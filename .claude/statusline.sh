@@ -157,10 +157,27 @@ else
     pct_used=0
 fi
 
-effort="default"
-settings_path="$HOME/.claude/settings.json"
-if [ -f "$settings_path" ]; then
-    effort=$(jq -r '.effortLevel // "default"' "$settings_path" 2>/dev/null)
+# ── Session duration from cost.total_duration_ms ────────
+session_duration=""
+total_duration_ms=$(echo "$input" | jq -r '.cost.total_duration_ms // 0')
+if [ "$total_duration_ms" -gt 0 ] 2>/dev/null; then
+    elapsed=$(( total_duration_ms / 1000 ))
+    if [ "$elapsed" -ge 3600 ] 2>/dev/null; then
+        session_duration="$(( elapsed / 3600 ))h$(( (elapsed % 3600) / 60 ))m"
+    elif [ "$elapsed" -ge 60 ] 2>/dev/null; then
+        session_duration="$(( elapsed / 60 ))m"
+    else
+        session_duration="${elapsed}s"
+    fi
+fi
+
+# ── Cost ────────────────────────────────────────────────
+total_cost=$(echo "$input" | jq -r '.cost.total_cost_usd // 0' | awk '{printf "$%.2f", $1}')
+
+# ── Context used percentage (from API) ──────────────────
+pct_used_api=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
+if [ -n "$pct_used_api" ] && [ "$pct_used_api" != "null" ]; then
+    pct_used=$pct_used_api
 fi
 
 # ── LINE 1 ──────────────────────────────────────────────
@@ -178,24 +195,7 @@ if git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     fi
 fi
 
-session_duration=""
-session_start=$(echo "$input" | jq -r '.session.start_time // empty')
-if [ -n "$session_start" ] && [ "$session_start" != "null" ]; then
-    start_epoch=$(iso_to_epoch "$session_start")
-    if [ -n "$start_epoch" ]; then
-        now_epoch=$(date +%s)
-        elapsed=$(( now_epoch - start_epoch ))
-        if [ "$elapsed" -ge 3600 ] 2>/dev/null; then
-            session_duration="$(( elapsed / 3600 ))h$(( (elapsed % 3600) / 60 ))m"
-        elif [ "$elapsed" -ge 60 ] 2>/dev/null; then
-            session_duration="$(( elapsed / 60 ))m"
-        else
-            session_duration="${elapsed}s"
-        fi
-    fi
-fi
-
-# Build line 1: Model | pct% (used/total) | dir (branch) | session | [effort]
+# Build line 1: Model | pct% (used/total) | dir (branch) | session | cost
 line1="${blue}${model_name}${reset}"
 line1+="${sep}"
 line1+="${pct_color}${pct_used}%${reset} ${dim}(${used_tokens}/${total_tokens})${reset}"
@@ -208,13 +208,10 @@ if [ -n "$session_duration" ]; then
     line1+="${sep}"
     line1+="${white}${session_duration}${reset}"
 fi
-line1+="${sep}"
-case "$effort" in
-    high)   line1+="${magenta}● high${reset}" ;;
-    medium) line1+="${dim}◑ medium${reset}" ;;
-    low)    line1+="${dim}◔ low${reset}" ;;
-    *)      line1+="${dim}◑ default${reset}" ;;
-esac
+if [ "$total_cost" != "\$0.00" ]; then
+    line1+="${sep}"
+    line1+="${yellow}${total_cost}${reset}"
+fi
 
 # ── OAuth token resolution ──────────────────────────────
 get_oauth_token() {
