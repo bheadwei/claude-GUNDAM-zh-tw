@@ -2,7 +2,7 @@
 name: general-purpose
 description: 通用型問題解決 agent，處理複雜研究、程式碼搜尋和多步驟任務
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "WebSearch", "WebFetch"]
-model: sonnet
+model: opus
 ---
 
 你是通用型問題解決專家，負責處理跨領域的複雜任務。

@@ -82,19 +82,19 @@ claude_v2026/
 
 | Agent | Model | 用途 |
 | :--- | :--- | :--- |
-| general-purpose | sonnet | 通用問題解決、跨領域研究 |
-| **planner** | **opus** | 功能規劃、實作步驟拆解 |
-| **architect** | **opus** | 系統架構設計、技術決策 |
-| code-quality-specialist | sonnet | 程式碼審查、品質把關 |
-| security-infrastructure-auditor | sonnet | OWASP Top 10、安全稽核 |
-| test-automation-engineer | sonnet | 單元/整合測試、TDD |
-| tdd-guide | sonnet | 測試驅動開發引導 |
-| e2e-validation-specialist | sonnet | Playwright E2E 測試 |
-| build-error-resolver | sonnet | 最小差異修復建置錯誤 |
-| refactor-cleaner | sonnet | 死碼偵測與安全清理 |
-| documentation-specialist | sonnet | Codemap 生成、技術文檔 |
-| deployment-expert | sonnet | 零停機部署、監控告警 |
-| workflow-template-manager | sonnet | VibeCoding 模板整合 |
+| general-purpose | opus | 通用問題解決、跨領域研究 |
+| planner | opus | 功能規劃、實作步驟拆解 |
+| architect | opus | 系統架構設計、技術決策 |
+| code-quality-specialist | opus | 程式碼審查、品質把關 |
+| security-infrastructure-auditor | opus | OWASP Top 10、安全稽核 |
+| test-automation-engineer | opus | 單元/整合測試、TDD |
+| tdd-guide | opus | 測試驅動開發引導 |
+| e2e-validation-specialist | opus | Playwright E2E 測試 |
+| build-error-resolver | opus | 最小差異修復建置錯誤 |
+| refactor-cleaner | opus | 死碼偵測與安全清理 |
+| documentation-specialist | opus | Codemap 生成、技術文檔 |
+| deployment-expert | opus | 零停機部署、監控告警 |
+| workflow-template-manager | opus | VibeCoding 模板整合 |
 
 ---
 
