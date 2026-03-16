@@ -188,11 +188,11 @@ weekly  ●●●●●●●●○○  79% ⟳ 03/23 10:00
 
 ## 新專案設定
 
-1. 複製整個 `claude_v2026/` 目錄到新位置
+1. 複製整個 `claude-GUNDAM-zh-tw` 目錄到新位置
 2. 複製 MCP 範本：Windows `cp .mcp.json.windows.example .mcp.json` / Linux `cp .mcp.json.linux.example .mcp.json`
 3. 編輯 `.mcp.json` 填入 API keys
-4. 根據語言需求，從 `everything-claude/rules/[language]/` 複製規則到 `.claude/rules/`
-5. 根據專案需求，從 `everything-claude/skills/` 複製額外 skill 到 `.claude/skills/`
+4. 根據語言需求，從 `.claude\custom-rule&skill/` 複製規則到 `.claude/rules/`
+5. 根據專案需求，從 `.claude\custom-rule&skill/` 複製額外 skill 到 `.claude/skills/`
 6. 啟動 Claude Code → `/task-init`
 
 ---
