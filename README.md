@@ -1,6 +1,6 @@
 # Claude Code 全面開發配置
 
-> **版本:** v4.1 | **更新:** 2026-03-16 | **平台:** Windows 11 + Git Bash
+> **版本:** v4.2 | **更新:** 2026-03-16 | **平台:** Windows / Linux (Ubuntu, RHEL)
 
 人類主導的文檔導向智能協作開發平台。
 
@@ -42,11 +42,13 @@ claude_v2026/
 │   ├── hooks/                        # Hook 腳本
 │   ├── context/                      # 專案上下文
 │   ├── coordination/                 # Agent 協調
-│   ├── statusline.sh                 # StatusLine（bash）
-│   ├── count_tokens.js               # Token 統計
+│   ├── statusline.sh                 # StatusLine（bash，跨平台）
+│   ├── statusline-go.exe             # StatusLine（Go 備用）
 │   └── WORKFLOW.md                   # 開發流程指南
 ├── VibeCoding_Workflow_Templates/    # 工作流模板庫（17 個）
-├── .mcp.json                         # MCP Server 設定
+├── .mcp.json                         # MCP Server 設定（不入 Git）
+├── .mcp.json.windows.example         # MCP 範本（Windows）
+├── .mcp.json.linux.example           # MCP 範本（Linux）
 ├── CLAUDE_TEMPLATE.md                # 專案初始化範本
 └── PROJECT_STRUCTURE.md              # 專案結構說明
 ```
@@ -189,9 +191,9 @@ weekly  ●●●●●●●●○○  79% ⟳ 03/23 10:00
 1. 複製整個 `claude_v2026/` 目錄到新位置
 2. 複製 MCP 範本：Windows `cp .mcp.json.windows.example .mcp.json` / Linux `cp .mcp.json.linux.example .mcp.json`
 3. 編輯 `.mcp.json` 填入 API keys
-3. 根據語言需求，從 `everything-claude/rules/[language]/` 複製規則到 `.claude/rules/`
-4. 根據專案需求，從 `everything-claude/skills/` 複製額外 skill 到 `.claude/skills/`
-5. 啟動 Claude Code → `/task-init`
+4. 根據語言需求，從 `everything-claude/rules/[language]/` 複製規則到 `.claude/rules/`
+5. 根據專案需求，從 `everything-claude/skills/` 複製額外 skill 到 `.claude/skills/`
+6. 啟動 Claude Code → `/task-init`
 
 ---
 
@@ -199,6 +201,7 @@ weekly  ●●●●●●●●○○  79% ⟳ 03/23 10:00
 
 | 版本 | 日期 | 變更 |
 | :--- | :--- | :--- |
+| v4.2 | 2026-03-16 | 跨平台支援（Windows/Linux）、MCP example 分平台、Agent 全 opus、移除 count_tokens.js |
 | v4.1 | 2026-03-16 | 新增 rules(7)、skills(8)、MCP(+2)、開發流程文件 |
 | v4.0 | 2026-03-16 | 全面升級：13 Agent、16 Commands、StatusLine 適配、模板精簡 68% |
 | v3.0 | 2025-09-25 | TaskMaster Hub-and-Spoke 架構 |
