@@ -1,0 +1,37 @@
+{
+  "mcpServers": {
+    "brave-search": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": "YOUR_BRAVE_API_KEY"
+      }
+    },
+    "context7": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@upstash/context7-mcp@latest"],
+      "env": {
+        "CONTEXT7_API_KEY": "YOUR_CONTEXT7_API_KEY"
+      }
+    },
+    "github": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "YOUR_GITHUB_TOKEN"
+      }
+    },
+    "playwright": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@playwright/mcp@latest"]
+    },
+    "sequential-thinking": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-sequential-thinking"]
+    },
+    "memory": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@modelcontextprotocol/server-memory"]
+    }
+  }
+}
