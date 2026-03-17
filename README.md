@@ -42,7 +42,8 @@ claude_v2026/
 │   ├── hooks/                        # Hook 腳本
 │   ├── context/                      # 專案上下文
 │   ├── coordination/                 # Agent 協調
-│   ├── statusline.sh                 # StatusLine（bash，跨平台）
+│   ├── statusline.sh                 # StatusLine（bash，Windows）
+│   ├── statusline-linux.sh           # StatusLine（bash，Linux）
 │   ├── statusline-go.exe             # StatusLine（Go 備用）
 │   └── WORKFLOW.md                   # 開發流程指南
 ├── VibeCoding_Workflow_Templates/    # 工作流模板庫（17 個）
@@ -182,6 +183,17 @@ claude_v2026/
 Opus 4.6 (1M context) │ 26% (266k/1.0m) │ project-name (main*) │ 15m │ ◑ default
 current ●●●○○○○○○○  28% ⟳ 19:00
 weekly  ●●●●●●●●○○  79% ⟳ 03/23 10:00
+```
+
+**平台設定：** Linux 環境須使用 `statusline-linux.sh`（LF 換行），避免 CRLF 導致執行錯誤。
+
+在 `.claude/settings.json` 中設定：
+```jsonc
+// Windows
+"statusLine": "bash .claude/statusline.sh"
+
+// Linux
+"statusLine": "bash .claude/statusline-linux.sh"
 ```
 
 ---

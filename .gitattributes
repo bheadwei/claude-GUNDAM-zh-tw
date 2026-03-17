@@ -1,0 +1,2 @@
+# Shell scripts for Linux must keep LF line endings
+.claude/statusline-linux.sh text eol=lf
