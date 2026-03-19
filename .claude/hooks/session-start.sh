@@ -64,10 +64,13 @@ if [ -z "$PROJECT_ROOT" ] || [ -z "$CLAUDE_DIR" ]; then
     exit 0  # 改為 exit 0，避免中斷 Claude Code
 fi
 
+# 確保 logs 目錄存在
+mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null
+
 # 日誌函數（跨平台兼容）
 log() {
     local timestamp="[$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo '????-??-?? ??:??:??')]"
-    echo "$timestamp $1" | tee -a "$CLAUDE_DIR/hooks.log" 2>/dev/null || echo "$timestamp $1"
+    echo "$timestamp $1" | tee -a "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || echo "$timestamp $1"
 }
 
 log "🪝 TaskMaster Session Start Hook 觸發 (Platform: $PLATFORM)"
@@ -99,19 +102,11 @@ if [ -f "$PROJECT_ROOT/CLAUDE_TEMPLATE.md" ]; then
         echo -e "\033[1;37m╰─────────────────────────────────────────────────────────────╯\033[0m"
         echo ""
 
-        # 觸發 TaskMaster Node.js 處理器（Windows 兼容）
+        # 觸發 TaskMaster Node.js 處理器（可選，不存在則跳過）
         if [ -f "$CLAUDE_DIR/taskmaster.js" ]; then
             log "🔗 調用 TaskMaster Node.js 處理器"
-            cd "$PROJECT_ROOT" 2>/dev/null || {
-                log "⚠️ 無法切換到專案目錄"
-                exit 0
-            }
-            # 使用 || true 確保即使 Node.js 返回非零碼也不會中斷
-            node "$CLAUDE_DIR/taskmaster.js" --hook-trigger=session-start || {
-                log "⚠️ TaskMaster 處理器執行完成 (退出碼: $?)"
-            }
-        else
-            log "⚠️ TaskMaster 核心文件不存在: $CLAUDE_DIR/taskmaster.js"
+            cd "$PROJECT_ROOT" 2>/dev/null || exit 0
+            node "$CLAUDE_DIR/taskmaster.js" --hook-trigger=session-start || true
         fi
 
         exit 0

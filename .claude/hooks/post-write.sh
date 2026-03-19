@@ -9,13 +9,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CLAUDE_DIR="$PROJECT_ROOT/.claude"
 
+# 確保 logs 目錄存在
+mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null
+
 # 日誌函數
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$CLAUDE_DIR/hooks.log"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$CLAUDE_DIR/logs/hooks.log"
 }
 
-# 獲取寫入的檔案路徑
-FILE_PATH="$1"
+# 從 stdin 讀取 hook JSON 輸入
+INPUT=$(cat)
+
+# 解析寫入的檔案路徑
+if command -v jq >/dev/null 2>&1; then
+    FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // ""')
+else
+    FILE_PATH=""
+fi
 
 log "🪝 TaskMaster Post Write Hook 觸發: $FILE_PATH"
 

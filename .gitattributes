@@ -1,2 +1,2 @@
-# Shell scripts for Linux must keep LF line endings
-.claude/statusline-linux.sh text eol=lf
+# Shell scripts must keep LF line endings (cross-platform)
+*.sh text eol=lf

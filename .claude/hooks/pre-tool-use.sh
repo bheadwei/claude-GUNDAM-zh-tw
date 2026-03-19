@@ -9,14 +9,25 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CLAUDE_DIR="$PROJECT_ROOT/.claude"
 
+# 確保 logs 目錄存在
+mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null
+
 # 日誌函數
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$CLAUDE_DIR/hooks.log"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$CLAUDE_DIR/logs/hooks.log"
 }
 
-# 獲取工具名稱和參數
-TOOL_NAME="$1"
-TOOL_ARGS="$2"
+# 從 stdin 讀取 hook JSON 輸入
+INPUT=$(cat)
+
+# 解析工具名稱和參數
+if command -v jq >/dev/null 2>&1; then
+    TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // "unknown"')
+    TOOL_ARGS=$(echo "$INPUT" | jq -r '.tool_input | tostring' 2>/dev/null || echo "")
+else
+    TOOL_NAME="unknown"
+    TOOL_ARGS=""
+fi
 
 log "🪝 TaskMaster Pre Tool Use Hook 觸發: $TOOL_NAME"
 

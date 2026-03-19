@@ -107,10 +107,69 @@
 
 使用 `/output-style <name>` 切換，詳見 `output-styles/README.md`。
 
-### Hooks
+### Hooks（已註冊於 settings.json）
 
-`hooks/` 下有腳本庫，目前 `settings.json` 未啟用任何 hook。
-如需啟用，在 `settings.json` 的 `hooks` 區段配置。
+```
+hooks/
+├── hook-utils.sh          # 共用工具函數庫（非 hook）
+├── session-start.sh       # 會話啟動：偵測模板、提示初始化
+├── user-prompt-submit.sh  # 用戶輸入：攔截 /task-* 命令
+├── pre-tool-use.sh        # 工具前置：TaskMaster 狀態提示
+├── post-write.sh          # 寫入後置：文檔審查通知
+├── agent-monitor.sh       # Agent 監控：記錄 subagent 活動
+└── watch-agents.sh        # 監控工具：即時追蹤 agent log
+```
+
+#### Hook 註冊對照表
+
+| 事件 | 腳本 | Matcher | 用途 |
+| :--- | :--- | :--- | :--- |
+| SessionStart | session-start.sh | 全部 | 偵測 `CLAUDE_TEMPLATE.md`，提示 `/task-init` |
+| UserPromptSubmit | user-prompt-submit.sh | 全部 | 攔截 `/task-*` 命令，準備 TaskMaster 環境 |
+| PreToolUse | agent-monitor.sh | `Agent` | 記錄 subagent 啟動（類型、prompt、model） |
+| PreToolUse | pre-tool-use.sh | `Write\|Edit\|Read` | 提供 TaskMaster 狀態上下文 |
+| PostToolUse | agent-monitor.sh | `Agent` | 記錄 subagent 完成結果 |
+| PostToolUse | post-write.sh | `Write` | 文檔寫入後觸發駕駛員審查通知 |
+
+#### Agent 活動監控
+
+所有 subagent 的啟動和完成會自動記錄到 `.claude/logs/`：
+
+- `agent-activity.log` — 人類可讀格式（prompt、結果、時間戳）
+- `agent-activity.jsonl` — 結構化 JSON（適合程式分析）
+
+即時監控（開另一個終端機）：
+
+```bash
+bash .claude/hooks/watch-agents.sh           # 即時追蹤
+bash .claude/hooks/watch-agents.sh --json    # JSON 格式
+bash .claude/hooks/watch-agents.sh --last 30 # 最近 30 行
+bash .claude/hooks/watch-agents.sh --summary # 統計摘要
+bash .claude/hooks/watch-agents.sh --clear   # 清除 log
+```
+
+#### 複製到其他專案
+
+```bash
+# 1. 複製 hooks 腳本
+mkdir -p .claude/hooks .claude/logs
+cp <模板路徑>/.claude/hooks/*.sh .claude/hooks/
+cp <模板路徑>/.claude/logs/.gitignore .claude/logs/
+
+# 2. 在目標專案 .claude/settings.json 加入 hooks 區段（見本專案 settings.json）
+```
+
+#### 自訂 Hook
+
+所有 hook 透過 **stdin** 接收 JSON 資料，使用 `jq` 解析：
+
+```bash
+#!/bin/bash
+INPUT=$(cat)
+TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // "unknown"')
+# 處理邏輯...
+exit 0  # 0=放行, 2=阻擋
+```
 
 ---
 

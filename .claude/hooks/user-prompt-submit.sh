@@ -9,13 +9,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CLAUDE_DIR="$PROJECT_ROOT/.claude"
 
+# 確保 logs 目錄存在
+mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null
+
 # 日誌函數
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$CLAUDE_DIR/hooks.log"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$CLAUDE_DIR/logs/hooks.log"
 }
 
-# 獲取用戶輸入（如果有的話）
-USER_INPUT="$1"
+# 從 stdin 讀取 hook JSON 輸入
+INPUT=$(cat)
+
+# 解析用戶輸入
+if command -v jq >/dev/null 2>&1; then
+    USER_INPUT=$(echo "$INPUT" | jq -r '.content // .message // ""')
+else
+    USER_INPUT=""
+fi
 
 log "🪝 TaskMaster User Prompt Submit Hook 觸發"
 
