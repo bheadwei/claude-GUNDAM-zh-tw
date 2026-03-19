@@ -80,8 +80,32 @@ EOF
     fi
 fi
 
+# 檢查是否為 WBS 檔案更新
+if [[ "$FILE_PATH" == *"taskmaster-data/wbs.md"* ]]; then
+    log "📋 WBS 任務清單已更新: $FILE_PATH"
+
+    # 記錄 WBS 更新歷史
+    WBS_LOG="$CLAUDE_DIR/taskmaster-data/wbs-history.log"
+    mkdir -p "$CLAUDE_DIR/taskmaster-data" 2>/dev/null
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WBS 更新" >> "$WBS_LOG"
+
+    cat << EOF
+
+┌──────────────────────────────────────────────────────────┐
+│  📋 WBS 任務清單已同步                                    │
+│                                                          │
+│  檔案: .claude/taskmaster-data/wbs.md                    │
+│  時間: $(date '+%Y-%m-%d %H:%M:%S')                     │
+│                                                          │
+│  📊 /task-status  查看最新狀態                            │
+│  ➡️  /task-next    取得下一個任務                          │
+└──────────────────────────────────────────────────────────┘
+
+EOF
+fi
+
 # 檢查是否為 TaskMaster 核心檔案更新
-if [[ "$FILE_PATH" == *".claude/taskmaster"* ]]; then
+if [[ "$FILE_PATH" == *".claude/taskmaster"* ]] && [[ "$FILE_PATH" != *"taskmaster-data"* ]]; then
     log "🔧 TaskMaster 核心檔案更新: $FILE_PATH"
 
     # 可以在這裡加入核心檔案更新後的處理邏輯
