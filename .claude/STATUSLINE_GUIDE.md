@@ -267,6 +267,46 @@ Opus 4.6 │ 43% (439k/1.0m) │ project (main*) │ 4h35m │ $42.84
 
 ---
 
+## 時間追蹤持久化
+
+StatusLine 除了顯示資訊外，還負責**開發時間追蹤**的資料持久化：
+
+### 運作方式
+
+```
+StatusLine 每次更新時
+    │
+    │  從 JSON 取得 total_duration_ms、cost_usd、session_id
+    │  從 .current-task 讀取當前 WBS 任務
+    ▼
+寫入 .claude/taskmaster-data/.session-snapshot（覆寫）
+    │
+    │  下次 session 啟動時（session-start.sh）
+    ▼
+歸檔到 .claude/taskmaster-data/timelog.jsonl（追加）
+    │
+    │  使用 /time-log 查看
+    ▼
+按日期/按 WBS 任務彙總顯示報表
+```
+
+### 相關檔案
+
+| 檔案 | 用途 |
+|------|------|
+| `.session-snapshot` | 暫存當前 session 的最新 duration（每次 StatusLine 更新覆寫） |
+| `.session-start` | 記錄本次 session 開始時間 |
+| `.current-task` | 當前進行中的 WBS 任務編號（由 `/task-next` 寫入） |
+| `timelog.jsonl` | 歸檔的時間日誌（每 session 一筆，JSON Lines 格式） |
+
+### 資料格式（timelog.jsonl）
+
+```json
+{"session_id":"abc","date":"2026-03-24","start":"14:07","duration_ms":3600000,"cost_usd":12.50,"task":"2.1"}
+```
+
+---
+
 ## 修改後生效
 
 改完 `statusline.sh` 後，**不需要重啟 Claude Code**。下次互動時自動使用新腳本。

@@ -1,6 +1,6 @@
 # 專案結構總覽
 
-> **版本:** v4.1 | **更新:** 2026-03-16
+> **版本:** v4.3 | **更新:** 2026-03-24
 
 ---
 
@@ -20,7 +20,8 @@ claude_v2026/
 │   ├── settings.json                   # 專案設定（權限、StatusLine、Model）
 │   ├── settings.local.json             # 個人設定（MCP 啟用）
 │   ├── WORKFLOW.md                     # 開發流程指南
-│   ├── statusline.sh                   # StatusLine bash 腳本
+│   ├── statusline.sh                   # StatusLine bash 腳本（Windows）
+│   ├── statusline-linux.sh            # StatusLine bash 腳本（Linux）
 │   ├── statusline-go.exe              # StatusLine Go 備用
 │   ├── SOP.md                          # 設定 SOP
 │   │
@@ -39,7 +40,7 @@ claude_v2026/
 │   │   ├── deployment-expert.md        # 部署專家
 │   │   └── workflow-template-manager.md # 模板管理
 │   │
-│   ├── commands/        (16 個)
+│   ├── commands/        (17 個)
 │   │   ├── plan.md                     # 規劃實作步驟
 │   │   ├── tdd.md                      # 測試驅動開發
 │   │   ├── build-fix.md               # 修復建置錯誤
@@ -51,8 +52,9 @@ claude_v2026/
 │   │   ├── learn.md                    # 擷取模式
 │   │   ├── save-session.md            # 儲存 session
 │   │   ├── task-init.md               # 專案初始化
-│   │   ├── task-status.md             # 專案狀態
-│   │   ├── task-next.md               # 下個任務
+│   │   ├── task-status.md             # 專案狀態（含時間追蹤）
+│   │   ├── task-next.md               # 下個任務（自動追蹤時間）
+│   │   ├── time-log.md                # 開發時間報表
 │   │   ├── hub-delegate.md            # Agent 委派
 │   │   ├── suggest-mode.md            # 建議密度
 │   │   └── template-check.md          # 模板合規
@@ -87,6 +89,14 @@ claude_v2026/
 │   │   └── README.md                  # MCP 推薦清單
 │   │
 │   ├── hooks/                         # Hook 腳本庫
+│   ├── taskmaster-data/               # 持久化資料（自動產生）
+│   │   ├── wbs.md                     # WBS 任務清單
+│   │   ├── project.json               # 專案元資料
+│   │   ├── timelog.jsonl              # 開發時間日誌（每 session 一筆）
+│   │   ├── wbs-history.log           # WBS 更新審計軌跡
+│   │   ├── .session-start             # 暫存：session 開始時間
+│   │   ├── .session-snapshot          # 暫存：最新 session 快照
+│   │   └── .current-task              # 暫存：當前進行中的任務編號
 │   ├── context/                       # 跨 Agent 上下文共享
 │   │   ├── decisions/                 # 技術決策記錄
 │   │   ├── quality/                   # 品質報告

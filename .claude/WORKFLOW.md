@@ -17,7 +17,7 @@
 ### Phase 1: 任務循環（每個任務重複）
 
 ```
-/task-next          # 從 WBS 取下一個任務
+/task-next          # 從 WBS 取下一個任務（自動開始時間追蹤）
     |
 /plan               # 規劃該任務的實作步驟（等待確認）
     |
@@ -31,12 +31,13 @@
     |
 /verify full        # 全面驗證（建置+型別+lint+測試+安全）
     |
-/task-status        # 確認進度，回到 /task-next
+/task-status        # 確認進度（含預估 vs 實際時間），回到 /task-next
 ```
 
 ### Phase 2: 收尾
 
 ```bash
+/time-log           # 查看今日/累計開發時間
 /verify pre-pr      # PR 前完整檢查（含安全掃描）
 /save-session       # 儲存 session 狀態供下次恢復
 ```
@@ -58,8 +59,9 @@
 | 指令 | 用途 | 常用參數 |
 | :--- | :--- | :--- |
 | `/task-init` | 專案初始化 | |
-| `/task-next` | 取下一個任務 | |
-| `/task-status` | 查看專案進度 | `--detailed`, `--metrics` |
+| `/task-next` | 取下一個任務（自動追蹤時間） | |
+| `/task-status` | 查看專案進度（含時間追蹤） | `--detailed`, `--metrics` |
+| `/time-log` | 開發時間報表 | `--today`, `--by-task`, `--week`, `--month` |
 | `/plan` | 規劃實作步驟 | [功能描述] |
 | `/tdd` | 測試驅動開發 | [功能描述] |
 | `/build-fix` | 修復建置錯誤 | |
@@ -75,6 +77,7 @@
 | `/check-quality` | 品質評估 |
 | `/refactor-clean` | 死碼清理 |
 | `/template-check` | 模板合規檢查 |
+| `/time-log` | 開發時間報表（每日/每任務） |
 | `/suggest-mode` | 調整建議密度 |
 | `/learn` | 擷取可重用模式 |
 | `/save-session` | 儲存 session |

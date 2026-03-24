@@ -188,7 +188,7 @@ GitHub 儲存庫設定：
 - CLAUDE.md 規則生效
 - 7 條自動載入規則 (.claude/rules/)
 - 13 個專業 Agent 就緒
-- 16 個 Slash Command 可用
+- 17 個 Slash Command 可用
 - GitHub: [啟用/未啟用]
 
 下一步：

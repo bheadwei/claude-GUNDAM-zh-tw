@@ -329,6 +329,24 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
     fi
 fi
 
+# ── Persist session duration for time tracking ──────────
+# Write current session's duration to a temp file so session-start can finalize it
+timelog_dir="$cwd/.claude/taskmaster-data"
+if [ -d "$timelog_dir" ] && [ "$total_duration_ms" -gt 0 ] 2>/dev/null; then
+    session_id=$(echo "$input" | jq -r '.session_id // ""')
+    today=$(date '+%Y-%m-%d' 2>/dev/null)
+    start_time=""
+    [ -f "$timelog_dir/.session-start" ] && start_time=$(cat "$timelog_dir/.session-start" 2>/dev/null | head -1)
+    total_cost_raw=$(echo "$input" | jq -r '.cost.total_cost_usd // 0')
+    # Read current task if any
+    current_task=""
+    [ -f "$timelog_dir/.current-task" ] && current_task=$(cat "$timelog_dir/.current-task" 2>/dev/null | head -1)
+    # Write snapshot (overwrite each time)
+    cat > "$timelog_dir/.session-snapshot" 2>/dev/null <<SNAPSHOT
+{"session_id":"${session_id}","date":"${today}","start":"${start_time}","duration_ms":${total_duration_ms},"cost_usd":${total_cost_raw},"task":"${current_task}"}
+SNAPSHOT
+fi
+
 # ── Output ──────────────────────────────────────────────
 printf "%b" "$line1"
 [ -n "$rate_lines" ] && printf "\n%b" "$rate_lines"

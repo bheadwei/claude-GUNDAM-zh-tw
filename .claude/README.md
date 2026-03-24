@@ -1,6 +1,6 @@
 # .claude 配置目錄
 
-> **版本:** v4.1 | **更新:** 2026-03-16
+> **版本:** v4.3 | **更新:** 2026-03-24
 
 ---
 
@@ -11,17 +11,19 @@
 ├── settings.json              # 專案設定（權限、StatusLine、Model）
 ├── settings.local.json        # 個人設定（MCP 啟用）-- 不入 Git
 ├── WORKFLOW.md                # 開發流程指南
-├── statusline.sh              # StatusLine bash 腳本
+├── statusline.sh              # StatusLine bash 腳本（Windows）
+├── statusline-linux.sh        # StatusLine bash 腳本（Linux）
 ├── statusline-go.exe          # StatusLine Go 備用
 ├── SOP.md                     # 設定 SOP
 │
 ├── agents/       (13 個)      # 專業 Agent 定義
-├── commands/     (16 個)      # Slash Command
+├── commands/     (17 個)      # Slash Command
 ├── rules/        (7 個)       # 自動載入規則
 ├── skills/       (8 個)       # 領域知識 Skill
 ├── output-styles/ (15 個)     # 輸出樣式模板
 ├── mcp-configs/               # MCP 推薦清單
 ├── hooks/                     # Hook 腳本庫
+├── taskmaster-data/           # 持久化資料（WBS、時間日誌）
 ├── context/                   # 跨 Agent 上下文共享
 ├── coordination/              # Agent 協調配置
 └── plugins/                   # Plugin 配置
@@ -51,7 +53,7 @@
 | deployment-expert | sonnet | 部署運維 |
 | workflow-template-manager | sonnet | 模板管理 |
 
-### Commands（16 個）
+### Commands（17 個）
 
 在 Claude Code 中輸入 `/` 即可使用。
 
@@ -68,8 +70,9 @@
 | /learn | 擷取模式 |
 | /save-session | 儲存 session |
 | /task-init | 專案初始化 |
-| /task-next | 下個任務 |
-| /task-status | 專案狀態 |
+| /task-next | 下個任務（自動追蹤時間） |
+| /task-status | 專案狀態（含時間追蹤） |
+| /time-log | 開發時間報表（每日/每任務） |
 | /hub-delegate | Agent 委派 |
 | /suggest-mode | 建議密度 |
 | /template-check | 模板合規 |

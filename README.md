@@ -1,6 +1,6 @@
 # Claude Code 全面開發配置
 
-> **版本:** v4.2 | **更新:** 2026-03-16 | **平台:** Windows / Linux (Ubuntu, RHEL)
+> **版本:** v4.3 | **更新:** 2026-03-24 | **平台:** Windows / Linux (Ubuntu, RHEL)
 
 人類主導的文檔導向智能協作開發平台。
 
@@ -34,7 +34,7 @@ claude_v2026/
 ├── .claude/
 │   ├── settings.json                 # 主設定（權限、StatusLine、Hooks）
 │   ├── agents/          (13 個)      # 專業 Agent
-│   ├── commands/        (16 個)      # Slash Commands
+│   ├── commands/        (17 個)      # Slash Commands
 │   ├── rules/           (7 個)       # 自動載入規則
 │   ├── skills/          (8 個)       # 領域知識 Skill
 │   ├── output-styles/   (15 個)      # Output Styles
@@ -61,14 +61,15 @@ claude_v2026/
 ```
 /task-init  →  /task-next  →  /plan  →  /tdd  →  /build-fix
                                                       ↓
-/save-session  ←  /task-status  ←  /verify  ←  /e2e  ←  /review-code
+/save-session  ←  /time-log  ←  /task-status  ←  /verify  ←  /e2e  ←  /review-code
 ```
 
 | 階段 | 指令 | 用途 |
 | :--- | :--- | :--- |
 | 專案級 | `/task-init` | 建立 WBS、分析複雜度 |
-| 專案級 | `/task-next` | 從 WBS 取下一個任務 |
-| 專案級 | `/task-status` | 查看整體進度 |
+| 專案級 | `/task-next` | 從 WBS 取下一個任務（自動追蹤時間） |
+| 專案級 | `/task-status` | 查看整體進度（含預估 vs 實際時間） |
+| 專案級 | `/time-log` | 每日/每任務開發時間報表 |
 | 功能級 | `/plan` | 規劃實作步驟（等待確認） |
 | 功能級 | `/tdd` | Red-Green-Refactor |
 | 功能級 | `/build-fix` | 修復建置錯誤 |
@@ -180,10 +181,12 @@ claude_v2026/
 ## StatusLine
 
 ```
-Opus 4.6 (1M context) │ 26% (266k/1.0m) │ project-name (main*) │ 15m │ ◑ default
+Opus 4.6 (1M context) │ 26% (266k/1.0m) │ project-name (main*) │ 15m │ $12.50
 current ●●●○○○○○○○  28% ⟳ 19:00
 weekly  ●●●●●●●●○○  79% ⟳ 03/23 10:00
 ```
+
+StatusLine 同時負責**時間追蹤持久化**：每次更新時將當前 session 的 duration 和任務寫入暫存檔，供跨 session 歸檔。
 
 **平台設定：** Linux 環境須使用 `statusline-linux.sh`（LF 換行），避免 CRLF 導致執行錯誤。
 
@@ -213,6 +216,7 @@ weekly  ●●●●●●●●○○  79% ⟳ 03/23 10:00
 
 | 版本 | 日期 | 變更 |
 | :--- | :--- | :--- |
+| v4.3 | 2026-03-24 | 開發時間追蹤（每日/每任務）、`/time-log` 命令、StatusLine 時間持久化、17 Commands |
 | v4.2 | 2026-03-16 | 跨平台支援（Windows/Linux）、MCP example 分平台、Agent 全 opus、移除 count_tokens.js |
 | v4.1 | 2026-03-16 | 新增 rules(7)、skills(8)、MCP(+2)、開發流程文件 |
 | v4.0 | 2026-03-16 | 全面升級：13 Agent、16 Commands、StatusLine 適配、模板精簡 68% |
