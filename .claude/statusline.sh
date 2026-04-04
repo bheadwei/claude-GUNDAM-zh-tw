@@ -41,15 +41,17 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 0
 fi
 
-# ── Colors ──────────────────────────────────────────────
-blue='\033[38;2;0;153;255m'
-orange='\033[38;2;255;176;85m'
-green='\033[38;2;0;175;80m'
-cyan='\033[38;2;86;182;194m'
-red='\033[38;2;255;85;85m'
-yellow='\033[38;2;230;200;0m'
-white='\033[38;2;220;220;220m'
-magenta='\033[38;2;180;140;255m'
+# ── Colors (Morandi Palette) ───────────────────────────
+red='\033[38;2;179;106;106m'      # Morandi Red #B36A6A
+blue='\033[38;2;122;144;164m'     # Morandi Blue #7A90A4
+green='\033[38;2;111;143;123m'    # Morandi Green #6F8F7B
+cyan='\033[38;2;138;164;168m'     # Morandi Cyan #8AA4A8
+orange='\033[38;2;168;137;106m'   # Morandi Orange #A8896A
+yellow='\033[38;2;194;169;106m'   # Morandi Yellow #C2A96A
+white='\033[38;2;208;212;215m'    # Soft White #D0D4D7
+silver='\033[38;2;160;170;176m'   # Morandi Silver #A0AAB0
+gray='\033[38;2;139;148;158m'     # Morandi Gray #8B949E
+pink='\033[38;2;179;106;106m'     # Morandi Pink #B36A6A
 dim='\033[2m'
 reset='\033[0m'
 
@@ -73,6 +75,17 @@ color_for_pct() {
     elif [ "$pct" -ge 70 ] 2>/dev/null; then printf "$yellow"
     elif [ "$pct" -ge 50 ] 2>/dev/null; then printf "$orange"
     else printf "$green"
+    fi
+}
+
+token_level_icon() {
+    local pct=$1
+    if [ "$pct" -ge 95 ] 2>/dev/null; then printf "💥"
+    elif [ "$pct" -ge 85 ] 2>/dev/null; then printf "🔥"
+    elif [ "$pct" -ge 70 ] 2>/dev/null; then printf "♨️"
+    elif [ "$pct" -ge 50 ] 2>/dev/null; then printf "🌡"
+    elif [ "$pct" -ge 30 ] 2>/dev/null; then printf "🌊"
+    else printf "❄️"
     fi
 }
 
@@ -139,6 +152,13 @@ format_reset_time() {
 
 # ── Extract JSON data ───────────────────────────────────
 model_name=$(echo "$input" | jq -r '.model.display_name // "Claude"')
+model_id=$(echo "$input" | jq -r '.model.id // ""')
+case "$model_id" in
+    *opus*)   model_icon="🦁" ; model_color="$red" ;;
+    *sonnet*) model_icon="🦅" ; model_color="$blue" ;;
+    *haiku*)  model_icon="🐦" ; model_color="$green" ;;
+    *)        model_icon="🤖" ; model_color="$cyan" ;;
+esac
 
 size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
 [ "$size" -eq 0 ] 2>/dev/null && size=200000
@@ -196,21 +216,26 @@ if git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 # Build line 1: Model | pct% (used/total) | dir (branch) | session | cost
-line1="${blue}${model_name}${reset}"
+level_icon=$(token_level_icon "$pct_used")
+line1="${model_color}${model_icon} ${model_name}${reset}"
 line1+="${sep}"
-line1+="${pct_color}${pct_used}%${reset} ${dim}(${used_tokens}/${total_tokens})${reset}"
+line1+="${level_icon} ${pct_color}${pct_used}%${reset} ${dim}(${used_tokens}/${total_tokens})${reset}"
 line1+="${sep}"
-line1+="${cyan}${dirname}${reset}"
+line1+="${cyan}📂 ${dirname}${reset}"
 if [ -n "$git_branch" ]; then
-    line1+=" ${green}(${git_branch}${red}${git_dirty}${green})${reset}"
+    if [ -n "$git_dirty" ]; then
+        line1+=" ${green}🌿 ${git_branch}${reset}${pink}💫${reset}"
+    else
+        line1+=" ${green}🌿 ${git_branch}${reset}"
+    fi
 fi
 if [ -n "$session_duration" ]; then
     line1+="${sep}"
-    line1+="${white}${session_duration}${reset}"
+    line1+="${white}⏱ ${session_duration}${reset}"
 fi
 if [ "$total_cost" != "\$0.00" ]; then
     line1+="${sep}"
-    line1+="${yellow}${total_cost}${reset}"
+    line1+="${yellow}💰 ${total_cost}${reset}"
 fi
 
 # ── OAuth token resolution ──────────────────────────────
@@ -304,8 +329,8 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
     five_hour_pct_color=$(color_for_pct "$five_hour_pct")
     five_hour_pct_fmt=$(printf "%3d" "$five_hour_pct")
 
-    rate_lines+="${white}current${reset} ${five_hour_bar} ${five_hour_pct_color}${five_hour_pct_fmt}%${reset}"
-    [ -n "$five_hour_reset" ] && rate_lines+=" ${dim}⟳${reset} ${white}${five_hour_reset}${reset}"
+    rate_lines+="${white}⚡${reset} ${five_hour_bar} ${five_hour_pct_color}${five_hour_pct_fmt}%${reset}"
+    [ -n "$five_hour_reset" ] && rate_lines+=" ${dim}🔄${reset} ${white}${five_hour_reset}${reset}"
 
     seven_day_pct=$(echo "$usage_data" | jq -r '.seven_day.utilization // 0' | awk '{printf "%.0f", $1}')
     seven_day_reset_iso=$(echo "$usage_data" | jq -r '.seven_day.resets_at // empty')
@@ -314,8 +339,8 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
     seven_day_pct_color=$(color_for_pct "$seven_day_pct")
     seven_day_pct_fmt=$(printf "%3d" "$seven_day_pct")
 
-    rate_lines+="\n${white}weekly${reset}  ${seven_day_bar} ${seven_day_pct_color}${seven_day_pct_fmt}%${reset}"
-    [ -n "$seven_day_reset" ] && rate_lines+=" ${dim}⟳${reset} ${white}${seven_day_reset}${reset}"
+    rate_lines+="\n${white}📅${reset} ${seven_day_bar} ${seven_day_pct_color}${seven_day_pct_fmt}%${reset}"
+    [ -n "$seven_day_reset" ] && rate_lines+=" ${dim}🔄${reset} ${white}${seven_day_reset}${reset}"
 
     extra_enabled=$(echo "$usage_data" | jq -r '.extra_usage.is_enabled // false')
     if [ "$extra_enabled" = "true" ]; then
@@ -325,7 +350,7 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
         extra_bar=$(build_bar "$extra_pct" "$bar_width")
         extra_pct_color=$(color_for_pct "$extra_pct")
 
-        rate_lines+="\n${white}extra${reset}   ${extra_bar} ${extra_pct_color}\$${extra_used}${dim}/${reset}${white}\$${extra_limit}${reset}"
+        rate_lines+="\n${white}💳${reset} ${extra_bar} ${extra_pct_color}\$${extra_used}${dim}/${reset}${white}\$${extra_limit}${reset}"
     fi
 fi
 
