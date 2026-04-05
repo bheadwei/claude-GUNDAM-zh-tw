@@ -34,7 +34,7 @@
 
 來源：[obra/superpowers](https://github.com/obra/superpowers)。與 `tdd-workflow` 重複的 **`sp-test-driven-development`** 未導入。
 
-**繁體中文怎麼用（平行代理／worktree／寫 skill）**：見 **[SUPERPOWERS-EXTRAS-USAGE-zh-TW.md](./SUPERPOWERS-EXTRAS-USAGE-zh-TW.md)**。
+**全系列 `sp-*` 繁體中文摘要**（含流程與進階）：見 **[SUPERPOWERS-EXTRAS-USAGE-zh-TW.md](./SUPERPOWERS-EXTRAS-USAGE-zh-TW.md)**；各 `sp-*/SKILL.md` 開頭亦附連結至此檔。
 
 | Skill                                       | 用途                  |
 | :------------------------------------------ | :-------------------- |
