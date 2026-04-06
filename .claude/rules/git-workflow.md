@@ -43,7 +43,13 @@ Types: feat, fix, refactor, docs, test, chore, perf, ci
 - 每個 commit 可獨立 review、獨立 revert
 - 禁止「fix」「update」「misc」等無意義 subject
 
-## 分支命名慣例
+## 分支策略
+
+### 保護分支
+- `main`/`master` 禁止直接 commit — 所有變更透過 PR 合入
+- 發現在保護分支上時，**立即停止**並詢問使用者
+
+### 命名慣例
 
 格式：`<type>/<short-description>`
 
@@ -51,8 +57,25 @@ Types: feat, fix, refactor, docs, test, chore, perf, ci
 - `feat/user-auth`
 - `fix/market-data-cache`
 - `refactor/api-response-format`
+- `chore/update-dependencies`
 
-詳細分支生命週期管理請載入 sunnydata-branch-lifecycle skill。
+### 分支生命週期
+
+```
+main ──┬── feat/xxx ──── PR ──→ main
+       ├── fix/yyy  ──── PR ──→ main
+       └── refactor/zzz ─ PR ──→ main
+```
+
+- 一個分支做一件事 — 與 commit 原則一致
+- 分支壽命越短越好 — 長壽命分支 = merge conflict
+- 完成後載入 sunnydata-branch-lifecycle skill 收尾
+
+### 禁止
+
+- 禁止 `git stash` 作為工作流替代品（stash 只用於臨時中斷）
+- 禁止在功能分支混做不相關任務
+- 禁止 force push 到共享分支（除非明確請求且確認影響）
 
 ## Pull Request 流程
 
