@@ -371,3 +371,7 @@ which jq || echo "jq 未安裝"
 # Ubuntu:  sudo apt install jq
 # RHEL:    sudo dnf install jq
 ```
+
+### 畫面上 emoji 與數字疊在一起
+
+部分終端（含內嵌終端）對 emoji 的**顯示寬度**與**游標前進格數**不一致，後面的 `%`、括號內 token 會與水位 icon 重疊。腳本已在各 emoji 後多補空格並在區段間加 `${reset}`；若仍異常，可改用等寬字型或縮短第一行（精簡風格）。

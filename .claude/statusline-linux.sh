@@ -219,22 +219,23 @@ if git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 # Build line 1: icon+Model | 水位+pct% | 📂 dir 🌿 branch💫 | ⏱ | 💰
-line1="${model_color}${model_icon} ${model_name}${reset}"
+# 多數終端對 emoji 寬度與游標前進不一致，emoji 後多補一個空格避免與後續文字疊字。
+line1="${model_color}${model_icon}  ${model_name}${reset}"
 line1+="${sep}"
-line1+="${level_icon} ${pct_color}${pct_used}%${reset} ${dim}(${used_tokens}/${total_tokens})${reset}"
+line1+="${level_icon}${reset}  ${pct_color}${pct_used}%${reset} ${dim}(${used_tokens}/${total_tokens})${reset}"
 line1+="${sep}"
-line1+="${cyan}📂 ${dirname}${reset}"
+line1+="${cyan}📂  ${dirname}${reset}"
 if [ -n "$git_branch" ]; then
-    line1+=" ${green}🌿 ${git_branch}${reset}"
+    line1+=" ${green}🌿  ${git_branch}${reset}"
     [ -n "$git_dirty" ] && line1+="${pink}💫${reset}"
 fi
 if [ -n "$session_duration" ]; then
     line1+="${sep}"
-    line1+="${white}⏱ ${session_duration}${reset}"
+    line1+="${white}⏱  ${session_duration}${reset}"
 fi
 if [ "$total_cost" != "\$0.00" ]; then
     line1+="${sep}"
-    line1+="${yellow}💰 ${total_cost}${reset}"
+    line1+="${yellow}💰  ${total_cost}${reset}"
 fi
 
 # ── OAuth token resolution ──────────────────────────────
@@ -328,8 +329,8 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
     five_hour_pct_color=$(color_for_pct "$five_hour_pct")
     five_hour_pct_fmt=$(printf "%3d" "$five_hour_pct")
 
-    rate_lines+="${white}⚡${reset} ${five_hour_bar} ${five_hour_pct_color}${five_hour_pct_fmt}%${reset}"
-    [ -n "$five_hour_reset" ] && rate_lines+=" ${dim}🔄${reset} ${white}${five_hour_reset}${reset}"
+    rate_lines+="${white}⚡${reset}  ${five_hour_bar} ${five_hour_pct_color}${five_hour_pct_fmt}%${reset}"
+    [ -n "$five_hour_reset" ] && rate_lines+=" ${dim}🔄${reset}  ${white}${five_hour_reset}${reset}"
 
     seven_day_pct=$(echo "$usage_data" | jq -r '.seven_day.utilization // 0' | awk '{printf "%.0f", $1}')
     seven_day_reset_iso=$(echo "$usage_data" | jq -r '.seven_day.resets_at // empty')
@@ -338,8 +339,8 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
     seven_day_pct_color=$(color_for_pct "$seven_day_pct")
     seven_day_pct_fmt=$(printf "%3d" "$seven_day_pct")
 
-    rate_lines+="\n${white}📅${reset} ${seven_day_bar} ${seven_day_pct_color}${seven_day_pct_fmt}%${reset}"
-    [ -n "$seven_day_reset" ] && rate_lines+=" ${dim}🔄${reset} ${white}${seven_day_reset}${reset}"
+    rate_lines+="\n${white}📅${reset}  ${seven_day_bar} ${seven_day_pct_color}${seven_day_pct_fmt}%${reset}"
+    [ -n "$seven_day_reset" ] && rate_lines+=" ${dim}🔄${reset}  ${white}${seven_day_reset}${reset}"
 
     extra_enabled=$(echo "$usage_data" | jq -r '.extra_usage.is_enabled // false')
     if [ "$extra_enabled" = "true" ]; then
@@ -349,7 +350,7 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
         extra_bar=$(build_bar "$extra_pct" "$bar_width")
         extra_pct_color=$(color_for_pct "$extra_pct")
 
-        rate_lines+="\n${white}💳${reset} ${extra_bar} ${extra_pct_color}\$${extra_used}${dim}/${reset}${white}\$${extra_limit}${reset}"
+        rate_lines+="\n${white}💳${reset}  ${extra_bar} ${extra_pct_color}\$${extra_used}${dim}/${reset}${white}\$${extra_limit}${reset}"
     fi
 fi
 
