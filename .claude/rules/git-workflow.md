@@ -79,16 +79,45 @@ main ──┬── feat/xxx ──── PR ──→ main
 
 ## Pull Request 流程
 
-1. 分析完整 commit 歷史（不只最新 commit）
-2. 使用 `git diff [base-branch]...HEAD` 查看所有變更
-3. PR 標題：簡述 WHAT（< 70 字元）
-4. PR Body 結構：
-   - **Background** — 為什麼要做這個 PR（連結 issue/討論）
-   - **Changes** — 核心變更摘要（不是 file list）
-   - **Impact** — 破壞性變更、migration 步驟
-   - **Test Plan** — 如何驗證
-5. 新分支用 `-u` flag push
-6. 每個 PR 的 commit 歷史應該乾淨可讀 — 必要時 squash 或 rebase
+### 前置條件（建立 PR 前必須全部滿足）
+
+- [ ] 所有測試通過（unit + integration + E2E）
+- [ ] commit 歷史已審計（WHY/WHAT/IMPACT body 完整）
+- [ ] 已自我 review 完整 diff：`git diff <base>...HEAD`
+- [ ] 無殘留 debug code（console.log、TODO hack、commented-out code）
+- [ ] PR 大小合理 — 超過 400 行 diff 或 10+ 檔案時，考慮拆分
+
+### 品質標準
+
+標題：`<type>(<scope>): <subject>`（< 70 字元）
+
+Body 結構（每個區段必填）：
+
+| 區段 | 內容 |
+| :--- | :--- |
+| **Background** | 為什麼做這個 PR — 問題、動機、關聯 issue |
+| **Changes** | 核心決策和取捨（不是 file list） |
+| **Impact** | 破壞性變更、migration、受影響模組 |
+| **Test Plan** | 具體驗證步驟 checklist |
+
+### 提交步驟
+
+1. 確認前置條件全部滿足
+2. `git push -u origin <branch>`
+3. `gh pr create`（使用上述 Body 結構）
+4. 載入 sunnydata-code-review skill 進行 self-review
+5. 指定 reviewer（如適用）
+
+### Merge 策略
+
+| 場景 | 策略 | 理由 |
+| :--- | :--- | :--- |
+| 功能分支（1-3 commits，邏輯清晰） | Merge commit | 保留完整歷史 |
+| 功能分支（多個零散 commit） | Squash merge | 合併為一個乾淨 commit |
+| 長期分支同步 | Rebase | 保持線性歷史 |
+| Hotfix | Merge commit | 可追溯修復點 |
+
+Merge 後刪除遠端分支：`git push origin --delete <branch>`
 
 ## 版本管理
 

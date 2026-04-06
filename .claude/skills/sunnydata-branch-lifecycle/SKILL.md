@@ -212,35 +212,69 @@ Then: proceed to Step 5 (cleanup worktree).
 
 #### Option 2 — Push and Create PR
 
+**Pre-flight checklist (mandatory — present to user before proceeding):**
+
+```
+PR Pre-flight Check:
+✓/✗ All tests passing
+✓/✗ Commit history audited (Step 2)
+✓/✗ Self-review of full diff completed
+✓/✗ No debug code residue (console.log, TODO hacks)
+✓/✗ PR size reasonable (< 400 lines diff, < 10 files)
+```
+
+If PR exceeds size limits, suggest splitting:
+```
+This PR touches <N> files with <M> lines changed.
+Consider splitting into smaller, focused PRs:
+1. <suggested split 1>
+2. <suggested split 2>
+
+Proceed as single PR anyway?
+```
+
+**Execute:**
+
 ```bash
 git push -u origin <feature-branch>
 ```
 
-Commit message format follows `.claude/rules/git-workflow.md` (Conventional Commits: `<type>: <description>`).
-
-```bash
-gh pr create --title "<type>(<scope>): <subject>" --body "$(cat <<'EOF'
-## Background
-<Why this PR exists — problem, trigger, motivation>
-
-## Changes
-<Key decisions and tradeoffs, not a file list>
-
-## Impact
-<Breaking changes, migration steps, affected modules>
-
-## Test Plan
-- [ ] <verification step>
-- [ ] <verification step>
-EOF
-)"
-```
-
-Before creating the PR, review the full diff:
+Review full diff before writing PR body:
 
 ```bash
 git diff <base-branch>...HEAD
 ```
+
+Analyze ALL commits (not just the latest) to write an accurate summary:
+
+```bash
+git log --oneline <base-branch>..HEAD
+```
+
+Create PR following `.claude/rules/git-workflow.md` PR quality standard:
+
+```bash
+gh pr create --title "<type>(<scope>): <subject>" --body "$(cat <<'EOF'
+## Background
+<Why this PR exists — the problem, what triggered it, the motivation>
+<Link to issue: #NNN>
+
+## Changes
+<Key decisions and tradeoffs — not a file list>
+<Why approach A over B>
+
+## Impact
+<Breaking changes, migration steps, affected modules>
+<If none: "No breaking changes.">
+
+## Test Plan
+- [ ] <specific verification step>
+- [ ] <specific verification step>
+EOF
+)"
+```
+
+After PR is created, invoke `sunnydata-code-review` skill for structured self-review.
 
 Then: proceed to Step 5 (cleanup worktree).
 
