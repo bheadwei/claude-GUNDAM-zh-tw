@@ -141,19 +141,39 @@ Ready to implement <feature-name>
 npm test / cargo test / pytest / go test ./...
 ```
 
-If tests fail:
+If tests fail: stop. Do not present options until tests pass.
+
+### Step 2: Audit Commit History (mandatory pre-condition)
+
+Before presenting options, review the commit log for quality:
+
+```bash
+git log --oneline <base-branch>..HEAD
+```
+
+**Check each commit against `.claude/rules/git-workflow.md`:**
+
+| Check | Fail action |
+|-------|-------------|
+| Subject > 72 chars or vague ("fix", "update", "misc") | Flag to user, suggest reword |
+| Missing body (WHY/WHAT/IMPACT) | Flag to user, suggest amend or squash |
+| Single commit touches 10+ unrelated files | Suggest splitting into logical commits |
+| Multiple commits do the same thing | Suggest squash |
+
+**Present audit summary to user:**
 
 ```
-Tests failing (<N> failures). Must fix before completing:
+Commit history review (N commits):
+✓ <sha> <subject>  — OK
+✗ <sha> <subject>  — Missing WHY in body
+✗ <sha> <subject>  — Subject too vague
 
-[Show failures]
-
-Cannot proceed with merge/PR until tests pass.
+Recommend: squash/reword before merge?
 ```
 
-Stop. Do not present options until tests pass.
+User may choose to proceed as-is or fix. Do not block — this is advisory, not a gate. But always surface the audit.
 
-### Step 2: Determine Base Branch
+### Step 3: Determine Base Branch
 
 ```bash
 git merge-base HEAD main 2>/dev/null || git merge-base HEAD master 2>/dev/null
@@ -161,7 +181,7 @@ git merge-base HEAD main 2>/dev/null || git merge-base HEAD master 2>/dev/null
 
 Or confirm with user: "This branch split from main — is that correct?"
 
-### Step 3: Present Exactly 4 Options
+### Step 4: Present Exactly 4 Options
 
 ```
 Implementation complete. What would you like to do?
@@ -176,7 +196,7 @@ Which option?
 
 Do not add explanation — keep options concise.
 
-### Step 4: Execute Choice
+### Step 5: Execute Choice
 
 #### Option 1 — Merge Locally
 
@@ -199,11 +219,15 @@ git push -u origin <feature-branch>
 Commit message format follows `.claude/rules/git-workflow.md` (Conventional Commits: `<type>: <description>`).
 
 ```bash
-gh pr create --title "<type>: <description>" --body "$(cat <<'EOF'
-## Summary
-- <bullet 1>
-- <bullet 2>
-- <bullet 3>
+gh pr create --title "<type>(<scope>): <subject>" --body "$(cat <<'EOF'
+## Background
+<Why this PR exists — problem, trigger, motivation>
+
+## Changes
+<Key decisions and tradeoffs, not a file list>
+
+## Impact
+<Breaking changes, migration steps, affected modules>
 
 ## Test Plan
 - [ ] <verification step>
@@ -250,7 +274,7 @@ git branch -D <feature-branch>
 
 Then: proceed to Step 5 (cleanup worktree).
 
-### Step 5: Cleanup Worktree
+### Step 6: Cleanup Worktree
 
 **For Options 1, 2, 4** — check if a worktree is registered, then remove it:
 
