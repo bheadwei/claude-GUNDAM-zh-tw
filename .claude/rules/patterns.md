@@ -23,3 +23,5 @@
 - 資料酬載（錯誤時 null）
 - 錯誤訊息欄位（成功時 null）
 - 分頁中繼資料（total, page, limit）
+
+完整 API 設計規範請載入 sunnydata-api-design skill。

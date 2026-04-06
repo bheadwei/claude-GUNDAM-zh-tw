@@ -9,19 +9,14 @@
 - 優先採用經驗證的方案而非全新撰寫
 
 ### 1. 先規劃
-- 使用 planner agent 建立實作計畫
-- 識別依賴和風險
-- 拆解為階段
+- 載入 sunnydata-design skill
+- 探索意圖與需求 → 撰寫實作計畫 → 依檢查點執行
 
 ### 2. TDD 方法
-- 使用 tdd-guide agent
-- 先寫測試 (RED)
-- 實作讓測試通過 (GREEN)
-- 重構 (IMPROVE)
-- 驗證 80%+ 覆蓋率
+- 遵循 TDD 流程（詳見 testing.md）
 
 ### 3. 程式碼審查
-- 寫完程式碼後立即使用 code-quality-specialist agent
+- 寫完程式碼後載入 sunnydata-code-review skill
 - 處理 CRITICAL 和 HIGH 問題
 
 ### 4. 提交

@@ -24,7 +24,11 @@
 ## 建置疑難排解
 
 建置失敗時：
-1. 使用 build-error-resolver agent
+1. 載入 sunnydata-debugging skill
 2. 分析錯誤訊息
 3. 增量修復
 4. 每次修復後驗證
+
+## 平行任務處理
+
+面對 2+ 個獨立任務時，載入 sunnydata-parallel-agents skill 進行平行派發。

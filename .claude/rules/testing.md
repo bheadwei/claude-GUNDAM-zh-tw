@@ -18,7 +18,7 @@
 
 ## 測試失敗排除
 
-1. 使用 tdd-guide agent
+1. 載入 sunnydata-testing skill
 2. 檢查測試隔離
 3. 驗證 mock 正確性
 4. 修實作而非測試（除非測試有誤）
