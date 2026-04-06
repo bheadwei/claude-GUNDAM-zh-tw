@@ -28,6 +28,15 @@
 - 快速失敗，清晰錯誤訊息
 - 永遠不信任外部資料
 
+## 命名慣例
+
+- 元件檔案：PascalCase（`Button.tsx`）
+- Hook 檔案：camelCase + `use` 前綴（`useAuth.ts`）
+- 工具函式：camelCase（`formatDate.ts`）
+- 型別檔案：camelCase + `.types` 後綴（`market.types.ts`）
+- 函式命名：動詞-名詞（`fetchMarketData`, `isValidEmail`）
+- 避免使用 `any` 型別
+
 ## 品質檢查清單
 
 - [ ] 程式碼可讀、命名良好
