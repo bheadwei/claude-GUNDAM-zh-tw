@@ -41,15 +41,17 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 0
 fi
 
-# ── Colors ──────────────────────────────────────────────
-blue='\033[38;2;0;153;255m'
-orange='\033[38;2;255;176;85m'
-green='\033[38;2;0;175;80m'
-cyan='\033[38;2;86;182;194m'
-red='\033[38;2;255;85;85m'
-yellow='\033[38;2;230;200;0m'
-white='\033[38;2;220;220;220m'
-magenta='\033[38;2;180;140;255m'
+# ── Colors (Tesla High-Contrast) ───────────────────────
+red='\033[38;2;232;33;39m'        # Tesla Red #E82127
+blue='\033[38;2;56;172;255m'      # Electric Blue #38ACFF
+green='\033[38;2;0;230;118m'      # Neon Green #00E676
+cyan='\033[38;2;0;229;255m'       # Cyber Cyan #00E5FF
+orange='\033[38;2;255;167;38m'    # Amber #FFA726
+yellow='\033[38;2;255;234;0m'     # Volt Yellow #FFEA00
+white='\033[38;2;245;245;245m'    # Pure White #F5F5F5
+silver='\033[38;2;176;190;197m'   # Tesla Silver #B0BEC5（備用）
+gray='\033[38;2;120;120;130m'     # Steel Gray #787882（備用）
+pink='\033[38;2;255;82;82m'       # Signal Red / dirty #FF5252
 dim='\033[2m'
 reset='\033[0m'
 
@@ -73,6 +75,18 @@ color_for_pct() {
     elif [ "$pct" -ge 70 ] 2>/dev/null; then printf "$yellow"
     elif [ "$pct" -ge 50 ] 2>/dev/null; then printf "$orange"
     else printf "$green"
+    fi
+}
+
+# Context % → 水位 icon（與 STATUSLINE_GUIDE「Token 水位」表一致）
+level_icon_for_pct() {
+    local pct=$1
+    if [ "$pct" -lt 30 ] 2>/dev/null; then printf '%s' '❄️'
+    elif [ "$pct" -lt 50 ] 2>/dev/null; then printf '%s' '🌊'
+    elif [ "$pct" -lt 70 ] 2>/dev/null; then printf '%s' '🌡'
+    elif [ "$pct" -lt 85 ] 2>/dev/null; then printf '%s' '♨️'
+    elif [ "$pct" -lt 95 ] 2>/dev/null; then printf '%s' '🔥'
+    else printf '%s' '💥'
     fi
 }
 
@@ -139,6 +153,13 @@ format_reset_time() {
 
 # ── Extract JSON data ───────────────────────────────────
 model_name=$(echo "$input" | jq -r '.model.display_name // "Claude"')
+model_name_lc=$(printf '%s' "$model_name" | tr '[:upper:]' '[:lower:]')
+case "$model_name_lc" in
+    *opus*)   model_icon='🦁'; model_color=$red ;;
+    *sonnet*) model_icon='🦅'; model_color=$blue ;;
+    *haiku*)  model_icon='🐦'; model_color=$green ;;
+    *)        model_icon='🤖'; model_color=$cyan ;;
+esac
 
 size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
 [ "$size" -eq 0 ] 2>/dev/null && size=200000
@@ -182,6 +203,7 @@ fi
 
 # ── LINE 1 ──────────────────────────────────────────────
 pct_color=$(color_for_pct "$pct_used")
+level_icon=$(level_icon_for_pct "$pct_used")
 cwd=$(echo "$input" | jq -r '.cwd // ""')
 [ -z "$cwd" ] || [ "$cwd" = "null" ] && cwd=$(pwd)
 dirname=$(basename "$cwd")
@@ -191,26 +213,28 @@ git_dirty=""
 if git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     git_branch=$(git -C "$cwd" symbolic-ref --short HEAD 2>/dev/null)
     if [ -n "$(git -C "$cwd" status --porcelain 2>/dev/null)" ]; then
-        git_dirty="*"
+        git_dirty="y"
     fi
 fi
 
-# Build line 1: Model | pct% (used/total) | dir (branch) | session | cost
-line1="${blue}${model_name}${reset}"
+# Build line 1: icon+Model | 水位+pct% | 📂 dir 🌿 branch💫 | ⏱ | 💰
+# 多數終端對 emoji 寬度與游標前進不一致，emoji 後多補一個空格避免與後續文字疊字。
+line1="${model_color}${model_icon}  ${model_name}${reset}"
 line1+="${sep}"
-line1+="${pct_color}${pct_used}%${reset} ${dim}(${used_tokens}/${total_tokens})${reset}"
+line1+="${level_icon}${reset}  ${pct_color}${pct_used}%${reset} ${dim}(${used_tokens}/${total_tokens})${reset}"
 line1+="${sep}"
-line1+="${cyan}${dirname}${reset}"
+line1+="${cyan}📂  ${dirname}${reset}"
 if [ -n "$git_branch" ]; then
-    line1+=" ${green}(${git_branch}${red}${git_dirty}${green})${reset}"
+    line1+=" ${green}🌿  ${git_branch}${reset}"
+    [ -n "$git_dirty" ] && line1+="${pink}💫${reset}"
 fi
 if [ -n "$session_duration" ]; then
     line1+="${sep}"
-    line1+="${white}${session_duration}${reset}"
+    line1+="${white}⏱  ${session_duration}${reset}"
 fi
 if [ "$total_cost" != "\$0.00" ]; then
     line1+="${sep}"
-    line1+="${yellow}${total_cost}${reset}"
+    line1+="${yellow}💰  ${total_cost}${reset}"
 fi
 
 # ── OAuth token resolution ──────────────────────────────
@@ -304,8 +328,8 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
     five_hour_pct_color=$(color_for_pct "$five_hour_pct")
     five_hour_pct_fmt=$(printf "%3d" "$five_hour_pct")
 
-    rate_lines+="${white}current${reset} ${five_hour_bar} ${five_hour_pct_color}${five_hour_pct_fmt}%${reset}"
-    [ -n "$five_hour_reset" ] && rate_lines+=" ${dim}⟳${reset} ${white}${five_hour_reset}${reset}"
+    rate_lines+="${white}⚡${reset}  ${five_hour_bar} ${five_hour_pct_color}${five_hour_pct_fmt}%${reset}"
+    [ -n "$five_hour_reset" ] && rate_lines+=" ${dim}🔄${reset}  ${white}${five_hour_reset}${reset}"
 
     seven_day_pct=$(echo "$usage_data" | jq -r '.seven_day.utilization // 0' | awk '{printf "%.0f", $1}')
     seven_day_reset_iso=$(echo "$usage_data" | jq -r '.seven_day.resets_at // empty')
@@ -314,8 +338,8 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
     seven_day_pct_color=$(color_for_pct "$seven_day_pct")
     seven_day_pct_fmt=$(printf "%3d" "$seven_day_pct")
 
-    rate_lines+="\n${white}weekly${reset}  ${seven_day_bar} ${seven_day_pct_color}${seven_day_pct_fmt}%${reset}"
-    [ -n "$seven_day_reset" ] && rate_lines+=" ${dim}⟳${reset} ${white}${seven_day_reset}${reset}"
+    rate_lines+="\n${white}📅${reset}  ${seven_day_bar} ${seven_day_pct_color}${seven_day_pct_fmt}%${reset}"
+    [ -n "$seven_day_reset" ] && rate_lines+=" ${dim}🔄${reset}  ${white}${seven_day_reset}${reset}"
 
     extra_enabled=$(echo "$usage_data" | jq -r '.extra_usage.is_enabled // false')
     if [ "$extra_enabled" = "true" ]; then
@@ -325,7 +349,7 @@ if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
         extra_bar=$(build_bar "$extra_pct" "$bar_width")
         extra_pct_color=$(color_for_pct "$extra_pct")
 
-        rate_lines+="\n${white}extra${reset}   ${extra_bar} ${extra_pct_color}\$${extra_used}${dim}/${reset}${white}\$${extra_limit}${reset}"
+        rate_lines+="\n${white}💳${reset}  ${extra_bar} ${extra_pct_color}\$${extra_used}${dim}/${reset}${white}\$${extra_limit}${reset}"
     fi
 fi
 
