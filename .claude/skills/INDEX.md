@@ -17,14 +17,12 @@
 
 ## 擴充方式
 
-更多 skill 可從 everything-claude 複製：
+更多 skill 可從備份取材池複製（共 94 個，見
+[`.claude/custom-rule&skill/skills/INDEX.md`](../custom-rule&skill/skills/INDEX.md)）：
 
 ```bash
 # 複製特定 skill
-cp -r everything-claude/everything-claude-code/skills/[skill-name] .claude/skills/
-
-# 可用的 skill（95 個）
-ls everything-claude/everything-claude-code/skills/
+cp -r .claude/custom-rule&skill/skills/[skill-name] .claude/skills/
 ```
 
 ### 推薦擴充
