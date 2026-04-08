@@ -5,6 +5,7 @@
 # Claude Code 個人設定
 .claude/settings.local.json
 .claude/taskmaster-data/
+.claude/sessions/
 
 # Node
 node_modules/
@@ -27,5 +28,4 @@ Thumbs.db
 tmp/
 *.tmp
 *.bak
-
 
