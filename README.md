@@ -7,6 +7,7 @@
 **核心文件**：
 - 📖 [`.claude/MECHANISMS.md`](.claude/MECHANISMS.md) — Agent / Skill / Command / Hook / Context 五套擴充機制的權威對照
 - 📘 [`.claude/CONTEXT_USAGE.md`](.claude/CONTEXT_USAGE.md) — Context 跨 session 共享系統使用指南
+- 📙 [`.claude/PAUSE_RESUME_GUIDE.md`](.claude/PAUSE_RESUME_GUIDE.md) — 開發暫停 / 恢復 SOP
 - 📗 [`.claude/WORKFLOW.md`](.claude/WORKFLOW.md) — 完整開發流程
 
 ---
@@ -40,6 +41,7 @@ claude_v2026/
 │   ├── settings.json                 # 主設定（權限、StatusLine、Hooks）
 │   ├── MECHANISMS.md                 # 五機制權威對照（必讀）
 │   ├── CONTEXT_USAGE.md              # Context 系統使用指南
+│   ├── PAUSE_RESUME_GUIDE.md         # 開發暫停 / 恢復 SOP
 │   ├── WORKFLOW.md                   # 開發流程指南
 │   ├── agents/          (13 個)      # 專業 Agent
 │   ├── commands/        (17 個)      # Slash Commands
