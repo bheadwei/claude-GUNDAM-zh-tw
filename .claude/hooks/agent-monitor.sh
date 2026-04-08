@@ -3,11 +3,11 @@
 # Agent Activity Monitor Hook
 # 記錄所有 subagent 的啟動、prompt、結果和耗時
 # 支援 PreToolUse 和 PostToolUse 事件
+#
+# 不使用 set -e：hook 不應因小錯而失敗
 
-set -e
-
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null)" || SCRIPT_DIR="."
+PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd 2>/dev/null)}" || PROJECT_ROOT="."
 LOG_DIR="$PROJECT_ROOT/.claude/logs"
 LOG_FILE="$LOG_DIR/agent-activity.log"
 LOG_JSONL="$LOG_DIR/agent-activity.jsonl"

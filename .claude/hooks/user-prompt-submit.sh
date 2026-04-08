@@ -3,18 +3,19 @@
 # TaskMaster User Prompt Submit Hook
 # 當用戶提交 prompt 時檢查是否包含 TaskMaster 相關命令
 
-set -e
+# 不使用 set -e：hook 不應因小錯而失敗
+# stdout 必須保持安靜，否則 Claude Code 會把 log 訊息當成 hook 輸出
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null)" || SCRIPT_DIR="."
+PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd 2>/dev/null)}" || PROJECT_ROOT="."
 CLAUDE_DIR="$PROJECT_ROOT/.claude"
 
 # 確保 logs 目錄存在
-mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null
+mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null || true
 
-# 日誌函數
+# 日誌函數（只寫檔案，不污染 stdout）
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$CLAUDE_DIR/logs/hooks.log"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
 }
 
 # 從 stdin 讀取 hook JSON 輸入

@@ -67,10 +67,10 @@ fi
 # 確保 logs 目錄存在
 mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null
 
-# 日誌函數（跨平台兼容）
+# 日誌函數（跨平台兼容、只寫檔案不污染 stdout）
 log() {
     local timestamp="[$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo '????-??-?? ??:??:??')]"
-    echo "$timestamp $1" | tee -a "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || echo "$timestamp $1"
+    echo "$timestamp $1" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
 }
 
 log "🪝 TaskMaster Session Start Hook 觸發 (Platform: $PLATFORM)"
