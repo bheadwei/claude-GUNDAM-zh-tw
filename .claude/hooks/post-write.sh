@@ -48,25 +48,8 @@ if [[ "$FILE_PATH" == *.md ]]; then
                 node "$CLAUDE_DIR/taskmaster.js" --hook-trigger=document-generated --file="$FILE_PATH"
             fi
 
-            # 顯示駕駛員審查提示
-            cat << EOF
-
-┌──────────────────────────────────────────────────────────┐
-│  📄 文檔生成完成通知                                      │
-│                                                          │
-│  檔案: $(basename "$FILE_PATH")                          │
-│  路徑: $FILE_PATH                           │
-│                                                          │
-│  🔍 駕駛員審查檢查點                                      │
-│  請檢查生成的文檔內容，確認品質後：                      │
-│                                                          │
-│  ✅ 批准: /task-review approve                           │
-│  🔄 修改: /task-review revise                            │
-│  ⏸️ 暫停: /task-review pause                             │
-│                                                          │
-└──────────────────────────────────────────────────────────┘
-
-EOF
+            # 記錄駕駛員審查檢查點（寫入 log，不污染 stdout）
+            log "📄 文檔生成完成: $(basename "$FILE_PATH") — 請執行 /task-review {approve|revise|pause}"
         fi
     fi
 
@@ -90,19 +73,7 @@ if [[ "$FILE_PATH" == *"taskmaster-data/wbs.md"* ]]; then
     mkdir -p "$CLAUDE_DIR/taskmaster-data" 2>/dev/null
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WBS 更新" >> "$WBS_LOG"
 
-    cat << EOF
-
-┌──────────────────────────────────────────────────────────┐
-│  📋 WBS 任務清單已同步                                    │
-│                                                          │
-│  檔案: .claude/taskmaster-data/wbs.md                    │
-│  時間: $(date '+%Y-%m-%d %H:%M:%S')                     │
-│                                                          │
-│  📊 /task-status  查看最新狀態                            │
-│  ➡️  /task-next    取得下一個任務                          │
-└──────────────────────────────────────────────────────────┘
-
-EOF
+    log "📋 WBS 任務清單已同步: .claude/taskmaster-data/wbs.md（使用 /task-status 或 /task-next）"
 fi
 
 # 檢查是否為 TaskMaster 核心檔案更新

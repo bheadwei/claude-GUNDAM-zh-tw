@@ -40,14 +40,13 @@ if [ -f "$CLAUDE_DIR/taskmaster-data/project.json" ]; then
     if command -v jq >/dev/null 2>&1 && [ -f "$CLAUDE_DIR/taskmaster-data/project.json" ]; then
         PROJECT_NAME=$(jq -r '.name // "未知專案"' "$CLAUDE_DIR/taskmaster-data/project.json")
 
-        echo "📋 TaskMaster 當前狀態:"
-        echo "   專案名稱: $PROJECT_NAME"
+        log "📋 TaskMaster 當前狀態: 專案名稱=$PROJECT_NAME"
 
         # 檢查是否有待審查的文檔
         if [ -d "$PROJECT_ROOT/docs" ]; then
             PENDING_DOCS=$(find "$PROJECT_ROOT/docs" -name "*.md" -newer "$CLAUDE_DIR/taskmaster-data/project.json" 2>/dev/null | wc -l)
             if [ "$PENDING_DOCS" -gt 0 ]; then
-                echo "   🔍 待審查文檔: $PENDING_DOCS 個"
+                log "   🔍 待審查文檔: $PENDING_DOCS 個"
             fi
         fi
     fi
@@ -59,8 +58,7 @@ case "$TOOL_NAME" in
         log "📝 Write 工具即將使用"
         # 檢查是否為文檔目錄寫入
         if [[ "$TOOL_ARGS" == *"docs/"* ]]; then
-            log "📄 即將寫入專案文檔"
-            echo "💡 提示: 文檔寫入後將觸發 TaskMaster 審查流程"
+            log "📄 即將寫入專案文檔（文檔寫入後將觸發 TaskMaster 審查流程）"
         fi
         ;;
 
@@ -84,8 +82,7 @@ case "$TOOL_NAME" in
         log "🤖 Task 工具即將使用 (智能體委派)"
         # 提供智能體協調上下文
         if [ -f "$CLAUDE_DIR/taskmaster-data/project.json" ]; then
-            echo "🤖 TaskMaster Hub 協調模式啟用"
-            echo "   所有智能體委派將記錄在 WBS Todo List 中"
+            log "🤖 TaskMaster Hub 協調模式啟用（agent 委派將記錄於 WBS Todo List）"
         fi
         ;;
 esac
