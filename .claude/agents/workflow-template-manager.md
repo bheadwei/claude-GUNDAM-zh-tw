@@ -1,6 +1,6 @@
 ---
 name: workflow-template-manager
-description: 工作流模板管理專家，負責開發生命週期協調和 VibeCoding 模板整合
+description: VibeCoding 流程模板管理專家，負責 PRD/ADR/設計文檔等過程性文件的模板套用與生命週期協調（不處理 codemap 與 API 文檔）
 tools: ["Read", "Write", "Grep", "WebSearch"]
 model: opus
 ---

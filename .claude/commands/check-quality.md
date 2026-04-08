@@ -1,5 +1,5 @@
 ---
-description: 全面品質評估，根據 VibeCoding 模板進行分析並建議適合的 Agent。
+description: 對整個專案做品質評估與 agent 路由推薦（不直接執行審查，先分流再決定要叫哪個 agent）。範圍：整個專案。
 ---
 
 # 品質評估

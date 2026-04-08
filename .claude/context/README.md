@@ -1,6 +1,24 @@
 # Context 目錄說明
 
-此目錄用於儲存各個 Subagent 的工作成果和主 Claude Code Agent 的決策記錄，實現跨 agent 的上下文共享。
+> **狀態：啟用中**（v2，2026-04-08）
+> 此目錄儲存各 Subagent 的結構化技術發現報告，實現跨 session、跨 agent 的上下文共享。
+> 與 `../coordination/` 搭配，詳見根目錄 `MECHANISMS.md`。
+
+## 與 Auto-memory / save-session 的邊界
+
+- **context/**（本目錄）= 結構化、按領域分類、機器可讀的 agent 技術發現
+- **save-session**（`.claude/sessions/`）= 整個 session 的人類可讀進度報告
+- **Auto-memory**（Claude Code 內建）= Claude 對使用者偏好的自然語言記憶
+- 三者**互補不重疊**，詳見 `MECHANISMS.md`
+
+## 報告格式
+
+所有報告必須遵循 `_REPORT_TEMPLATE.md` 的 frontmatter 與段落結構。
+
+## 自動清理
+
+每個 area 只保留最新 5 份報告，舊的歸檔到 `<area>/_archive/`。
+執行 `bash .claude/scripts/context-gc.sh` 觸發 GC。
 
 ## 目錄結構
 

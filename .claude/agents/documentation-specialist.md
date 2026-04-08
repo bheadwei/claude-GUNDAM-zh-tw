@@ -1,6 +1,6 @@
 ---
 name: documentation-specialist
-description: 技術文檔與 codemap 專家，專注於 API 文檔、系統文檔、codemap 生成和知識庫維護
+description: Codemap 與 API 文檔專家，從程式碼結構自動生成 codemap、維護 API 文檔與技術 README（不處理 PRD/ADR 等流程模板）
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
 model: opus
 ---

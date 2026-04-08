@@ -1,6 +1,14 @@
 # Coordination 協調機制目錄
 
-此目錄管理 Subagent 之間的協調機制，包括任務交接和衝突解決記錄。
+> **狀態：啟用中**（v2，2026-04-08）
+> 此目錄管理 Subagent 之間的協調機制，包括任務交接和衝突解決記錄。
+> 與 `../context/` 系統搭配使用，詳見根目錄 `MECHANISMS.md`。
+
+## 快速使用
+
+- **建立交接**：複製 `handoffs/_HANDOFF_TEMPLATE.md`，命名為 `<from>-to-<to>-<YYYY-MM-DD-HHMM>.md`
+- **查看待處理交接**：列出 `handoffs/` 中 `status: pending` 的檔案
+- **記錄衝突**：在 `conflicts/` 建立 `conflict-<YYYY-MM-DD-HHMM>-<簡述>.md`
 
 ## 目錄結構
 

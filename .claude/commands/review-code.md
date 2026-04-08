@@ -1,5 +1,5 @@
 ---
-description: 根據 VibeCoding 模板進行程式碼審查，涵蓋品質、安全、架構合規。
+description: 對指定路徑直接執行程式碼審查（委派 code-quality-specialist），涵蓋品質、安全、架構合規。範圍：單一檔案或目錄。
 ---
 
 # 程式碼審查

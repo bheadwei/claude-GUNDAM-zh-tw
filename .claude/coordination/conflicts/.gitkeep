@@ -1,0 +1,6 @@
+# 衝突解決紀錄目錄
+
+當不同 agent 對同一決策有不同建議時，主 Claude 在此紀錄決策過程。
+命名格式：`conflict-<YYYY-MM-DD-HHMM>-<簡述>.md`
+
+詳見 `../README.md`
