@@ -17,6 +17,8 @@ description: 協調 Agent 委派執行任務，分析任務特性並建議最適
 
 ## 輸出格式
 
+先顯示分析結果：
+
 ```
 任務分析:
   任務: [任務描述]
@@ -26,13 +28,22 @@ description: 協調 Agent 委派執行任務，分析任務特性並建議最適
 Agent 建議:
   最佳: [agent-name] (適合度 95%)
   替代: [agent-name] (適合度 80%)
-
-請選擇:
-  [1] 啟動建議的 Agent
-  [2] 選擇替代 Agent
-  [3] 指定其他 Agent
-  [N] 取消
 ```
+
+然後**必須使用 `AskUserQuestion`** 詢問決定（遵守 `.claude/rules/interactive-qa.md`）：
+
+- 「啟動建議的 Agent」（Recommended）
+- 「選擇替代 Agent」
+- 「指定其他 Agent」
+- 「取消」
+
+## 問答記錄
+
+遵守 `.claude/rules/interactive-qa.md`：
+
+- 流程結束後**一次性** `Write` 到 `.claude/qa-history/YYYY-MM-DD-HHMMSS-hub-delegate.md`
+- 記錄：任務分析、Agent 建議、使用者選擇、最終委派結果
+- 不要每題都寫（省 token）
 
 ## 使用方式
 

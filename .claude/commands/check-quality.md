@@ -16,6 +16,8 @@ description: 對整個專案做品質評估與 agent 路由推薦（不直接執
 
 ## 輸出格式
 
+先顯示評估結果：
+
 ```
 品質評估結果:
   程式碼品質:  [A/B/C/D]
@@ -23,15 +25,24 @@ description: 對整個專案做品質評估與 agent 路由推薦（不直接執
   測試覆蓋:    [X]%
   安全檢查:    [通過/有風險]
   模板合規:    [X]%
-
-建議的 Agent:
-  [1] code-quality-specialist -- 深度程式碼審查
-  [2] security-infrastructure-auditor -- 安全稽核
-  [3] test-automation-engineer -- 測試補強
-  [4] deployment-expert -- 部署就緒檢查
-
-請選擇 (1-4) 或輸入 N 跳過:
 ```
+
+然後**必須使用 `AskUserQuestion`** 詢問後續動作（遵守 `.claude/rules/interactive-qa.md`）：
+
+- 「code-quality-specialist — 深度程式碼審查」
+- 「security-infrastructure-auditor — 安全稽核」
+- 「test-automation-engineer — 測試補強」
+- 「deployment-expert — 部署就緒檢查」
+
+（依評估結果決定推薦順序，問題可設 `multiSelect: true` 允許同時選多個 Agent）
+
+## 問答記錄
+
+遵守 `.claude/rules/interactive-qa.md`：
+
+- 流程結束後**一次性** `Write` 到 `.claude/qa-history/YYYY-MM-DD-HHMMSS-check-quality.md`
+- 記錄：評估結果、使用者選擇、後續執行的 Agent
+- 不要每題都寫（省 token）
 
 ## 使用方式
 
