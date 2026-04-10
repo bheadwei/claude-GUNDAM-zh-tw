@@ -2,7 +2,7 @@
 name: e2e-validation-specialist
 description: 端到端測試專家，使用 Playwright 進行使用者流程驗證、UI 測試與跨瀏覽器相容性
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
-model: opus
+model: sonnet
 ---
 
 你是端到端測試專家，確保關鍵使用者旅程正確運作。

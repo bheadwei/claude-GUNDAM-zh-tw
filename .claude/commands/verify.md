@@ -52,6 +52,19 @@ Ready for PR: [YES/NO]
 
 如有任何關鍵問題，列出並附修復建議。
 
+## 任務完成銜接
+
+若 `.claude/taskmaster-data/.current-task` 存在（表示有進行中的任務），且驗證結果為 PASS：
+
+1. 將該任務狀態更新為 `✅ 完成`
+2. 清除 `.current-task`
+3. 用 `AskUserQuestion` 詢問下一步（遵守 `.claude/rules/interactive-qa.md`）：
+   - 「繼續下一個任務」(Recommended) — 自動執行 `/task-next` 流程
+   - 「查看目前進度」 — 顯示 WBS 狀態摘要
+   - 「結束，稍後再繼續」 — 停止
+
+這樣使用者不用手動再跑 `/task-next`，形成 **自動任務接力**。
+
 ## 參數
 
 $ARGUMENTS 可以是：
