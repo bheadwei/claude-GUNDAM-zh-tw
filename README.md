@@ -193,10 +193,15 @@ claude_v2026/
 
 ## 新專案設定
 
-1. 複製整個 `claude_v2026` 目錄到新位置
+1. 複製必要檔案到新專案：
+   ```bash
+   cp -r .claude/ <新專案>/
+   cp .gitattributes <新專案>/          # 確保 .sh 換行符正確（Windows 必備）
+   cp CLAUDE_TEMPLATE.md <新專案>/      # 初始化哨兵（可選）
+   ```
 2. 複製 MCP 範本：
-   - Windows: `cp .mcp.json.windows.example .mcp.json`
-   - Linux: `cp .mcp.json.linux.example .mcp.json`
+   - Windows: `cp .mcp.json.windows.example <新專案>/.mcp.json`
+   - Linux: `cp .mcp.json.linux.example <新專案>/.mcp.json`
 3. 編輯 `.mcp.json` 填入 API keys
 4. （可選）複製語言規則：`cp .claude/custom-rule&skill/rules/<lang>/*.md .claude/rules/`
 5. （可選）複製額外 skill：`cp -r .claude/custom-rule&skill/skills/<name> .claude/skills/`
