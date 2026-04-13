@@ -33,7 +33,7 @@ claude_v2026/
 ├── .mcp.json                         # MCP Server 設定（不入 Git）
 ├── .mcp.json.windows.example         # MCP 範本（Windows）
 ├── .mcp.json.linux.example           # MCP 範本（Linux）
-├── VibeCoding_Workflow_Templates/    # 工作流文件範本（16 個）
+├── VibeCoding_Workflow_Templates/    # 工作流文件範本（16 個，編號 01-09,11-17）
 │
 └── .claude/                          # 核心配置
     ├── README.md                     # 配置目錄詳細說明
@@ -177,14 +177,14 @@ claude_v2026/
 
 ---
 
-## VibeCoding 工作流模板（17 個）
+## VibeCoding 工作流模板（16 個）
 
 | 階段 | 模板 |
 | :--- | :--- |
 | 流程總覽 | `01` workflow_manual |
 | 規劃 | `02` PRD、`03` BDD |
 | 架構設計 | `04` ADR、`05` 架構、`06` API |
-| 詳細設計 | `07` 模組、`08` 結構、`09` 依賴、`10` 類別 |
+| 詳細設計 | `07` 模組、`08` 結構、`09` 設計與依賴 |
 | 開發品質 | `11` Review、`12` 前端架構、`17` 前端 IA |
 | 安全部署 | `13` 安全、`14` 部署 |
 | 維護管理 | `15` 文檔、`16` WBS |
@@ -208,7 +208,7 @@ claude_v2026/
 
 | 版本 | 日期 | 變更 |
 | :--- | :--- | :--- |
-| v5.0 | 2026-04-13 | Skills 精簡至 4 個（-85%）、Rules 精簡（-28%）、Hooks 精簡（-81%）、文檔整合到 guides/、新增 project-docs skill、新增 dev-project-kit plugin、刪除通用知識 skill |
+| v5.0 | 2026-04-13 | Skills 精簡至 7 個（-46%）、Rules 精簡（-28%）、Hooks 精簡（-81%）、文檔整合到 guides/、新增 project-docs skill、新增 dev-project-kit plugin、刪除通用知識 skill |
 | v4.4 | 2026-04-08 | Context 系統啟用、MECHANISMS.md、Hook 健壯性修正 |
 | v4.3 | 2026-03-24 | 開發時間追蹤、`/time-log`、StatusLine 持久化 |
 | v4.2 | 2026-03-16 | 跨平台支援（Windows/Linux） |

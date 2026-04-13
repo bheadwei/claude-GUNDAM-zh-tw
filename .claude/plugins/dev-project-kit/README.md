@@ -1,15 +1,18 @@
 # dev-project-kit
 
-專案開發工具包 Plugin，提供 4 個專業 Skills。
+專案開發工具包 Plugin，提供 7 個專業 Skills。
 
 ## 包含的 Skills
 
 | Skill | 用途 |
 |:---|:---|
-| `project-docs` | 依據 VibeCoding 範本撰寫 PRD、架構、API 等 17 種文件 |
+| `project-docs` | 依據 VibeCoding 範本撰寫 PRD、架構、API 等 16 種文件 |
 | `deep-research` | 使用 firecrawl + exa MCP 進行多源深度研究 |
 | `e2e-testing` | Playwright E2E 測試模式（POM、CI/CD、flaky test） |
 | `cost-aware-llm-pipeline` | LLM API 成本優化（模型路由、預算追蹤、Prompt 快取） |
+| `mcp-builder` | MCP Server 開發指南（Python FastMCP / TypeScript SDK） |
+| `database-migrations` | DB Migration 安全模式（Rollback、Zero-downtime） |
+| `postgres-patterns` | PostgreSQL 速查表（查詢優化、Schema 設計、RLS） |
 
 ## 使用方式
 
@@ -46,4 +49,7 @@ claude --plugin-dir /path/to/template/.claude/plugins/dev-project-kit
 /dev-project-kit:deep-research
 /dev-project-kit:e2e-testing
 /dev-project-kit:cost-aware-llm-pipeline
+/dev-project-kit:mcp-builder
+/dev-project-kit:database-migrations
+/dev-project-kit:postgres-patterns
 ```
