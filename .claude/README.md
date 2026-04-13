@@ -18,8 +18,8 @@
 │   └── STATUSLINE_GUIDE.md    # StatusLine 客製化手冊
 ├── agents/       (13 個)      # 專業 Agent 定義
 ├── commands/     (17 個)      # Slash Command
-├── rules/        (7 個)       # 自動載入規則
-├── skills/       (2 個)       # 專案特定領域知識
+├── rules/        (9 個)       # 自動載入規則
+├── skills/       (7 個)       # 專案特定領域知識
 ├── output-styles/ (15 個)     # 輸出樣式模板
 ├── hooks/                     # Hook 腳本庫
 ├── context/                   # 跨 Agent 上下文共享
@@ -31,32 +31,37 @@
 
 | Agent | Model | 用途 |
 | :--- | :--- | :--- |
-| general-purpose | sonnet | 通用問題解決 |
 | planner | opus | 功能規劃 |
 | architect | opus | 架構設計 |
+| security-infrastructure-auditor | opus | 安全稽核 |
 | code-quality-specialist | sonnet | 程式碼審查 |
-| security-infrastructure-auditor | sonnet | 安全稽核 |
 | test-automation-engineer | sonnet | 測試自動化 |
 | tdd-guide | sonnet | TDD 引導 |
 | e2e-validation-specialist | sonnet | E2E 測試 |
-| build-error-resolver | sonnet | 建置修復 |
 | refactor-cleaner | sonnet | 死碼清理 |
-| documentation-specialist | sonnet | 文檔生成 |
+| general-purpose | sonnet | 通用問題解決 |
 | deployment-expert | sonnet | 部署運維 |
-| workflow-template-manager | sonnet | 模板管理 |
+| build-error-resolver | haiku | 建置修復 |
+| documentation-specialist | haiku | 文檔生成 |
+| workflow-template-manager | haiku | 模板管理 |
 
-## Skills（2 個精選）
+## Skills（7 個精選）
 
-只保留專案特定知識。通用知識（coding standards、REST API、OWASP、TDD、Docker）由模型內建 + `rules/` 覆蓋。
+僅保留模型不知道的專案特定知識。
 
 | Skill | 用途 |
 | :--- | :--- |
+| project-docs | 依據 VibeCoding 範本撰寫專案文件 |
 | deep-research | 多源深度研究（MCP 串接） |
 | e2e-testing | Playwright E2E 測試模式 |
+| cost-aware-llm-pipeline | LLM API 成本優化 |
+| mcp-builder | MCP Server 開發指南 |
+| database-migrations | DB Migration 安全模式 |
+| postgres-patterns | PostgreSQL 速查表 |
 
 按需從 `custom-rule&skill/skills/` 複製語言特定 skill。
 
-## Rules（7 個，自動載入）
+## Rules（9 個，自動載入）
 
 每次對話自動注入 context，無需手動觸發。
 
@@ -70,6 +75,7 @@
 | testing | 80%+ 覆蓋率、TDD |
 | performance | 模型選擇、Context 管理 |
 | patterns | Repository Pattern、API 格式 |
+| ui-design | Apple 風格簡約設計、毛玻璃效果 |
 
 ## Hooks
 

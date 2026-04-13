@@ -150,7 +150,7 @@ C4Component
 
 #### 2.4 Level 4: 代碼視圖 (可選,關鍵模組)
 
-關鍵類別與交互序列圖 (詳見 10_class_relationships_template.md)
+關鍵類別與交互序列圖 (詳見 09_design_and_dependencies.md)
 
 ### 3. DDD 戰略設計 (Strategic Design)
 
@@ -405,7 +405,7 @@ graph TB
 - **決策記錄**: 04_architecture_decision_record_template.md (ADR)
 - **API設計**: 06_api_design_specification.md (介面契約)
 - **領域設計**: 04-ddd-aggregate-spec.md (聚合詳細設計)
-- **類別關係**: 10_class_relationships_template.md (靜態結構)
+- **類別關係**: 09_design_and_dependencies.md (靜態結構)
 
 ---
 

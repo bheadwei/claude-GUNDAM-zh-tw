@@ -25,8 +25,7 @@ description: 對指定路徑直接執行程式碼審查（委派 code-quality-sp
 ### 階段 3: 詳細設計
 - `07_module_specification_and_tests.md` → 模組規格與測試
 - `08_project_structure_guide.md` → 專案結構
-- `09_file_dependencies_template.md` → 依賴分析
-- `10_class_relationships_template.md` → 類別設計
+- `09_design_and_dependencies.md` → 設計與依賴
 
 ### 階段 4: 開發品質
 - `11_code_review_and_refactoring_guide.md` → 審查清單

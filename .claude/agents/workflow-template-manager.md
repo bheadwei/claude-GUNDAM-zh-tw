@@ -35,11 +35,10 @@ model: haiku
 - `05_architecture_and_design_document.md` -- 系統架構（C4、DDD）
 - `06_api_design_specification.md` -- RESTful API 設計標準
 
-### Stage 3: 詳細設計 (07-10)
-- `07_module_specification_and_tests.md` -- 模組規格與測試
+### Stage 3: 詳細設計 (07-09)
+- `07_module_specification_and_tests.md` -- 模組規格與測試（含效能邊界）
 - `08_project_structure_guide.md` -- 標準化專案組織
-- `09_file_dependencies_template.md` -- 依賴關係分析
-- `10_class_relationships_template.md` -- UML 類別設計
+- `09_design_and_dependencies.md` -- 設計與依賴（類別圖、分層、SOLID）
 
 ### Stage 4: 開發與品質 (11-12, 17)
 - `11_code_review_and_refactoring_guide.md` -- 程式碼品質流程

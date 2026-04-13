@@ -209,7 +209,7 @@ git commit -am "wip: 註冊 - token 生成中"
 如果你跑過 `/review-code`、agent 已經把報告寫進 `.claude/context/quality/`。
 下次叫 `code-quality-specialist` 會自動讀 — **這部分不需要手動引導**，是 Context 系統的好處。
 
-詳見 [`CONTEXT_USAGE.md`](CONTEXT_USAGE.md)。
+詳見 [`MECHANISMS.md`](MECHANISMS.md)。
 
 ---
 

@@ -24,7 +24,7 @@
 
 - Agent / Skill / Command / Hook / Context 五套擴充機制
 - 詳見 `.claude/guides/MECHANISMS.md`
-- Context 系統使用見 `.claude/CONTEXT_USAGE.md`
+- Context 系統見 `.claude/guides/MECHANISMS.md`
 
 ## 專案結構
 

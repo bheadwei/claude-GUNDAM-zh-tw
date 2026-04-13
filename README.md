@@ -33,7 +33,7 @@ claude_v2026/
 ├── .mcp.json                         # MCP Server 設定（不入 Git）
 ├── .mcp.json.windows.example         # MCP 範本（Windows）
 ├── .mcp.json.linux.example           # MCP 範本（Linux）
-├── VibeCoding_Workflow_Templates/    # 工作流文件範本（17 個）
+├── VibeCoding_Workflow_Templates/    # 工作流文件範本（16 個）
 │
 └── .claude/                          # 核心配置
     ├── README.md                     # 配置目錄詳細說明
@@ -41,10 +41,10 @@ claude_v2026/
     ├── settings.local.json           # 個人設定（MCP 啟用）
     ├── statusline.sh                 # StatusLine 腳本
     │
-    ├── rules/        (8 個)          # 自動載入規則（每次對話注入）
+    ├── rules/        (9 個)          # 自動載入規則（每次對話注入）
     ├── agents/       (13 個)         # 專業 Agent 定義
     ├── commands/     (17 個)         # Slash Commands
-    ├── skills/       (4 個)          # 專案特定領域知識
+    ├── skills/       (7 個)          # 專案特定領域知識
     ├── output-styles/ (15 個)        # 輸出樣式模板
     ├── hooks/                        # Hook 腳本庫
     ├── plugins/                      # Plugin 套件
@@ -109,23 +109,23 @@ claude_v2026/
 | :--- | :--- | :--- |
 | planner | opus | 功能規劃、步驟拆解 |
 | architect | opus | 架構設計、技術選型 |
+| security-infrastructure-auditor | opus | OWASP、安全漏洞 |
 | code-quality-specialist | sonnet | 程式碼審查 |
-| security-infrastructure-auditor | sonnet | OWASP、安全漏洞 |
 | test-automation-engineer | sonnet | 實作後測試補強 |
 | tdd-guide | sonnet | 實作前 TDD 門禁 |
 | e2e-validation-specialist | sonnet | Playwright E2E |
-| build-error-resolver | sonnet | 最小差異修建置錯誤 |
 | refactor-cleaner | sonnet | 死碼清理 |
-| documentation-specialist | sonnet | codemap、API 文檔 |
-| workflow-template-manager | sonnet | VibeCoding 模板管理 |
 | deployment-expert | sonnet | 部署、CI/CD、監控 |
 | general-purpose | sonnet | 通用任務 |
+| build-error-resolver | haiku | 建置修復 |
+| documentation-specialist | haiku | codemap、API 文檔 |
+| workflow-template-manager | haiku | VibeCoding 模板管理 |
 
 ---
 
-## Rules（8 個，自動載入）
+## Rules（9 個，自動載入）
 
-每次對話自動注入，共 211 行。
+每次對話自動注入。
 
 | 規則 | 強制內容 |
 | :--- | :--- |
@@ -137,14 +137,15 @@ claude_v2026/
 | testing | 80%+ 覆蓋率、TDD 強制 |
 | performance | 模型選擇策略、Context 管理 |
 | patterns | Repository Pattern、API 格式 |
+| ui-design | Apple 風格簡約設計、毛玻璃效果 |
 
 語言特定規則可從 `custom-rule&skill/rules/` 複製（typescript、python、golang 等 8 種語言）。
 
 ---
 
-## Skills（4 個精選）
+## Skills（7 個精選）
 
-僅保留模型不知道的專案特定知識，通用知識由模型內建 + rules 覆蓋。
+僅保留模型不知道的專案特定知識。
 
 | Skill | 用途 | 觸發時機 |
 | :--- | :--- | :--- |
@@ -152,17 +153,21 @@ claude_v2026/
 | **deep-research** | 多源深度研究（MCP 串接） | 複雜問題調查 |
 | **e2e-testing** | Playwright E2E 測試模式 | 測試關鍵使用者流程 |
 | **cost-aware-llm-pipeline** | LLM API 成本優化 | 開發 AI 應用 |
+| **mcp-builder** | MCP Server 開發指南 | 串接外部 API |
+| **database-migrations** | DB Migration 安全模式 | Schema 變更 |
+| **postgres-patterns** | PostgreSQL 速查表 | 寫 SQL、設計 Schema |
 
 更多 skill（94 個）可從 `custom-rule&skill/skills/` 按需複製。
 
 ---
 
-## MCP Server（6 個啟用）
+## MCP Server（7 個啟用）
 
 | Server | 用途 |
 | :--- | :--- |
 | brave-search | 網路搜尋 |
 | context7 | 即時套件文檔查詢 |
+| firecrawl | 網頁爬取與深度研究 |
 | github | GitHub PR/Issue 操作 |
 | playwright | 瀏覽器自動化與 E2E |
 | sequential-thinking | 鏈式推理 |
