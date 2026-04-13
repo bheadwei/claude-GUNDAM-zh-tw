@@ -1,91 +1,14 @@
 #!/bin/bash
-
-# TaskMaster Pre Tool Use Hook
-# 在工具使用前檢查 TaskMaster 狀態並提供上下文
-
-# 不使用 set -e：hook 不應因小錯而失敗
-# stdout 必須保持安靜，否則 Claude Code 會把 log 訊息當成 hook 輸出
+# Pre Tool Use Hook — 輕量 log，不注入 context
+# Matcher: Write|Edit|Read
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null)" || SCRIPT_DIR="."
-PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd 2>/dev/null)}" || PROJECT_ROOT="."
-CLAUDE_DIR="$PROJECT_ROOT/.claude"
-
-# 確保 logs 目錄存在
+CLAUDE_DIR="${SCRIPT_DIR}/.."
 mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null || true
 
-# 日誌函數（只寫檔案，不污染 stdout）
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
-}
-
-# 從 stdin 讀取 hook JSON 輸入
 INPUT=$(cat)
+TOOL_NAME="unknown"
+command -v jq >/dev/null 2>&1 && TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // "unknown"')
 
-# 解析工具名稱和參數
-if command -v jq >/dev/null 2>&1; then
-    TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // "unknown"')
-    TOOL_ARGS=$(echo "$INPUT" | jq -r '.tool_input | tostring' 2>/dev/null || echo "")
-else
-    TOOL_NAME="unknown"
-    TOOL_ARGS=""
-fi
-
-log "🪝 TaskMaster Pre Tool Use Hook 觸發: $TOOL_NAME"
-
-# 如果 TaskMaster 已初始化，提供當前狀態上下文
-if [ -f "$CLAUDE_DIR/taskmaster-data/project.json" ]; then
-    log "📊 TaskMaster 已初始化，提供上下文資訊"
-
-    # 讀取當前專案狀態
-    if command -v jq >/dev/null 2>&1 && [ -f "$CLAUDE_DIR/taskmaster-data/project.json" ]; then
-        PROJECT_NAME=$(jq -r '.name // "未知專案"' "$CLAUDE_DIR/taskmaster-data/project.json")
-
-        log "📋 TaskMaster 當前狀態: 專案名稱=$PROJECT_NAME"
-
-        # 檢查是否有待審查的文檔
-        if [ -d "$PROJECT_ROOT/docs" ]; then
-            PENDING_DOCS=$(find "$PROJECT_ROOT/docs" -name "*.md" -newer "$CLAUDE_DIR/taskmaster-data/project.json" 2>/dev/null | wc -l)
-            if [ "$PENDING_DOCS" -gt 0 ]; then
-                log "   🔍 待審查文檔: $PENDING_DOCS 個"
-            fi
-        fi
-    fi
-fi
-
-# 特定工具的預處理
-case "$TOOL_NAME" in
-    "Write")
-        log "📝 Write 工具即將使用"
-        # 檢查是否為文檔目錄寫入
-        if [[ "$TOOL_ARGS" == *"docs/"* ]]; then
-            log "📄 即將寫入專案文檔（文檔寫入後將觸發 TaskMaster 審查流程）"
-        fi
-        ;;
-
-    "Edit")
-        log "✏️ Edit 工具即將使用"
-        # 檢查是否編輯關鍵檔案
-        if [[ "$TOOL_ARGS" == *".claude/"* ]]; then
-            log "⚙️ 即將編輯 TaskMaster 核心檔案"
-        fi
-        ;;
-
-    "Read")
-        log "📖 Read 工具即將使用"
-        # 如果讀取 VibeCoding 範本，提供上下文
-        if [[ "$TOOL_ARGS" == *"VibeCoding_Workflow_Templates"* ]]; then
-            log "🎨 即將讀取 VibeCoding 範本"
-        fi
-        ;;
-
-    "Task")
-        log "🤖 Task 工具即將使用 (智能體委派)"
-        # 提供智能體協調上下文
-        if [ -f "$CLAUDE_DIR/taskmaster-data/project.json" ]; then
-            log "🤖 TaskMaster Hub 協調模式啟用（agent 委派將記錄於 WBS Todo List）"
-        fi
-        ;;
-esac
-
-log "✅ Pre Tool Use Hook 處理完成"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] pre-tool: $TOOL_NAME" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
 exit 0

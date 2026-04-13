@@ -1,95 +1,19 @@
 #!/bin/bash
-
-# TaskMaster Post Write Hook
-# 當 Claude Code 寫入檔案後觸發，特別關注文檔生成
-
-# 不使用 set -e：hook 不應因小錯而失敗
-# stdout 必須保持安靜，否則 Claude Code 會把 log 訊息當成 hook 輸出
+# Post Write Hook — 記錄文檔和 WBS 寫入事件
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null)" || SCRIPT_DIR="."
-PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd 2>/dev/null)}" || PROJECT_ROOT="."
-CLAUDE_DIR="$PROJECT_ROOT/.claude"
-
-# 確保 logs 目錄存在
+CLAUDE_DIR="${SCRIPT_DIR}/.."
 mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null || true
 
-# 日誌函數（只寫檔案，不污染 stdout）
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
-}
-
-# 從 stdin 讀取 hook JSON 輸入
 INPUT=$(cat)
+FILE_PATH=""
+command -v jq >/dev/null 2>&1 && FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // ""')
 
-# 解析寫入的檔案路徑
-if command -v jq >/dev/null 2>&1; then
-    FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // ""')
-else
-    FILE_PATH=""
-fi
-
-log "🪝 TaskMaster Post Write Hook 觸發: $FILE_PATH"
-
-# 檢查是否為文檔檔案
-if [[ "$FILE_PATH" == *.md ]]; then
-    log "📄 偵測到 Markdown 文檔寫入: $FILE_PATH"
-
-    # 檢查是否為專案文檔目錄
-    if [[ "$FILE_PATH" == *"docs/"* ]]; then
-        log "📋 專案文檔更新: $FILE_PATH"
-
-        # 如果 TaskMaster 已初始化，通知文檔生成完成
-        if [ -f "$CLAUDE_DIR/taskmaster-data/project.json" ]; then
-            log "🔔 通知 TaskMaster 文檔生成完成"
-
-            # 觸發文檔生成完成處理
-            if [ -f "$CLAUDE_DIR/taskmaster.js" ]; then
-                cd "$PROJECT_ROOT"
-                node "$CLAUDE_DIR/taskmaster.js" --hook-trigger=document-generated --file="$FILE_PATH"
-            fi
-
-            # 記錄駕駛員審查檢查點（寫入 log，不污染 stdout）
-            log "📄 文檔生成完成: $(basename "$FILE_PATH") — 請執行 /task-review {approve|revise|pause}"
-        fi
-    fi
-
-    # 檢查是否為 VibeCoding 範本更新
-    if [[ "$FILE_PATH" == *"VibeCoding_Workflow_Templates"* ]]; then
-        log "🎨 VibeCoding 範本更新: $FILE_PATH"
-
-        # 如果 TaskMaster 已初始化，可能需要重新評估任務
-        if [ -f "$CLAUDE_DIR/taskmaster-data/project.json" ]; then
-            log "🔄 範本更新，可能需要重新評估任務"
-        fi
-    fi
-fi
-
-# 檢查是否為 WBS 檔案更新
+# WBS 更新時記錄歷史
 if [[ "$FILE_PATH" == *"taskmaster-data/wbs.md"* ]]; then
-    log "📋 WBS 任務清單已更新: $FILE_PATH"
-
-    # 記錄 WBS 更新歷史
-    WBS_LOG="$CLAUDE_DIR/taskmaster-data/wbs-history.log"
     mkdir -p "$CLAUDE_DIR/taskmaster-data" 2>/dev/null
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WBS 更新" >> "$WBS_LOG"
-
-    log "📋 WBS 任務清單已同步: .claude/taskmaster-data/wbs.md（使用 /task-status 或 /task-next）"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] WBS updated" >> "$CLAUDE_DIR/taskmaster-data/wbs-history.log" 2>/dev/null
 fi
 
-# 檢查是否為 TaskMaster 核心檔案更新
-if [[ "$FILE_PATH" == *".claude/taskmaster"* ]] && [[ "$FILE_PATH" != *"taskmaster-data"* ]]; then
-    log "🔧 TaskMaster 核心檔案更新: $FILE_PATH"
-
-    # 可以在這裡加入核心檔案更新後的處理邏輯
-    # 例如：重新載入配置、驗證系統狀態等
-fi
-
-# 檢查是否為 hooks 配置更新
-if [[ "$FILE_PATH" == *"hooks-config.json"* ]] || [[ "$FILE_PATH" == *"settings.local.json"* ]]; then
-    log "⚙️ Hooks 配置檔案更新: $FILE_PATH"
-
-    # 可以在這裡加入配置更新後的處理邏輯
-fi
-
-log "✅ Post Write Hook 處理完成"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] post-write: $FILE_PATH" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
 exit 0

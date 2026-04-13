@@ -17,13 +17,13 @@
 
 ## 開發流程
 
-遵循 `.claude/WORKFLOW.md` 的標準流程：
+遵循 `.claude/guides/WORKFLOW.md` 的標準流程：
 /task-next → /plan → /tdd → /verify
 
 ## 機制概覽
 
 - Agent / Skill / Command / Hook / Context 五套擴充機制
-- 詳見 `.claude/MECHANISMS.md`
+- 詳見 `.claude/guides/MECHANISMS.md`
 - Context 系統使用見 `.claude/CONTEXT_USAGE.md`
 
 ## 專案結構

@@ -230,7 +230,7 @@ git commit -am "wip: 註冊 - token 生成中"
 **Q：為什麼不直接用 Auto-memory？**
 A：本模板已停用 Auto-memory（記憶會跑到專案外的 `~/.claude/projects/.../memory/`）。
 所有狀態應保存在 `.claude/sessions/` 內，跟著 git 走。
-詳見 [`MECHANISMS.md`](MECHANISMS.md) 與 [`CONTEXT_USAGE.md`](CONTEXT_USAGE.md)。
+詳見 [`MECHANISMS.md`](MECHANISMS.md)。
 
 **Q：Claude 自動載入 session 檔嗎？**
 A：**不會**。`save-session` 紀錄需要你在新 session 第一句話明確要求 Claude 讀取。
@@ -254,7 +254,6 @@ A：
 ## 相關文件
 
 - [`MECHANISMS.md`](MECHANISMS.md) — 五套擴充機制權威對照
-- [`CONTEXT_USAGE.md`](CONTEXT_USAGE.md) — Context 系統使用指南
 - [`WORKFLOW.md`](WORKFLOW.md) — 完整開發流程
-- [`commands/save-session.md`](commands/save-session.md) — `/save-session` 指令詳細
+- [`../commands/save-session.md`](../commands/save-session.md) — `/save-session` 指令詳細
 - [`commands/learn.md`](commands/learn.md) — `/learn` 指令詳細

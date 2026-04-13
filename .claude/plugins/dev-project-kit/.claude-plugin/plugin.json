@@ -1,0 +1,12 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "dev-project-kit",
+  "version": "1.0.0",
+  "description": "專案開發工具包 — 涵蓋文件撰寫、深度研究、E2E 測試、LLM 成本優化四大領域的 Skills 套件",
+  "author": {
+    "name": "bheadwei"
+  },
+  "license": "MIT",
+  "keywords": ["development", "project-docs", "e2e-testing", "llm", "research"],
+  "skills": "./skills/"
+}

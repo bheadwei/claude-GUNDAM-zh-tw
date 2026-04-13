@@ -2,14 +2,14 @@
 
 > **狀態：啟用中**（v2，2026-04-08）
 > 此目錄儲存各 Subagent 的結構化技術發現報告，實現跨 session、跨 agent 的上下文共享。
-> 與 `../coordination/` 搭配，詳見根目錄 `MECHANISMS.md`。
+> 與 `../coordination/` 搭配，詳見 `../guides/MECHANISMS.md`。
 
 ## 與 Auto-memory / save-session 的邊界
 
 - **context/**（本目錄）= 結構化、按領域分類、機器可讀的 agent 技術發現
 - **save-session**（`.claude/sessions/`）= 整個 session 的人類可讀進度報告
 - **Auto-memory**（Claude Code 內建）= Claude 對使用者偏好的自然語言記憶
-- 三者**互補不重疊**，詳見 `MECHANISMS.md`
+- 三者**互補不重疊**，詳見 `../guides/MECHANISMS.md`
 
 ## 報告格式
 

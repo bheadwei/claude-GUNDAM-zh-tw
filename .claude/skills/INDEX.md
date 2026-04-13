@@ -1,37 +1,32 @@
 # Skills 索引
 
-已安裝 8 個精選 skill，涵蓋核心開發流程。
+已安裝 7 個精選 skill（僅保留模型不知道的專案特定知識）。
 
 ## 已安裝
 
-| Skill | 用途 | 觸發時機 |
+| Skill | 用途 | 啟動時機 |
 | :--- | :--- | :--- |
-| **tdd-workflow** | TDD 完整流程（Red-Green-Refactor） | 寫新功能、修 bug、重構 |
-| **api-design** | REST API 設計最佳實踐 | 設計 API 端點 |
-| **security-review** | 安全審查流程 | commit 前、安全敏感程式碼 |
+| **project-docs** | 依據 VibeCoding 範本撰寫專案文件 | 撰寫 PRD、架構、API 規格等文件 |
+| **deep-research** | 多源深度研究（MCP 串接） | 複雜問題調查 |
 | **e2e-testing** | Playwright E2E 測試模式 | 測試關鍵使用者流程 |
-| **coding-standards** | 通用編碼標準 | 所有開發工作 |
-| **deep-research** | 深度研究技巧 | 複雜問題調查 |
-| **deployment-patterns** | 部署模式（Blue-Green, Canary） | 部署規劃 |
-| **docker-patterns** | Docker 最佳實踐 | 容器化專案 |
+| **cost-aware-llm-pipeline** | LLM API 成本優化（模型路由 + 預算追蹤） | 開發 AI 應用 |
+| **mcp-builder** | MCP Server 開發指南（FastMCP / MCP SDK） | 串接外部 API 或服務 |
+| **database-migrations** | DB Migration 安全模式（zero-downtime DDL） | Schema 變更、資料遷移 |
+| **postgres-patterns** | PostgreSQL 速查表（Index、型態、RLS） | 寫 SQL、設計 Schema |
+
+## 不需要 Skill 的場景
+
+以下知識模型已內建，不需額外 skill：
+- Python 語法、PEP 8、pytest → 模型內建知識
+- React/Vue/Angular 前端模式 → 用 **context7 MCP** 查最新文檔
+- REST API / GraphQL 後端模式 → 用 `rules/patterns.md` 的專案約定
+- TDD / Security / Docker → 用 `rules/` 的精簡規則
+- Claude API / SDK → 已是 **Claude Code 內建 skill**
 
 ## 擴充方式
 
-更多 skill 可從備份取材池複製（共 94 個，見
-[`.claude/custom-rule&skill/skills/INDEX.md`](../custom-rule&skill/skills/INDEX.md)）：
+語言/框架特定的 skill 可從備份池按需複製：
 
 ```bash
-# 複製特定 skill
 cp -r .claude/custom-rule&skill/skills/[skill-name] .claude/skills/
 ```
-
-### 推薦擴充
-
-| Skill | 適用場景 |
-| :--- | :--- |
-| python-patterns | Python 專案 |
-| golang-patterns | Go 專案 |
-| springboot-patterns | Java/Spring Boot 專案 |
-| frontend-patterns | React/Vue 前端專案 |
-| postgres-patterns | PostgreSQL 專案 |
-| database-migrations | 資料庫遷移 |

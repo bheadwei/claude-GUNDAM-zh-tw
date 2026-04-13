@@ -1,14 +1,8 @@
 # Claude Code 全面開發配置
 
-> **版本:** v4.4 | **更新:** 2026-04-08 | **平台:** Windows / Linux (Ubuntu, RHEL)
+> **版本:** v5.0 | **更新:** 2026-04-13 | **平台:** Windows / Linux
 
 人類主導的文檔導向智能協作開發平台。
-
-**核心文件**：
-- 📖 [`.claude/MECHANISMS.md`](.claude/MECHANISMS.md) — Agent / Skill / Command / Hook / Context 五套擴充機制的權威對照
-- 📘 [`.claude/CONTEXT_USAGE.md`](.claude/CONTEXT_USAGE.md) — Context 跨 session 共享系統使用指南
-- 📙 [`.claude/PAUSE_RESUME_GUIDE.md`](.claude/PAUSE_RESUME_GUIDE.md) — 開發暫停 / 恢復 SOP
-- 📗 [`.claude/WORKFLOW.md`](.claude/WORKFLOW.md) — 完整開發流程
 
 ---
 
@@ -29,58 +23,48 @@ claude
 /task-next → /plan → /tdd → /verify
 ```
 
-完整開發流程見 [.claude/WORKFLOW.md](.claude/WORKFLOW.md)。
-
 ---
 
-## 系統架構
+## 目錄結構
 
 ```
 claude_v2026/
-├── .claude/
-│   ├── settings.json                 # 主設定（權限、StatusLine、Hooks）
-│   ├── MECHANISMS.md                 # 五機制權威對照（必讀）
-│   ├── CONTEXT_USAGE.md              # Context 系統使用指南
-│   ├── PAUSE_RESUME_GUIDE.md         # 開發暫停 / 恢復 SOP
-│   ├── WORKFLOW.md                   # 開發流程指南
-│   ├── agents/          (13 個)      # 專業 Agent
-│   ├── commands/        (17 個)      # Slash Commands
-│   ├── rules/           (7 個)       # 自動載入規則
-│   ├── skills/          (8 個)       # 領域知識 Skill
-│   ├── output-styles/   (15 個)      # Output Styles
-│   ├── mcp-configs/                  # MCP 推薦清單
-│   ├── hooks/                        # Hook 腳本（含 post-agent-report.sh）
-│   ├── context/                      # Agent 跨 session 結構化報告
-│   │   ├── _REPORT_TEMPLATE.md       # 報告統一格式
-│   │   ├── quality/                  # code-quality-specialist 報告
-│   │   ├── security/                 # security agent 報告
-│   │   ├── testing/                  # test-automation-engineer 報告
-│   │   ├── e2e/                      # e2e agent 報告
-│   │   ├── decisions/                # 架構決策 ADR
-│   │   ├── deployment/               # 部署紀錄
-│   │   └── docs/                     # 文檔狀態
-│   ├── coordination/                 # Agent 間任務交接
-│   │   ├── handoffs/                 # 交接檔
-│   │   └── conflicts/                # 衝突解決紀錄
-│   ├── sessions/                     # /save-session 儲存
-│   ├── scripts/                      # 工具腳本
-│   │   └── context-gc.sh             # Context GC（保留最新 5 份）
-│   ├── templates/                    # 初始化模板（僅 init 時讀）
-│   │   ├── CLAUDE-md.template.md
-│   │   └── project-structures.md
-│   ├── custom-rule&skill/            # 取材備份池（不參與執行）
-│   │   ├── README.md
-│   │   ├── rules/                    # 8 種語言完整 rules
-│   │   └── skills/                   # 94 個 skills + INDEX.md
-│   ├── statusline.sh                 # StatusLine（bash，Windows）
-│   ├── statusline-linux.sh           # StatusLine（bash，Linux）
-│   └── statusline-go.exe             # StatusLine（Go 備用）
-├── VibeCoding_Workflow_Templates/    # 工作流模板庫（17 個）
+├── CLAUDE_TEMPLATE.md                # 專案初始化哨兵（init 後自動刪除）
 ├── .mcp.json                         # MCP Server 設定（不入 Git）
 ├── .mcp.json.windows.example         # MCP 範本（Windows）
 ├── .mcp.json.linux.example           # MCP 範本（Linux）
-├── CLAUDE_TEMPLATE.md                # 專案初始化哨兵（init 後刪除）
-└── PROJECT_STRUCTURE.md              # 專案結構說明
+├── VibeCoding_Workflow_Templates/    # 工作流文件範本（17 個）
+│
+└── .claude/                          # 核心配置
+    ├── README.md                     # 配置目錄詳細說明
+    ├── settings.json                 # 主設定（權限、StatusLine、Hooks）
+    ├── settings.local.json           # 個人設定（MCP 啟用）
+    ├── statusline.sh                 # StatusLine 腳本
+    │
+    ├── rules/        (8 個)          # 自動載入規則（每次對話注入）
+    ├── agents/       (13 個)         # 專業 Agent 定義
+    ├── commands/     (17 個)         # Slash Commands
+    ├── skills/       (4 個)          # 專案特定領域知識
+    ├── output-styles/ (15 個)        # 輸出樣式模板
+    ├── hooks/                        # Hook 腳本庫
+    ├── plugins/                      # Plugin 套件
+    │   └── dev-project-kit/          # 開發工具包（可攜帶到其他專案）
+    │
+    ├── guides/                       # 參考文件（不自動載入）
+    │   ├── WORKFLOW.md               # 開發流程指南
+    │   ├── MECHANISMS.md             # 五套機制權威對照
+    │   ├── MCP_CONFIGS.md            # MCP Server 推薦清單
+    │   ├── PAUSE_RESUME_GUIDE.md     # 暫停/恢復 SOP
+    │   └── STATUSLINE_GUIDE.md       # StatusLine 客製化手冊
+    │
+    ├── context/                      # Agent 跨 session 報告
+    ├── coordination/                 # Agent 間工作交接
+    ├── sessions/                     # /save-session 儲存
+    ├── taskmaster-data/              # WBS、時間日誌
+    ├── qa-history/                   # 問答紀錄
+    ├── logs/                         # Hook 執行 log
+    ├── templates/                    # 初始化範本（僅 /task-init 時讀）
+    └── custom-rule&skill/            # 備份池（94+ skills、8 種語言 rules）
 ```
 
 ---
@@ -93,111 +77,83 @@ claude_v2026/
 /save-session  ←  /time-log  ←  /task-status  ←  /verify  ←  /e2e  ←  /review-code
 ```
 
+快速模式（小功能）：`/plan → /tdd → /verify quick`
+
+### 指令速查
+
 | 階段 | 指令 | 用途 |
 | :--- | :--- | :--- |
 | 專案級 | `/task-init` | 建立 WBS、分析複雜度 |
-| 專案級 | `/task-next` | 從 WBS 取下一個任務（自動追蹤時間） |
-| 專案級 | `/task-status` | 查看整體進度（含預估 vs 實際時間） |
-| 專案級 | `/time-log` | 每日/每任務開發時間報表 |
-| 功能級 | `/plan` | 規劃實作步驟（等待確認） |
-| 功能級 | `/tdd` | Red-Green-Refactor |
-| 功能級 | `/build-fix` | 修復建置錯誤 |
+| | `/task-next` | 取下一個任務（自動追蹤時間） |
+| | `/task-status` | 查看進度 |
+| | `/time-log` | 開發時間報表 |
+| 功能級 | `/plan` | 規劃實作步驟 |
+| | `/tdd` | Red-Green-Refactor |
+| | `/build-fix` | 修復建置錯誤 |
 | 品質級 | `/review-code` | 程式碼審查 |
-| 品質級 | `/e2e` | Playwright E2E 測試 |
-| 品質級 | `/verify` | 全面驗證（quick/full/pre-pr） |
-| 收尾 | `/save-session` | 儲存 session 狀態 |
-
-快速模式（小功能）：`/plan → /tdd → /verify quick`
+| | `/e2e` | Playwright E2E 測試 |
+| | `/verify` | 全面驗證（quick/full/pre-pr） |
+| 輔助 | `/hub-delegate` | 手動委派 Agent |
+| | `/check-quality` | 品質評估 + Agent 推薦 |
+| | `/refactor-clean` | 死碼清理 |
+| | `/suggest-mode` | 調整建議密度 |
+| | `/learn` | 擷取可重用模式 |
+| | `/save-session` | 儲存 session 狀態 |
+| | `/template-check` | 模板合規檢查 |
 
 ---
 
-## Agent 系統（13 個）
+## Agent（13 個）
 
 | Agent | Model | 用途 |
 | :--- | :--- | :--- |
-| general-purpose | opus | 通用問題解決、跨領域研究 |
-| planner | opus | 功能規劃、實作步驟拆解 |
-| architect | opus | 系統架構設計、技術決策 |
-| code-quality-specialist | opus | 程式碼審查（寫入 context/quality/） |
-| security-infrastructure-auditor | opus | OWASP Top 10（寫入 context/security/） |
-| test-automation-engineer | opus | **實作後**測試補強（讀 quality handoff，寫入 context/testing/） |
-| tdd-guide | opus | **實作前**測試驅動開發引導（前置門禁） |
-| e2e-validation-specialist | opus | Playwright E2E 測試（寫入 context/e2e/） |
-| build-error-resolver | opus | 最小差異修復建置錯誤 |
-| refactor-cleaner | opus | 死碼偵測與安全清理 |
-| documentation-specialist | opus | **Codemap 與 API 文檔**（程式碼層） |
-| deployment-expert | opus | 零停機部署、監控告警 |
-| workflow-template-manager | opus | **VibeCoding 流程模板**（PRD/ADR/設計文檔） |
+| planner | opus | 功能規劃、步驟拆解 |
+| architect | opus | 架構設計、技術選型 |
+| code-quality-specialist | sonnet | 程式碼審查 |
+| security-infrastructure-auditor | sonnet | OWASP、安全漏洞 |
+| test-automation-engineer | sonnet | 實作後測試補強 |
+| tdd-guide | sonnet | 實作前 TDD 門禁 |
+| e2e-validation-specialist | sonnet | Playwright E2E |
+| build-error-resolver | sonnet | 最小差異修建置錯誤 |
+| refactor-cleaner | sonnet | 死碼清理 |
+| documentation-specialist | sonnet | codemap、API 文檔 |
+| workflow-template-manager | sonnet | VibeCoding 模板管理 |
+| deployment-expert | sonnet | 部署、CI/CD、監控 |
+| general-purpose | sonnet | 通用任務 |
 
 ---
 
-## Rules（7 個，自動載入）
+## Rules（8 個，自動載入）
 
-放在 `.claude/rules/`，每次對話自動生效：
+每次對話自動注入，共 211 行。
 
 | 規則 | 強制內容 |
 | :--- | :--- |
 | coding-style | 不可變性、檔案 < 800 行、函式 < 50 行 |
 | development-workflow | 研究先行 → Plan → TDD → Review |
-| git-workflow | Conventional Commits、PR 流程 |
+| git-workflow | Conventional Commits |
+| interactive-qa | AskUserQuestion 一次一題 |
 | security | commit 前安全檢查清單 |
 | testing | 80%+ 覆蓋率、TDD 強制 |
 | performance | 模型選擇策略、Context 管理 |
 | patterns | Repository Pattern、API 格式 |
 
-語言特定規則可從 `.claude/custom-rule&skill/rules/` 複製（typescript、python、golang、kotlin、swift、php、perl 等 8 種語言）。
+語言特定規則可從 `custom-rule&skill/rules/` 複製（typescript、python、golang 等 8 種語言）。
 
 ---
 
-## Skills（8 個精選）
+## Skills（4 個精選）
 
-放在 `.claude/skills/`，提供領域深度知識：
+僅保留模型不知道的專案特定知識，通用知識由模型內建 + rules 覆蓋。
 
-| Skill | 搭配 |
-| :--- | :--- |
-| tdd-workflow | `/tdd` 指令 |
-| api-design | API 模板 |
-| security-review | 安全 Agent |
-| e2e-testing | `/e2e` 指令 |
-| coding-standards | 所有開發 |
-| deep-research | 複雜問題 |
-| deployment-patterns | 部署規劃 |
-| docker-patterns | 容器化 |
+| Skill | 用途 | 觸發時機 |
+| :--- | :--- | :--- |
+| **project-docs** | 依據 VibeCoding 範本撰寫專案文件 | 撰寫 PRD、架構、API 規格 |
+| **deep-research** | 多源深度研究（MCP 串接） | 複雜問題調查 |
+| **e2e-testing** | Playwright E2E 測試模式 | 測試關鍵使用者流程 |
+| **cost-aware-llm-pipeline** | LLM API 成本優化 | 開發 AI 應用 |
 
-更多 skill（94 個）可從 `.claude/custom-rule&skill/skills/` 按需複製，
-索引見 [`.claude/custom-rule&skill/skills/INDEX.md`](.claude/custom-rule&skill/skills/INDEX.md)。
-
----
-
-## Context 系統（第 5 機制）
-
-4 個專業 agent 在執行前後自動讀寫結構化技術發現報告，實現跨 session 與跨 agent 的上下文共享：
-
-| Agent | 寫入位置 |
-| :--- | :--- |
-| code-quality-specialist | `.claude/context/quality/` |
-| security-infrastructure-auditor | `.claude/context/security/` |
-| test-automation-engineer | `.claude/context/testing/` |
-| e2e-validation-specialist | `.claude/context/e2e/` |
-
-**設計原則**：
-- 不污染主對話 context（按需讀取，不在 session-start 自動注入）
-- 100% 留在專案內，跟著 git 走
-- 與 `save-session`、`/learn`、Auto-memory 不重疊（衝突矩陣見 MECHANISMS.md）
-
-**常用操作**：
-```bash
-# 看最新報告
-ls -t .claude/context/quality/
-
-# 看待處理交接
-grep -l "status: pending" .claude/coordination/handoffs/*.md
-
-# 清理舊報告（保留最新 5 份）
-bash .claude/scripts/context-gc.sh
-```
-
-完整使用見 [`.claude/CONTEXT_USAGE.md`](.claude/CONTEXT_USAGE.md)。
+更多 skill（94 個）可從 `custom-rule&skill/skills/` 按需複製。
 
 ---
 
@@ -209,10 +165,10 @@ bash .claude/scripts/context-gc.sh
 | context7 | 即時套件文檔查詢 |
 | github | GitHub PR/Issue 操作 |
 | playwright | 瀏覽器自動化與 E2E |
-| sequential-thinking | 鏈式推理（複雜問題） |
+| sequential-thinking | 鏈式推理 |
 | memory | 跨 session 記憶 |
 
-更多可用 server 見 [.claude/mcp-configs/README.md](.claude/mcp-configs/README.md)。
+更多可用 server 見 `.claude/guides/MCP_CONFIGS.md`。
 
 ---
 
@@ -228,39 +184,6 @@ bash .claude/scripts/context-gc.sh
 | 安全部署 | `13` 安全、`14` 部署 |
 | 維護管理 | `15` 文檔、`16` WBS |
 
-索引：[VibeCoding_Workflow_Templates/INDEX.md](VibeCoding_Workflow_Templates/INDEX.md)
-
----
-
-## Output Styles（15 個）
-
-使用 `/output-style <name>` 切換 Claude 的產出格式：
-
-01-prd / 02-bdd / 03-architecture / 04-ddd / 05-api / 06-tdd / 07-code-review / 08-security / 09-database / 10-backend-python / 11-frontend-bdd / 12-integration / 13-data-contract / 14-ci-gates / 15-vision
-
----
-
-## StatusLine
-
-```
-Opus 4.6 (1M context) │ 26% (266k/1.0m) │ project-name (main*) │ 15m │ $12.50
-current ●●●○○○○○○○  28% ⟳ 19:00
-weekly  ●●●●●●●●○○  79% ⟳ 03/23 10:00
-```
-
-StatusLine 同時負責**時間追蹤持久化**：每次更新時將當前 session 的 duration 和任務寫入暫存檔，供跨 session 歸檔。
-
-**平台設定：** Linux 環境須使用 `statusline-linux.sh`（LF 換行），避免 CRLF 導致執行錯誤。
-
-在 `.claude/settings.json` 中設定：
-```jsonc
-// Windows
-"statusLine": "bash .claude/statusline.sh"
-
-// Linux
-"statusLine": "bash .claude/statusline-linux.sh"
-```
-
 ---
 
 ## 新專案設定
@@ -270,10 +193,9 @@ StatusLine 同時負責**時間追蹤持久化**：每次更新時將當前 sess
    - Windows: `cp .mcp.json.windows.example .mcp.json`
    - Linux: `cp .mcp.json.linux.example .mcp.json`
 3. 編輯 `.mcp.json` 填入 API keys
-4. （可選）依語言需求從 `.claude/custom-rule&skill/rules/<lang>/` 複製到 `.claude/rules/`
-5. （可選）依專案需求從 `.claude/custom-rule&skill/skills/` 複製額外 skill 到 `.claude/skills/`
-6. 啟動 Claude Code → 自動偵測 `CLAUDE_TEMPLATE.md` → 確認後執行 `/task-init`
-7. `/task-init` 完成後會自動刪除 `CLAUDE_TEMPLATE.md`
+4. （可選）複製語言規則：`cp .claude/custom-rule&skill/rules/<lang>/*.md .claude/rules/`
+5. （可選）複製額外 skill：`cp -r .claude/custom-rule&skill/skills/<name> .claude/skills/`
+6. 啟動 Claude Code → 偵測 `CLAUDE_TEMPLATE.md` → 執行 `/task-init`
 
 ---
 
@@ -281,9 +203,8 @@ StatusLine 同時負責**時間追蹤持久化**：每次更新時將當前 sess
 
 | 版本 | 日期 | 變更 |
 | :--- | :--- | :--- |
-| v4.4 | 2026-04-08 | Context 系統啟用（第 5 機制）、MECHANISMS.md 機制對照、CLAUDE_TEMPLATE 精簡 82%、Hook 健壯性修正、test-automation-engineer 重定位為「實作後補強」 |
-| v4.3 | 2026-03-24 | 開發時間追蹤（每日/每任務）、`/time-log` 命令、StatusLine 時間持久化、17 Commands |
-| v4.2 | 2026-03-16 | 跨平台支援（Windows/Linux）、MCP example 分平台、Agent 全 opus、移除 count_tokens.js |
-| v4.1 | 2026-03-16 | 新增 rules(7)、skills(8)、MCP(+2)、開發流程文件 |
-| v4.0 | 2026-03-16 | 全面升級：13 Agent、16 Commands、StatusLine 適配、模板精簡 68% |
-| v3.0 | 2025-09-25 | TaskMaster Hub-and-Spoke 架構 |
+| v5.0 | 2026-04-13 | Skills 精簡至 4 個（-85%）、Rules 精簡（-28%）、Hooks 精簡（-81%）、文檔整合到 guides/、新增 project-docs skill、新增 dev-project-kit plugin、刪除通用知識 skill |
+| v4.4 | 2026-04-08 | Context 系統啟用、MECHANISMS.md、Hook 健壯性修正 |
+| v4.3 | 2026-03-24 | 開發時間追蹤、`/time-log`、StatusLine 持久化 |
+| v4.2 | 2026-03-16 | 跨平台支援（Windows/Linux） |
+| v4.0 | 2026-03-16 | 全面升級：13 Agent、16 Commands、StatusLine |
