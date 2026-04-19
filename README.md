@@ -8,11 +8,27 @@
 
 ## 快速開始
 
+### 步驟 1：複製模板到新專案（使用複製腳本，自動排除專案專屬資料）
+
 ```bash
-# 1. 複製本模板到新專案
+# Git Bash / Linux / macOS / WSL
+bash scripts/copy-template.sh /path/to/new-project
+
+# Windows PowerShell
+powershell -ExecutionPolicy Bypass -File scripts\copy-template.ps1 D:\projects\my-app
+```
+
+> **為什麼用腳本？** 手動 `cp -r` 會把 `settings.local.json`、`taskmaster-data/`、`logs/`、`sessions/` 等專案專屬資料一起帶走，造成新專案被舊資料污染。複製腳本會自動排除這些目錄。
+
+### 步驟 2-5：MCP 設定 → 啟動 → 初始化 → 開發
+
+```bash
+cd /path/to/new-project
+
 # 2. 複製對應平台的 MCP 範本並填入 API keys
-#    Windows: cp .mcp.json.windows.example .mcp.json
-#    Linux:   cp .mcp.json.linux.example .mcp.json
+cp .mcp.json.windows.example .mcp.json  # Windows
+cp .mcp.json.linux.example .mcp.json    # Linux / macOS
+
 # 3. 啟動 Claude Code
 claude
 
@@ -22,6 +38,20 @@ claude
 # 5. 開始開發循環
 /task-next → /plan → /tdd → /verify
 ```
+
+### 手動複製時需排除的目錄（若不用腳本）
+
+| 路徑 | 原因 |
+|------|------|
+| `.claude/settings.local.json` | 含模板開發過程累積的 permission，對新專案無意義 |
+| `.claude/taskmaster-data/` | 前一專案的 WBS 與計時記錄 |
+| `.claude/qa-history/` | 前一專案的問答歷史 |
+| `.claude/sessions/` | 前一專案的 session 存檔 |
+| `.claude/logs/` | 執行時 log |
+| `.claude/worktrees/` | Agent worktree |
+| `.claude/context/`、`coordination/` | Agent 跨 session 報告 |
+| `workshop/` | 模板開發工作區 |
+| `.git/`、`node_modules/`、`.venv/` | 依賴與版控 |
 
 ---
 

@@ -1,5 +1,15 @@
 # 開發工作流
 
+## Python 套件管理（CRITICAL）
+
+Python 專案一律使用 `uv` 管理套件與虛擬環境：
+- 初始化：`uv init` → `uv venv --python 3.12`
+- 安裝套件：`uv add <package>`
+- 執行程式：`uv run <command>`
+- **禁止**使用 `pip install`、`pip3`、`poetry`
+- 虛擬環境放專案目錄下（`.venv`）
+- 每次新增/移除套件後，同步產出 `requirements.txt`：`uv pip compile pyproject.toml -o requirements.txt`
+
 ## 功能實作流程
 
 ### 0. 研究與重用（任何新實作前必做）

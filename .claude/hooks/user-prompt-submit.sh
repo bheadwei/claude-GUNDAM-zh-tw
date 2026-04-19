@@ -1,8 +1,9 @@
 #!/bin/bash
 # User Prompt Submit Hook — 偵測 /task-* 命令，確保資料目錄存在
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/null)" || SCRIPT_DIR="."
-CLAUDE_DIR="${SCRIPT_DIR}/.."
+# 優先用 Claude Code 注入的環境變數；不存在時從腳本自身位置算
+PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd 2>/dev/null)}"
+CLAUDE_DIR="$PROJECT_ROOT/.claude"
 mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null || true
 
 INPUT=$(cat)
