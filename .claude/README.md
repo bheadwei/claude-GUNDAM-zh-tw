@@ -1,6 +1,6 @@
 # .claude 配置目錄
 
-> **版本:** v5.0 | **更新:** 2026-04-13
+> **版本:** v5.1 | **更新:** 2026-04-20
 
 ## 目錄結構
 
@@ -18,13 +18,18 @@
 │   └── STATUSLINE_GUIDE.md    # StatusLine 客製化手冊
 ├── agents/       (13 個)      # 專業 Agent 定義
 ├── commands/     (17 個)      # Slash Command
-├── rules/        (9 個)       # 自動載入規則
+├── rules/        (11 個)      # 自動載入規則
 ├── skills/       (7 個)       # 專案特定領域知識
 ├── output-styles/ (15 個)     # 輸出樣式模板
 ├── hooks/                     # Hook 腳本庫
 ├── context/                   # 跨 Agent 上下文共享
 ├── coordination/              # Agent 協調配置
-└── taskmaster-data/           # WBS、時間日誌
+└── taskmaster-data/           # WBS、時間日誌、plans/（計畫持久化）
+    ├── wbs.md                 # WBS 任務清單（What）
+    ├── plans/                 # 計畫檔（How，/plan 寫入）
+    │   ├── INDEX.md
+    │   └── archive/           # /verify 完成後歸檔
+    └── .current-task          # 當前進行中任務 ID
 ```
 
 ## Agents（13 個）
@@ -61,20 +66,22 @@
 
 按需從 `custom-rule&skill/skills/` 複製語言特定 skill。
 
-## Rules（9 個，自動載入）
+## Rules（11 個，自動載入）
 
 每次對話自動注入 context，無需手動觸發。
 
 | 規則 | 內容 |
 | :--- | :--- |
+| bash-cwd | Bash CWD 汙染防護 |
 | coding-style | 不可變性、檔案大小、錯誤處理 |
-| development-workflow | 研究先行 → Plan → TDD → Review |
+| development-workflow | 研究先行 → Plan → TDD → Review，Python 強制 uv |
 | git-workflow | Conventional Commits |
 | interactive-qa | AskUserQuestion 一次一題 |
 | security | commit 前安全檢查 |
 | testing | 80%+ 覆蓋率、TDD |
 | performance | 模型選擇、Context 管理 |
 | patterns | Repository Pattern、API 格式 |
+| plan-persistence | `/plan` 持久化、WBS/Plan 職責分工 |
 | ui-design | Apple 風格簡約設計、毛玻璃效果 |
 
 ## Hooks

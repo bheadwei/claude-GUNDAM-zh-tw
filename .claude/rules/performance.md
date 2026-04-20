@@ -6,7 +6,7 @@
 | :--- | :--- |
 | **Haiku 4.5** | 輕量 agent、高頻呼叫、worker agent |
 | **Sonnet 4.6** | 主要開發、多 agent 編排、複雜編碼 |
-| **Opus 4.6** | 架構決策、深度推理、研究分析 |
+| **Opus 4.7** | 架構決策、深度推理、研究分析 |
 
 ## Context Window 管理
 

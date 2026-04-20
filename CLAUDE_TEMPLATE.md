@@ -2,7 +2,7 @@
 
 # Claude Code 專案初始化提示
 
-> **版本:** v5.0 | **模式:** 人類主導 | **觸發方式:** Session 啟動時自動偵測
+> **版本:** v5.1 | **模式:** 人類主導 | **觸發方式:** Session 啟動時自動偵測
 
 ## 給 Claude 的指令
 
@@ -31,6 +31,6 @@
 - 可重用 pattern → `.claude/skills/learned/`（`/learn` 手動）
 - **不使用** Auto-memory（`~/.claude/projects/.../memory/`），所有記憶留在專案內
 
-詳見 `.claude/MECHANISMS.md`。
+詳見 `.claude/guides/MECHANISMS.md`。
 
 <!-- CLAUDE_CODE_INIT_END -->

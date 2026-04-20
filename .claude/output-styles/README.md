@@ -8,7 +8,7 @@
 
 ## 📚 總覽
 
-本目錄包含 9 個精心設計的 Output Styles,涵蓋從需求規劃到安全上線的完整軟體開發流程。這些樣式整合了業界最佳實踐 (IEEE 1016, DDD, TDD, BDD, OWASP) 與 Claude Code 的 AI 協作能力。
+本目錄包含 15 個精心設計的 Output Styles,涵蓋從需求規劃到安全上線的完整軟體開發流程。這些樣式整合了業界最佳實踐 (IEEE 1016, DDD, TDD, BDD, OWASP) 與 Claude Code 的 AI 協作能力。
 
 ## 🎯 快速開始
 

@@ -40,8 +40,8 @@
 | `/task-next` | 取下一個任務（自動追蹤時間） |
 | `/task-status` | 查看專案進度 |
 | `/time-log` | 開發時間報表 |
-| `/plan` | 規劃實作步驟 |
-| `/tdd` | 測試驅動開發 |
+| `/plan [wbs-id]` | 規劃實作步驟 → 寫入 `plans/<id>-<slug>.md`（持久化）|
+| `/tdd` | 測試驅動開發，自動載入當前任務 plan 並按階段推進 |
 | `/build-fix` | 修復建置錯誤 |
 | `/review-code` | 程式碼審查 |
 | `/e2e` | E2E 測試 |

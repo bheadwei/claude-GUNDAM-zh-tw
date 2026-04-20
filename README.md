@@ -1,6 +1,6 @@
 # Claude Code 全面開發配置
 
-> **版本:** v5.0 | **更新:** 2026-04-13 | **平台:** Windows / Linux
+> **版本:** v5.1 | **更新:** 2026-04-20 | **平台:** Windows（需 Git Bash）/ Linux / macOS
 
 人類主導的文檔導向智能協作開發平台。
 
@@ -8,13 +8,22 @@
 
 ## 快速開始
 
+### 前置需求
+
+| 平台 | 必要軟體 |
+|---|---|
+| Windows | **Git Bash**（Git for Windows 附帶）+ `jq`（`winget install jqlang.jq`） |
+| Linux / macOS | `bash`（系統內建）+ `jq`（`apt/brew install jq`） |
+
+> `.claude/hooks/*.sh` 與 `statusline.sh` 皆為 bash 腳本。Windows 原生 PowerShell 無法執行，**必須裝 Git Bash**。
+
 ### 步驟 1：複製模板到新專案（使用複製腳本，自動排除專案專屬資料）
 
 ```bash
 # Git Bash / Linux / macOS / WSL
 bash scripts/copy-template.sh /path/to/new-project
 
-# Windows PowerShell
+# Windows PowerShell（只用於複製，hooks 仍需 Git Bash 執行）
 powershell -ExecutionPolicy Bypass -File scripts\copy-template.ps1 D:\projects\my-app
 ```
 
@@ -71,7 +80,7 @@ claude_v2026/
     ├── settings.local.json           # 個人設定（MCP 啟用）
     ├── statusline.sh                 # StatusLine 腳本
     │
-    ├── rules/        (9 個)          # 自動載入規則（每次對話注入）
+    ├── rules/        (11 個)         # 自動載入規則（每次對話注入）
     ├── agents/       (13 個)         # 專業 Agent 定義
     ├── commands/     (17 個)         # Slash Commands
     ├── skills/       (7 個)          # 專案特定領域知識
@@ -103,11 +112,22 @@ claude_v2026/
 
 ```
 /task-init  →  /task-next  →  /plan  →  /tdd  →  /build-fix
-                                                      ↓
+                   ↑           ↓          ↓
+                   |      寫入 plan   讀 plan
+                   |      更新 WBS    更新階段
+                   ↓
 /save-session  ←  /time-log  ←  /task-status  ←  /verify  ←  /e2e  ←  /review-code
+                                      ↑                        讀 plan 驗收
+                                顯示 plan 進度                 歸檔 plan
 ```
 
-快速模式（小功能）：`/plan → /tdd → /verify quick`
+**Plan 持久化（v5.1 新增）**：
+- `/plan <wbs-id>` 寫入 `.claude/taskmaster-data/plans/<id>-<slug>.md`
+- `/tdd` 自動載入當前任務的 plan，按階段 RED→GREEN→REFACTOR 並更新階段狀態
+- `/verify` PASS → 自動標 WBS ✅ + plan 歸檔至 `plans/archive/`
+- WBS（What）與 Plan（How）職責分工詳見 `.claude/rules/plan-persistence.md`
+
+快速模式（小功能）：`/plan --adhoc → /tdd → /verify quick`
 
 ### 指令速查
 
@@ -153,20 +173,22 @@ claude_v2026/
 
 ---
 
-## Rules（9 個，自動載入）
+## Rules（11 個，自動載入）
 
 每次對話自動注入。
 
 | 規則 | 強制內容 |
 | :--- | :--- |
+| bash-cwd | Bash CWD 汙染防護、subshell 隔離 |
 | coding-style | 不可變性、檔案 < 800 行、函式 < 50 行 |
-| development-workflow | 研究先行 → Plan → TDD → Review |
+| development-workflow | 研究先行 → Plan → TDD → Review，Python 強制 uv |
 | git-workflow | Conventional Commits |
 | interactive-qa | AskUserQuestion 一次一題 |
 | security | commit 前安全檢查清單 |
 | testing | 80%+ 覆蓋率、TDD 強制 |
 | performance | 模型選擇策略、Context 管理 |
 | patterns | Repository Pattern、API 格式 |
+| plan-persistence | `/plan` 檔案持久化、WBS/Plan 職責分工、狀態同步 |
 | ui-design | Apple 風格簡約設計、毛玻璃效果 |
 
 語言特定規則可從 `custom-rule&skill/rules/` 複製（typescript、python、golang 等 8 種語言）。
@@ -243,6 +265,7 @@ claude_v2026/
 
 | 版本 | 日期 | 變更 |
 | :--- | :--- | :--- |
+| v5.1 | 2026-04-20 | Plan 持久化系統（`/plan` 寫入 `plans/`、`/tdd` 自動接續階段、`/verify` 驗收歸檔）、新增 `rules/plan-persistence.md`、模型別名收租（agent frontmatter 全用 `opus/sonnet/haiku` 自動追最新）、settings.json 權限改 uv |
 | v5.0 | 2026-04-13 | Skills 精簡至 7 個（-46%）、Rules 精簡（-28%）、Hooks 精簡（-81%）、文檔整合到 guides/、新增 project-docs skill、新增 dev-project-kit plugin、刪除通用知識 skill |
 | v4.4 | 2026-04-08 | Context 系統啟用、MECHANISMS.md、Hook 健壯性修正 |
 | v4.3 | 2026-03-24 | 開發時間追蹤、`/time-log`、StatusLine 持久化 |

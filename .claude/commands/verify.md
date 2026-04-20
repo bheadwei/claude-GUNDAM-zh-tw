@@ -52,18 +52,37 @@ Ready for PR: [YES/NO]
 
 如有任何關鍵問題，列出並附修復建議。
 
+## Plan 驗收標準比對
+
+若當前 `.current-task` 對應的 plan 存在（`.claude/taskmaster-data/plans/<id>-*.md`），在步驟 1-6 驗證後：
+
+1. 讀取 plan 檔的「驗收標準（整體）」checklist
+2. 逐項比對前面驗證結果：
+   - 「測試覆蓋率 ≥ 80%」→ 由步驟 4 結果填入
+   - 「所有階段狀態為 ✅」→ 讀 plan frontmatter `status`
+   - 「`/review-code` 無 CRITICAL/HIGH 問題」→ 若未執行，提示使用者執行
+   - 其他自訂條件 → 呈現給使用者確認
+3. **Plan 檔內的 checklist 同步勾選**（已通過的標 `[x]`）
+4. 若全部 checklist 通過 → 視為整體驗收 PASS
+
+**相關規範：** `.claude/rules/plan-persistence.md`
+
 ## 任務完成銜接
 
 若 `.claude/taskmaster-data/.current-task` 存在（表示有進行中的任務），且驗證結果為 PASS：
 
-1. 將該任務狀態更新為 `✅ 完成`
+1. 將 WBS 該任務狀態更新為 `✅ 完成`
 2. 清除 `.current-task`
-3. 用 `AskUserQuestion` 詢問下一步（遵守 `.claude/rules/interactive-qa.md`）：
+3. **Plan 歸檔**（若存在對應 plan 檔）：
+   - 將 plan frontmatter 標 `status: "✅ 完成"`、`archived: "YYYY-MM-DD"`
+   - 移動至 `.claude/taskmaster-data/plans/archive/`（目錄不存在則建立）
+   - 更新 `plans/INDEX.md`：該行的狀態改為 `✅ 完成（已歸檔）`，路徑改為 `archive/<filename>`
+4. 用 `AskUserQuestion` 詢問下一步（遵守 `.claude/rules/interactive-qa.md`）：
    - 「繼續下一個任務」(Recommended) — 自動執行 `/task-next` 流程
    - 「查看目前進度」 — 顯示 WBS 狀態摘要
    - 「結束，稍後再繼續」 — 停止
 
-這樣使用者不用手動再跑 `/task-next`，形成 **自動任務接力**。
+這樣使用者不用手動再跑 `/task-next`，形成 **自動任務接力**，且計畫自動歸檔不佔主目錄。
 
 ## 參數
 

@@ -124,3 +124,35 @@ _(為每個 WBS 模組複製上方表格)_
 | M2: 核心功能完成 | YYYY-MM-DD | 可測試版本 | |
 | M3: 測試完成 | YYYY-MM-DD | 測試報告 | |
 | M4: 上線 | YYYY-MM-DD | 生產部署 | |
+
+---
+
+## 7. 執行階段（與 Claude Code 工作流整合）
+
+WBS 是**專案層級的 backlog（What）**；每個 WBS 任務的**實作藍圖（How）**由 `/plan` 指令產生並持久化。
+
+### 運作方式
+
+1. **`/task-next`** — 從本 WBS 取下一個任務（自動更新狀態為 🔄 進行中）
+2. **`/plan <wbs-id>`** — 為該任務產生實作藍圖，寫入 `.claude/taskmaster-data/plans/<id>-<slug>.md`
+   - 計畫檔包含：階段拆解、風險、依賴（技術）、驗收標準
+   - 本 WBS 表格的「備註」欄會自動加上計畫連結
+3. **`/tdd`** — 自動載入當前任務的計畫，按階段 RED-GREEN-REFACTOR 推進；每完成一階段即更新計畫檔狀態
+4. **`/verify`** — 讀計畫驗收標準比對測試結果 → PASS 後：
+   - 本 WBS 任務標為 ✅ 完成
+   - 計畫檔歸檔至 `plans/archive/`
+
+### 職責分工（避免重複維護）
+
+| 欄位 | 唯一來源 |
+|---|---|
+| 任務狀態（⏳/🔄/✅）、優先級、依賴任務、總預估 | **本 WBS 表格** |
+| 階段拆解、風險、驗收標準、實作細節 | **Plan 檔** |
+
+**完整規範：** `.claude/rules/plan-persistence.md`
+
+### WBS 備註欄範例
+
+```markdown
+| 2.1 | 建立 auth middleware | 🔄 進行中 | 高 | 1.3 | 4h | [計畫](plans/2.1-auth-middleware.md) |
+```

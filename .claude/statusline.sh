@@ -213,6 +213,24 @@ if [ "$total_cost" != "\$0.00" ]; then
     line1+="${yellow}${total_cost}${reset}"
 fi
 
+# ── WBS task + plan progress ────────────────────────────
+task_dir="$cwd/.claude/taskmaster-data"
+if [ -f "$task_dir/.current-task" ]; then
+    curr_task=$(head -1 "$task_dir/.current-task" 2>/dev/null | tr -d '[:space:]\r')
+    if [ -n "$curr_task" ]; then
+        line1+="${sep}"
+        line1+="${cyan}task ${curr_task}${reset}"
+        plan_file=$(ls "$task_dir/plans/${curr_task}"-*.md 2>/dev/null | head -1)
+        if [ -n "$plan_file" ] && [ -f "$plan_file" ]; then
+            curr_phase=$(grep '^current_phase:' "$plan_file" 2>/dev/null | head -1 | tr -dc '0-9')
+            total_phase=$(grep -c '^### 階段' "$plan_file" 2>/dev/null || echo 0)
+            if [ -n "$curr_phase" ] && [ "$total_phase" -gt 0 ] 2>/dev/null; then
+                line1+=" ${dim}(plan ${curr_phase}/${total_phase})${reset}"
+            fi
+        fi
+    fi
+fi
+
 # ── OAuth token resolution ──────────────────────────────
 get_oauth_token() {
     if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then

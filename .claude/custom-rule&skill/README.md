@@ -26,3 +26,13 @@
 - **主模板要輕**：規則太多會稀釋 Claude 的注意力，每多 1KB rules 都吃 context
 - **備份要全**：保留所有可能用到的素材，避免日後重新蒐集
 - **明確邊界**：執行用 vs 取材用，不會互相污染
+
+## 取材後務必檢查
+
+搬運 skill 到 `.claude/skills/` 後，**檢查並更新這些容易過時的內容**：
+
+- [ ] 寫死的 Claude 模型 ID（`claude-opus-4-7`、`claude-sonnet-4-6`、`claude-haiku-4-5-20251001`）
+- [ ] API 定價表（參考 Anthropic 官網最新值）
+- [ ] SDK 版本號、npm/PyPI 套件版本
+- [ ] 套件管理指令（Python 一律用 `uv add`，非 `pip install`）
+- [ ] 參考連結是否仍有效

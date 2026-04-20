@@ -18,8 +18,9 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
 
 1. 讀取 `.claude/taskmaster-data/wbs.md`
 2. 解析任務清單表格，統計各狀態數量
-3. 顯示統計和任務清單
-4. 如有任務狀態變更，**立即更新** wbs.md 檔案
+3. **讀取** `.claude/taskmaster-data/plans/INDEX.md`（若存在），建立 `<task-id> → plan 進度` 映射
+4. 顯示統計和任務清單（含 plan 進度欄位）
+5. 如有任務狀態變更，**立即更新** wbs.md 檔案
 
 ## 輸出格式
 
@@ -39,15 +40,23 @@ VibeCoding 模板合規:
   13_security_and_readiness_checklists.md   [待檢查]
 
 任務清單:
-  [完成] 1.1 專案初始化
-  [完成] 1.2 需求分析
-  [進行] 2.1 架構設計           ← 當前
-  [待處理] 2.2 API 設計
-  [待處理] 3.1 核心功能開發
+  [完成] 1.1 專案初始化                          Plan: —
+  [完成] 1.2 需求分析                            Plan: —
+  [進行] 2.1 架構設計           ← 當前            Plan: 🔄 2/4
+  [待處理] 2.2 API 設計                          Plan: ⚪ 尚無
+  [待處理] 3.1 核心功能開發                       Plan: ⚪ 尚無
   ...
 
 下一步建議: /task-next
 ```
+
+### Plan 進度符號
+
+- `🔄 N/M`：進行中，已完成 N 個階段 / 共 M 階段
+- `⏳ 0/M`：計畫已建立但尚未開始
+- `✅ 已歸檔`：任務完成後 plan 移至 `plans/archive/`
+- `⚪ 尚無`：WBS 任務無對應 plan 檔
+- `—`：已完成任務且無歷史 plan 記錄
 
 ## 更新任務狀態
 
@@ -77,7 +86,9 @@ VibeCoding 模板合規:
 ## 使用方式
 
 ```
-/task-status              # 簡要狀態
-/task-status --detailed   # 含每個任務詳情
+/task-status              # 簡要狀態（含 plan 進度）
+/task-status --detailed   # 含每個任務詳情（展開 plan 階段）
 /task-status --metrics    # 含效能指標和時間追蹤
 ```
+
+**相關規範：** `.claude/rules/plan-persistence.md`
