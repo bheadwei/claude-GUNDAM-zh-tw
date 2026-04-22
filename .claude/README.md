@@ -16,8 +16,8 @@
 │   ├── MCP_CONFIGS.md         # MCP Server 推薦清單
 │   ├── PAUSE_RESUME_GUIDE.md  # 暫停/恢復 SOP
 │   └── STATUSLINE_GUIDE.md    # StatusLine 客製化手冊
-├── agents/       (13 個)      # 專業 Agent 定義
-├── commands/     (17 個)      # Slash Command
+├── agents/       (14 個)      # 專業 Agent 定義
+├── commands/     (20 個)      # Slash Command
 ├── rules/        (11 個)      # 自動載入規則
 ├── skills/       (7 個)       # 專案特定領域知識
 ├── output-styles/ (15 個)     # 輸出樣式模板
@@ -49,6 +49,7 @@
 | build-error-resolver | haiku | 建置修復 |
 | documentation-specialist | haiku | 文檔生成 |
 | workflow-template-manager | haiku | 模板管理 |
+| ui-builder | sonnet | 前端 UI 產出（嚴格遵循 DESIGN.md） |
 
 ## Skills（7 個精選）
 

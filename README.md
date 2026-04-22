@@ -143,6 +143,9 @@ claude_v2026/
 | 品質級 | `/review-code` | 程式碼審查 |
 | | `/e2e` | Playwright E2E 測試 |
 | | `/verify` | 全面驗證（quick/full/pre-pr） |
+| UI 前端 | `/ui-style` | 選擇/切換 UI 風格 |
+| | `/ui-site` | 網站雛形產生器（Q&A → IA 文檔 + 多頁骨架 + 設計 tokens）|
+| | `/ui-page <path>` | 單頁深化（讀 IA，Q&A 補細節，委派 ui-builder）|
 | 輔助 | `/hub-delegate` | 手動委派 Agent |
 | | `/check-quality` | 品質評估 + Agent 推薦 |
 | | `/refactor-clean` | 死碼清理 |
@@ -153,7 +156,7 @@ claude_v2026/
 
 ---
 
-## Agent（13 個）
+## Agent（14 個）
 
 | Agent | Model | 用途 |
 | :--- | :--- | :--- |
@@ -170,6 +173,7 @@ claude_v2026/
 | build-error-resolver | haiku | 建置修復 |
 | documentation-specialist | haiku | codemap、API 文檔 |
 | workflow-template-manager | haiku | VibeCoding 模板管理 |
+| ui-builder | sonnet | 前端 UI 產出專家（嚴格遵循 DESIGN.md） |
 
 ---
 
