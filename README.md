@@ -217,17 +217,18 @@ claude_v2026/
 
 ---
 
-## MCP Server（7 個啟用）
+## MCP Server（8 個，含可選）
 
-| Server | 用途 |
-| :--- | :--- |
-| brave-search | 網路搜尋 |
-| context7 | 即時套件文檔查詢 |
-| firecrawl | 網頁爬取與深度研究 |
-| github | GitHub PR/Issue 操作 |
-| playwright | 瀏覽器自動化與 E2E |
-| sequential-thinking | 鏈式推理 |
-| memory | 跨 session 記憶 |
+| Server | 用途 | 備註 |
+| :--- | :--- | :--- |
+| brave-search | 網路搜尋 | |
+| context7 | 即時套件文檔查詢 | |
+| firecrawl | 網頁爬取與深度研究 | |
+| github | GitHub PR/Issue 操作 | |
+| playwright | 瀏覽器自動化與 E2E | |
+| sequential-thinking | 鏈式推理 | |
+| memory | 跨 session 記憶 | |
+| pencil | 設計檔（.pen）編輯/產生 | **需本機先安裝 Pencil 擴充元件**（Cursor / VS Code）。Windows 範本使用 `${USERPROFILE}` 變數自動解析路徑；Linux/macOS 需自行填入 binary 路徑（見 `.mcp.json.linux.example`）。 |
 
 更多可用 server 見 `.claude/guides/MCP_CONFIGS.md`。
 

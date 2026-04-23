@@ -39,6 +39,12 @@
       "env": {
         "FIRECRAWL_API_KEY": "YOUR_FIRECRAWL_API_KEY"
       }
+    },
+    "pencil": {
+      "command": "${USERPROFILE}\\.pencil\\mcp\\cursor\\out\\mcp-server-windows-x64.exe",
+      "args": ["--app", "cursor"],
+      "env": {},
+      "type": "stdio"
     }
   }
 }

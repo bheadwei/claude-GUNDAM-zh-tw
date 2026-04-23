@@ -39,6 +39,12 @@
       "env": {
         "FIRECRAWL_API_KEY": "YOUR_FIRECRAWL_API_KEY"
       }
+    },
+    "pencil": {
+      "command": "YOUR_PENCIL_MCP_BINARY_PATH",
+      "args": ["--app", "cursor"],
+      "env": {},
+      "type": "stdio"
     }
   }
 }
