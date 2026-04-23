@@ -10,6 +10,23 @@ Python 專案一律使用 `uv` 管理套件與虛擬環境：
 - 虛擬環境放專案目錄下（`.venv`）
 - 每次新增/移除套件後，同步產出 `requirements.txt`：`uv pip compile pyproject.toml -o requirements.txt`
 
+## Node.js / 前端套件管理（CRITICAL）
+
+Node.js 專案的 package manager（`bun` / `pnpm` / `npm`）由使用者在專案層決定，**不由 Claude 自選**。
+
+- **完整規則**：`.claude/rules/package-manager.md`
+- **設定檔**：`.claude/taskmaster-data/package-manager.json`
+- **選擇 / 切換指令**：`/pm-choose`、`/pm-switch`
+
+**強制行為**：
+
+- 執行 `install` / `run` / `test` 等 Node 相關指令前，**必須**讀取設定檔
+- 設定檔不存在 → 觸發 `/pm-choose` 詢問使用者
+- 設定檔存在 → 一律套用該 PM 的指令語法（對照表見 `package-manager.md`）
+- **禁止**在未確認設定的情況下自行選擇 PM
+
+**模板預設推薦**：新專案優先 `bun`（速度與 DX 最佳），但**必須透過 `/pm-choose` 讓使用者確認**，不可略過。
+
 ## 功能實作流程
 
 ### 0. 研究與重用（任何新實作前必做）
