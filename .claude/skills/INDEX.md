@@ -6,7 +6,7 @@
 
 | Skill | 用途 | 啟動時機 |
 | :--- | :--- | :--- |
-| **project-docs** | 依據 VibeCoding 範本撰寫專案文件 | 撰寫 PRD、架構、API 規格等文件 |
+| **project-docs** | 依 VibeCoding 範本產專案文件，支援 demo/mvp/full 三檔深度 | `/docs-init` 觸發（demo 產精簡 PRD、mvp 產 Tech Spec、full 產完整文件集），或手動要求寫 PRD/架構/API 規格 |
 | **deep-research** | 多源深度研究（MCP 串接） | 複雜問題調查 |
 | **e2e-testing** | Playwright E2E 測試模式 | 測試關鍵使用者流程 |
 | **cost-aware-llm-pipeline** | LLM API 成本優化（模型路由 + 預算追蹤） | 開發 AI 應用 |

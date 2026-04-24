@@ -1,6 +1,6 @@
 # Claude Code 全面開發配置
 
-> **版本:** v5.1 | **更新:** 2026-04-20 | **平台:** Windows（需 Git Bash）/ Linux / macOS
+> **版本:** v5.2 | **更新:** 2026-04-23 | **平台:** Windows（需 Git Bash）/ Linux / macOS
 
 人類主導的文檔導向智能協作開發平台。
 
@@ -41,7 +41,7 @@ cp .mcp.json.linux.example .mcp.json    # Linux / macOS
 # 3. 啟動 Claude Code
 claude
 
-# 4. 初始化專案
+# 4. 初始化專案（會先選開發情境 demo / mvp / full，再產文件 → 生 WBS）
 /task-init
 
 # 5. 開始開發循環
@@ -80,9 +80,9 @@ claude_v2026/
     ├── settings.local.json           # 個人設定（MCP 啟用）
     ├── statusline.sh                 # StatusLine 腳本
     │
-    ├── rules/        (11 個)         # 自動載入規則（每次對話注入）
+    ├── rules/        (13 個)         # 自動載入規則（每次對話注入）
     ├── agents/       (13 個)         # 專業 Agent 定義
-    ├── commands/     (17 個)         # Slash Commands
+    ├── commands/     (23 個)         # Slash Commands
     ├── skills/       (7 個)          # 專案特定領域知識
     ├── output-styles/ (15 個)        # 輸出樣式模板
     ├── hooks/                        # Hook 腳本庫
@@ -111,15 +111,25 @@ claude_v2026/
 ## 開發流程
 
 ```
-/task-init  →  /task-next  →  /plan  →  /tdd  →  /build-fix
-                   ↑           ↓          ↓
-                   |      寫入 plan   讀 plan
-                   |      更新 WBS    更新階段
-                   ↓
+/task-init                                                  ← 第一題：demo / mvp / full
+    │
+    ├─ demo  → /docs-init --demo  → docs/prd.md
+    ├─ mvp   → /docs-init --mvp   → docs/tech-spec.md
+    └─ full  → /docs-init --full  → docs/01_prd.md, 02_bdd.md ...
+         ↓
+   WBS（從文件反推，避免發散）
+         ↓
+/task-next  →  /plan  →  /tdd  →  /build-fix
+     ↑          ↓         ↓
+     |     寫入 plan  讀 plan
+     |     更新 WBS   更新階段
+     ↓
 /save-session  ←  /time-log  ←  /task-status  ←  /verify  ←  /e2e  ←  /review-code
-                                      ↑                        讀 plan 驗收
-                                顯示 plan 進度                 歸檔 plan
+                                     ↑                       讀 plan 驗收
+                               顯示 plan 進度                 歸檔 plan
 ```
+
+**文件先行（v5.2 新增）**：`/task-init` 第一題選開發情境，依情境自動觸發 `/docs-init` 產文件，再從文件拆 WBS——避免「越做越發散」。詳見 `.claude/commands/docs-init.md`。
 
 **Plan 持久化（v5.1 新增）**：
 - `/plan <wbs-id>` 寫入 `.claude/taskmaster-data/plans/<id>-<slug>.md`
@@ -133,7 +143,8 @@ claude_v2026/
 
 | 階段 | 指令 | 用途 |
 | :--- | :--- | :--- |
-| 專案級 | `/task-init` | 建立 WBS、分析複雜度 |
+| 專案級 | `/task-init` | 初始化（選情境 → 產文件 → 生 WBS） |
+| | `/docs-init` | 規格文件產出（`--demo` / `--mvp` / `--full`） |
 | | `/task-next` | 取下一個任務（自動追蹤時間） |
 | | `/task-status` | 查看進度 |
 | | `/time-log` | 開發時間報表 |
@@ -146,6 +157,8 @@ claude_v2026/
 | UI 前端 | `/ui-style` | 選擇/切換 UI 風格 |
 | | `/ui-site` | 網站雛形產生器（Q&A → IA 文檔 + 多頁骨架 + 設計 tokens）|
 | | `/ui-page <path>` | 單頁深化（讀 IA，Q&A 補細節，委派 ui-builder）|
+| 環境設定 | `/pm-choose` | 選擇 Node.js 套件管理器（bun/pnpm/npm） |
+| | `/pm-switch` | 切換已設定的 PM（附遷移指引） |
 | 輔助 | `/hub-delegate` | 手動委派 Agent |
 | | `/check-quality` | 品質評估 + Agent 推薦 |
 | | `/refactor-clean` | 死碼清理 |
@@ -177,7 +190,7 @@ claude_v2026/
 
 ---
 
-## Rules（11 個，自動載入）
+## Rules（13 個，自動載入）
 
 每次對話自動注入。
 
@@ -185,7 +198,7 @@ claude_v2026/
 | :--- | :--- |
 | bash-cwd | Bash CWD 汙染防護、subshell 隔離 |
 | coding-style | 不可變性、檔案 < 800 行、函式 < 50 行 |
-| development-workflow | 研究先行 → Plan → TDD → Review，Python 強制 uv |
+| development-workflow | 研究先行 → Plan → TDD → Review，Python 強制 uv，Node 強制 `/pm-choose` |
 | git-workflow | Conventional Commits |
 | interactive-qa | AskUserQuestion 一次一題 |
 | security | commit 前安全檢查清單 |
@@ -193,6 +206,8 @@ claude_v2026/
 | performance | 模型選擇策略、Context 管理 |
 | patterns | Repository Pattern、API 格式 |
 | plan-persistence | `/plan` 檔案持久化、WBS/Plan 職責分工、狀態同步 |
+| package-manager | Node 指令執行前讀取 PM 設定，對照 bun/pnpm/npm 語法 |
+| pencil-design-location | Pencil `.pen` 檔強制落地 `design/`，禁用 `open_document("new")` |
 | ui-design | Apple 風格簡約設計、毛玻璃效果 |
 
 語言特定規則可從 `custom-rule&skill/rules/` 複製（typescript、python、golang 等 8 種語言）。
@@ -205,7 +220,7 @@ claude_v2026/
 
 | Skill | 用途 | 觸發時機 |
 | :--- | :--- | :--- |
-| **project-docs** | 依據 VibeCoding 範本撰寫專案文件 | 撰寫 PRD、架構、API 規格 |
+| **project-docs** | 依 VibeCoding 範本產專案文件，支援 demo/mvp/full 三檔深度 | `/docs-init` 觸發，或手動要求寫 PRD/架構/API 規格 |
 | **deep-research** | 多源深度研究（MCP 串接） | 複雜問題調查 |
 | **e2e-testing** | Playwright E2E 測試模式 | 測試關鍵使用者流程 |
 | **cost-aware-llm-pipeline** | LLM API 成本優化 | 開發 AI 應用 |
@@ -270,6 +285,7 @@ claude_v2026/
 
 | 版本 | 日期 | 變更 |
 | :--- | :--- | :--- |
+| v5.2 | 2026-04-23 | 文件先行流程（`/task-init` 支援 demo/mvp/full 三情境 → `/docs-init` 產文件 → WBS 從文件反推）、Package Manager 選擇系統（`/pm-choose` `/pm-switch` + `rules/package-manager.md`）、Pencil MCP 接入與 `.pen` 檔強制落地 `design/`（`rules/pencil-design-location.md`） |
 | v5.1 | 2026-04-20 | Plan 持久化系統（`/plan` 寫入 `plans/`、`/tdd` 自動接續階段、`/verify` 驗收歸檔）、新增 `rules/plan-persistence.md`、模型別名收租（agent frontmatter 全用 `opus/sonnet/haiku` 自動追最新）、settings.json 權限改 uv |
 | v5.0 | 2026-04-13 | Skills 精簡至 7 個（-46%）、Rules 精簡（-28%）、Hooks 精簡（-81%）、文檔整合到 guides/、新增 project-docs skill、新增 dev-project-kit plugin、刪除通用知識 skill |
 | v4.4 | 2026-04-08 | Context 系統啟用、MECHANISMS.md、Hook 健壯性修正 |

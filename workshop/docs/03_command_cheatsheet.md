@@ -1,6 +1,6 @@
 # VibeCoding 模板 — 指令速查卡
 
-> 隨堂參考用，17 個 slash command + 13 個 Agent 一覽
+> 隨堂參考用，23 個 slash command + 14 個 Agent 一覽
 
 ---
 
@@ -10,10 +10,19 @@
 
 | 指令 | 說明 | 何時用 |
 | :--- | :--- | :--- |
-| `/task-init` | 專案初始化，互動式 Q&A → 產出 CLAUDE.md + WBS | 新專案第一步 |
+| `/task-init` | 專案初始化，選情境（demo/mvp/full）→ 產文件 → CLAUDE.md + WBS | 新專案第一步 |
+| `/docs-init` | 規格文件產出（`--demo` / `--mvp` / `--full`，可升級） | `/task-init` 自動呼叫，或補文件 |
 | `/task-next` | 從 WBS 取得下一個任務（自動追蹤時間） | 每個任務開始前 |
 | `/task-status` | 查看 WBS 任務狀態總覽 | 想了解整體進度 |
 | `/time-log` | 開發時間報表（按日期/任務） | 回顧開發時間 |
+
+### 環境設定
+
+| 指令 | 說明 | 何時用 |
+| :--- | :--- | :--- |
+| `/ui-style` | 選擇 / 切換 UI 設計風格 | 前端專案開始前或想換風格 |
+| `/pm-choose` | 選 Node.js 套件管理器（bun/pnpm/npm） | 新前端專案或首次跑 Node 指令 |
+| `/pm-switch` | 切換已設定的 PM，附遷移指引 | 想改用不同 PM |
 
 ### 開發流程
 

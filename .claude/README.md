@@ -1,6 +1,6 @@
 # .claude 配置目錄
 
-> **版本:** v5.1 | **更新:** 2026-04-20
+> **版本:** v5.2 | **更新:** 2026-04-23
 
 ## 目錄結構
 
@@ -17,8 +17,8 @@
 │   ├── PAUSE_RESUME_GUIDE.md  # 暫停/恢復 SOP
 │   └── STATUSLINE_GUIDE.md    # StatusLine 客製化手冊
 ├── agents/       (14 個)      # 專業 Agent 定義
-├── commands/     (20 個)      # Slash Command
-├── rules/        (11 個)      # 自動載入規則
+├── commands/     (23 個)      # Slash Command
+├── rules/        (13 個)      # 自動載入規則
 ├── skills/       (7 個)       # 專案特定領域知識
 ├── output-styles/ (15 個)     # 輸出樣式模板
 ├── hooks/                     # Hook 腳本庫
@@ -57,7 +57,7 @@
 
 | Skill | 用途 |
 | :--- | :--- |
-| project-docs | 依據 VibeCoding 範本撰寫專案文件 |
+| project-docs | 依 VibeCoding 範本產專案文件，支援 demo/mvp/full 三檔深度（由 `/docs-init` 呼叫） |
 | deep-research | 多源深度研究（MCP 串接） |
 | e2e-testing | Playwright E2E 測試模式 |
 | cost-aware-llm-pipeline | LLM API 成本優化 |
@@ -67,7 +67,7 @@
 
 按需從 `custom-rule&skill/skills/` 複製語言特定 skill。
 
-## Rules（11 個，自動載入）
+## Rules（13 個，自動載入）
 
 每次對話自動注入 context，無需手動觸發。
 
@@ -75,7 +75,7 @@
 | :--- | :--- |
 | bash-cwd | Bash CWD 汙染防護 |
 | coding-style | 不可變性、檔案大小、錯誤處理 |
-| development-workflow | 研究先行 → Plan → TDD → Review，Python 強制 uv |
+| development-workflow | 研究先行 → Plan → TDD → Review，Python 強制 uv，Node 強制 `/pm-choose` |
 | git-workflow | Conventional Commits |
 | interactive-qa | AskUserQuestion 一次一題 |
 | security | commit 前安全檢查 |
@@ -83,6 +83,8 @@
 | performance | 模型選擇、Context 管理 |
 | patterns | Repository Pattern、API 格式 |
 | plan-persistence | `/plan` 持久化、WBS/Plan 職責分工 |
+| package-manager | Node 指令前讀取 PM 設定（bun/pnpm/npm），不符則觸發 `/pm-choose` |
+| pencil-design-location | Pencil `.pen` 檔強制落地 `design/`，禁用 `open_document("new")` |
 | ui-design | Apple 風格簡約設計、毛玻璃效果 |
 
 ## Hooks
