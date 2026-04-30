@@ -519,20 +519,23 @@ def build_presentation():
     # ================================================================
     make_section_slide(prs, "Chapter 3", "開發循環")
 
-    # 循環全貌
-    make_content_slide(prs, "開發循環全貌", [
-        ("/task-next      取得下一個任務", WHITE, Pt(22), False),
-        ("      \u2193", GRAY_DIM, Pt(16), False),
-        ("/plan               planner agent (Opus) 建立計畫", WHITE, Pt(22), False),
-        ("      \u2193            \u2192 人類審核 \u2192 確認", ACCENT_WARN, Pt(16), False),
-        ("/tdd                tdd-guide agent \u2014 RED \u2192 GREEN \u2192 IMPROVE", WHITE, Pt(22), False),
-        ("      \u2193", GRAY_DIM, Pt(16), False),
-        ("/review-code   code-quality agent 審查", WHITE, Pt(22), False),
-        ("      \u2193            \u2192 修復 CRITICAL / HIGH", ACCENT_WARN, Pt(16), False),
-        ("git commit        conventional commits 格式", WHITE, Pt(22), False),
-        ("      \u2193", GRAY_DIM, Pt(16), False),
-        ("\u2500\u2500\u2500 \u9084\u6709\u4efb\u52d9\uff1f\u2192 \u56de\u5230 /task-next \u2500\u2500\u2500", ACCENT, Pt(18), True),
-    ], note="核心觀念：人類主導、AI 輔助。/plan 後一定要人類確認。")
+    # 循環全貌（v5.3 任務分級）
+    make_content_slide(prs, "開發循環全貌（依任務模式分流）", [
+        ("/task-next   取任務 + 選模式（quick / standard / critical）", WHITE, Pt(20), False),
+        ("", WHITE, Pt(8), False),
+        ("─── quick ───     直接寫 → /verify (auto: quick)", ACCENT2, Pt(20), False),
+        ("                          適合：< 30min 單檔修改", GRAY_MID, Pt(15), False),
+        ("", WHITE, Pt(6), False),
+        ("─── standard ───  /plan → /tdd (80%) → /review-code", WHITE, Pt(20), False),
+        ("                          → /verify (auto: full)", WHITE, Pt(18), False),
+        ("                          適合：1-4h 新功能 / 重構", GRAY_MID, Pt(15), False),
+        ("", WHITE, Pt(6), False),
+        ("─── critical ───   /plan → /tdd (100%) → /review-code", ACCENT_WARN, Pt(20), False),
+        ("                          → /verify (auto: pre-pr + 安全掃描)", ACCENT_WARN, Pt(18), False),
+        ("                          適合：金流 / 認證 / 安全 / 核心", GRAY_MID, Pt(15), False),
+        ("", WHITE, Pt(6), False),
+        ("─── 完成 → 回到 /task-next 接力下一個 ───", ACCENT, Pt(16), True),
+    ], note="v5.3 新增任務分級。小修改走 quick 不被綡住，核心邏輯走 critical 加倍嚴謹。/verify 依模式自動選 profile。")
 
     # 第 1 輪
     make_section_slide(prs, "\u7b2c 1 \u8f2a\uff08\u8a73\u7d30\uff09", "\u5f8c\u7aef API \u2014 FastAPI + pytest")
@@ -636,16 +639,18 @@ def build_presentation():
     ], note="教學效果：刻意犯錯比完美示範更有記憶點")
 
     # Ch3 小結
-    make_content_slide(prs, "Chapter 3 \u5c0f\u7d50 \u2014 3 \u8f2a\u5faa\u74b0\u5b8c\u6210", [
-        ("\u7b2c 1 \u8f2a:  \u5f8c\u7aef API    FastAPI + pytest", WHITE, Pt(22), False),
-        ("\u7b2c 2 \u8f2a:  \u524d\u7aef UI     React + Vitest", WHITE, Pt(22), False),
-        ("\u7b2c 3 \u8f2a:  Bug \u4fee\u5fa9   /build-fix", WHITE, Pt(22), False),
+    make_content_slide(prs, "Chapter 3 \u5c0f\u7d50 \u2014 3 \u7a2e Lane \u5b8c\u6210", [
+        ("\u7b2c 1 \u8f2a:  \u5f8c\u7aef API    (standard) FastAPI + pytest", WHITE, Pt(22), False),
+        ("\u7b2c 2 \u8f2a:  \u524d\u7aef UI     (standard) React + Vitest", WHITE, Pt(22), False),
+        ("\u7b2c 3 \u8f2a:  Bug \u4fee\u5fa9   (quick) \u76f4\u63a5\u5beb + /verify", WHITE, Pt(22), False),
         ("", WHITE, Pt(12), False),
-        ("\u6838\u5fc3\u6d41\u7a0b\uff1a", ACCENT, Pt(20), True),
-        ("/task-next \u2192 /plan \u2192 /tdd \u2192 /review-code \u2192 commit", ACCENT, Pt(22), False),
+        ("\u6838\u5fc3\u6d41\u7a0b\uff08\u4f9d\u6a21\u5f0f\u5206\u6d41\uff09\uff1a", ACCENT, Pt(20), True),
+        ("quick     \u2192  \u76f4\u63a5\u5beb \u2192 /verify", ACCENT2, Pt(20), False),
+        ("standard  \u2192  /plan \u2192 /tdd (80%) \u2192 /review-code \u2192 /verify", WHITE, Pt(20), False),
+        ("critical  \u2192  /plan \u2192 /tdd (100%) \u2192 /review-code \u2192 /verify", ACCENT_WARN, Pt(20), False),
         ("", WHITE, Pt(12), False),
-        ("Agent \u5354\u4f5c\uff1a", ACCENT2, Pt(20), True),
-        ("  planner (Opus) \u2192 tdd-guide (Sonnet) \u2192 code-quality (Sonnet) \u2192 build-resolver (Haiku)", GRAY_LIGHT, Pt(16), False),
+        ("Agent \u5354\u4f5c\uff1a", ACCENT2, Pt(18), True),
+        ("  planner (Opus) \u2192 tdd-guide (Sonnet) \u2192 code-quality (Sonnet) \u2192 build-resolver (Haiku)", GRAY_LIGHT, Pt(15), False),
     ])
 
     # ================================================================
@@ -653,8 +658,8 @@ def build_presentation():
     # ================================================================
     make_section_slide(prs, "Chapter 4", "品質驗證")
 
-    # /verify
-    make_code_slide(prs, "/verify \u2014 \u4e09\u9053\u54c1\u8cea\u9580", [
+    # /verify (v5.3: 依任務模式自動選 profile)
+    make_code_slide(prs, "/verify \u2014 \u4e09\u9053\u54c1\u8cea\u9580\uff08\u4f9d\u6a21\u5f0f\u81ea\u52d5\uff09", [
         ("\U0001f50d \u5168\u9762\u9a57\u8b49", ACCENT),
         ("", GRAY_DIM),
         ("Gate 1: \u578b\u5225\u6aa2\u67e5", WHITE),

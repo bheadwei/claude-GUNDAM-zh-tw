@@ -10,46 +10,56 @@
 Chapter 3: 開發循環
 ━━━━━━━━━━━━━━━━━━
 
- 我們會跑 3 輪完整循環：
+ v5.3 新增「任務分級」— 三種 lane 對應不同強度：
 
- 第 1 輪（詳細）後端 API     → 10 min
- 第 2 輪（加速）前端 UI      → 10 min
- 第 3 輪（快速）修 Bug       →  5 min
+ ┌──────────┬────────────────────────────────┐
+ │ quick    │ 直接寫 → /verify               │
+ │ standard │ /plan → /tdd → /verify         │
+ │ critical │ /plan → /tdd(100%) → /review   │
+ │          │   → /verify(pre-pr)            │
+ └──────────┴────────────────────────────────┘
 
- 每輪都是：
- /task-next → /plan → /tdd → /review-code → commit
+ 我們會跑 3 輪：
+
+ 第 1 輪 後端 API   (standard) → 10 min
+ 第 2 輪 前端 UI    (standard) → 10 min
+ 第 3 輪 修 Bug     (quick)    →  5 min
 ```
 
 ---
 
-## Slide 2: 開發循環全貌
+## Slide 2: 開發循環全貌（依任務模式分流）
 
 ```
-         ┌──────────────────────────────────────┐
-         │                                      │
-         ▼                                      │
-   /task-next     取得下一個任務                 │
-         │                                      │
-         ▼                                      │
-   /plan          planner agent 建立計畫         │
-         │        （人類審核 → 確認）             │
-         ▼                                      │
-   /tdd           tdd-guide agent               │
-         │        RED → GREEN → IMPROVE          │
-         ▼                                      │
-   /review-code   code-quality agent 審查        │
-         │        （修復 CRITICAL / HIGH）        │
-         ▼                                      │
-   git commit     conventional commits           │
-         │                                      │
-         └──────── 還有任務？──── Yes ───────────┘
-                        │
-                       No
-                        ▼
-                   /verify 全面驗證
+   /task-next     取任務 + 選模式（quick/standard/critical）
+         │
+         ▼
+   ┌─────┴──────────────┬──────────────────┐
+   │ quick              │ standard         │ critical
+   │                    │                  │
+   ▼                    ▼                  ▼
+ 直接寫            /plan              /plan
+   │           planner agent      planner agent
+   │                │                  │
+   │                ▼                  ▼
+   │            /tdd                /tdd（100% 覆蓋）
+   │       RED→GREEN→REFAC       RED→GREEN→REFAC
+   │       （80% 覆蓋）              │
+   │                │                  ▼
+   │                │             /review-code
+   │                │                  │
+   ▼                ▼                  ▼
+ /verify         /verify            /verify
+ (auto:quick)    (auto:full)        (auto:pre-pr)
+   │                │                  │
+   └────────────────┴──────────────────┘
+                    ▼
+              git commit
+                    │
+                    └──→ /task-next 接力下一個
 ```
 
-**講師口述：** 這個循環就是今天的核心。每個步驟都有對應的 Agent 在背後工作。注意 `/plan` 之後有一個人類審核的環節——AI 不會自己決定怎麼做，你要看過計畫才繼續。
+**講師口述：** v5.3 起 `/task-next` 會多問一題「任務模式」。小修改走 quick lane，跳過 plan/tdd 直接寫；一般功能走 standard；金流/認證等核心走 critical。`/verify` 會依模式自動選對應 profile，不必手動帶參數。
 
 ---
 
@@ -58,8 +68,7 @@ Chapter 3: 開發循環
 ```
 ⚡ 操作：輸入 /task-next
 
-AI 會從 WBS 中選出最優先的任務
-通常第一個是後端基礎架構
+AI 會從 WBS 選出最優先的任務，並詢問執行模式
 
 ┌──────────────────────────────────────┐
 │  📋 下一個任務                        │
@@ -72,9 +81,15 @@ AI 會從 WBS 中選出最優先的任務
 │                                      │
 │  → 開始工作？                        │
 └──────────────────────────────────────┘
+
+接著會問：選擇任務模式
+
+  ▸ standard  (Recommended)  ← 預估 1h，預設此值
+    quick
+    critical
 ```
 
-**講師口述：** `/task-next` 不是隨便挑任務，它會看依賴關係和優先級。
+**講師口述：** `/task-next` 不只看依賴和優先級，還會依任務量級推薦預設模式。今天這個 1h 的後端任務適合 standard，按預設往下走就好。
 
 ---
 
@@ -275,54 +290,59 @@ code-quality-specialist agent (Sonnet) 會檢查：
 
 ---
 
-## Slide 11: 第 3 輪 — 刻意犯錯 + /build-fix
+## Slide 11: 第 3 輪 — Quick Lane + /build-fix
 
 ```
+⚡ 操作：/task-next → 選 quick 模式
+
+  小 bug / 文案 / 樣式調整 → 走 quick lane
+  跳過 /plan 和 /tdd 強制流程，直接動手
+
 ⚡ 操作：刻意引入一個 bug
 
   例：把 models.py 的 category 型別改壞
-
   → 建置失敗 ❌
-  → 測試失敗 ❌
 
 ⚡ 操作：輸入 /build-fix
 
   build-error-resolver agent (Haiku) 會：
-
   1. 讀取錯誤訊息
   2. 定位問題檔案
   3. 用最小差異修復
   4. 驗證修復成功
 
-  ┌──────────────────────────┐
-  │  修復完成                 │
-  │  變更: 1 file, 1 line    │
-  │  測試: ✅ all passed      │
-  └──────────────────────────┘
+⚡ 操作：/verify
 
-  → 用最輕量的 Haiku 模型，快速修復，省成本
+  ┌──────────────────────────┐
+  │  自動跑 quick profile     │
+  │  Build:  ✅              │
+  │  Types:  ✅              │
+  │  → 數秒完成               │
+  └──────────────────────────┘
 ```
 
-**講師口述：** 開發一定會出錯，重點是出錯後怎麼處理。`/build-fix` 用最便宜的模型做最小修復。不是重寫，是精準修補。
+**講師口述：** quick 模式是 v5.3 加的快車道。小修改不該被 80% 覆蓋率和完整 plan 拖累。`/verify` 也會自動降階成 quick profile，只跑 build + types，幾秒就好。
 
 ---
 
 ## Slide 12: Chapter 3 小結
 
 ```
-✅ 你剛完成了 3 輪開發循環
+✅ 你剛完成了 3 輪開發循環，體驗了三種 lane
 
-  第 1 輪: 後端 API（FastAPI + pytest）
-  第 2 輪: 前端 UI（React + Vitest）
-  第 3 輪: Bug 修復（/build-fix）
+  第 1 輪: 後端 API   (standard) → 完整 plan/tdd/review
+  第 2 輪: 前端 UI    (standard) → 同上 + UI 規範
+  第 3 輪: Bug 修復   (quick)    → 直接寫 + quick verify
 
-核心流程：
-  /task-next → /plan → /tdd → /review-code → commit
+核心流程（依模式分流）：
+  quick     → 直接寫 → /verify
+  standard  → /plan → /tdd → /review-code → /verify
+  critical  → 同 standard 但 100% 覆蓋 + 強制 review
 
 你體驗到的 Agent 協作：
-  planner (Opus)       → 規劃
-  tdd-guide (Sonnet)   → 測試驅動
-  code-quality (Sonnet) → 審查
+  planner (Opus)         → 規劃
+  tdd-guide (Sonnet)     → 測試驅動
+  code-quality (Sonnet)  → 審查
   build-resolver (Haiku) → 修錯
 
 接下來：品質驗證 →
