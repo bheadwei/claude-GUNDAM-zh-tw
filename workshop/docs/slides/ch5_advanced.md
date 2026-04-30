@@ -116,7 +116,7 @@ Chapter 5: 進階技巧
 ```
 今天我們走過的路：
 
-  Ch1  認識模板     了解 5 大機制、13 個 Agent
+  Ch1  認識模板     .claude 6 大觀念、14 個 Agent
         │
   Ch2  /task-init   專案初始化、產出 CLAUDE.md + WBS
         │

@@ -1,6 +1,6 @@
 """
 VibeCoding Workshop 投影片生成器
-Lovable 風格 — 暖奶油背景、炭黑文字、暖中性調色板
+NVIDIA 風格 — 真黑背景、白文字、NVIDIA 綠強調、industrial bold
 """
 
 from pptx import Presentation
@@ -9,24 +9,24 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pathlib import Path
 
-# ── 色彩系統（Lovable 暖中性調）────────────────────────
-# 來源：.claude/ui/lovable/DESIGN.md
-BG_DARK      = RGBColor(0xF7, 0xF4, 0xED)  # Cream 主背景（不是純白）
-BG_CODE      = RGBColor(0xEC, 0xEA, 0xE4)  # Light Cream 區塊底（border 同色）
-ACCENT       = RGBColor(0x1C, 0x1C, 0x1C)  # Charcoal 主要強調（深色文字即強調）
-ACCENT2      = RGBColor(0x5B, 0x7A, 0x52)  # 暖橄欖綠（通過/成功，去飽和）
-ACCENT_WARN  = RGBColor(0x9A, 0x7B, 0x3A)  # 暖琥珀（警告，去飽和）
-ACCENT_ERR   = RGBColor(0xA8, 0x45, 0x3D)  # 暖磚紅（失敗，去飽和）
-WHITE        = RGBColor(0x1C, 0x1C, 0x1C)  # Charcoal 主文字
-GRAY_LIGHT   = RGBColor(0x3D, 0x3D, 0x3D)  # Charcoal 83%（次要文字）
-GRAY_MID     = RGBColor(0x5F, 0x5F, 0x5D)  # Muted Gray（輔助文字）
-GRAY_DIM     = RGBColor(0xA8, 0xA6, 0xA0)  # Charcoal 40% on cream（最淡）
-PURE_WHITE   = RGBColor(0xFC, 0xFB, 0xF8)  # Off-White（深色塊上的反白文字）
+# ── 色彩系統（NVIDIA 高對比工業調）────────────────────
+# 來源：.claude/ui/nvidia/DESIGN.md
+BG_DARK      = RGBColor(0x00, 0x00, 0x00)  # True Black 主背景
+BG_CODE      = RGBColor(0x1A, 0x1A, 0x1A)  # Near Black 程式碼區塊底
+ACCENT       = RGBColor(0x76, 0xB9, 0x00)  # NVIDIA Green 唯一品牌色
+ACCENT2      = RGBColor(0x76, 0xB9, 0x00)  # 通過/成功也用 NVIDIA Green（強化品牌）
+ACCENT_WARN  = RGBColor(0xEF, 0x91, 0x00)  # Yellow 300 警告
+ACCENT_ERR   = RGBColor(0xE5, 0x20, 0x20)  # Red 500 錯誤
+WHITE        = RGBColor(0xFF, 0xFF, 0xFF)  # Pure White 主文字（深底用）
+GRAY_LIGHT   = RGBColor(0xA7, 0xA7, 0xA7)  # Gray 300（次要文字）
+GRAY_MID     = RGBColor(0x89, 0x89, 0x89)  # Gray 400（輔助文字）
+GRAY_DIM     = RGBColor(0x75, 0x75, 0x75)  # Gray 500（最淡）
+PURE_WHITE   = RGBColor(0xFF, 0xFF, 0xFF)  # 純白裝飾
 
-# ── 字體（Lovable 用 Camera Plain Variable，系統字體 fallback：ui-sans-serif/system-ui）
-# Windows system-ui ≈ Segoe UI；CJK 維持微軟正黑體
-FONT_TITLE   = "Segoe UI"
-FONT_BODY    = "Segoe UI"
+# ── 字體（NVIDIA 用 NVIDIA-EMEA + Arial/Helvetica fallback）
+# Windows 用 Arial 最貼近；CJK 維持微軟正黑體
+FONT_TITLE   = "Arial"
+FONT_BODY    = "Arial"
 FONT_CODE    = "Consolas"
 FONT_CJK     = "Microsoft JhengHei UI"
 
@@ -335,10 +335,11 @@ def build_presentation():
     # 模板是什麼
     make_content_slide(prs, "VibeCoding 模板 = AI 開發的標準作業程序", [
         ("\U0001f4cb  16 份文件模板        規範從需求到部署的每個階段", WHITE, Pt(20), False),
-        ("\U0001f916  13 個 AI Agent        各司其職、自動協作", WHITE, Pt(20), False),
-        ("\u26a1  17 個快捷指令        一行啟動完整流程", WHITE, Pt(20), False),
-        ("\U0001f4cf   9 條自動規則         品質底線自動守護", WHITE, Pt(20), False),
+        ("\U0001f916  14 個 AI Agent        各司其職、自動協作", WHITE, Pt(20), False),
+        ("\u26a1  23 個快捷指令        一行啟動完整流程", WHITE, Pt(20), False),
+        ("\U0001f4cf  13 條自動規則         品質底線自動守護", WHITE, Pt(20), False),
         ("\U0001f527   7 個領域技能         按需載入專業知識", WHITE, Pt(20), False),
+        ("\U0001fa9d   6 個系統 Hook         事件自動化", WHITE, Pt(20), False),
         ("", WHITE, Pt(12), False),
         ("\u2192  複製到任何新專案，立即可用", ACCENT, Pt(20), True),
     ])
@@ -364,28 +365,131 @@ def build_presentation():
         note="核心訊息：差別在流程，不在 AI 模型本身"
     )
 
-    # 5 大機制
-    make_content_slide(prs, "5 大擴展機制", [
-        ("Hook        系統事件自動觸發 \u2192 Shell 腳本", WHITE, Pt(20), False),
-        ("                  例：啟動時偵測模板、自動追蹤時間", GRAY_MID, Pt(16), False),
-        ("Command   使用者輸入 /xxx \u2192 預設 Prompt", WHITE, Pt(20), False),
-        ("                  例：/tdd, /plan, /verify", GRAY_MID, Pt(16), False),
-        ("Skill          語意偵測自動觸發 \u2192 領域知識", WHITE, Pt(20), False),
-        ("                  例：偵測到 FastAPI 自動載入相關知識", GRAY_MID, Pt(16), False),
-        ("Agent        主 Agent 委派子任務 \u2192 專業 AI", WHITE, Pt(20), False),
-        ("                  例：code-quality-specialist 做審查", GRAY_MID, Pt(16), False),
-        ("Context     跨 Agent 知識共享 \u2192 報告存檔", WHITE, Pt(20), False),
-        ("                  例：品質報告 \u2192 測試報告接力", GRAY_MID, Pt(16), False),
-    ], note="今天主要用 Command 和 Agent，其他三個先知道就好")
+    # .claude/ 6 大觀念總覽
+    make_content_slide(prs, ".claude/ 是專案的「AI 大腦」 — 6 大設定觀念", [
+        ("觀念             角色                 載入時機", ACCENT, Pt(20), True),
+        ("CLAUDE.md     專案說明書       每次對話自動", WHITE, Pt(20), False),
+        ("rules/             行為準則           每次對話自動", WHITE, Pt(20), False),
+        ("commands/   快捷指令           使用者 /xxx 觸發", WHITE, Pt(20), False),
+        ("agents/         專業 AI 同事     主 AI 委派時", WHITE, Pt(20), False),
+        ("skills/           領域知識包       語意偵測自動", WHITE, Pt(20), False),
+        ("hooks/         事件觸發器       系統事件發生", WHITE, Pt(20), False),
+        ("", WHITE, Pt(12), False),
+        ("\u2192  接下來一張投影片介紹一個觀念", GRAY_MID, Pt(18), False),
+    ], note="這是今天最關鍵的一張。所有 AI 行為都來自這 6 種設定。")
 
-    # 13 Agent
-    make_content_slide(prs, "13 個 Agent — 按模型分級", [
+    # CLAUDE.md
+    make_content_slide(prs, "CLAUDE.md — 專案說明書", [
+        ("特性：每次對話開頭自動載入", ACCENT, Pt(20), True),
+        ("位置：專案根目錄  /  類比：給新員工的 Onboarding 文件", GRAY_LIGHT, Pt(18), False),
+        ("", WHITE, Pt(10), False),
+        ("內容：", WHITE, Pt(20), True),
+        ("\u2022  專案是什麼、解決什麼問題", WHITE, Pt(18), False),
+        ("\u2022  技術棧（語言、框架、DB）", WHITE, Pt(18), False),
+        ("\u2022  目錄結構與重要檔案", WHITE, Pt(18), False),
+        ("\u2022  開發流程約定", WHITE, Pt(18), False),
+        ("\u2022  嚴禁事項（如：不可碰 prod DB）", WHITE, Pt(18), False),
+        ("", WHITE, Pt(10), False),
+        ("\u2192  寫得好的 CLAUDE.md = AI 一進來就懂專案", ACCENT2, Pt(18), True),
+    ], note="/task-init 會幫你產一份")
+
+    # rules/
+    make_content_slide(prs, "rules/ — 永遠載入的規則（13 條）", [
+        ("特性：每次對話開頭自動載入（與 CLAUDE.md 並列）", ACCENT, Pt(20), True),
+        ("類比：公司的員工守則  /  橫切關注點", GRAY_LIGHT, Pt(18), False),
+        ("", WHITE, Pt(10), False),
+        ("範例：", WHITE, Pt(20), True),
+        ("coding-style.md     編碼風格", WHITE, Pt(18), False),
+        ("testing.md            測試覆蓋率", WHITE, Pt(18), False),
+        ("security.md           安全規範", WHITE, Pt(18), False),
+        ("git-workflow.md     提交規範", WHITE, Pt(18), False),
+        ("task-mode.md       任務分級（v5.3 新增）", WHITE, Pt(18), False),
+        ("", WHITE, Pt(10), False),
+        ("\u2192  粒度小、可組合、跨專案複用", ACCENT2, Pt(18), True),
+    ], note="rules 是橫切通則，CLAUDE.md 是專案專屬。分開讓規則可跨專案複用。")
+
+    # commands/
+    make_content_slide(prs, "commands/ — 你的快捷指令（23 個）", [
+        ("特性：使用者輸入 /xxx 時觸發", ACCENT, Pt(20), True),
+        ("類比：終端機的 alias  /  本質：預設 prompt 模板", GRAY_LIGHT, Pt(18), False),
+        ("", WHITE, Pt(10), False),
+        ("/task-init     專案初始化", WHITE, Pt(18), False),
+        ("/task-next     取下一個任務", WHITE, Pt(18), False),
+        ("/plan          規劃實作", WHITE, Pt(18), False),
+        ("/tdd           測試驅動開發", WHITE, Pt(18), False),
+        ("/review-code   程式碼審查", WHITE, Pt(18), False),
+        ("/verify        全面驗證", WHITE, Pt(18), False),
+        ("...           還有 /ui-style /pm-choose /e2e ...", GRAY_MID, Pt(18), False),
+        ("", WHITE, Pt(10), False),
+        ("\u2192  自己也能寫，放到 .claude/commands/ 即生效", ACCENT2, Pt(18), True),
+    ])
+
+    # agents/
+    make_content_slide(prs, "agents/ — 專業 AI 同事（14 個）", [
+        ("特性：主 AI 委派子任務時呼叫", ACCENT, Pt(20), True),
+        ("類比：團隊裡的專科同事", GRAY_LIGHT, Pt(18), False),
+        ("", WHITE, Pt(10), False),
+        ("為什麼需要 Agent？", WHITE, Pt(20), True),
+        ("\u2022  隔離 context — 不污染主對話", WHITE, Pt(18), False),
+        ("\u2022  專用工具 — 例如審查 agent 只給讀檔權限", WHITE, Pt(18), False),
+        ("\u2022  模型分工 — Opus 想策略、Haiku 修小錯", WHITE, Pt(18), False),
+        ("\u2022  平行執行 — 多個 agent 同時跑", WHITE, Pt(18), False),
+        ("", WHITE, Pt(10), False),
+        ("\u2192  Claude Code 最強大的設計", ACCENT2, Pt(18), True),
+    ])
+
+    # skills/
+    make_content_slide(prs, "skills/ — 領域知識按需載入（7 個）", [
+        ("特性：AI 語意偵測，符合條件自動載入", ACCENT, Pt(20), True),
+        ("類比：手冊櫃 — 需要時才翻", GRAY_LIGHT, Pt(18), False),
+        ("", WHITE, Pt(10), False),
+        ("postgres-patterns      寫 SQL 時自動載入", WHITE, Pt(18), False),
+        ("database-migrations   Schema 變更時觸發", WHITE, Pt(18), False),
+        ("e2e-testing                寫 E2E 測試時觸發", WHITE, Pt(18), False),
+        ("mcp-builder                做 MCP server 時觸發", WHITE, Pt(18), False),
+        ("cost-aware-llm          AI 應用成本優化", WHITE, Pt(18), False),
+        ("project-docs              產 PRD / ADR 時", WHITE, Pt(18), False),
+        ("", WHITE, Pt(10), False),
+        ("\u2192  與 rules 差別：rules 永遠載入，skill 按需", GRAY_MID, Pt(16), False),
+    ])
+
+    # hooks/
+    make_content_slide(prs, "hooks/ — 事件自動化（6 個）", [
+        ("特性：系統事件發生時自動執行 shell 腳本", ACCENT, Pt(20), True),
+        ("類比：Git hooks 或 GitHub Actions", GRAY_LIGHT, Pt(18), False),
+        ("", WHITE, Pt(10), False),
+        ("事件類型：", WHITE, Pt(20), True),
+        ("SessionStart        啟動時             顯示模板提示", WHITE, Pt(17), False),
+        ("PreToolUse          呼叫工具前        權限檢查", WHITE, Pt(17), False),
+        ("PostToolUse        工具執行後        記錄、自動格式化", WHITE, Pt(17), False),
+        ("UserPromptSubmit  使用者送出       注入上下文", WHITE, Pt(17), False),
+        ("Stop / Notification                       收尾通知", WHITE, Pt(17), False),
+        ("", WHITE, Pt(10), False),
+        ("\u2192  AI 不能拒絕的副作用 — AI 決策、hook 落實", ACCENT2, Pt(18), True),
+    ])
+
+    # 6 大觀念對照表
+    make_content_slide(prs, "6 大觀念對照表 — 一張記住差異", [
+        ("觀念              觸發方式         生命週期        主要用途", ACCENT, Pt(18), True),
+        ("CLAUDE.md      自動載入        長駐 ctx        專案說明", WHITE, Pt(18), False),
+        ("rules               自動載入        長駐 ctx        跨專案通則", WHITE, Pt(18), False),
+        ("commands     使用者 /xxx     單次調用        封裝常用 prompt", WHITE, Pt(18), False),
+        ("agents           AI 委派           隔離 ctx         專業分工", WHITE, Pt(18), False),
+        ("skills             語意偵測        按需載入        領域知識", WHITE, Pt(18), False),
+        ("hooks            系統事件        無 AI 介入      副作用 / 自動化", WHITE, Pt(18), False),
+        ("", WHITE, Pt(12), False),
+        ("三條軸：自動 vs 觸發、長駐 vs 按需、AI 內 vs AI 外", GRAY_MID, Pt(16), False),
+    ], note="今天密集用到 commands 和 agents，其他在背景幫你工作")
+
+    # 14 Agent
+    make_content_slide(prs, "14 個 Agent — 按模型分級", [
         ("Opus  (\u91cd\u91cf\u7d1a\u63a8\u7406)", ACCENT, Pt(22), True),
         ("    planner \u2022 architect \u2022 security-auditor", WHITE, Pt(18), False),
         ("", WHITE, Pt(8), False),
         ("Sonnet  (\u4e00\u822c\u958b\u767c)", ACCENT2, Pt(22), True),
         ("    code-quality \u2022 tdd-guide \u2022 e2e-specialist", WHITE, Pt(18), False),
         ("    test-engineer \u2022 refactor-cleaner \u2022 deployment", WHITE, Pt(18), False),
+        ("    ui-builder \u2022 general-purpose", WHITE, Pt(18), False),
         ("", WHITE, Pt(8), False),
         ("Haiku  (\u8f15\u91cf\u5feb\u901f)", ACCENT_WARN, Pt(22), True),
         ("    build-resolver \u2022 doc-specialist \u2022 template-mgr", WHITE, Pt(18), False),
@@ -395,14 +499,16 @@ def build_presentation():
 
     # 目錄結構
     make_code_slide(prs, "目錄結構 — .claude/ 下的關鍵目錄", [
+        ("CLAUDE.md           \u2190 專案說明書（根目錄）", ACCENT),
         (".claude/", ACCENT),
-        ("\u251c\u2500\u2500 agents/          \u2190 13 \u500b Agent \u5b9a\u7fa9", GRAY_LIGHT),
-        ("\u251c\u2500\u2500 commands/        \u2190 17 \u500b\u5feb\u6377\u6307\u4ee4", GRAY_LIGHT),
-        ("\u251c\u2500\u2500 rules/           \u2190 9 \u689d\u81ea\u52d5\u898f\u5247\uff08\u6bcf\u6b21\u5c0d\u8a71\u8f09\u5165\uff09", ACCENT2),
+        ("\u251c\u2500\u2500 agents/          \u2190 14 \u500b Agent \u5b9a\u7fa9", GRAY_LIGHT),
+        ("\u251c\u2500\u2500 commands/        \u2190 23 \u500b\u5feb\u6377\u6307\u4ee4", GRAY_LIGHT),
+        ("\u251c\u2500\u2500 rules/           \u2190 13 \u689d\u81ea\u52d5\u898f\u5247", ACCENT2),
         ("\u251c\u2500\u2500 skills/          \u2190 7 \u500b\u9818\u57df\u6280\u80fd", GRAY_LIGHT),
         ("\u251c\u2500\u2500 hooks/           \u2190 6 \u500b\u7cfb\u7d71\u4e8b\u4ef6\u8173\u672c", GRAY_LIGHT),
+        ("\u251c\u2500\u2500 ui/              \u2190 UI \u98a8\u683c\u76ee\u9304\uff08lovable / nvidia / ...\uff09", GRAY_LIGHT),
         ("\u251c\u2500\u2500 context/         \u2190 Agent \u9593\u7684\u5831\u544a\u5171\u4eab", GRAY_LIGHT),
-        ("\u251c\u2500\u2500 guides/          \u2190 \u53c3\u8003\u6587\u4ef6\uff08\u4e0d\u81ea\u52d5\u8f09\u5165\uff09", GRAY_DIM),
+        ("\u251c\u2500\u2500 guides/          \u2190 \u53c3\u8003\u6587\u4ef6", GRAY_DIM),
         ("\u2514\u2500\u2500 taskmaster-data/ \u2190 WBS \u4efb\u52d9 + \u6642\u9593\u8ffd\u8e64", ACCENT),
     ], note="不需要背，知道去哪找就好")
 
@@ -418,7 +524,7 @@ def build_presentation():
 
     # 旅程
     make_content_slide(prs, "今天的旅程", [
-        ("Ch1   認識模板                10 min  \u2190 你在這裡", ACCENT, Pt(22), True),
+        ("Ch1   認識模板 + 觀念       15 min  \u2190 你在這裡", ACCENT, Pt(22), True),
         ("Ch2   專案初始化             15 min", WHITE, Pt(22), False),
         ("Ch3   開發循環 x3            25 min   \u2b50 核心", ACCENT_WARN, Pt(22), True),
         ("Ch4   品質驗證                10 min", WHITE, Pt(22), False),
@@ -732,7 +838,7 @@ def build_presentation():
 
     # 流程回顧
     make_content_slide(prs, "完整流程回顧", [
-        ("Ch1   \u8a8d\u8b58\u6a21\u677f         5 \u5927\u6a5f\u5236\u300113 \u500b Agent", GRAY_MID, Pt(20), False),
+        ("Ch1   \u8a8d\u8b58\u6a21\u677f         .claude 6 \u5927\u89c0\u5ff5\u300114 \u500b Agent", GRAY_MID, Pt(20), False),
         ("Ch2   /task-init           \u5c08\u6848\u521d\u59cb\u5316 \u2192 CLAUDE.md + WBS", GRAY_MID, Pt(20), False),
         ("Ch3   \u958b\u767c\u5faa\u74b0 x3       /task-next \u2192 /plan \u2192 /tdd \u2192 /review-code", WHITE, Pt(20), False),
         ("Ch4   \u54c1\u8cea\u9a57\u8b49           /verify \u2192 /e2e \u2192 /time-log", WHITE, Pt(20), False),
