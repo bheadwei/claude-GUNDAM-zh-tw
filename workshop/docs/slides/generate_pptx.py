@@ -1,6 +1,6 @@
 """
 VibeCoding Workshop 投影片生成器
-簡約專業風格 — 淺色背景、微軟正黑體
+Lovable 風格 — 暖奶油背景、炭黑文字、暖中性調色板
 """
 
 from pptx import Presentation
@@ -9,23 +9,25 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pathlib import Path
 
-# ── 色彩系統（淺色主題）─────────────────────────────────
-BG_DARK      = RGBColor(0xFA, 0xFA, 0xFC)  # 近白背景
-BG_CODE      = RGBColor(0xF0, 0xF2, 0xF5)  # 程式碼區塊淺灰底
-ACCENT       = RGBColor(0x1A, 0x6B, 0xE5)  # 藍色強調
-ACCENT2      = RGBColor(0x1B, 0x8C, 0x4E)  # 綠色（通過/成功）
-ACCENT_WARN  = RGBColor(0xC4, 0x8A, 0x0A)  # 深黃（警告）
-ACCENT_ERR   = RGBColor(0xD1, 0x2E, 0x2E)  # 紅色（失敗）
-WHITE        = RGBColor(0x1A, 0x1A, 0x1A)  # 主文字（深黑）
-GRAY_LIGHT   = RGBColor(0x37, 0x37, 0x3C)  # 次要文字
-GRAY_MID     = RGBColor(0x6B, 0x6B, 0x76)  # 輔助文字
-GRAY_DIM     = RGBColor(0xA0, 0xA0, 0xAA)  # 最淡文字
-PURE_WHITE   = RGBColor(0xFF, 0xFF, 0xFF)  # 純白（裝飾用）
+# ── 色彩系統（Lovable 暖中性調）────────────────────────
+# 來源：.claude/ui/lovable/DESIGN.md
+BG_DARK      = RGBColor(0xF7, 0xF4, 0xED)  # Cream 主背景（不是純白）
+BG_CODE      = RGBColor(0xEC, 0xEA, 0xE4)  # Light Cream 區塊底（border 同色）
+ACCENT       = RGBColor(0x1C, 0x1C, 0x1C)  # Charcoal 主要強調（深色文字即強調）
+ACCENT2      = RGBColor(0x5B, 0x7A, 0x52)  # 暖橄欖綠（通過/成功，去飽和）
+ACCENT_WARN  = RGBColor(0x9A, 0x7B, 0x3A)  # 暖琥珀（警告，去飽和）
+ACCENT_ERR   = RGBColor(0xA8, 0x45, 0x3D)  # 暖磚紅（失敗，去飽和）
+WHITE        = RGBColor(0x1C, 0x1C, 0x1C)  # Charcoal 主文字
+GRAY_LIGHT   = RGBColor(0x3D, 0x3D, 0x3D)  # Charcoal 83%（次要文字）
+GRAY_MID     = RGBColor(0x5F, 0x5F, 0x5D)  # Muted Gray（輔助文字）
+GRAY_DIM     = RGBColor(0xA8, 0xA6, 0xA0)  # Charcoal 40% on cream（最淡）
+PURE_WHITE   = RGBColor(0xFC, 0xFB, 0xF8)  # Off-White（深色塊上的反白文字）
 
-# ── 字體 ─────────────────────────────────────────────
-FONT_TITLE   = "Microsoft JhengHei UI"  # 微軟正黑體
-FONT_BODY    = "Microsoft JhengHei UI"
-FONT_CODE    = "Microsoft JhengHei UI"
+# ── 字體（Lovable 用 Camera Plain Variable，系統字體 fallback：ui-sans-serif/system-ui）
+# Windows system-ui ≈ Segoe UI；CJK 維持微軟正黑體
+FONT_TITLE   = "Segoe UI"
+FONT_BODY    = "Segoe UI"
+FONT_CODE    = "Consolas"
 FONT_CJK     = "Microsoft JhengHei UI"
 
 SLIDE_WIDTH  = Inches(13.333)
@@ -178,7 +180,7 @@ def make_code_slide(prs, title, code_lines, note=""):
     )
     code_bg.fill.solid()
     code_bg.fill.fore_color.rgb = BG_CODE
-    code_bg.line.color.rgb = RGBColor(0xD8, 0xDA, 0xE0)
+    code_bg.line.color.rgb = BG_CODE  # Lovable border #eceae4
     code_bg.line.width = Pt(1)
     # 圓角效果（近似）
     code_bg.shadow.inherit = False
