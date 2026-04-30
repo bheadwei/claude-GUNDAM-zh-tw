@@ -1,6 +1,6 @@
 """
 VibeCoding Workshop 投影片生成器
-NVIDIA 風格 — 真黑背景、白文字、NVIDIA 綠強調、industrial bold
+Claude (Anthropic) 風格 — 羊皮紙背景、赤陶品牌色、暖調中性、襯線標題
 """
 
 from pptx import Presentation
@@ -9,23 +9,25 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pathlib import Path
 
-# ── 色彩系統（NVIDIA 高對比工業調）────────────────────
-# 來源：.claude/ui/nvidia/DESIGN.md
-BG_DARK      = RGBColor(0x00, 0x00, 0x00)  # True Black 主背景
-BG_CODE      = RGBColor(0x1A, 0x1A, 0x1A)  # Near Black 程式碼區塊底
-ACCENT       = RGBColor(0x76, 0xB9, 0x00)  # NVIDIA Green 唯一品牌色
-ACCENT2      = RGBColor(0x76, 0xB9, 0x00)  # 通過/成功也用 NVIDIA Green（強化品牌）
-ACCENT_WARN  = RGBColor(0xEF, 0x91, 0x00)  # Yellow 300 警告
-ACCENT_ERR   = RGBColor(0xE5, 0x20, 0x20)  # Red 500 錯誤
-WHITE        = RGBColor(0xFF, 0xFF, 0xFF)  # Pure White 主文字（深底用）
-GRAY_LIGHT   = RGBColor(0xA7, 0xA7, 0xA7)  # Gray 300（次要文字）
-GRAY_MID     = RGBColor(0x89, 0x89, 0x89)  # Gray 400（輔助文字）
-GRAY_DIM     = RGBColor(0x75, 0x75, 0x75)  # Gray 500（最淡）
+# ── 色彩系統（Claude 暖調文學沙龍）────────────────────
+# 來源：.claude/ui/claude/DESIGN.md
+BG_DARK      = RGBColor(0xF5, 0xF4, 0xED)  # Parchment 主背景（羊皮紙）
+BG_CODE      = RGBColor(0xFA, 0xF9, 0xF5)  # Ivory 程式碼區塊底（最淺暖白）
+ACCENT       = RGBColor(0xC9, 0x64, 0x42)  # Terracotta 品牌赤陶
+ACCENT2      = RGBColor(0x6B, 0x7A, 0x3F)  # 暖橄欖綠（通過/成功，去飽和）
+ACCENT_WARN  = RGBColor(0xD9, 0x77, 0x57)  # Coral（赤陶較淺變體，做警告）
+ACCENT_ERR   = RGBColor(0xB5, 0x33, 0x33)  # Error Crimson 暖紅
+WHITE        = RGBColor(0x14, 0x14, 0x13)  # Anthropic Near Black 主文字（暖夜黑）
+GRAY_LIGHT   = RGBColor(0x3D, 0x3D, 0x3A)  # Dark Warm（次要文字）
+GRAY_MID     = RGBColor(0x5E, 0x5D, 0x59)  # Olive Gray（輔助文字）
+GRAY_DIM     = RGBColor(0x87, 0x86, 0x7F)  # Stone Gray（最淡）
 PURE_WHITE   = RGBColor(0xFF, 0xFF, 0xFF)  # 純白裝飾
+BORDER_WARM  = RGBColor(0xE8, 0xE6, 0xDC)  # Warm Sand 邊框（程式碼框、卡片框）
 
-# ── 字體（NVIDIA 用 NVIDIA-EMEA + Arial/Helvetica fallback）
-# Windows 用 Arial 最貼近；CJK 維持微軟正黑體
-FONT_TITLE   = "Arial"
+# ── 字體（Claude 用 Anthropic Serif/Sans，fallback：Georgia/Arial）
+# 標題用襯線 Georgia（仿 Anthropic Serif 的書本感）
+# 內文用無襯線 Arial；CJK 維持微軟正黑體
+FONT_TITLE   = "Georgia"
 FONT_BODY    = "Arial"
 FONT_CODE    = "Consolas"
 FONT_CJK     = "Microsoft JhengHei UI"
@@ -180,7 +182,7 @@ def make_code_slide(prs, title, code_lines, note=""):
     )
     code_bg.fill.solid()
     code_bg.fill.fore_color.rgb = BG_CODE
-    code_bg.line.color.rgb = BG_CODE  # Lovable border #eceae4
+    code_bg.line.color.rgb = BORDER_WARM  # Claude Warm Sand border #e8e6dc
     code_bg.line.width = Pt(1)
     # 圓角效果（近似）
     code_bg.shadow.inherit = False
