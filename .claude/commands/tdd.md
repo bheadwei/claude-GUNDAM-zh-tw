@@ -6,7 +6,24 @@ description: 強制執行測試驅動開發工作流，會自動載入當前任�
 
 此指令呼叫 **tdd-guide** agent 強制執行 TDD，並**自動載入當前 WBS 任務的 plan 檔**（若存在）按階段推進。
 
-**相關規範：** `.claude/rules/plan-persistence.md`
+**相關規範：** `.claude/rules/plan-persistence.md`、`.claude/rules/task-mode.md`
+
+## 任務模式分流（最先檢查）
+
+讀 `.claude/taskmaster-data/.current-task-mode`：
+
+- **`quick`** → 進入 Fast Lane（見下方）
+- **`critical`** → 進入 Strict Lane：100% 覆蓋率，且階段完成前必須執行 `/review-code`
+- **`standard` 或檔案不存在** → 走下方標準流程
+
+### Fast Lane（quick 模式）
+
+1. 跳過 plan 偵測
+2. 不強制「先寫測試」— 允許實作後補測試
+3. 不檢查覆蓋率門檻
+4. 完成後直接提示 `/verify`（會自動跑 quick profile）
+
+quick 模式下，TDD 退化成「寫完功能 + 至少 1 個 happy path 測試」。
 
 ## 執行前流程（自動）
 

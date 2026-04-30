@@ -91,3 +91,21 @@ $ARGUMENTS 可以是：
 - `full` - 所有檢查（預設）
 - `pre-commit` - 與 commit 相關的檢查
 - `pre-pr` - 完整檢查加安全掃描
+
+## 自動 Profile 選擇（依任務模式）
+
+若使用者**未指定** `$ARGUMENTS`，讀取 `.claude/taskmaster-data/.current-task-mode`：
+
+| 任務模式 | 自動 profile |
+|---|---|
+| `quick` | `quick` |
+| `standard`（或檔案不存在） | `full` |
+| `critical` | `pre-pr` |
+
+使用者明確帶入 `$ARGUMENTS` 時優先採用使用者選擇。
+
+**相關規範：** `.claude/rules/task-mode.md`
+
+## 任務完成後清除模式
+
+第「任務完成銜接」階段標記 WBS 為 ✅ 後，**同步清除** `.current-task-mode`（連同 `.current-task`），避免下個任務沿用舊模式。

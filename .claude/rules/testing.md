@@ -1,6 +1,18 @@
 # 測試要求
 
-## 最低覆蓋率: 80%
+## 覆蓋率門檻（依任務模式）
+
+讀 `.claude/taskmaster-data/.current-task-mode`：
+
+| 模式 | 覆蓋率門檻 | 行為 |
+|---|---|---|
+| `quick` | 不檢查 | 至少 1 個 happy path 測試 |
+| `standard`（預設） | 80% | 一般功能/重構 |
+| `critical` | 100% | 金流、認證、安全、核心邏輯 |
+
+詳見 `.claude/rules/task-mode.md`。
+
+## 最低覆蓋率: 80%（standard 模式）
 
 必要測試類型：
 1. **單元測試** - 個別函式、工具、元件

@@ -64,6 +64,18 @@ description: 從 WBS 取得下一個任務建議，分析優先級和依賴關�
 - 「查看詳細資訊」
 - 「查看完整任務清單」
 
+### 選擇任務模式（quick / standard / critical）
+
+使用者選「開始此任務」後，**必須再用 `AskUserQuestion` 問一次任務模式**（規範見 `.claude/rules/task-mode.md`）：
+
+依該規則的「自動分級啟發式」算出**預設值**並標 `(Recommended)`：
+
+- `quick` — 直接寫，跳過 plan/TDD，僅 `/verify quick`（適合 < 30min 單檔修改）
+- `standard` — 走 plan → tdd → verify 完整流程（適合 1-4h 新功能/重構）
+- `critical` — standard + 100% 覆蓋 + review-code（金流/認證/安全）
+
+使用者選定後，將模式字串寫入 `.claude/taskmaster-data/.current-task-mode`。
+
 ## 問答記錄
 
 遵守 `.claude/rules/interactive-qa.md`：
@@ -87,6 +99,7 @@ description: 從 WBS 取得下一個任務建議，分析優先級和依賴關�
 3. 更新「最後更新」日期
 4. 寫回檔案
 5. **時間追蹤**：將任務編號寫入 `.claude/taskmaster-data/.current-task`（例如 `2.1`）
+6. **任務模式**：將選定的模式（`quick`/`standard`/`critical`）寫入 `.claude/taskmaster-data/.current-task-mode`
 
 當任務完成（透過 `/verify` 或使用者確認）時：
 1. 將任務狀態更新為 `✅ 完成`
