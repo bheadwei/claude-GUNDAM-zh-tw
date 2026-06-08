@@ -1,6 +1,6 @@
 ---
 name: ui-builder
-description: 前端 UI 產出專家，嚴格遵循 DESIGN.md 風格規範產生頁面與元件。自動用於 /ui-site 與 /ui-page 指令。
+description: 前端 UI 產出專家。Use 當需要產生前端頁面或元件時（自動用於 /ui-site 與 /ui-page 指令），嚴格遵循 DESIGN.md 風格規範與設計 tokens，零硬編碼色票，產出前後做風格合規檢查。
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
 model: sonnet
 ---

@@ -1,6 +1,6 @@
 ---
 name: general-purpose
-description: 通用型問題解決 agent，處理複雜研究、程式碼搜尋和多步驟任務
+description: 通用型問題解決 agent。Fallback only — 僅在沒有更專業的 agent 適配時使用，處理跨領域研究、程式碼搜尋與多步驟探索任務。有對應專業 agent 時一律優先選專業 agent。
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "WebSearch", "WebFetch"]
 model: sonnet
 ---

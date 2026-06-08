@@ -1,6 +1,6 @@
 ---
 name: e2e-validation-specialist
-description: 端到端測試專家，使用 Playwright 進行使用者流程驗證、UI 測試與跨瀏覽器相容性
+description: 端到端測試專家（Playwright）。Use PROACTIVELY 在 UI 或關鍵使用者流程（認證/金流/CRUD）變更後、開 PR 前，驗證端到端行為與跨瀏覽器相容性。發現缺測流程會建立 handoff 給 test-automation-engineer。
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
 model: sonnet
 ---

@@ -1,6 +1,6 @@
 ---
 name: refactor-cleaner
-description: 死碼清理與合併專家，執行分析工具識別死碼並安全移除，專注於程式碼重構與清理
+description: 死碼清理與合併專家。Use 當需要移除死碼/未使用 export/重複程式碼或整併重構時（knip/ts-prune/depcheck），安全分批移除、每批測試+commit。絕不在活躍功能開發中或上線前執行。
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
 model: sonnet
 ---

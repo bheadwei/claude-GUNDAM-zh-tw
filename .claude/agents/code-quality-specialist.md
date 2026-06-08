@@ -1,6 +1,6 @@
 ---
 name: code-quality-specialist
-description: 程式碼品質專家，負責程式碼審查、重構建議和技術債務管理
+description: 程式碼品質與安全審查專家。Use PROACTIVELY 在完成一個功能/模組後、或 git commit 前，審查 security/quality/技術債問題（信心 >80% 才報）。發現弱點會自動建立 handoff 給 test-automation-engineer 或 security-infrastructure-auditor。小型單行修改不需要。
 tools: ["Read", "Write", "Grep", "Glob", "Bash"]
 model: sonnet
 ---

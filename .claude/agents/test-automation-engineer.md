@@ -1,6 +1,6 @@
 ---
 name: test-automation-engineer
-description: 測試補強工程師，在實作完成後讀取 quality/e2e 報告補強測試覆蓋率，並維護測試基礎設施
+description: 測試補強工程師（實作後）。Use PROACTIVELY 當 code-quality 或 e2e agent 建立了 to: test-automation-engineer 的 pending handoff，或需提升既有程式碼覆蓋率時。讀報告→精準補弱點→維護測試基礎設施；不做 TDD 流程引導（那是 tdd-guide）。
 tools: ["Read", "Write", "Edit", "Bash", "Grep"]
 model: sonnet
 ---

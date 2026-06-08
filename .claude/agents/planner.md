@@ -1,6 +1,6 @@
 ---
 name: planner
-description: 功能規劃專家，為複雜功能和重構建立全面、可操作的實作計畫，並持久化至 plans/。
+description: 功能規劃專家。Use 在實作複雜功能或重構之前（跨 ≥2 檔案 或 ≥1h），建立分階段、可驗收的實作藍圖並持久化至 plans/，與 WBS 雙向連結。quick 小任務不需要規劃。
 tools: ["Read", "Write", "Edit", "Grep", "Glob"]
 model: opus
 ---

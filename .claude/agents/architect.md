@@ -1,6 +1,6 @@
 ---
 name: architect
-description: 系統架構設計專家，負責可擴展、可維護的系統設計和技術決策
+description: 系統架構設計專家。Use 當需要設計新子系統、評估重大技術取捨/選型、或規劃跨模組架構時（產出 ADR 與設計提案）。專注「動工前」的架構決策，唯讀分析、不負責實作。
 tools: ["Read", "Grep", "Glob"]
 model: opus
 ---

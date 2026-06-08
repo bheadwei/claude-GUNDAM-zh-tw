@@ -1,6 +1,6 @@
 ---
 name: workflow-template-manager
-description: VibeCoding 流程模板管理專家，負責 PRD/ADR/設計文檔等過程性文件的模板套用與生命週期協調（不處理 codemap 與 API 文檔）
+description: VibeCoding 流程模板管理專家。Use 當需要套用或協調 PRD、ADR、設計文檔等「過程性文件模板」與其生命週期時。不處理 codemap 與 API 文檔（那是 documentation-specialist）。
 tools: ["Read", "Write", "Grep", "WebSearch"]
 model: haiku
 ---
