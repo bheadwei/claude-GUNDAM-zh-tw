@@ -75,6 +75,12 @@ log() {
 
 log "🪝 TaskMaster Session Start Hook 觸發 (Platform: $PLATFORM)"
 
+# 依賴健檢：多個 hook（agent-monitor、handoff 注入、意圖路由）依賴 jq；缺少時提示使用者
+if ! command -v jq >/dev/null 2>&1; then
+    log "⚠️ jq 未安裝：agent 監控與 handoff 自動注入將靜默停用"
+    echo "⚠️ 偵測到 jq 未安裝 — .claude 的 agent 監控與 handoff 自動注入會停用。安裝：Windows \`winget install jqlang.jq\`（或 scoop install jq）、macOS \`brew install jq\`、Linux \`apt install jq\`。"
+fi
+
 # ============================================================================
 # 時間追蹤：歸檔上一次 Session 的時間
 # ============================================================================

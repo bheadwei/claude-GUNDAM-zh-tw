@@ -19,7 +19,10 @@
 2. **整合測試** - API 端點、資料庫操作
 3. **E2E 測試** - 關鍵使用者流程
 
-## 測試驅動開發（強制）
+## 測試驅動開發（standard / critical 強制；quick 豁免）
+
+> **任務模式豁免**：以下 test-first 流程僅在 `standard` / `critical` 模式強制。
+> `quick` 模式（見 `task-mode.md`）允許「先實作 + 後補 happy-path 測試」，**不強制 RED-first、不檢查覆蓋率**。不要對 quick 小任務硬套完整 TDD。
 
 1. 先寫測試 (RED)
 2. 執行測試 - 應該失敗

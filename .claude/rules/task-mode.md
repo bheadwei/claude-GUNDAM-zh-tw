@@ -16,7 +16,23 @@
 
 格式：純文字，僅一個值 `quick` / `standard` / `critical`。
 
-由 `/task-next` 在使用者選定任務後寫入；`/verify` 完成任務後同步清除（連同 `.current-task`）。
+寫入時機：`/task-next` 選定任務後寫入；**入口自動分級**（見下節）對 ad-hoc 任務也寫入；`/tdd <mode>` 行內參數可覆寫；`/verify` 完成任務後同步清除（連同 `.current-task`）。
+
+## 入口自動分級（主路徑必跑，無需 /task-next）
+
+**問題**：`.current-task-mode` 過去只有 `/task-next` 會寫 → 臨時/ad-hoc 任務落到無檔狀態、被當成 standard 跑完整 TDD，**小任務也被迫走重流程**。
+
+**修正**：**任何實作型請求開始前**，若 `.current-task-mode` 不存在，主模型**必須**：
+
+1. 用下方「自動分級啟發式」即時判定模式
+2. **明確宣告**判定與理由（一句話），例如：
+   > 判定 **quick**（單檔、<30min、樣式調整）→ 直接實作 + 1 個 happy-path 驗證，跳過 plan/TDD。
+3. 將判定值寫入 `.current-task-mode`（ad-hoc 也寫，不必經 `/task-next`）
+4. 使用者可當場一句話否決/調整（如「這要 standard」）
+
+**預設不再是 standard**——改為「先判定、後宣告」。判不準時偏保守往上一級，但 quick 該快就快。
+
+> **何謂「實作型請求」**：需要寫/改程式碼或設定的請求。純問答、檢視、研究不需分級。
 
 ## 流程指令的快慢車道
 
@@ -42,15 +58,15 @@
 - **standard** → 跨 ≥ 2 檔 或 ≥ 1h 才需要（同 `plan-persistence.md` 既有規則）
 - **critical** → 一律需要 plan
 
-## 自動分級啟發式（給 `/task-next` 用）
+## 自動分級啟發式（共用：`/task-next` 與 入口自動分級）
 
-呈現任務時依以下訊號**預設**模式，再讓使用者調整：
+依以下訊號判定**預設**模式，再讓使用者調整：
 
-- WBS 預估時間 < 30min **且** 描述含「修文案/調樣式/改設定/小 bug」 → **quick**
-- WBS 任務名含「auth/payment/billing/security/migration」 → **critical**
-- 其他 → **standard**
+- 單檔範圍 **且** 預估 < 30min **且** 屬「文案/樣式/設定/小 bug」 → **quick**
+- 觸及「auth/認證/payment/金流/billing/security/安全/migration/遷移/核心商業邏輯」 → **critical**
+- 其他（跨檔、新功能、重構） → **standard**
 
-使用者透過 `AskUserQuestion` 可手動覆寫此預設。
+`/task-next` 透過 `AskUserQuestion` 讓使用者覆寫；入口自動分級則以「宣告 + 等使用者一句話否決」方式覆寫。
 
 ## 例外與升級
 

@@ -10,11 +10,17 @@ description: 強制執行測試驅動開發工作流，會自動載入當前任�
 
 ## 任務模式分流（最先檢查）
 
-讀 `.claude/taskmaster-data/.current-task-mode`：
+決定模式的優先序：
+
+1. **行內參數** `/tdd quick|standard|critical` → 以此為準，並寫入 `.current-task-mode`（覆寫）
+2. 否則讀 `.claude/taskmaster-data/.current-task-mode`
+3. 仍無 → 依 `task-mode.md`「入口自動分級」啟發式即時判定、**宣告理由**後寫入（**不要逕自當 standard**）
+
+判定後：
 
 - **`quick`** → 進入 Fast Lane（見下方）
 - **`critical`** → 進入 Strict Lane：100% 覆蓋率，且階段完成前必須執行 `/review-code`
-- **`standard` 或檔案不存在** → 走下方標準流程
+- **`standard`** → 走下方標準流程
 
 ### Fast Lane（quick 模式）
 

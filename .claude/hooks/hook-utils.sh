@@ -43,10 +43,9 @@ check_required_files() {
 
     log_debug "檢查必要檔案: $claude_dir"
 
-    # 檢查 TaskMaster 核心檔案
+    # taskmaster.js 為選用元件（此模板版本未必內含）；缺少僅記 debug，不視為失敗
     if [ ! -f "$claude_dir/taskmaster.js" ]; then
-        log_error "TaskMaster 核心檔案不存在: $claude_dir/taskmaster.js"
-        return 1
+        log_debug "taskmaster.js 不存在（選用元件，略過）: $claude_dir/taskmaster.js"
     fi
 
     # 檢查 hooks 配置

@@ -35,12 +35,14 @@ Node.js 專案的 package manager（`bun` / `pnpm` / `npm`）由使用者在專�
 - 搜套件庫（npm/PyPI/crates.io）找現成方案
 - 優先採用經驗證的方案而非全新撰寫
 
-### 1. 先規劃
+> **先判任務模式**（見 `task-mode.md` 入口自動分級）。以下 1-4 為 `standard` / `critical` 的完整流程；`quick` 小任務跳過步驟 1-2，直接實作 + 補 happy-path 測試。
+
+### 1. 先規劃（standard / critical）
 - 使用 planner agent 建立實作計畫
 - 識別依賴和風險
 - 拆解為階段
 
-### 2. TDD 方法
+### 2. TDD 方法（standard / critical）
 - 使用 tdd-guide agent
 - 先寫測試 (RED)
 - 實作讓測試通過 (GREEN)
