@@ -69,6 +69,7 @@ format_tokens() {
 
 color_for_pct() {
     local pct=$1
+    # 標準號誌配色：低用量綠 → 橙 → 黃 → 高用量紅
     if [ "$pct" -ge 90 ] 2>/dev/null; then printf "$red"
     elif [ "$pct" -ge 70 ] 2>/dev/null; then printf "$yellow"
     elif [ "$pct" -ge 50 ] 2>/dev/null; then printf "$orange"
@@ -84,14 +85,37 @@ build_bar() {
 
     local filled=$(( pct * width / 100 ))
     local empty=$(( width - filled ))
-    local bar_color
-    bar_color=$(color_for_pct "$pct")
+    local col
+    col=$(color_for_pct "$pct")
 
-    local filled_str="" empty_str=""
-    for ((i=0; i<filled; i++)); do filled_str+="●"; done
-    for ((i=0; i<empty; i++)); do empty_str+="○"; done
-
-    printf "${bar_color}${filled_str}${dim}${empty_str}${reset}"
+    local f="" e="" i
+    # 依 BAR_STYLE 切換樣式（圓點/分段槽 皆保留；可用 /statusline-style 切換）
+    case "$BAR_STYLE" in
+        dots)        # ●○ 圓點（最早的樣式）
+            for ((i=0; i<filled; i++)); do f+="●"; done
+            for ((i=0; i<empty; i++)); do e+="○"; done
+            printf "${col}${f}${dim}${e}${reset}" ;;
+        solid)       # ▐██░░▌ 實心條 + 外框
+            for ((i=0; i<filled; i++)); do f+="█"; done
+            for ((i=0; i<empty; i++)); do e+="░"; done
+            printf "${dim}▐${reset}${col}${f}${dim}${e}▌${reset}" ;;
+        squares)     # ■□ 粗方塊
+            for ((i=0; i<filled; i++)); do f+="■"; done
+            for ((i=0; i<empty; i++)); do e+="□"; done
+            printf "${col}${f}${dim}${e}${reset}" ;;
+        braille)     # ▕⣿⣀▏ 點陣粒子
+            for ((i=0; i<filled; i++)); do f+="⣿"; done
+            for ((i=0; i<empty; i++)); do e+="⣀"; done
+            printf "${dim}▕${reset}${col}${f}${dim}${e}▏${reset}" ;;
+        gradient)    # ▐██▓▒░▌ 漸層消散
+            if [ "$filled" -ge 1 ]; then for ((i=0; i<filled-1; i++)); do f+="█"; done; f+="▓"; fi
+            if [ "$empty" -ge 1 ]; then e+="▒"; for ((i=0; i<empty-1; i++)); do e+="░"; done; fi
+            printf "${dim}▐${reset}${col}${f}${dim}${e}▌${reset}" ;;
+        *)           # segmented（分段槽，預設）：▕▰▱▏
+            for ((i=0; i<filled; i++)); do f+="▰"; done
+            for ((i=0; i<empty; i++)); do e+="▱"; done
+            printf "${dim}▕${reset}${col}${f}${dim}${e}▏${reset}" ;;
+    esac
 }
 
 iso_to_epoch() {
@@ -180,6 +204,22 @@ if [ -n "$pct_used_api" ] && [ "$pct_used_api" != "null" ]; then
     pct_used=$pct_used_api
 fi
 
+# ── Statusline bar style config ─────────────────────────
+# 由 /statusline-style 寫入；不存在則用預設 segmented
+BAR_STYLE="segmented"
+sl_cwd=$(echo "$input" | jq -r '.cwd // ""')
+{ [ -z "$sl_cwd" ] || [ "$sl_cwd" = "null" ]; } && sl_cwd=$(pwd)
+sl_conf="$sl_cwd/.claude/taskmaster-data/statusline.conf"
+if [ -f "$sl_conf" ]; then
+    while IFS='=' read -r sk sv; do
+        sk=$(printf '%s' "$sk" | tr -d '[:space:]\r')
+        sv=$(printf '%s' "$sv" | tr -d '[:space:]\r')
+        case "$sk" in
+            bar_style) [ -n "$sv" ] && BAR_STYLE="$sv" ;;
+        esac
+    done < "$sl_conf"
+fi
+
 # ── LINE 1 ──────────────────────────────────────────────
 pct_color=$(color_for_pct "$pct_used")
 cwd=$(echo "$input" | jq -r '.cwd // ""')
@@ -230,6 +270,67 @@ if [ -f "$task_dir/.current-task" ]; then
         fi
     fi
 fi
+
+# ── Agent activity (this session) + Level/XP ────────────
+sl_session=$(echo "$input" | jq -r '.session_id // ""')
+agent_log_file="$cwd/.claude/logs/agent-activity.jsonl"
+agent_count=0
+if [ -f "$agent_log_file" ] && [ -n "$sl_session" ]; then
+    agent_count=$(jq -r --arg s "$sl_session" \
+        'select(.event=="agent_start" and .session_id==$s) | .session_id' \
+        "$agent_log_file" 2>/dev/null | wc -l | tr -d ' ')
+fi
+[ -z "$agent_count" ] && agent_count=0
+if [ "$agent_count" -gt 0 ] 2>/dev/null; then
+    line1+="${sep}${magenta}🤖 ${agent_count}${reset}"
+fi
+
+# Level：預設以 git commit 總數為 XP（單調遞增、跨 session 持久、不會因清 log 而倒退）
+# 想換指標 → 改下面 xp 這一行即可（檔尾「等級機制」說明有其他來源範例）
+# 複合戰功值 XP = commits×10 + 累計開發時數×5 + 累計 agent 指揮數×3
+xp_commits=$(git -C "$cwd" rev-list --count HEAD 2>/dev/null); [ -z "$xp_commits" ] && xp_commits=0
+xp_hours=0
+timelog_file="$cwd/.claude/taskmaster-data/timelog.jsonl"
+if [ -f "$timelog_file" ]; then
+    total_ms=$(jq -s 'map(.duration_ms // 0) | add // 0' "$timelog_file" 2>/dev/null)
+    [ -n "$total_ms" ] && [ "$total_ms" -gt 0 ] 2>/dev/null && xp_hours=$(( total_ms / 3600000 ))
+fi
+xp_agents=0
+if [ -f "$agent_log_file" ]; then
+    xp_agents=$(jq -r 'select(.event=="agent_start") | .event' "$agent_log_file" 2>/dev/null | wc -l | tr -d ' ')
+    [ -z "$xp_agents" ] && xp_agents=0
+fi
+xp=$(( xp_commits * 10 + xp_hours * 5 + xp_agents * 3 ))
+if [ "$xp" -gt 0 ] 2>/dev/null; then
+    lvl_thresholds=(0 120 300 600 1200 2500 5000)
+    lvl_icons=("🔧" "🛡️" "🚀" "⚡" "🌟" "☄️" "👑")
+    lvl_titles=("鋼鐵整備兵" "見習駕駛員" "戰場倖存者" "緋紅王牌" "覺醒新人類" "三倍速·赤色彗星" "白色惡魔")
+    lvl=1
+    for i in "${!lvl_thresholds[@]}"; do
+        [ "$xp" -ge "${lvl_thresholds[$i]}" ] 2>/dev/null && lvl=$((i + 1))
+    done
+    lvl_idx=$((lvl - 1))
+    if [ "$lvl" -lt "${#lvl_thresholds[@]}" ]; then
+        lvl_prog="${dim}(${xp}/${lvl_thresholds[$lvl]})${reset}"
+    else
+        lvl_prog="${dim}(MAX)${reset}"
+    fi
+    line1+="${sep}${yellow}Lv.${lvl} ${lvl_icons[$lvl_idx]} ${lvl_titles[$lvl_idx]}${reset} ${lvl_prog}"
+fi
+
+# ══════════════════════════════════════════════════════════
+# 等級機制（Level）說明 — 想自訂時改這裡
+# ──────────────────────────────────────────────────────────
+# 原理三步：(1) 取一個會成長的 XP → (2) 用門檻表換算等級 → (3) 配對 icon/稱號。
+# 預設 XP = 複合戰功值：commits×10 + 累計開發時數×5 + 累計 agent 數×3（會頻繁變動，最有感）。
+# 調整權重 → 改上面 xp=$(( ... )) 的係數。改用單一來源範例：
+#   • 純 commit 數：         xp=$xp_commits
+#   • 純累計開發時數：       xp=$xp_hours
+#   • 純累計 agent 指揮數：   xp=$xp_agents
+#   • 本 session 新增行數：   xp=$(echo "$input" | jq -r '.cost.total_lines_added // 0')
+# 門檻/稱號：改 lvl_thresholds / lvl_icons / lvl_titles（三陣列長度需一致）。
+# 註：換 XP 來源後記得同步調整 lvl_thresholds 的量級。
+# ══════════════════════════════════════════════════════════
 
 # ── OAuth token resolution ──────────────────────────────
 get_oauth_token() {
@@ -313,7 +414,7 @@ fi
 rate_lines=""
 
 if [ -n "$usage_data" ] && echo "$usage_data" | jq -e . >/dev/null 2>&1; then
-    bar_width=10
+    bar_width=16
 
     five_hour_pct=$(echo "$usage_data" | jq -r '.five_hour.utilization // 0' | awk '{printf "%.0f", $1}')
     five_hour_reset_iso=$(echo "$usage_data" | jq -r '.five_hour.resets_at // empty')

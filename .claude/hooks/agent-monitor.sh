@@ -70,7 +70,7 @@ case "$EVENT" in
         } >> "$LOG_FILE"
 
         # === 結構化 JSONL log ===
-        jq -n \
+        jq -nc \
             --arg ts "$TIMESTAMP" \
             --arg event "agent_start" \
             --arg agent_type "$AGENT_TYPE" \
@@ -120,7 +120,7 @@ case "$EVENT" in
         } >> "$LOG_FILE"
 
         # === 結構化 JSONL log ===
-        jq -n \
+        jq -nc \
             --arg ts "$TIMESTAMP" \
             --arg event "agent_complete" \
             --arg agent_type "$AGENT_TYPE" \
