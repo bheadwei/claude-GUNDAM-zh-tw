@@ -1,4 +1,4 @@
-# copy-template.ps1 — 將 claude_v2026 模板複製到新專案資料夾
+﻿# copy-template.ps1 — 將 claude_v2026 模板複製到新專案資料夾
 # 自動排除個人設定、執行時資料、歷史紀錄等專案專屬內容
 #
 # 用法:
@@ -88,9 +88,14 @@ Write-Host "   來源: $source"
 Write-Host "   目標: $Destination"
 Write-Host ""
 
+# 去掉路徑結尾的反斜線，避免 "C:\path\" 的結尾 \ 跳脫掉引號
+$sourcePath = $source.Path.TrimEnd('\')
+$destPath = (Resolve-Path $Destination).Path.TrimEnd('\')
+
+# 直接呼叫 robocopy（不手動加引號），由 PowerShell 處理參數引號最穩健
 $robocopyArgs = @(
-    "`"$source`"",
-    "`"$Destination`"",
+    $sourcePath,
+    $destPath,
     '/E',           # 複製所有子目錄（含空目錄）
     '/R:1',         # 失敗重試 1 次
     '/W:1',         # 等待 1 秒
@@ -102,18 +107,19 @@ $robocopyArgs = @(
 
 foreach ($dir in $excludeDirs) {
     $robocopyArgs += '/XD'
-    $robocopyArgs += "`"$dir`""
+    $robocopyArgs += $dir
 }
 
 foreach ($file in $excludeFiles) {
     $robocopyArgs += '/XF'
-    $robocopyArgs += "`"$file`""
+    $robocopyArgs += $file
 }
 
 # Robocopy 的 exit code：0-7 都算成功
-$proc = Start-Process -FilePath 'robocopy' -ArgumentList $robocopyArgs -NoNewWindow -Wait -PassThru
-if ($proc.ExitCode -ge 8) {
-    Write-Host "❌ Robocopy 失敗 (exit code: $($proc.ExitCode))" -ForegroundColor Red
+& robocopy @robocopyArgs
+$exitCode = $LASTEXITCODE
+if ($exitCode -ge 8) {
+    Write-Host "❌ Robocopy 失敗 (exit code: $exitCode)" -ForegroundColor Red
     exit 1
 }
 

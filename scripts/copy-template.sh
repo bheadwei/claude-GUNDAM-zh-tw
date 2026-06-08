@@ -112,7 +112,14 @@ else
     cp -r "$SRC/." "$DEST/"
 
     for pattern in "${EXCLUDES[@]}"; do
-        find "$DEST" -path "$DEST/$pattern" -exec rm -rf {} + 2>/dev/null || true
+        p="${pattern%/}"                    # 去掉結尾斜線：find -path 比對的路徑不帶結尾 /
+        if [[ "$p" == */* ]]; then
+            # 含路徑的樣式：比對 DEST 下的相對路徑
+            find "$DEST" -path "$DEST/$p" -prune -exec rm -rf {} + 2>/dev/null || true
+        else
+            # 純檔名 / 目錄名：任意層級比對
+            find "$DEST" -name "$p" -prune -exec rm -rf {} + 2>/dev/null || true
+        fi
     done
 fi
 
