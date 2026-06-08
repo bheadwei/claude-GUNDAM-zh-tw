@@ -1,230 +1,72 @@
-# 🪝 TaskMaster Hooks 系統
+# 🪝 Hooks 系統
+
+`.claude/hooks/` 下的 shell 腳本由 Claude Code 在特定事件自動觸發，負責**副作用與上下文注入**（記錄、時間追蹤、agent 觀測、handoff 自動化、意圖路由）。掛載設定在 `.claude/settings.json` 的 `hooks` 區。
 
 ## 📁 檔案結構
 
 ```
 .claude/hooks/
-├── README.md                    # 本文件：Hooks 系統說明
-├── hook-utils.sh               # 共用工具函數庫
-├── session-start.sh            # 會話開始 Hook
-├── user-prompt-submit.sh       # 用戶輸入提交 Hook
-├── pre-tool-use.sh            # 工具使用前 Hook
-└── post-write.sh              # 檔案寫入後 Hook
+├── README.md                # 本文件
+├── session-start.sh         # SessionStart：模板偵測、時間歸檔、log 輪替
+├── user-prompt-submit.sh    # UserPromptSubmit：/task-init 偵測 + 意圖路由注入
+├── pre-tool-use.sh          # PreToolUse(Write|Edit)：輕量 log
+├── post-write.sh            # PostToolUse(Write)：WBS/檔案寫入記錄
+├── agent-monitor.sh         # Pre/PostToolUse(Agent)：subagent 活動記錄
+├── post-agent-report.sh     # PostToolUse(Agent)：報告稽核 + pending handoff 注入
+└── watch-agents.sh          # 手動工具（非 hook）：即時追蹤 agent 活動
 ```
 
-## 🎯 Hook 功能說明
+> 已移除 `hook-utils.sh`（舊 TaskMaster `taskmaster.js` 時代的共用庫，無任何 hook 引用）。
 
-### 1. `session-start.sh`
-**觸發時機**: Claude Code 會話開始時
+## 🎯 各 Hook 功能
 
-**主要功能**:
-- 自動檢測 `CLAUDE_TEMPLATE.md` 檔案
-- 判斷是否需要初始化 TaskMaster
-- 顯示初始化提示訊息
-- 調用 TaskMaster Node.js 處理器
+| 腳本 | 事件 / Matcher | 功能 |
+|---|---|---|
+| `session-start.sh` | `SessionStart` | 偵測 `CLAUDE_TEMPLATE.md` 顯示提示；歸檔上次 session 時間；**啟動時一次性輪替 log**；jq 缺失健檢 |
+| `user-prompt-submit.sh` | `UserPromptSubmit` | 偵測 `/task-init` 建資料夾；依關鍵字注入「建議任務模式 + 建議 agent 鏈」（受 `.suggest-mode` 控制） |
+| `pre-tool-use.sh` | `PreToolUse` `Write\|Edit` | 輕量記錄 tool 名到 `logs/hooks.log`（**已移除 Read**：高頻低價值） |
+| `post-write.sh` | `PostToolUse` `Write\|Edit` | WBS 更新寫歷史；記錄寫入/編輯事件（hook 內按路徑過濾） |
+| `agent-monitor.sh` | `Pre/PostToolUse` `Agent` | 記錄 subagent 啟動/完成（人類可讀 `agent-activity.log` + 結構化 `agent-activity.jsonl`） |
+| `post-agent-report.sh` | `PostToolUse` `Agent` | 稽核需寫報告的 agent；掃描 `coordination/handoffs/` 的 pending 交接並注入主對話（受 `.suggest-mode` 控制） |
+| `watch-agents.sh` | （手動）| `--summary` / `--last N` / `--json` / `--clear`；被 `/agent-log` 包裝 |
 
-**使用場景**:
+## ⚙️ 相關設定檔
+
+- `.claude/taskmaster-data/.suggest-mode` — `high`/`medium`/`low`/`off`，控制意圖路由與 handoff 注入密度（預設 medium）。由 `/suggest-mode` 寫入。
+- `.claude/taskmaster-data/.session-snapshot` / `.session-start` — 時間追蹤用。
+- log 一律寫在 `.claude/logs/`（`hooks.log`、`agent-activity.log`、`agent-activity.jsonl`、`context-reports.log`）。
+
+## 🧹 Log 輪替
+
+`session-start.sh` 在**每次 session 啟動時**將各 log 截尾保留最後 N 行（`agent-activity.log` 8000、`.jsonl` 5000、`hooks.log` 2000、`context-reports.log` 1000）。集中在啟動做，避免在高頻 hook 中加 per-call 成本。
+
+## 🔍 除錯與測試
+
 ```bash
-# 每次啟動 Claude Code 時自動執行
-# 無需手動調用
-```
+# 查看 hook log
+tail -n 50 .claude/logs/hooks.log
 
-### 2. `user-prompt-submit.sh`
-**觸發時機**: 用戶提交 prompt 時
+# 即時追蹤 agent 活動（另開終端）
+bash .claude/hooks/watch-agents.sh
+bash .claude/hooks/watch-agents.sh --summary
 
-**主要功能**:
-- 檢測 TaskMaster 相關命令 (`/task-*`)
-- 識別文檔相關操作
-- 準備初始化環境
-- 更新系統狀態
+# 手動測試（hook 從 stdin 讀 JSON）
+echo '{"hook_event_name":"PreToolUse","tool_name":"Agent","tool_input":{"subagent_type":"planner","description":"x","prompt":"y"}}' \
+  | bash .claude/hooks/agent-monitor.sh
 
-**使用場景**:
-```bash
-# 當用戶輸入包含以下內容時觸發：
-# - /task-init
-# - /task-status
-# - /task-next
-# - /hub-delegate
-# - docs/ 路徑
-# - .md 檔案操作
-```
-
-### 3. `pre-tool-use.sh`
-**觸發時機**: Claude Code 工具使用前
-
-**主要功能**:
-- 提供 TaskMaster 狀態上下文
-- 顯示當前專案資訊
-- 工具特定的預處理
-- 智能體委派準備
-
-**支援工具**:
-- `Write`: 檔案寫入提示
-- `Edit`: 核心檔案編輯警告
-- `Read`: VibeCoding 範本讀取上下文
-- `Task`: 智能體委派準備
-
-### 4. `post-write.sh`
-**觸發時機**: Claude Code 寫入檔案後
-
-**主要功能**:
-- 檢測文檔檔案生成
-- 觸發駕駛員審查流程
-- 更新 TaskMaster 狀態
-- 顯示審查通知
-
-**監控檔案類型**:
-- 專案文檔 (`docs/*.md`)
-- VibeCoding 範本
-- TaskMaster 核心檔案
-- Hooks 配置檔案
-
-### 5. `hook-utils.sh`
-**功能**: 共用工具函數庫
-
-**提供函數**:
-- 日誌函數 (`log_info`, `log_success`, `log_warning`, `log_error`)
-- 狀態檢查 (`check_taskmaster_status`, `check_required_files`)
-- 檔案類型判斷 (`is_document_file`, `is_project_document`)
-- 駕駛員通知 (`show_driver_notification`)
-- 環境驗證 (`validate_environment`)
-
-## 🔧 設定和使用
-
-### 1. 權限設定
-```bash
-# 確保所有 hook 腳本具有執行權限
-chmod +x .claude/hooks/*.sh
-```
-
-### 2. 環境變數
-```bash
-# 開啟除錯模式（可選）
+# 除錯模式（部分腳本支援）
 export TASKMASTER_DEBUG=true
 ```
 
-### 3. 日誌檔案
-所有 Hook 活動記錄在：`.claude/hooks.log`
+## 🛠️ 撰寫新 Hook 的慣例
 
-### 4. Claude Code 整合
-hooks 通過 `.claude/settings.local.json` 整合到 Claude Code：
-
-```json
-{
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/session-start.sh",
-            "timeout": 30
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/user-prompt-submit.sh '{{content}}'",
-            "timeout": 15
-          }
-        ]
-      }
-    ]
-  }
-}
-```
-
-## 🎯 Hook 執行流程
-
-```mermaid
-graph TD
-    A[Claude Code 啟動] --> B[session-start.sh]
-    B --> C{偵測 CLAUDE_TEMPLATE.md?}
-    C -->|是| D[顯示初始化提示]
-    C -->|否| E[待命狀態]
-
-    F[用戶輸入] --> G[user-prompt-submit.sh]
-    G --> H{包含 /task-* 命令?}
-    H -->|是| I[準備執行環境]
-    H -->|否| J[檢查文檔操作]
-
-    K[工具使用前] --> L[pre-tool-use.sh]
-    L --> M[提供狀態上下文]
-
-    N[檔案寫入後] --> O[post-write.sh]
-    O --> P{是文檔檔案?}
-    P -->|是| Q[觸發審查流程]
-    P -->|否| R[記錄活動]
-```
-
-## 🛠️ 自定義 Hooks
-
-### 創建新 Hook
-```bash
-# 1. 創建新的 hook 腳本
-touch .claude/hooks/my-custom-hook.sh
-chmod +x .claude/hooks/my-custom-hook.sh
-
-# 2. 加入基本結構
-cat << 'EOF' > .claude/hooks/my-custom-hook.sh
-#!/bin/bash
-
-# 載入共用工具函數
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/hook-utils.sh"
-
-# Hook 主邏輯
-log_info "自定義 Hook 執行中..."
-EOF
-
-# 3. 在 settings.local.json 中註冊
-```
-
-### Hook 最佳實踐
-1. **總是載入 `hook-utils.sh`** 使用共用函數
-2. **適當的日誌記錄** 便於除錯和監控
-3. **錯誤處理** 使用 `set -e` 和適當的錯誤檢查
-4. **效能考慮** hooks 應該快速執行，避免阻塞
-5. **狀態檢查** 在執行動作前檢查必要條件
-
-## 🔍 除錯和監控
-
-### 查看 Hook 日誌
-```bash
-# 實時監控 Hook 活動
-tail -f .claude/hooks.log
-
-# 查看最近的 Hook 活動
-tail -n 50 .claude/hooks.log
-```
-
-### 手動測試 Hook
-```bash
-# 測試會話開始 Hook
-.claude/hooks/session-start.sh
-
-# 測試用戶輸入 Hook
-.claude/hooks/user-prompt-submit.sh "/task-init MyProject"
-
-# 測試檔案寫入 Hook
-.claude/hooks/post-write.sh "docs/test.md"
-```
-
-### 除錯模式
-```bash
-# 啟用詳細日誌
-export TASKMASTER_DEBUG=true
-
-# 執行 Hook 查看除錯資訊
-.claude/hooks/session-start.sh
-```
+1. **不要用 `set -e`** — hook 不應因小錯中斷 Claude Code；以 `exit 0` 收尾，關鍵指令用 `|| true` 兜底。
+2. **路徑用 `$CLAUDE_PROJECT_DIR`**（Claude Code 注入），fallback 才從 `BASH_SOURCE` 推算。
+3. **jq 可能缺失** — `command -v jq || exit 0` 軟降級，不阻擋。
+4. **效能** — hook 在主迴圈內同步執行；減少 process spawn（例如一次 jq 解析多欄位，而非逐欄呼叫）。
+5. **避免在高頻事件做重活** — `Read`、`Edit` 觸發極頻繁；一次性工作（如 log 輪替）放 `SessionStart`。
+6. **CWD 不污染** — 需要切目錄時用 subshell `(cd ... && ...)`（見 `.claude/rules/bash-cwd.md`）。
 
 ---
 
-**🎯 設計原則**: 所有 Hooks 都設計為非侵入性，確保即使在 Hook 失敗的情況下，Claude Code 的正常功能也不會受到影響。
+**設計原則**：所有 hook 皆為非侵入式——即使 hook 失敗，Claude Code 正常功能不受影響。

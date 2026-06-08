@@ -14,7 +14,7 @@ coordination/
 
 - **建立交接**: 複製 `handoffs/_HANDOFF_TEMPLATE.md`，命名為 `<from>-to-<to>-<YYYY-MM-DD-HHMM>.md`
 - **查看待處理**: `grep -l "status: pending" .claude/coordination/handoffs/*.md`
-- **記錄衝突**: 在 `conflicts/` 建立 `conflict-<YYYY-MM-DD-HHMM>-<簡述>.md`
+- **記錄衝突**: 複製 `conflicts/_CONFLICT_TEMPLATE.md`，命名為 `conflict-<YYYY-MM-DD-HHMM>-<簡述>.md`
 
 ## 常見交接場景
 

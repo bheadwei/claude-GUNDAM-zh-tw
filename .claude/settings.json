@@ -91,7 +91,7 @@
         ]
       },
       {
-        "matcher": "Write|Edit|Read",
+        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",
@@ -118,7 +118,7 @@
         ]
       },
       {
-        "matcher": "Write",
+        "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "command",

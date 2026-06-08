@@ -1,5 +1,6 @@
 #!/bin/bash
 # Post Write Hook — 記錄文檔和 WBS 寫入事件
+# Matcher: Write|Edit（WBS 常透過 Edit 更新，故兩者都記；hook 內已按路徑過濾）
 
 # 優先用 Claude Code 注入的環境變數；不存在時從腳本自身位置算
 PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd 2>/dev/null)}"

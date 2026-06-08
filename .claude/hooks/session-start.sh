@@ -82,6 +82,30 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 # ============================================================================
+# Log 輪替：僅在 session 啟動時執行一次（避免 per-call 成本），
+# 將各 log 截尾保留最後 N 行，防止無限長大拖慢 /agent-log 等查詢。
+# ============================================================================
+rotate_log() {
+    local file="$1" max="$2" lines tmp
+    [ -f "$file" ] || return 0
+    lines=$(wc -l < "$file" 2>/dev/null | tr -d ' ')
+    [ -z "$lines" ] && return 0
+    if [ "$lines" -gt "$max" ] 2>/dev/null; then
+        tmp="${file}.tmp.$$"
+        if tail -n "$max" "$file" > "$tmp" 2>/dev/null; then
+            mv -f "$tmp" "$file" 2>/dev/null || rm -f "$tmp" 2>/dev/null
+            log "🧹 已輪替 $(basename "$file")（$lines → $max 行）"
+        else
+            rm -f "$tmp" 2>/dev/null
+        fi
+    fi
+}
+rotate_log "$CLAUDE_DIR/logs/agent-activity.log"   8000   # 多行/筆，約 ~570 筆
+rotate_log "$CLAUDE_DIR/logs/agent-activity.jsonl" 5000   # 單行/筆
+rotate_log "$CLAUDE_DIR/logs/hooks.log"            2000
+rotate_log "$CLAUDE_DIR/logs/context-reports.log"  1000
+
+# ============================================================================
 # 時間追蹤：歸檔上一次 Session 的時間
 # ============================================================================
 TIMELOG_DIR="$CLAUDE_DIR/taskmaster-data"
@@ -133,13 +157,6 @@ if [ -f "$PROJECT_ROOT/CLAUDE_TEMPLATE.md" ]; then
         echo -e "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
         echo -e "\033[1;37m╰─────────────────────────────────────────────────────────────╯\033[0m"
         echo ""
-
-        # 觸發 TaskMaster Node.js 處理器（可選，不存在則跳過）
-        if [ -f "$CLAUDE_DIR/taskmaster.js" ]; then
-            log "🔗 調用 TaskMaster Node.js 處理器"
-            cd "$PROJECT_ROOT" 2>/dev/null || exit 0
-            node "$CLAUDE_DIR/taskmaster.js" --hook-trigger=session-start || true
-        fi
 
         exit 0
     else

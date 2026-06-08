@@ -1,6 +1,6 @@
 #!/bin/bash
 # Pre Tool Use Hook — 輕量 log，不注入 context
-# Matcher: Write|Edit|Read
+# Matcher: Write|Edit（已移除 Read：高頻低價值，避免每次讀檔都 spawn jq）
 
 # 優先用 Claude Code 注入的環境變數；不存在時從腳本自身位置算
 PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd 2>/dev/null)}"
