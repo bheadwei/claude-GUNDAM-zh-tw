@@ -29,3 +29,6 @@ tmp/
 *.tmp
 *.bak
 
+# update-template 備份
+.claude-backups/
+
