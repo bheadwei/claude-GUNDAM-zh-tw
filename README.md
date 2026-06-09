@@ -80,9 +80,9 @@ claude_v2026/
     ├── settings.local.json           # 個人設定（MCP 啟用）
     ├── statusline.sh                 # StatusLine 腳本
     │
-    ├── rules/        (13 個)         # 自動載入規則（每次對話注入）
-    ├── agents/       (13 個)         # 專業 Agent 定義
-    ├── commands/     (23 個)         # Slash Commands
+    ├── rules/        (15 個)         # 自動載入規則（每次對話注入）
+    ├── agents/       (14 個)         # 專業 Agent 定義
+    ├── commands/     (25 個)         # Slash Commands
     ├── skills/       (7 個)          # 專案特定領域知識
     ├── output-styles/ (15 個)        # 輸出樣式模板
     ├── hooks/                        # Hook 腳本庫

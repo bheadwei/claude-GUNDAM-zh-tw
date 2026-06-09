@@ -99,7 +99,7 @@
 
 - 用「沒有模板 vs 有模板」的對比開場，製造動機
 - 展示模板目錄時用 `tree` 指令，但只展開第一層，避免資訊過載
-- 順手秀一下 statusline 的 agent 計數能量條（`/statusline-style` 可切樣式），作為「模板會自己觀測自己」的彩蛋
+- 順手秀一下 statusline 的 agent 計數能量條（改 `statusline.sh` 頂部 `BAR_STYLE` 可切樣式，`bash .claude/statusline.sh preview` 即時預覽），作為「模板會自己觀測自己」的彩蛋
 - Gemini API Key 設定可提前準備好 `.env` 範例檔，節省時間
 
 ---

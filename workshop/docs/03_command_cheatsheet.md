@@ -41,7 +41,6 @@
 | `/ui-page` | 單頁深化（讀 IA + Q&A → 完整頁面） | 已有網站要做新頁 |
 | `/pm-choose` | 選 Node.js 套件管理器（bun/pnpm/npm） | 新前端專案或首次跑 Node 指令 |
 | `/pm-switch` | 切換已設定的 PM，附遷移指引 | 想改用不同 PM |
-| `/statusline-style` | 切換 statusline 能量條樣式（打指令直接問答選） | 想換 statusline 外觀 |
 
 ### 開發流程
 
@@ -61,6 +60,7 @@
 | `/verify` | 全面驗證（依任務模式自動選 profile） | 任務結束前 |
 | `/check-quality` | 品質評估 + Agent 路由推薦 | 想全面檢視品質 |
 | `/template-check` | 驗證是否符合模板規範 | 品質稽核時 |
+| `/deploy` | 部署入口（先安全把關 → 委派 deployment-expert） | 要上線 / 設 CI-CD 時 |
 
 ### 輔助 / 可觀測性
 

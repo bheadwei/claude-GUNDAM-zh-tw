@@ -1,12 +1,12 @@
 ---
 description: 單頁深化：讀 IA 契約 + Q&A 補細節 → 生成符合風格的完整頁面。缺 IA 時引導三種模式。
 ---
-
 # 單頁深化產生器
 
 為既有頁面（`/ui-site` 建立的 stub，或既有專案的頁面）**填充內容**，產出符合風格的完整程式碼。
 
 **相關規範：**
+
 - `.claude/rules/ui-design.md`（強制三階段檢查）
 - `.claude/rules/interactive-qa.md`（一次一題 Q&A）
 
@@ -40,17 +40,18 @@ Read .claude/ui/<codename>/DESIGN.md
 檢查 `docs/17_frontend_information_architecture.md` 是否存在：
 
 **模式 A：IA 已存在**
+
 - 讀取該頁區段（例如「## 定價頁（/pricing）」）
 - 取得：頁面目的、CTA、區塊、資料、狀態
 - **跳過模式選擇 Q&A**，直接進入第 2 步
 
 **模式 B：IA 不存在** — 用 AskUserQuestion 問：
 
-| 選項 | 說明 |
-|---|---|
-| **[Recommended] 先跑 /ui-site** | 建立完整網站 IA（30 min Q&A，後續加頁面容易） |
-| **最小 IA 模式** | 只為這一頁建立 IA snippet（5 min，可漸進累積） |
-| **Adhoc 模式** | 跳過 IA，純頁面 Q&A，不留檔（快速原型） |
+| 選項                                  | 說明                                           |
+| ------------------------------------- | ---------------------------------------------- |
+| **[Recommended] 先跑 /ui-site** | 建立完整網站 IA（30 min Q&A，後續加頁面容易）  |
+| **最小 IA 模式**                | 只為這一頁建立 IA snippet（5 min，可漸進累積） |
+| **Adhoc 模式**                  | 跳過 IA，純頁面 Q&A，不留檔（快速原型）        |
 
 依選擇進入對應流程（見第 2 步）。
 
@@ -117,6 +118,7 @@ Read .claude/ui/<codename>/DESIGN.md
 ### 4. 委派 ui-builder agent
 
 確認後呼叫 `ui-builder` agent，傳入：
+
 - 頁面路徑
 - IA 資訊（或 Q&A 結果）
 - 風格確認（DESIGN.md 關鍵規範）
@@ -163,19 +165,20 @@ IA snippet 格式（最小模式）：
 ### 6. Q&A 記錄
 
 遵守 `.claude/rules/interactive-qa.md`，流程結束後**一次性** Write 到：
+
 ```
 .claude/qa-history/YYYY-MM-DD-HHMMSS-ui-page-<path>.md
 ```
 
 ## 邊界情況
 
-| 情境 | 處理 |
-|---|---|
-| 該頁 stub 不存在（既有專案無此檔） | 詢問「建立新檔案嗎？」→ 建立 |
-| 該頁已有完整內容（不是 stub） | 警告「已有內容，行為為 ⦅覆寫 / 補充 / 取消⦆」 |
-| 模式 B.2 Adhoc 後使用者想補 IA | 提示「執行 `/ui-page <path>` 無 --adhoc 會走模式 B.1」 |
-| IA 存在但該頁區段缺 | 回退到模式 B.1，新增該頁 snippet 到既有 IA |
-| DESIGN.md 缺對應區塊規範（例如沒定義 FAQ accordion） | 用 fallback 規範 + 告知使用者「DESIGN.md 未規範 FAQ，用預設模式」|
+| 情境                                                 | 處理                                                              |
+| ---------------------------------------------------- | ----------------------------------------------------------------- |
+| 該頁 stub 不存在（既有專案無此檔）                   | 詢問「建立新檔案嗎？」→ 建立                                     |
+| 該頁已有完整內容（不是 stub）                        | 警告「已有內容，行為為 ⦅覆寫 / 補充 / 取消⦆」                   |
+| 模式 B.2 Adhoc 後使用者想補 IA                       | 提示「執行 `/ui-page <path>` 無 --adhoc 會走模式 B.1」          |
+| IA 存在但該頁區段缺                                  | 回退到模式 B.1，新增該頁 snippet 到既有 IA                        |
+| DESIGN.md 缺對應區塊規範（例如沒定義 FAQ accordion） | 用 fallback 規範 + 告知使用者「DESIGN.md 未規範 FAQ，用預設模式」 |
 
 ## 風格合規硬檢查（由 ui-builder 執行）
 
