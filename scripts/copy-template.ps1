@@ -131,6 +131,13 @@ if ($exitCode -ge 8) {
 New-Item -ItemType Directory -Path (Join-Path $Destination '.claude\logs') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $Destination '.claude\taskmaster-data') -Force | Out-Null
 
+# 由種子檔建立預設 statusline.conf（之後直接改 value 即可換樣式，不必跑 command）
+$seedSrc = Join-Path $Destination '.claude\templates\statusline.conf.template'
+$seedDst = Join-Path $Destination '.claude\taskmaster-data\statusline.conf'
+if ((Test-Path $seedSrc) -and -not (Test-Path $seedDst)) {
+    Copy-Item -Path $seedSrc -Destination $seedDst -Force
+}
+
 # 建立最小化的 settings.local.json
 $minimalSettings = @'
 {

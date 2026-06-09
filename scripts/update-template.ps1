@@ -150,6 +150,19 @@ foreach ($d in $mergeClaudeDirs) {
     Invoke-Sync (Join-Path $source ".claude\$d") (Join-Path $destPath ".claude\$d") -AdditiveOnly
 }
 
+Write-Host "▶ SEED 預設設定檔（僅在缺檔時建立，不覆蓋已選樣式）..." -ForegroundColor Green
+$seedSrc = Join-Path $source '.claude\templates\statusline.conf.template'
+$seedDst = Join-Path $destPath '.claude\taskmaster-data\statusline.conf'
+if ((Test-Path $seedSrc) -and -not (Test-Path $seedDst)) {
+    if ($DryRun) {
+        Write-Host "   [dry] $seedDst"
+    } else {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $seedDst) -Force | Out-Null
+        Copy-Item -Path $seedSrc -Destination $seedDst -Force
+        Write-Host "   建立 statusline.conf（預設 segmented）"
+    }
+}
+
 # ============================================================================
 # 完成
 # ============================================================================
