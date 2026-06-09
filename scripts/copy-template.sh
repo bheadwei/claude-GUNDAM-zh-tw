@@ -131,11 +131,6 @@ fi
 mkdir -p "$DEST/.claude/logs"
 mkdir -p "$DEST/.claude/taskmaster-data"
 
-# 由種子檔建立預設 statusline.conf（之後直接改 value 即可換樣式，不必跑 command）
-SEED_SRC="$DEST/.claude/templates/statusline.conf.template"
-SEED_DST="$DEST/.claude/taskmaster-data/statusline.conf"
-[ -f "$SEED_SRC" ] && [ ! -f "$SEED_DST" ] && cp -f "$SEED_SRC" "$SEED_DST"
-
 # 建立最小化的 settings.local.json
 cat > "$DEST/.claude/settings.local.json" <<'EOF'
 {

@@ -38,7 +38,7 @@ SOURCE="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # ---- 分類設定 ----
 SYNC_CLAUDE_DIRS=(agents commands rules skills hooks guides output-styles plugins templates ui scripts "custom-rule&skill")
-SYNC_CLAUDE_FILES=(statusline.sh statusline-debug.sh statusline-linux.sh settings.json README.md)
+SYNC_CLAUDE_FILES=(statusline.sh statusline-debug.sh settings.json README.md)
 SYNC_ROOT_DIRS=(scripts)
 SYNC_ROOT_FILES=(.mcp.json.linux.example .mcp.json.windows.example CLAUDE_TEMPLATE.md .gitattributes)
 MERGE_CLAUDE_DIRS=(context coordination)
@@ -118,19 +118,6 @@ for f in "${SYNC_ROOT_FILES[@]}";   do copy_file "$SOURCE/$f"          "$DEST/$f
 
 echo "▶ MERGE 骨架目錄（保留執行資料）..."
 for d in "${MERGE_CLAUDE_DIRS[@]}"; do sync_dir "$SOURCE/.claude/$d" "$DEST/.claude/$d" additive; done
-
-echo "▶ SEED 預設設定檔（僅在缺檔時建立，不覆蓋已選樣式）..."
-SEED_SRC="$SOURCE/.claude/templates/statusline.conf.template"
-SEED_DST="$DEST/.claude/taskmaster-data/statusline.conf"
-if [ -f "$SEED_SRC" ] && [ ! -f "$SEED_DST" ]; then
-  if [ "$DRY_RUN" -eq 1 ]; then
-    echo "   [dry] $SEED_DST"
-  else
-    mkdir -p "$(dirname "$SEED_DST")"
-    cp -f "$SEED_SRC" "$SEED_DST"
-    echo "   建立 statusline.conf（預設 segmented）"
-  fi
-fi
 
 echo ""
 if [ "$DRY_RUN" -eq 1 ]; then

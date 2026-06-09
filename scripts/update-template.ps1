@@ -35,7 +35,7 @@ $syncClaudeDirs = @(
     'output-styles', 'plugins', 'templates', 'ui', 'scripts', 'custom-rule&skill'
 )
 $syncClaudeFiles = @(
-    'statusline.sh', 'statusline-debug.sh', 'statusline-linux.sh',
+    'statusline.sh', 'statusline-debug.sh',
     'settings.json', 'README.md'
 )
 $syncRootDirs  = @('scripts')   # 倉庫根目錄下的輔助腳本（含本腳本自己）
@@ -148,19 +148,6 @@ Write-Host "▶ MERGE 骨架目錄（保留執行資料）..." -ForegroundColor 
 foreach ($d in $mergeClaudeDirs) {
     # AdditiveOnly：永不刪除目標已有的報告 / handoff
     Invoke-Sync (Join-Path $source ".claude\$d") (Join-Path $destPath ".claude\$d") -AdditiveOnly
-}
-
-Write-Host "▶ SEED 預設設定檔（僅在缺檔時建立，不覆蓋已選樣式）..." -ForegroundColor Green
-$seedSrc = Join-Path $source '.claude\templates\statusline.conf.template'
-$seedDst = Join-Path $destPath '.claude\taskmaster-data\statusline.conf'
-if ((Test-Path $seedSrc) -and -not (Test-Path $seedDst)) {
-    if ($DryRun) {
-        Write-Host "   [dry] $seedDst"
-    } else {
-        New-Item -ItemType Directory -Path (Split-Path -Parent $seedDst) -Force | Out-Null
-        Copy-Item -Path $seedSrc -Destination $seedDst -Force
-        Write-Host "   建立 statusline.conf（預設 segmented）"
-    }
 }
 
 # ============================================================================

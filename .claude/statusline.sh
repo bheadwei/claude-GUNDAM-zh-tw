@@ -1,11 +1,22 @@
 #!/bin/bash
 set -f
 
-input=$(cat)
+# ════════════════════════════════════════════════════════════
+#  ⚙️  能量條樣式 — 改這一行即可（存檔後 statusline 下次刷新生效）
+#     可選值：segmented / solid / dots / squares / braille / gradient
+#     即時預覽：bash .claude/statusline.sh preview
+# ════════════════════════════════════════════════════════════
+BAR_STYLE="solid"
 
-if [ -z "$input" ]; then
-    printf "Claude"
-    exit 0
+# 預覽模式不讀 stdin（直接跑 statusline.sh 才不會卡在等待輸入）
+if [ "$1" = "preview" ] || [ "$1" = "demo" ]; then
+    PREVIEW_MODE=1
+else
+    input=$(cat)
+    if [ -z "$input" ]; then
+        printf "Claude"
+        exit 0
+    fi
 fi
 
 # ── jq PATH fix (cross-platform) ────────────────────────
@@ -89,7 +100,7 @@ build_bar() {
     col=$(color_for_pct "$pct")
 
     local f="" e="" i
-    # 依 BAR_STYLE 切換樣式（圓點/分段槽 皆保留；可用 /statusline-style 切換）
+    # 依 BAR_STYLE 切換樣式（改檔案頂部的 BAR_STYLE 變數即可；預覽：statusline.sh preview）
     case "$BAR_STYLE" in
         dots)        # ●○ 圓點（最早的樣式）
             for ((i=0; i<filled; i++)); do f+="●"; done
@@ -117,6 +128,22 @@ build_bar() {
             printf "${dim}▕${reset}${col}${f}${dim}${e}▏${reset}" ;;
     esac
 }
+
+# ── 預覽模式輸出（bash statusline.sh preview [style]）──────
+# 一次列出所有樣式在 20% / 55% / 90% 下的樣子，即時確認，不必等刷新
+if [ -n "$PREVIEW_MODE" ]; then
+    current_style="$BAR_STYLE"
+    if [ -n "$2" ]; then styles="$2"; else styles="segmented solid dots squares braille gradient"; fi
+    printf "能量條樣式預覽（填充 20%% / 55%% / 90%%）：\n\n"
+    for s in $styles; do
+        BAR_STYLE="$s"
+        if [ "$s" = "$current_style" ]; then printf "  ▶ %-10s " "$s"; else printf "    %-10s " "$s"; fi
+        for p in 20 55 90; do build_bar "$p" 14; printf "   "; done
+        printf "\n"
+    done
+    printf "\n目前設定 BAR_STYLE=\"%s\"（改 .claude/statusline.sh 頂部那行）\n" "$current_style"
+    exit 0
+fi
 
 iso_to_epoch() {
     local iso_str="$1"
@@ -202,22 +229,6 @@ total_cost=$(echo "$input" | jq -r '.cost.total_cost_usd // 0' | awk '{printf "$
 pct_used_api=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
 if [ -n "$pct_used_api" ] && [ "$pct_used_api" != "null" ]; then
     pct_used=$pct_used_api
-fi
-
-# ── Statusline bar style config ─────────────────────────
-# 由 /statusline-style 寫入；不存在則用預設 segmented
-BAR_STYLE="segmented"
-sl_cwd=$(echo "$input" | jq -r '.cwd // ""')
-{ [ -z "$sl_cwd" ] || [ "$sl_cwd" = "null" ]; } && sl_cwd=$(pwd)
-sl_conf="$sl_cwd/.claude/taskmaster-data/statusline.conf"
-if [ -f "$sl_conf" ]; then
-    while IFS='=' read -r sk sv; do
-        sk=$(printf '%s' "$sk" | tr -d '[:space:]\r')
-        sv=$(printf '%s' "$sv" | tr -d '[:space:]\r')
-        case "$sk" in
-            bar_style) [ -n "$sv" ] && BAR_STYLE="$sv" ;;
-        esac
-    done < "$sl_conf"
 fi
 
 # ── LINE 1 ──────────────────────────────────────────────
