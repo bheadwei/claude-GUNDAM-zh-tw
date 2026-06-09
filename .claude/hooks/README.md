@@ -13,6 +13,7 @@
 ├── post-write.sh            # PostToolUse(Write)：WBS/檔案寫入記錄
 ├── agent-monitor.sh         # Pre/PostToolUse(Agent)：subagent 活動記錄
 ├── post-agent-report.sh     # PostToolUse(Agent)：報告稽核 + pending handoff 注入
+├── pre-compact.sh           # PreCompact：壓縮前快照工作狀態到 sessions/
 └── watch-agents.sh          # 手動工具（非 hook）：即時追蹤 agent 活動
 ```
 
@@ -28,6 +29,7 @@
 | `post-write.sh` | `PostToolUse` `Write\|Edit` | WBS 更新寫歷史；記錄寫入/編輯事件（hook 內按路徑過濾） |
 | `agent-monitor.sh` | `Pre/PostToolUse` `Agent` | 記錄 subagent 啟動/完成（人類可讀 `agent-activity.log` + 結構化 `agent-activity.jsonl`） |
 | `post-agent-report.sh` | `PostToolUse` `Agent` | 稽核需寫報告的 agent；掃描 `coordination/handoffs/` 的 pending 交接並注入主對話（受 `.suggest-mode` 控制） |
+| `pre-compact.sh` | `PreCompact` | context 壓縮（manual/auto）前，將當前任務 / git 狀態 / 最近 agent 活動快照到 `sessions/auto-precompact-<ts>.md`（敘事式存檔仍用 `/save-session`） |
 | `watch-agents.sh` | （手動）| `--summary` / `--last N` / `--json` / `--clear`；被 `/agent-log` 包裝 |
 
 ## ⚙️ 相關設定檔
