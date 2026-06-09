@@ -53,9 +53,23 @@
 - ❌ 同時平行啟動會互改同一批檔案的 agent（會衝突；序列化或用 worktree 隔離）
 - ❌ 一次委派一長串 agent 卻不在每棒後檢視產出
 
+## 安全平行（worktree 編排）
+
+平行不是反模式，**「會互改同一批檔案」才是**。當多個任務的檔案範圍不重疊時，可安全並行：
+
+- **判斷依據**：每個任務 `plan` 檔的 `files:` frontmatter（見 `plan-persistence.md`）。`files:` 無交集 → 可平行；沒 plan/沒 `files:` → 保守視為不可平行。
+- **入口**：`/task-next` 偵測到「依賴已滿足且互不衝突」的任務 ≥ 2 個時，會（**選擇性、不強制**）提供「🔀 平行開發」選項。
+- **隔離**：每個任務在獨立 git worktree（`.claude/worktrees/<task-id>`）+ 獨立分支開發，完成 `/verify` 後**依序** `merge --no-ff` 回主分支，再 `git worktree remove` 清理。
+- **委派**：以 `Agent` 工具 + `isolation: "worktree"` 並行委派時，務必確保各 agent 檔案範圍不重疊（即上面的 `files:` 無交集）。
+- **合併衝突**＝`files:` 估算有漏 → 停下人工解，並補正該 plan 的 `files:`。
+
+> 一句話：**循序是預設、平行是選項**；平行的安全來自「檔案範圍不重疊 + worktree 隔離」。
+
 ## 相關
 
 - `.claude/rules/task-mode.md` — 任務強度分級
+- `.claude/rules/plan-persistence.md` — plan 的 `files:` 欄（平行判斷依據）
+- `.claude/commands/task-next.md` — 平行任務偵測與 worktree 編排入口
 - `.claude/coordination/README.md` — 交接檔格式與場景
 - `.claude/commands/suggest-mode.md` — 調整建議/注入密度
 - `.claude/commands/hub-delegate.md` — 手動委派單一 agent

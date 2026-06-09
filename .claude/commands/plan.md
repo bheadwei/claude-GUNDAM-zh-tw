@@ -39,6 +39,7 @@ planner agent：
 確認後 planner 自動：
 
 1. **寫入 plan 檔**：`.claude/taskmaster-data/plans/<id>-<slug>.md` 或 `adhoc-YYYY-MM-DD-<slug>.md`
+   - **必填 `files:` frontmatter**：依階段拆解列出本任務會新增/修改的檔案（或 glob）。這是 `/task-next` 判斷任務可否平行開發的依據（範圍重疊＝不可平行）；不確定就多列、偏保守。格式見 `plan-persistence.md`。
 2. **更新 INDEX.md**：在 `plans/INDEX.md` 新增一行
 3. **更新 WBS**：若綁 WBS 任務，在該任務「備註」欄加入 `[計畫](plans/<id>-<slug>.md)`
 4. **顯示摘要**：列出計畫路徑與下一步建議

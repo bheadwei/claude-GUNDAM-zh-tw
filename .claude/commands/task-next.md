@@ -63,6 +63,45 @@ description: 從 WBS 取得下一個任務建議，分析優先級和依賴關�
 - 「跳過，看下一個」
 - 「查看詳細資訊」
 - 「查看完整任務清單」
+- **（僅當偵測到可平行任務時才出現）** 「🔀 平行開發這 N 個任務（worktree 隔離）」— 見下方「平行任務偵測」
+
+### 平行任務偵測（可選，不強制）
+
+> 目標：能平行的任務讓使用者**可以選擇**同時開發，但**預設不強制**——不選就是現在的單任務循序流程。
+
+在顯示上面的動作選項**之前**，先算一次「可平行集合」：
+
+1. **算 ready set**：WBS 中 `狀態 = ⏳ 待處理` 且**所有「依賴」任務皆為 ✅ 完成**的任務。
+2. **取得每個 ready 任務的檔案範圍**：讀 `.claude/taskmaster-data/plans/<id>-*.md` 的 `files:` frontmatter。
+   - **沒有 plan 檔，或 plan 沒寫 `files:` → 視為「範圍未知」，排除於平行候選**（保守，避免衝突）。
+3. **判斷互不衝突**：兩任務的 `files:` glob **無交集** 即可平行。挑出一組彼此都不衝突的任務（≥ 2 個才有意義）。
+4. **只有當「可平行集合 ≥ 2」時**，才在上面的 `AskUserQuestion` 加入「🔀 平行開發這 N 個任務」選項；並在選項說明列出是哪幾個任務（例：`2.2 / 2.3 / 3.1`）。
+
+若候選任務缺 plan，**提示**使用者：「任務 2.3 尚無 plan/files，無法判斷是否可平行；可先 `/plan 2.3` 後再試」——但不阻擋單任務流程。
+
+### 平行開發編排（使用者選了「平行開發」才執行）
+
+採 **git worktree 隔離**，每個任務獨立分支、互不踩檔，完成後依序合併：
+
+1. **前置檢查**：工作目錄需乾淨（`git status` 無未提交變更）；否則提示先提交/暫存。
+2. **為每個並行任務建立 worktree**：
+   ```bash
+   git worktree add ".claude/worktrees/<task-id>" -b "task/<task-id>-<slug>"
+   ```
+3. **並行開發**：每個任務在自己的 worktree 內走既有鏈（`/tdd` → `/verify`）。可用 `Agent` 工具並 `isolation: "worktree"` 委派，或逐一進入各 worktree 開發。每個任務各自寫 `.current-task` / plan 階段狀態（互不干擾）。
+4. **合併回主分支**（逐一、依序，降低衝突）：
+   ```bash
+   git -C "<主repo>" merge --no-ff "task/<task-id>-<slug>"
+   ```
+   - 合併前該任務需 `/verify` 通過。
+   - 若仍出現合併衝突（代表 `files:` 估算有漏）→ 停下、人工解、並提醒補正該 plan 的 `files:`。
+5. **清理**：
+   ```bash
+   git worktree remove ".claude/worktrees/<task-id>"
+   ```
+6. **更新 WBS**：每個完成的任務標 `✅ 完成`。
+
+> 規範細節與反模式見 `.claude/rules/agent-orchestration.md`「安全平行（worktree 編排）」。
 
 ### 選擇任務模式（quick / standard / critical）
 
