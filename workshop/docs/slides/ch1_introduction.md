@@ -14,7 +14,7 @@ VibeCoding 模板實戰 Workshop
 [講師名稱] | [日期]
 ```
 
-**講師口述：** 今天我們要用 70 分鐘，從零開始用 AI 輔助開發一個全端 Todo 應用。重點不是寫程式，而是學一套**可重複的工作流**。
+**講師口述：** 今天我們要用 60 分鐘，從零開始用 AI 輔助開發一個**會串流回覆的 AI 聊天機器人**。重點不是寫程式，而是學一套**可重複的工作流**——而且最後會做出一個你會想拿回去改的成品。
 
 ---
 
@@ -45,10 +45,10 @@ VibeCoding 模板實戰 Workshop
 │                                             │
 │  📋 16 份文件模板    規範從需求到部署        │
 │  🤖 14 個 AI Agent   各司其職、自動協作      │
-│  ⚡ 23 個快捷指令    一行啟動完整流程        │
-│  📏 13 條自動規則    品質底線自動守護        │
+│  ⚡ 25 個快捷指令    一行啟動完整流程        │
+│  📏 15 條自動規則    品質底線自動守護        │
 │  🔧  7 個領域技能    按需載入專業知識        │
-│  🪝  6 個系統 Hook   事件自動化              │
+│  🪝  系統 Hook       事件自動化              │
 │                                             │
 │  → 複製到任何新專案，立即可用                │
 └─────────────────────────────────────────────┘
@@ -64,7 +64,7 @@ VibeCoding 模板實戰 Workshop
        沒有模板                    有模板
   ┌──────────────┐          ┌──────────────┐
   │ "幫我寫一個   │          │ /task-init   │
-  │  Todo App"    │          │  ↓ 互動式Q&A │
+  │  聊天機器人"  │          │  ↓ 互動式Q&A │
   │       ↓       │          │  ↓ 產出 WBS  │
   │  AI 直接寫    │          │ /task-next   │
   │  一大段程式碼  │          │ /plan        │
@@ -136,7 +136,7 @@ VibeCoding 模板實戰 Workshop
 │  位置：.claude/rules/*.md                    │
 │  類比：公司的員工守則                         │
 │                                             │
-│  範例（本模板有 13 條）：                    │
+│  範例（本模板有 15 條）：                    │
 │   • coding-style.md     編碼風格             │
 │   • testing.md          測試覆蓋率           │
 │   • security.md         安全規範             │
@@ -161,15 +161,15 @@ VibeCoding 模板實戰 Workshop
 │  位置：.claude/commands/*.md                 │
 │  類比：終端機的 alias                        │
 │                                             │
-│  本模板提供 23 個指令：                      │
+│  本模板提供 25 個指令：                      │
 │   /task-init     專案初始化                  │
 │   /task-next     取下一個任務                │
 │   /plan          規劃實作                    │
 │   /tdd           測試驅動開發                │
 │   /review-code   程式碼審查                  │
 │   /verify        全面驗證                    │
+│   /agent-log     看 subagent 軌跡            │
 │   /ui-style      選 UI 風格                  │
-│   /pm-choose     選套件管理器                │
 │   ...                                        │
 │                                             │
 │  本質：預設 prompt 模板，幫你省打字           │
@@ -306,27 +306,53 @@ hooks      系統事件       無 AI 介入  副作用 / 自動化
 
 ---
 
-## Slide 14: 目錄結構（只看第一層）
+## Slide 14: Agent 編排劇本 — 主動委派 + 接力
+
+```
+┌─────────────────────────────────────────────────┐
+│  原則：有專家就委派，交棒靠 handoff 不靠記憶     │
+│                                                 │
+│   新功能的標準鏈：                               │
+│                                                 │
+│   planner → tdd-guide → code-quality            │
+│        → test-automation →（critical）security   │
+│                                                 │
+│   每棒做完會：                                   │
+│    1. 寫報告到 .claude/context/                  │
+│    2. 對下一棒建 handoff（coordination/handoffs）│
+│    3. hook 注入提示 → 主 AI 接手下一棒           │
+│                                                 │
+│   用 /agent-log 隨時看：誰跑過、留了什麼、交給誰  │
+└─────────────────────────────────────────────────┘
+```
+
+**講師口述：** Agent 不是各跑各的，而是像接力賽。一棒做完會留下報告、把後續工作寫成「交接單」，模板的 hook 看到交接單就提示主 AI 接手下一棒。這就是為什麼一個 `/tdd` 跑完，常會自動接到審查、補測試。今天 Ch4 的 `/agent-log` 就能把整條軌跡攤開給你看。
+
+---
+
+## Slide 15: 目錄結構（只看第一層）
 
 ```
 .claude/
 ├── CLAUDE.md            ← 專案說明書（根目錄）
 ├── agents/              ← 14 個 Agent 定義
-├── commands/            ← 23 個快捷指令
-├── rules/               ← 13 條自動規則
+├── commands/            ← 25 個快捷指令
+├── rules/               ← 15 條自動規則
 ├── skills/              ←  7 個領域技能
-├── hooks/               ←  6 個系統事件腳本
+├── hooks/               ← 系統事件腳本
 ├── ui/                  ← UI 風格目錄（lovable / nvidia / ...）
-├── context/             ← Agent 間的報告共享
+├── context/             ← Agent 報告共享
+├── coordination/        ← Agent 間的 handoff 交接
+├── logs/                ← subagent 活動軌跡（/agent-log 來源）
 ├── guides/              ← 參考文件（不自動載入）
-└── taskmaster-data/     ← WBS 任務 + 時間追蹤
+└── taskmaster-data/     ← WBS 任務 + 時間追蹤 + 任務模式
 ```
 
-**講師口述：** 看到 `.claude/` 就知道這是 Claude Code 專案。每個子資料夾對應前面講的觀念。今天會實際打開來改的是 commands 和 agents。
+**講師口述：** 看到 `.claude/` 就知道這是 Claude Code 專案。每個子資料夾對應前面講的觀念。今天會實際打開來改的是 commands 和 agents；`logs/` 和 `coordination/` 則是 agent 協作的軌跡與交接，等下用 `/agent-log` 會看到。
 
 ---
 
-## Slide 15: 環境準備檢查
+## Slide 16: 環境準備檢查
 
 ```
 ✅ 確認清單
@@ -335,10 +361,10 @@ hooks      系統事件       無 AI 介入  副作用 / 自動化
 │  □ Claude Code CLI 已安裝               │
 │    → claude --version                   │
 │                                         │
-│  □ Python 3.11+ 已安裝                  │
-│    → python --version                   │
+│  □ Python 3.11+ 與 uv 已安裝            │
+│    → python --version / uv --version    │
 │                                         │
-│  □ Node.js 18+ 已安裝（前端用）          │
+│  □ Node.js 18+（僅 /e2e 需要）           │
 │    → node --version                     │
 │                                         │
 │  □ Git 已設定                           │
@@ -346,31 +372,33 @@ hooks      系統事件       無 AI 介入  副作用 / 自動化
 │                                         │
 │  □ 模板已複製到工作目錄                  │
 │                                         │
-│  □ .mcp.json 已設定 API Key             │
+│  □ Gemini API Key 已備妥（放 .env）      │
+│    → GEMINI_API_KEY=...                  │
 │                                         │
 └─────────────────────────────────────────┘
 ```
 
-**講師口述：** 請大家花 1 分鐘確認這些都就緒。有問題的舉手，我們一起解決。
+**講師口述：** 請大家花 1 分鐘確認這些都就緒。重點是 uv 和 Gemini API Key——Key 去 Google AI Studio 拿，放進 `.env`，記得別 commit 上去（這也是等下安全示範的伏筆）。有問題的舉手。
 
 ---
 
-## Slide 16: 今天的旅程
+## Slide 17: 今天的旅程
 
 ```
 我們在這裡
     ↓
-   Ch1 認識模板 + 觀念   ← 15 min（現在）
+   Ch1 認識模板 + 觀念   ← 10 min（現在）
     ↓
-   Ch2 專案初始化        ← 15 min
+   Ch2 專案初始化        ← 12 min
     ↓
-   Ch3 開發循環 x3       ← 25 min ⭐ 核心
+   Ch3 開發循環 x3       ← 20 min ⭐ 核心
     ↓
    Ch4 品質驗證          ← 10 min
     ↓
-   Ch5 進階 + Q&A        ← 10 min
+   Ch5 進階 + Q&A        ←  8 min
     ↓
   🎉 你會了一套 AI 開發工作流
+     + 一個會串流回覆的聊天機器人
 ```
 
 **講師口述：** 接下來我們直接開始。請打開終端機，跟著我一起操作。

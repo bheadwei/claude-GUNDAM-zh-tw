@@ -315,7 +315,7 @@ def build_presentation():
     # ================================================================
     make_title_slide(prs,
         "VibeCoding 模板實戰 Workshop",
-        "用 Claude Code 跑完一個專案的開發工作流"
+        "用 Claude Code 做出一個會串流回覆的 AI 聊天機器人"
     )
 
     # ================================================================
@@ -338,10 +338,10 @@ def build_presentation():
     make_content_slide(prs, "VibeCoding 模板 = AI 開發的標準作業程序", [
         ("\U0001f4cb  16 份文件模板        規範從需求到部署的每個階段", WHITE, Pt(20), False),
         ("\U0001f916  14 個 AI Agent        各司其職、自動協作", WHITE, Pt(20), False),
-        ("\u26a1  23 個快捷指令        一行啟動完整流程", WHITE, Pt(20), False),
-        ("\U0001f4cf  13 條自動規則         品質底線自動守護", WHITE, Pt(20), False),
+        ("\u26a1  25 個快捷指令        一行啟動完整流程", WHITE, Pt(20), False),
+        ("\U0001f4cf  15 條自動規則         品質底線自動守護", WHITE, Pt(20), False),
         ("\U0001f527   7 個領域技能         按需載入專業知識", WHITE, Pt(20), False),
-        ("\U0001fa9d   6 個系統 Hook         事件自動化", WHITE, Pt(20), False),
+        ("\U0001fa9d   系統 Hook              事件自動化", WHITE, Pt(20), False),
         ("", WHITE, Pt(12), False),
         ("\u2192  複製到任何新專案，立即可用", ACCENT, Pt(20), True),
     ])
@@ -349,7 +349,7 @@ def build_presentation():
     # 對比
     make_two_col_slide(prs, "對比 — 沒模板 vs 有模板",
         "\u274c  沒有模板", [
-            "\"幫我寫一個 Todo App\"",
+            "\"幫我寫一個聊天機器人\"",
             "\u2192 AI 直接寫一大段程式碼",
             "\u2192 沒測試",
             "\u2192 沒文件",
@@ -396,7 +396,7 @@ def build_presentation():
     ], note="/task-init 會幫你產一份")
 
     # rules/
-    make_content_slide(prs, "rules/ — 永遠載入的規則（13 條）", [
+    make_content_slide(prs, "rules/ — 永遠載入的規則（15 條）", [
         ("特性：每次對話開頭自動載入（與 CLAUDE.md 並列）", ACCENT, Pt(20), True),
         ("類比：公司的員工守則  /  橫切關注點", GRAY_LIGHT, Pt(18), False),
         ("", WHITE, Pt(10), False),
@@ -405,13 +405,14 @@ def build_presentation():
         ("testing.md            測試覆蓋率", WHITE, Pt(18), False),
         ("security.md           安全規範", WHITE, Pt(18), False),
         ("git-workflow.md     提交規範", WHITE, Pt(18), False),
-        ("task-mode.md       任務分級（v5.3 新增）", WHITE, Pt(18), False),
+        ("task-mode.md       任務分級", WHITE, Pt(18), False),
+        ("agent-orchestration.md  編排劇本", WHITE, Pt(18), False),
         ("", WHITE, Pt(10), False),
         ("\u2192  粒度小、可組合、跨專案複用", ACCENT2, Pt(18), True),
     ], note="rules 是橫切通則，CLAUDE.md 是專案專屬。分開讓規則可跨專案複用。")
 
     # commands/
-    make_content_slide(prs, "commands/ — 你的快捷指令（23 個）", [
+    make_content_slide(prs, "commands/ — 你的快捷指令（25 個）", [
         ("特性：使用者輸入 /xxx 時觸發", ACCENT, Pt(20), True),
         ("類比：終端機的 alias  /  本質：預設 prompt 模板", GRAY_LIGHT, Pt(18), False),
         ("", WHITE, Pt(10), False),
@@ -421,7 +422,8 @@ def build_presentation():
         ("/tdd           測試驅動開發", WHITE, Pt(18), False),
         ("/review-code   程式碼審查", WHITE, Pt(18), False),
         ("/verify        全面驗證", WHITE, Pt(18), False),
-        ("...           還有 /ui-style /pm-choose /e2e ...", GRAY_MID, Pt(18), False),
+        ("/agent-log     看 subagent 軌跡", WHITE, Pt(18), False),
+        ("...           還有 /ui-style /suggest-mode /e2e ...", GRAY_MID, Pt(18), False),
         ("", WHITE, Pt(10), False),
         ("\u2192  自己也能寫，放到 .claude/commands/ 即生效", ACCENT2, Pt(18), True),
     ])
@@ -499,17 +501,35 @@ def build_presentation():
         ("\u2192  \u6a21\u677f\u81ea\u52d5\u5206\u914d\uff0c\u4e0d\u9700\u8981\u624b\u52d5\u9078\u64c7", GRAY_MID, Pt(16), False),
     ])
 
+    # Agent 編排劇本
+    make_content_slide(prs, "Agent 編排劇本 — 主動委派 + 接力", [
+        ("原則：有專家就委派，交棒靠 handoff 不靠記憶", ACCENT, Pt(20), True),
+        ("", WHITE, Pt(8), False),
+        ("新功能的標準鏈：", WHITE, Pt(20), True),
+        ("  planner → tdd-guide → code-quality", WHITE, Pt(20), False),
+        ("       → test-automation →（critical）security", WHITE, Pt(18), False),
+        ("", WHITE, Pt(8), False),
+        ("每棒做完會：", WHITE, Pt(20), True),
+        ("  1. 寫報告到 .claude/context/", WHITE, Pt(18), False),
+        ("  2. 對下一棒建 handoff（coordination/handoffs）", WHITE, Pt(18), False),
+        ("  3. hook 注入提示 → 主 AI 接手下一棒", WHITE, Pt(18), False),
+        ("", WHITE, Pt(8), False),
+        ("→  用 /agent-log 看：誰跑過、留了什麼、交給誰", ACCENT2, Pt(18), True),
+    ], note="Agent 像接力賽：一棒留報告 + 交接單，hook 提示主 AI 接手下一棒。Ch4 的 /agent-log 會攤開整條軌跡。")
+
     # 目錄結構
     make_code_slide(prs, "目錄結構 — .claude/ 下的關鍵目錄", [
         ("CLAUDE.md           \u2190 專案說明書（根目錄）", ACCENT),
         (".claude/", ACCENT),
         ("\u251c\u2500\u2500 agents/          \u2190 14 \u500b Agent \u5b9a\u7fa9", GRAY_LIGHT),
-        ("\u251c\u2500\u2500 commands/        \u2190 23 \u500b\u5feb\u6377\u6307\u4ee4", GRAY_LIGHT),
-        ("\u251c\u2500\u2500 rules/           \u2190 13 \u689d\u81ea\u52d5\u898f\u5247", ACCENT2),
+        ("\u251c\u2500\u2500 commands/        \u2190 25 \u500b\u5feb\u6377\u6307\u4ee4", GRAY_LIGHT),
+        ("\u251c\u2500\u2500 rules/           \u2190 15 \u689d\u81ea\u52d5\u898f\u5247", ACCENT2),
         ("\u251c\u2500\u2500 skills/          \u2190 7 \u500b\u9818\u57df\u6280\u80fd", GRAY_LIGHT),
-        ("\u251c\u2500\u2500 hooks/           \u2190 6 \u500b\u7cfb\u7d71\u4e8b\u4ef6\u8173\u672c", GRAY_LIGHT),
+        ("\u251c\u2500\u2500 hooks/           \u2190 \u7cfb\u7d71\u4e8b\u4ef6\u8173\u672c", GRAY_LIGHT),
         ("\u251c\u2500\u2500 ui/              \u2190 UI \u98a8\u683c\u76ee\u9304\uff08lovable / nvidia / ...\uff09", GRAY_LIGHT),
-        ("\u251c\u2500\u2500 context/         \u2190 Agent \u9593\u7684\u5831\u544a\u5171\u4eab", GRAY_LIGHT),
+        ("\u251c\u2500\u2500 context/         \u2190 Agent \u5831\u544a\u5171\u4eab", GRAY_LIGHT),
+        ("\u251c\u2500\u2500 coordination/    \u2190 Agent \u9593\u7684 handoff \u4ea4\u63a5", ACCENT2),
+        ("\u251c\u2500\u2500 logs/            \u2190 subagent \u8ecc\u8de1\uff08/agent-log\uff09", GRAY_LIGHT),
         ("\u251c\u2500\u2500 guides/          \u2190 \u53c3\u8003\u6587\u4ef6", GRAY_DIM),
         ("\u2514\u2500\u2500 taskmaster-data/ \u2190 WBS \u4efb\u52d9 + \u6642\u9593\u8ffd\u8e64", ACCENT),
     ], note="不需要背，知道去哪找就好")
@@ -517,22 +537,23 @@ def build_presentation():
     # 環境準備
     make_checklist_slide(prs, "環境準備檢查", [
         ("Claude Code CLI 已安裝    \u2192 claude --version", False),
-        ("Python 3.11+ 已安裝         \u2192 python --version", False),
-        ("Node.js 18+ 已安裝           \u2192 node --version", False),
+        ("Python 3.11+ 與 uv 已安裝  → uv --version", False),
+        ("Python 直譯器\u2192 python --version", False),
+        ("Node.js 18+（僅 /e2e 需要）\u2192 node --version", False),
         ("Git 已設定                          \u2192 git config user.name", False),
         ("模板已複製到工作目錄", False),
-        (".mcp.json 已設定 API Key", False),
-    ], note="給學員 1 分鐘檢查，有問題的舉手")
+        ("Gemini API Key 已放入 .env  → GEMINI_API_KEY=...", False),
+    ], note="重點：uv 和 Gemini API Key（Google AI Studio 取得，放 .env 別 commit）")
 
     # 旅程
     make_content_slide(prs, "今天的旅程", [
-        ("Ch1   認識模板 + 觀念       15 min  \u2190 你在這裡", ACCENT, Pt(22), True),
-        ("Ch2   專案初始化             15 min", WHITE, Pt(22), False),
-        ("Ch3   開發循環 x3            25 min   \u2b50 核心", ACCENT_WARN, Pt(22), True),
+        ("Ch1   認識模板 + 觀念       10 min\u2190 你在這裡", ACCENT, Pt(22), True),
+        ("Ch2   專案初始化             12 min", WHITE, Pt(22), False),
+        ("Ch3   開發循環 x3            20 min\u2b50 核心", ACCENT_WARN, Pt(22), True),
         ("Ch4   品質驗證                10 min", WHITE, Pt(22), False),
-        ("Ch5   進階 + Q&A             10 min", WHITE, Pt(22), False),
+        ("Ch5   進階 + Q&A              8 min", WHITE, Pt(22), False),
         ("", WHITE, Pt(12), False),
-        ("\u2192  70 分鐘後，你會了一套 AI 開發工作流", ACCENT2, Pt(20), True),
+        ("\u2192  60 分鐘後，你會了工作流 + 一個會串流的聊天機器人", ACCENT2, Pt(20), True),
     ])
 
     # ================================================================
@@ -542,7 +563,7 @@ def build_presentation():
 
     # /task-init
     make_content_slide(prs, "一切從 /task-init 開始", [
-        ("你輸入：  /task-init TaskFlow", ACCENT, Pt(24), True),
+        ("你輸入：  /task-init GeminiChat", ACCENT, Pt(24), True),
         ("", WHITE, Pt(8), False),
         ("AI 會做：", WHITE, Pt(20), True),
         ("  1.  問你一系列問題（互動式 Q&A）", WHITE, Pt(20), False),
@@ -554,16 +575,16 @@ def build_presentation():
     ], note="這是最關鍵的 Aha Moment — AI 先問問題、理解需求，再產文件")
 
     # MVP vs Complete
-    make_two_col_slide(prs, "MVP vs Complete 模式",
-        "MVP 模式  \u2190 今天用這個", [
-            "輕量 Tech Spec",
+    make_two_col_slide(prs, "demo / mvp / full — 三種文件深度",
+        "mvp 模式\u2190 今天用這個", [
+            "單檔 Tech Spec",
             "快速驗證想法",
             "1-2 人小專案",
-            "原型 / POC",
+            "（更快可選 demo：精簡 PRD）",
             "",
-            ("隨時可升級為 Complete", GRAY_MID),
+            ("隨時可升級為 full", GRAY_MID),
         ],
-        "Complete 模式", [
+        "full 模式", [
             "完整 16 份文件",
             "每個決策有文件記錄",
             "3+ 人團隊專案",
@@ -593,14 +614,14 @@ def build_presentation():
         ("\u251c\u2500\u2500 1.1 \u9700\u6c42\u5206\u6790          \u2190 /task-init \u7522\u51fa", GRAY_LIGHT),
         ("\u2514\u2500\u2500 1.2 \u67b6\u69cb\u8a2d\u8a08", GRAY_LIGHT),
         ("", GRAY_DIM),
-        ("2.0 \u5f8c\u7aef\u958b\u767c", ACCENT),
-        ("\u251c\u2500\u2500 2.1 \u57fa\u790e\u67b6\u69cb          \u2190 /task-next \u6703\u6307\u6d3e", ACCENT2),
-        ("\u251c\u2500\u2500 2.2 CRUD API", GRAY_LIGHT),
-        ("\u2514\u2500\u2500 2.3 \u7be9\u9078\u529f\u80fd", GRAY_LIGHT),
+        ("2.0 \u5f8c\u7aef\u4e32\u6d41 API", ACCENT),
+        ("\u251c\u2500\u2500 2.1 FastAPI+Gemini \u67b6\u69cb          \u2190 /task-next \u6703\u6307\u6d3e", ACCENT2),
+        ("\u251c\u2500\u2500 2.2 /api/chat SSE 串流", GRAY_LIGHT),
+        ("\u2514\u2500\u2500 2.3 \u591a\u8f2a\u5c0d\u8a71\u6b77\u53f2", GRAY_LIGHT),
         ("", GRAY_DIM),
-        ("3.0 \u524d\u7aef\u958b\u767c", ACCENT),
-        ("\u251c\u2500\u2500 3.1 \u5143\u4ef6\u958b\u767c", GRAY_LIGHT),
-        ("\u2514\u2500\u2500 3.2 \u4e92\u52d5\u529f\u80fd", GRAY_LIGHT),
+        ("3.0 \u524d\u7aef\u804a\u5929 UI", ACCENT),
+        ("\u251c\u2500\u2500 3.1 \u55ae\u9801\u9aa8\u67b6 + \u6a23\u5f0f", GRAY_LIGHT),
+        ("\u2514\u2500\u2500 3.2 SSE \u9010\u5b57\u4e32\u6d41\u986f\u793a", GRAY_LIGHT),
         ("", GRAY_DIM),
         ("\u6bcf\u500b\u4efb\u52d9\u6709\uff1a\u7de8\u865f \u2502 \u8ca0\u8cac\u4eba \u2502 \u72c0\u614b \u2502 \u5de5\u6642", GRAY_MID),
     ])
@@ -612,13 +633,13 @@ def build_presentation():
         ("claude", ACCENT),
         ("", GRAY_DIM),
         ("# 2. \u57f7\u884c\u521d\u59cb\u5316", GRAY_MID),
-        ("/task-init TaskFlow", ACCENT),
+        ("/task-init GeminiChat", ACCENT),
         ("", GRAY_DIM),
         ("# 3. \u56de\u7b54 AI \u7684\u554f\u984c", GRAY_MID),
-        ("\u5c08\u6848\u63cf\u8ff0\uff1a\u6975\u7c21\u5f85\u8fa6\u6e05\u55ae\u61c9\u7528", WHITE),
-        ("\u6280\u8853\u68e7\uff1a  Python FastAPI + React + SQLite", WHITE),
-        ("\u6a21\u5f0f\uff1a    MVP", WHITE),
-        ("\u529f\u80fd\uff1a    CRUD + \u5206\u985e\u7be9\u9078", WHITE),
+        ("\u5c08\u6848\u63cf\u8ff0\uff1a\u4e32\u6d41\u5f0f AI \u804a\u5929\u6a5f\u5668\u4eba", WHITE),
+        ("\u6280\u8853\u68e7\uff1a  Python FastAPI + Gemini + 原生單頁", WHITE),
+        ("\u6a21\u5f0f\uff1a    mvp", WHITE),
+        ("\u529f\u80fd\uff1a    \u4e32\u6d41\u5c0d\u8a71 + \u591a\u8f2a\u6b77\u53f2 + \u89d2\u8272", WHITE),
         ("", GRAY_DIM),
         ("# 4. \u6aa2\u67e5\u7522\u51fa", GRAY_MID),
         ("/task-status", ACCENT),
@@ -648,7 +669,7 @@ def build_presentation():
     ], note="v5.3 新增任務分級。小修改走 quick 不被綡住，核心邏輯走 critical 加倍嚴謹。/verify 依模式自動選 profile。")
 
     # 第 1 輪
-    make_section_slide(prs, "\u7b2c 1 \u8f2a\uff08\u8a73\u7d30\uff09", "\u5f8c\u7aef API \u2014 FastAPI + pytest")
+    make_section_slide(prs, "\u7b2c 1 \u8f2a\uff08\u8a73\u7d30\uff09", "\u5f8c\u7aef API \u2014 FastAPI + Gemini SSE")
 
     # /plan
     make_code_slide(prs, "/plan \u2014 AI \u5148\u60f3\u6e05\u695a\u518d\u52d5\u624b", [
@@ -657,16 +678,16 @@ def build_presentation():
         ("\u6b65\u9a5f 1: \u5efa\u7acb\u5c08\u6848\u7d50\u69cb", WHITE),
         ("  - pyproject.toml (dependencies)", GRAY_LIGHT),
         ("  - app/main.py    (FastAPI entry)", GRAY_LIGHT),
-        ("  - app/models.py  (SQLModel schemas)", GRAY_LIGHT),
-        ("  - app/database.py(SQLite connection)", GRAY_LIGHT),
+        ("  - app/config.py  (讀 GEMINI_API_KEY)", GRAY_LIGHT),
+        ("  - app/gemini.py  (串流封裝)", GRAY_LIGHT),
         ("", GRAY_DIM),
-        ("\u6b65\u9a5f 2: \u5b9a\u7fa9 Todo \u8cc7\u6599\u6a21\u578b", WHITE),
-        ("  - id, title, category, done, created_at", GRAY_LIGHT),
+        ("\u6b65\u9a5f 2: \u5b9a\u7fa9\u8acb\u6c42/\u56de\u61c9\u6a21\u578b", WHITE),
+        ("  - messages: [{role, content}] 多輪 context", GRAY_LIGHT),
         ("", GRAY_DIM),
-        ("\u6b65\u9a5f 3: \u5be6\u4f5c CRUD endpoints", WHITE),
-        ("  - GET / POST / PUT / DELETE  /api/todos", GRAY_LIGHT),
+        ("\u6b65\u9a5f 3: \u5be6\u4f5c /api/chat \u4e32\u6d41\u7aef\u9ede", WHITE),
+        ("  - generate_content_stream + StreamingResponse", GRAY_LIGHT),
         ("", GRAY_DIM),
-        ("\u98a8\u96aa: \u7121\uff08\u6a19\u6e96 CRUD\uff0c\u4f4e\u8907\u96dc\u5ea6\uff09", ACCENT2),
+        ("\u98a8\u96aa: API \u8a08\u8cbb \u2192 \u6e2c\u8a66\u7528 mock\uff0c\u4e0d\u6253\u771f API", ACCENT2),
     ], note="暫停讓學員讀計畫。強調：AI 不是直接寫 code，而是先用 Opus 做規劃。")
 
     # /tdd
@@ -692,7 +713,7 @@ def build_presentation():
         ("", WHITE, Pt(12), False),
         ("\u2022  Swagger UI \u81ea\u52d5\u7522\u751f", WHITE, Pt(20), False),
         ("\u2022  \u76f4\u63a5\u5728\u700f\u89bd\u5668\u4e2d\u6e2c\u8a66\u6bcf\u500b API", WHITE, Pt(20), False),
-        ("\u2022  \u4e0d\u9700\u8981 Postman \u6216\u5176\u4ed6\u5de5\u5177", WHITE, Pt(20), False),
+        ("\u2022  curl -N \u53ef\u770b token \u9010\u584a\u4e32\u6d41\u5410\u51fa", WHITE, Pt(20), False),
         ("", WHITE, Pt(12), False),
         ("\u2192  \u9078 FastAPI \u7684\u984d\u5916\u597d\u8655", GRAY_MID, Pt(18), False),
     ], note="Aha Moment：讓學員打開 /docs 頁面，點 Try it out")
@@ -704,16 +725,16 @@ def build_presentation():
         ("\u2705 PASS  \u547d\u540d\u898f\u7bc4", ACCENT2),
         ("\u2705 PASS  \u51fd\u5f0f\u9577\u5ea6 < 50 \u884c", ACCENT2),
         ("\u2705 PASS  \u7121\u786c\u7de8\u78bc\u503c", ACCENT2),
-        ("\u26a0\ufe0f  WARN  \u7f3a\u5c11\u8f38\u5165\u9a57\u8b49 (title \u9577\u5ea6)", ACCENT_WARN),
+        ("\u26a0\ufe0f  WARN  API Key \u4e0d\u53ef\u786c\u7de8\u78bc \u2192 \u6539\u7528 .env", ACCENT_ERR),
         ("\u2705 PASS  \u932f\u8aa4\u8655\u7406", ACCENT2),
         ("\u2705 PASS  \u4e0d\u53ef\u8b8a\u6a21\u5f0f", ACCENT2),
         ("", GRAY_DIM),
         ("\u6574\u9ad4: 8.5/10", WHITE),
-        ("\u5efa\u8b70: \u52a0\u4e0a title \u7684 max_length \u9a57\u8b49", ACCENT_WARN),
+        ("\u5fc5\u4fee: \u628a API Key \u79fb\u5230\u74b0\u5883\u8b8a\u6578", ACCENT_WARN),
     ], note="AI 寫的 code，再讓另一個 AI 審查。依模板的 9 條規則打分。")
 
     # 第 2 輪
-    make_section_slide(prs, "\u7b2c 2 \u8f2a\uff08\u52a0\u901f\uff09", "\u524d\u7aef UI \u2014 React + Tailwind")
+    make_section_slide(prs, "\u7b2c 2 \u8f2a\uff08\u52a0\u901f\uff09", "\u524d\u7aef UI \u2014 原生單頁 + 逐字串流")
 
     make_content_slide(prs, "\u7b2c 2 \u8f2a\uff1a\u540c\u6a23\u7684\u6d41\u7a0b\uff0c\u52a0\u5feb\u7bc0\u594f", [
         ("/task-next      \u2192  \u81ea\u52d5\u8df3\u5230\u524d\u7aef\u4efb\u52d9", WHITE, Pt(22), False),
@@ -727,7 +748,7 @@ def build_presentation():
         ("\u2022  \u4f86\u81ea .claude/rules/ui-design.md", WHITE, Pt(20), False),
         ("     \u2192 \u4e0d\u9700\u8981\u624b\u52d5\u6307\u5b9a\uff0cAI \u81ea\u52d5\u9075\u5b88", GRAY_MID, Pt(16), False),
         ("", WHITE, Pt(8), False),
-        ("\u2022  \u700f\u89bd\u5668\u4e2d\u67e5\u770b\u6210\u679c\uff1a\u555f\u52d5 dev server\uff0c\u5be6\u969b\u64cd\u4f5c", ACCENT2, Pt(20), False),
+        ("\u2022  \u700f\u89bd\u5668\u958b\u804a\u5929\u9801 \u2192 \u770b AI \u4e00\u500b\u5b57\u4e00\u500b\u5b57\u4e32\u6d41\u56de\u8986", ACCENT2, Pt(20), False),
     ])
 
     # 第 3 輪
@@ -750,9 +771,9 @@ def build_presentation():
 
     # Ch3 小結
     make_content_slide(prs, "Chapter 3 \u5c0f\u7d50 \u2014 3 \u7a2e Lane \u5b8c\u6210", [
-        ("\u7b2c 1 \u8f2a:  \u5f8c\u7aef API    (standard) FastAPI + pytest", WHITE, Pt(22), False),
-        ("\u7b2c 2 \u8f2a:  \u524d\u7aef UI     (standard) React + Vitest", WHITE, Pt(22), False),
-        ("\u7b2c 3 \u8f2a:  Bug \u4fee\u5fa9   (quick) \u76f4\u63a5\u5beb + /verify", WHITE, Pt(22), False),
+        ("\u7b2c 1 \u8f2a:  \u5f8c\u7aef API    (standard) FastAPI + Gemini SSE", WHITE, Pt(22), False),
+        ("\u7b2c 2 \u8f2a:  \u524d\u7aef UI     (standard) 原生單頁 + 逐字串流", WHITE, Pt(22), False),
+        ("\u7b2c 3 \u8f2a:  \u63db\u4eba\u8a2d+\u4feeBug (quick) \u76f4\u63a5\u5beb + /verify", WHITE, Pt(22), False),
         ("", WHITE, Pt(12), False),
         ("\u6838\u5fc3\u6d41\u7a0b\uff08\u4f9d\u6a21\u5f0f\u5206\u6d41\uff09\uff1a", ACCENT, Pt(20), True),
         ("quick     \u2192  \u76f4\u63a5\u5beb \u2192 /verify", ACCENT2, Pt(20), False),
@@ -773,17 +794,17 @@ def build_presentation():
         ("\U0001f50d \u5168\u9762\u9a57\u8b49", ACCENT),
         ("", GRAY_DIM),
         ("Gate 1: \u578b\u5225\u6aa2\u67e5", WHITE),
-        ("  Python: mypy --strict     \u2705", ACCENT2),
-        ("  TS:     tsc --noEmit      \u2705", ACCENT2),
+        ("  mypy --strict             \u2705", ACCENT2),
+        ("  (Gemini \u5168\u7a0b mock\uff0c\u4e0d\u6253\u771f API)", GRAY_MID),
         ("", GRAY_DIM),
         ("Gate 2: \u6e2c\u8a66", WHITE),
-        ("  pytest     \u2192 12/12 passed  \u2705", ACCENT2),
-        ("  vitest     \u2192  8/8  passed  \u2705", ACCENT2),
-        ("  coverage   \u2192  87%          \u2705 (>80%)", ACCENT2),
+        ("  pytest     \u2192 9/9 passed\u2705", ACCENT2),
+        ("  stream\u2192  8/8  passed  \u2705", ACCENT2),
+        ("  coverage   \u2192  86%\u2705 (>80%)", ACCENT2),
         ("", GRAY_DIM),
         ("Gate 3: Lint", WHITE),
         ("  ruff       \u2192  0 errors     \u2705", ACCENT2),
-        ("  eslint     \u2192  0 errors     \u2705", ACCENT2),
+        ("  format\u2192  0 errors     \u2705", ACCENT2),
         ("", GRAY_DIM),
         ("\u7d50\u679c: \u2705 \u5168\u90e8\u901a\u904e", ACCENT2),
     ])
@@ -795,11 +816,11 @@ def build_presentation():
         ("  1.  \u555f\u52d5 Playwright \u700f\u89bd\u5668", WHITE, Pt(20), False),
         ("  2.  \u81ea\u52d5\u57f7\u884c\u4f7f\u7528\u8005\u6d41\u7a0b\uff1a", WHITE, Pt(20), False),
         ("", WHITE, Pt(4), False),
-        ("        \u6253\u958b\u9996\u9801 \u2192 \u770b\u5230\u7a7a\u7684 Todo \u5217\u8868", GRAY_LIGHT, Pt(18), False),
-        ("        \u65b0\u589e \"\u8cb7\u725b\u5976\" \u2192 \u5217\u8868\u51fa\u73fe\u8a72\u9805\u76ee", GRAY_LIGHT, Pt(18), False),
-        ("        \u6a19\u8a18\u5b8c\u6210 \u2192 \u51fa\u73fe\u522a\u9664\u7dda", GRAY_LIGHT, Pt(18), False),
-        ("        \u5207\u63db\u5206\u985e \u2192 \u7be9\u9078\u6b63\u78ba", GRAY_LIGHT, Pt(18), False),
-        ("        \u522a\u9664 \u2192 \u56de\u5230\u7a7a\u5217\u8868", GRAY_LIGHT, Pt(18), False),
+        ("        \u6253\u958b\u804a\u5929\u9801 \u2192 \u770b\u5230\u7a7a\u7684\u5c0d\u8a71\u8996\u7a97", GRAY_LIGHT, Pt(18), False),
+        ("        \u9001\u51fa\u300c\u4f60\u597d\u300d \u2192 AI \u958b\u59cb\u4e32\u6d41\u56de\u8986", GRAY_LIGHT, Pt(18), False),
+        ("        \u7b49\u5f85\u4e32\u6d41\u5b8c\u6210 \u2192 \u6c23\u6ce1\u986f\u793a\u5b8c\u6574\u56de\u8986", GRAY_LIGHT, Pt(18), False),
+        ("        \u518d\u8ffd\u554f\u4e00\u53e5 \u2192 \u591a\u8f2a context \u751f\u6548", GRAY_LIGHT, Pt(18), False),
+        ("        \u6e05\u9664\u5c0d\u8a71 \u2192 \u56de\u5230\u7a7a\u767d\u8996\u7a97", GRAY_LIGHT, Pt(18), False),
         ("", WHITE, Pt(8), False),
         ("  3.  \u7522\u51fa\u622a\u5716 + \u6e2c\u8a66\u5831\u544a", ACCENT2, Pt(20), False),
     ], note="視覺衝擊最強的 demo — 瀏覽器自己在動")
@@ -808,16 +829,16 @@ def build_presentation():
     make_content_slide(prs, "/time-log \u2014 \u81ea\u52d5\u6642\u9593\u8ffd\u8e64", [
         ("\u4f60\u6c92\u6709\u624b\u52d5\u8a18\u904e\u4efb\u4f55\u6642\u9593", ACCENT, Pt(24), True),
         ("", WHITE, Pt(12), False),
-        ("  2.1  \u57fa\u790e\u67b6\u69cb              12 min", WHITE, Pt(22), False),
-        ("  2.2  CRUD API                18 min", WHITE, Pt(22), False),
-        ("  3.1  \u524d\u7aef\u5143\u4ef6              15 min", WHITE, Pt(22), False),
-        ("  3.2  CRUD \u4e92\u52d5              12 min", WHITE, Pt(22), False),
-        ("  4.1  Bug \u4fee\u5fa9                3 min", WHITE, Pt(22), False),
+        ("  2.1  Gemini \u67b6\u69cb           4 min", WHITE, Pt(22), False),
+        ("  2.2  串流端點 /api/chat    8 min", WHITE, Pt(22), False),
+        ("  3.1  \u55ae\u9801 + CSS            2 min", WHITE, Pt(22), False),
+        ("  3.2  SSE \u9010\u5b57\u4e32\u6d41\u986f\u793a      4 min", WHITE, Pt(22), False),
+        ("  4.1  \u63db\u4eba\u8a2d + \u4fee Bug       2 min", WHITE, Pt(22), False),
         ("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500", GRAY_DIM, Pt(22), False),
-        ("  \u5408\u8a08                          60 min", ACCENT2, Pt(22), True),
+        ("  \u5408\u8a08                          ~20 min", ACCENT2, Pt(22), True),
         ("", WHITE, Pt(12), False),
         ("\u2192  \u5168\u90e8\u7531 Hook \u81ea\u52d5\u8ffd\u8e64\uff0c\u5c0d\u56de\u9867\u548c\u672a\u4f86\u4f30\u7b97\u975e\u5e38\u6709\u7528", GRAY_MID, Pt(18), False),
-    ], note="用數據收尾：我們花了 X 分鐘完成一個全端應用")
+    ], note="用數據收尾：我們花了 X 分鐘約 20 分鐘做出一個會串流的 AI 聊天機器人")
 
     # ================================================================
     # CHAPTER 5 — 進階 + 收尾
@@ -825,6 +846,8 @@ def build_presentation():
     make_section_slide(prs, "Chapter 5", "進階技巧與收尾")
 
     make_content_slide(prs, "更多可以探索的功能", [
+        ("/suggest-mode      調整建議密度（新手 high、熟練 low/off）", WHITE, Pt(22), False),
+        ("/agent-log           看 subagent 軌跡與 handoff 交接", WHITE, Pt(22), False),
         ("/save-session      \u4fdd\u5b58\u6703\u8a71\u72c0\u614b\uff0c\u4e0b\u6b21\u63a5\u7e8c", WHITE, Pt(22), False),
         ("                             \u2192 \u6bcf\u6b21\u4e0b\u73ed\u524d\u57f7\u884c\uff0c\u9694\u5929\u7121\u7e2b\u63a5\u7e8c", GRAY_MID, Pt(16), False),
         ("", WHITE, Pt(6), False),
@@ -840,31 +863,31 @@ def build_presentation():
 
     # 流程回顧
     make_content_slide(prs, "完整流程回顧", [
-        ("Ch1   \u8a8d\u8b58\u6a21\u677f         .claude 6 \u5927\u89c0\u5ff5\u300114 \u500b Agent", GRAY_MID, Pt(20), False),
+        ("Ch1   \u8a8d\u8b58\u6a21\u677f         .claude 6 \u5927\u89c0\u5ff5\u300114 Agent\u3001\u7de8\u6392\u5287\u672c", GRAY_MID, Pt(20), False),
         ("Ch2   /task-init           \u5c08\u6848\u521d\u59cb\u5316 \u2192 CLAUDE.md + WBS", GRAY_MID, Pt(20), False),
         ("Ch3   \u958b\u767c\u5faa\u74b0 x3       /task-next \u2192 /plan \u2192 /tdd \u2192 /review-code", WHITE, Pt(20), False),
-        ("Ch4   \u54c1\u8cea\u9a57\u8b49           /verify \u2192 /e2e \u2192 /time-log", WHITE, Pt(20), False),
+        ("Ch4   \u54c1\u8cea\u9a57\u8b49           /verify \u2192 /e2e \u2192 /agent-log \u2192 /time-log", WHITE, Pt(20), False),
         ("Ch5   \u9032\u968e\u6280\u5de7           /save-session\u3001/learn\u3001\u64f4\u5145\u6280\u80fd", GRAY_MID, Pt(20), False),
         ("", WHITE, Pt(16), False),
-        ("\u2192  ~60 min \u5b8c\u6210\u4e00\u500b\u6709\u6e2c\u8a66\u3001\u6709\u6587\u6a94\u3001\u6709\u54c1\u8cea\u9580\u7684\u5168\u7aef\u61c9\u7528", ACCENT2, Pt(22), True),
+        ("\u2192  ~60 min \u5b8c\u6210\u4e00\u500b\u6709\u6e2c\u8a66\u3001\u6709\u6587\u6a94\u3001\u6709\u54c1\u8cea\u9580\u7684 AI \u804a\u5929\u6a5f\u5668\u4eba", ACCENT2, Pt(22), True),
     ])
 
     # 課後作業
     make_content_slide(prs, "課後作業 — 選一個挑戰", [
         ("\u521d\u7d1a", ACCENT2, Pt(24), True),
-        ("  \u7528\u6a21\u677f\u5efa\u7acb\u4e00\u500b\u300c\u8a18\u5e33\u672c\u300dApp\uff0c\u8dd1\u5b8c /task-init \u2192 /task-next \u2192 /tdd \u5faa\u74b0", WHITE, Pt(18), False),
+        ("  \u7528\u6a21\u677f\u5efa\u7acb\u4e00\u500b\u300c\u7ffb\u8b6f\u5c0f\u5e6b\u624b\u300dchatbot\uff0c\u8dd1\u5b8c /task-init \u2192 /task-next \u2192 /tdd \u5faa\u74b0", WHITE, Pt(18), False),
         ("", WHITE, Pt(8), False),
         ("\u4e2d\u7d1a", ACCENT, Pt(24), True),
-        ("  \u70ba TaskFlow \u52a0\u4e0a\u300c\u5230\u671f\u65e5\u300d\u6b04\u4f4d\uff0c\u7df4\u7fd2 SQLModel migration + \u524d\u7aef\u66f4\u65b0", WHITE, Pt(18), False),
+        ("  \u70ba GeminiChat \u52a0\u300c\u5c0d\u8a71\u6301\u4e45\u5316\uff08SQLite\uff09+ \u591a\u89d2\u8272\u5207\u63db\u300d", WHITE, Pt(18), False),
         ("", WHITE, Pt(8), False),
         ("\u9032\u968e", ACCENT_WARN, Pt(24), True),
-        ("  \u70ba TaskFlow \u52a0\u4e0a JWT \u8a8d\u8b49\uff08FastAPI Security\uff09\uff0c\u9ad4\u9a57 security-auditor agent", WHITE, Pt(18), False),
+        ("  \u70ba GeminiChat \u52a0 RAG\uff08\u8b80 PDF \u554f\u7b54\uff09\u6216\u7528 mcp-builder \u5305\u6210 MCP tool", WHITE, Pt(18), False),
     ])
 
     # 探索路徑
     make_content_slide(prs, "推薦探索路徑", [
-        ("\u60f3\u6df1\u5165 Agent \u6a5f\u5236     \u2192  .claude/agents/ (13 \u500b\u5b9a\u7fa9\u6a94)", WHITE, Pt(20), False),
-        ("\u60f3\u5ba2\u88fd\u5316\u898f\u5247        \u2192  .claude/rules/ (\u4fee\u6539\u6216\u65b0\u589e)", WHITE, Pt(20), False),
+        ("\u60f3\u6df1\u5165 Agent \u6a5f\u5236     \u2192  .claude/agents/ (14 \u500b\u5b9a\u7fa9\u6a94)", WHITE, Pt(20), False),
+        ("\u60f3\u5ba2\u88fd\u5316\u898f\u5247        \u2192  .claude/rules/ (15 \u689d\uff0c\u53ef\u6539\u53ef\u52a0)", WHITE, Pt(20), False),
         ("\u60f3\u64f4\u5145\u6280\u80fd            \u2192  custom-rule&skill/skills/ (94+)", WHITE, Pt(20), False),
         ("\u60f3\u505a\u5b8c\u6574\u5c08\u6848\u6587\u4ef6  \u2192  /project-docs + 16 \u500b\u6a21\u677f", WHITE, Pt(20), False),
         ("\u60f3\u5efa MCP Server     \u2192  mcp-builder skill", WHITE, Pt(20), False),
