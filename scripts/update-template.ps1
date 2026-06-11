@@ -9,15 +9,17 @@
 #   .\scripts\update-template.ps1 D:\projects\my-app -DryRun      # 只預覽不寫入
 #   .\scripts\update-template.ps1 D:\projects\my-app -Prune       # 連目標多出來的模板檔一起清掉
 #   .\scripts\update-template.ps1 D:\projects\my-app -NoBackup    # 不先備份（不建議）
+#   .\scripts\update-template.ps1 D:\projects\my-app -ClaudeOnly  # 只更新 .claude\，完全不碰根目錄資產
 
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true, Position = 0)]
     [string]$Destination,
 
-    [switch]$DryRun,     # 只列出將變更的內容，不實際寫入
-    [switch]$Prune,      # 對 SYNC 目錄使用 /MIR，刪除目標多出來的檔（預設僅新增/覆蓋）
-    [switch]$NoBackup    # 略過備份（預設會先把目標 .claude 壓成 zip）
+    [switch]$DryRun,      # 只列出將變更的內容，不實際寫入
+    [switch]$Prune,       # 對 SYNC 目錄使用 /MIR，刪除目標多出來的檔（預設僅新增/覆蓋）
+    [switch]$NoBackup,    # 略過備份（預設會先把目標 .claude 壓成 zip）
+    [switch]$ClaudeOnly   # 只更新 .claude\，跳過根目錄的 scripts/ 與根層檔案（保留專案自己的 CLAUDE.md/.gitignore/.gitattributes 等）
 )
 
 $ErrorActionPreference = 'Stop'
@@ -122,26 +124,36 @@ function Copy-OneFile {
 # ============================================================================
 
 $mode = if ($DryRun) { 'DRY-RUN（不寫入）' } elseif ($Prune) { 'SYNC + PRUNE' } else { 'SYNC（不刪除）' }
+if ($ClaudeOnly) { $mode += ' · CLAUDE-ONLY' }
 Write-Host ""
 Write-Host "🔄 更新模板資產 [$mode]" -ForegroundColor Cyan
 Write-Host "   來源: $source"
 Write-Host "   目標: $destPath"
+if ($ClaudeOnly) { Write-Host "   範圍: 僅 .claude\（跳過根目錄資產）" -ForegroundColor DarkYellow }
 Write-Host ""
 
 Write-Host "▶ SYNC 模板目錄..." -ForegroundColor Green
 foreach ($d in $syncClaudeDirs) {
     Invoke-Sync (Join-Path $source ".claude\$d") (Join-Path $destPath ".claude\$d") -Mirror:$Prune
 }
-foreach ($d in $syncRootDirs) {
-    Invoke-Sync (Join-Path $source $d) (Join-Path $destPath $d) -Mirror:$Prune
+if (-not $ClaudeOnly) {
+    foreach ($d in $syncRootDirs) {
+        Invoke-Sync (Join-Path $source $d) (Join-Path $destPath $d) -Mirror:$Prune
+    }
+} else {
+    Write-Host "   ⏭  跳過根目錄目錄: $($syncRootDirs -join ', ')" -ForegroundColor DarkGray
 }
 
 Write-Host "▶ SYNC 模板檔案..." -ForegroundColor Green
 foreach ($f in $syncClaudeFiles) {
     Copy-OneFile (Join-Path $source ".claude\$f") (Join-Path $destPath ".claude\$f")
 }
-foreach ($f in $syncRootFiles) {
-    Copy-OneFile (Join-Path $source $f) (Join-Path $destPath $f)
+if (-not $ClaudeOnly) {
+    foreach ($f in $syncRootFiles) {
+        Copy-OneFile (Join-Path $source $f) (Join-Path $destPath $f)
+    }
+} else {
+    Write-Host "   ⏭  跳過根目錄檔案: $($syncRootFiles -join ', ')" -ForegroundColor DarkGray
 }
 
 Write-Host "▶ MERGE 骨架目錄（保留執行資料）..." -ForegroundColor Green
@@ -163,6 +175,9 @@ if ($DryRun) {
 Write-Host ""
 Write-Host "🔒 以下專案紀錄完全未被更動：" -ForegroundColor Yellow
 foreach ($p in $preserveNote) { Write-Host "     - $p" }
+if ($ClaudeOnly) {
+    Write-Host "     - (root) scripts/ 及所有根層檔案（CLAUDE.md / .gitignore / .gitattributes / .mcp.json.* 等）" -ForegroundColor Yellow
+}
 Write-Host ""
 if (-not $DryRun -and -not $NoBackup) {
     Write-Host "🛟 如需還原：解壓 .claude-backups\ 內最新的 zip 覆蓋回 .claude\" -ForegroundColor Cyan

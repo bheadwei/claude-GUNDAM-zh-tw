@@ -8,8 +8,9 @@
 # 用法:
 #   ./scripts/update-template.sh /path/to/my-app
 #   ./scripts/update-template.sh /path/to/my-app --dry-run    # 只預覽不寫入
-#   ./scripts/update-template.sh /path/to/my-app --prune      # 連目標多出來的模板檔一起清掉
-#   ./scripts/update-template.sh /path/to/my-app --no-backup  # 不先備份（不建議）
+#   ./scripts/update-template.sh /path/to/my-app --prune       # 連目標多出來的模板檔一起清掉
+#   ./scripts/update-template.sh /path/to/my-app --no-backup   # 不先備份（不建議）
+#   ./scripts/update-template.sh /path/to/my-app --claude-only # 只更新 .claude/，完全不碰根目錄資產
 
 set -euo pipefail
 
@@ -17,19 +18,21 @@ DEST=""
 DRY_RUN=0
 PRUNE=0
 NO_BACKUP=0
+CLAUDE_ONLY=0
 
 for arg in "$@"; do
   case "$arg" in
-    --dry-run)   DRY_RUN=1 ;;
-    --prune)     PRUNE=1 ;;
-    --no-backup) NO_BACKUP=1 ;;
-    -*)          echo "未知選項: $arg" >&2; exit 1 ;;
-    *)           DEST="$arg" ;;
+    --dry-run)     DRY_RUN=1 ;;
+    --prune)       PRUNE=1 ;;
+    --no-backup)   NO_BACKUP=1 ;;
+    --claude-only) CLAUDE_ONLY=1 ;;
+    -*)            echo "未知選項: $arg" >&2; exit 1 ;;
+    *)             DEST="$arg" ;;
   esac
 done
 
 if [ -z "$DEST" ]; then
-  echo "用法: $0 <目標專案路徑> [--dry-run] [--prune] [--no-backup]" >&2
+  echo "用法: $0 <目標專案路徑> [--dry-run] [--prune] [--no-backup] [--claude-only]" >&2
   exit 1
 fi
 
@@ -101,20 +104,30 @@ copy_file() {  # $1=src $2=dst
 MODE="SYNC（不刪除）"
 [ "$PRUNE" -eq 1 ] && MODE="SYNC + PRUNE"
 [ "$DRY_RUN" -eq 1 ] && MODE="DRY-RUN（不寫入）"
+[ "$CLAUDE_ONLY" -eq 1 ] && MODE="$MODE · CLAUDE-ONLY"
 
 echo ""
 echo "🔄 更新模板資產 [$MODE]"
 echo "   來源: $SOURCE"
 echo "   目標: $DEST"
+[ "$CLAUDE_ONLY" -eq 1 ] && echo "   範圍: 僅 .claude/（跳過根目錄資產）"
 echo ""
 
 echo "▶ SYNC 模板目錄..."
 for d in "${SYNC_CLAUDE_DIRS[@]}"; do sync_dir "$SOURCE/.claude/$d" "$DEST/.claude/$d" mirror; done
-for d in "${SYNC_ROOT_DIRS[@]}";  do sync_dir "$SOURCE/$d"          "$DEST/$d"          mirror; done
+if [ "$CLAUDE_ONLY" -eq 0 ]; then
+  for d in "${SYNC_ROOT_DIRS[@]}"; do sync_dir "$SOURCE/$d" "$DEST/$d" mirror; done
+else
+  echo "   ⏭  跳過根目錄目錄: ${SYNC_ROOT_DIRS[*]}"
+fi
 
 echo "▶ SYNC 模板檔案..."
 for f in "${SYNC_CLAUDE_FILES[@]}"; do copy_file "$SOURCE/.claude/$f" "$DEST/.claude/$f"; done
-for f in "${SYNC_ROOT_FILES[@]}";   do copy_file "$SOURCE/$f"          "$DEST/$f";          done
+if [ "$CLAUDE_ONLY" -eq 0 ]; then
+  for f in "${SYNC_ROOT_FILES[@]}"; do copy_file "$SOURCE/$f" "$DEST/$f"; done
+else
+  echo "   ⏭  跳過根目錄檔案: ${SYNC_ROOT_FILES[*]}"
+fi
 
 echo "▶ MERGE 骨架目錄（保留執行資料）..."
 for d in "${MERGE_CLAUDE_DIRS[@]}"; do sync_dir "$SOURCE/.claude/$d" "$DEST/.claude/$d" additive; done
@@ -128,6 +141,7 @@ fi
 echo ""
 echo "🔒 以下專案紀錄完全未被更動："
 for p in "${PRESERVE_NOTE[@]}"; do echo "     - $p"; done
+[ "$CLAUDE_ONLY" -eq 1 ] && echo "     - (root) scripts/ 及所有根層檔案（CLAUDE.md / .gitignore / .gitattributes / .mcp.json.* 等）"
 echo ""
 if [ "$DRY_RUN" -eq 0 ] && [ "$NO_BACKUP" -eq 0 ]; then
   echo "🛟 如需還原：解壓 .claude-backups/ 內最新的 tar.gz 覆蓋回 .claude/"
