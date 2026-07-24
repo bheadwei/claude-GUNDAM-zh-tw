@@ -92,6 +92,8 @@ Read .claude/ui/{primary}/DESIGN.md
 
 例外：若專案完全未建立 tokens，第一次建立時可直接從 DESIGN.md 抄 hex 值到 `tailwind.config.ts` 或 `styles/tokens.css`，**但後續元件必須引用 token，不再抄 hex**。
 
+> Token 分層與交換格式對齊 W3C DTCG（global → semantic/alias → component），詳見範本 `12_frontend_architecture_specification.md`。
+
 ### 2.2 字體禁令
 
 ❌ 禁止隨意 `font-size: 17px` 這種散亂值
@@ -105,6 +107,18 @@ Read .claude/ui/{primary}/DESIGN.md
 ### 2.4 元件一致性
 
 同類元件（按鈕、卡片、輸入框）**不得同時存在 2 種風格**。已建立 `Button` 就不要再寫 inline `<button>`；已有 `Card` 不要再寫自訂卡片。
+
+### 2.5 反 AI slop 禁令（除非選定的 DESIGN.md 明確要求）
+
+❌ **禁止**以下「AI 生成味」的預設美學：
+
+- 紫色/藍紫漸層背景或按鈕（`purple gradient`、`#8B5CF6 → #EC4899` 這類）
+- 無理由用 Inter / Roboto / Arial 充當品牌字型（fallback 模式的系統字體堆疊除外）
+- 彈跳（bounce）、過度 spring 動畫；動畫一律 150-300ms ease
+- Cookie-cutter 版型：hero 大標 + 三欄 icon 卡片 + 置中 CTA 的罐頭結構
+- 擁擠間距（元素貼邊、區塊間無呼吸空間）
+
+✅ 正確做法：從選定的 DESIGN.md 取得明確的色彩/字體/版型個性；無 DESIGN.md 時遵循 fallback 的克制中性色 + 單一強調色。
 
 ---
 
@@ -121,6 +135,8 @@ Read .claude/ui/{primary}/DESIGN.md
 - [x] 陰影：符合規範
 - [x] 深色模式：CSS 變數已雙版本定義
 - [x] 元件一致性：同類元件無並存多風格
+- [x] 反 AI slop：無紫漸層/罐頭版型/彈跳動畫（見 2.5）
+- [x] a11y：文字對比 ≥ 4.5:1、focus 狀態可見、觸控目標 ≥ 44px、圖片有 alt
 - [ ] 未達成項目說明：[如有]
 ```
 

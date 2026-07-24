@@ -20,7 +20,6 @@
 ├── commands/     (25 個)      # Slash Command
 ├── rules/        (15 個)      # 自動載入規則
 ├── skills/       (7 個)       # 專案特定領域知識
-├── output-styles/ (15 個)     # 輸出樣式模板
 ├── hooks/                     # Hook 腳本庫
 ├── context/                   # 跨 Agent 上下文共享
 ├── coordination/              # Agent 協調配置

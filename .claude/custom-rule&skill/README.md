@@ -10,6 +10,7 @@
 | `.claude/skills/` | ✅ 生效 | 主模板精選 8 個 skill |
 | `.claude/custom-rule&skill/rules/` | ❌ 備份 | 8 種語言的完整規則集 |
 | `.claude/custom-rule&skill/skills/` | ❌ 備份 | 94 個 skill 的完整池 |
+| `.claude/custom-rule&skill/output-styles/` | ❌ 備份 | 15 個文件產出用 output style（2026-07 移入；功能已由 project-docs 20 份範本涵蓋，備查用） |
 
 ## 取材流程
 

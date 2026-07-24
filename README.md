@@ -82,7 +82,6 @@ claude_v2026/
     ├── agents/       (14 個)         # 專業 Agent 定義
     ├── commands/     (25 個)         # Slash Commands
     ├── skills/       (7 個)          # 專案特定領域知識
-    ├── output-styles/ (15 個)        # 輸出樣式模板
     ├── hooks/                        # Hook 腳本庫
     │
     ├── guides/                       # 參考文件（不自動載入）
