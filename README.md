@@ -84,8 +84,6 @@ claude_v2026/
     ├── skills/       (7 個)          # 專案特定領域知識
     ├── output-styles/ (15 個)        # 輸出樣式模板
     ├── hooks/                        # Hook 腳本庫
-    ├── plugins/                      # Plugin 套件
-    │   └── dev-project-kit/          # 開發工具包（可攜帶到其他專案）
     │
     ├── guides/                       # 參考文件（不自動載入）
     │   ├── WORKFLOW.md               # 開發流程指南
