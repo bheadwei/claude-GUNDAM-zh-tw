@@ -6,6 +6,8 @@ description: 驗證專案是否符合指定的 VibeCoding 工作流模板規範�
 
 ## 選擇模板: $ARGUMENTS
 
+範本來源：`.claude/skills/project-docs/templates/`
+
 ## 可用模板
 
 ### 階段 0: 流程
@@ -20,23 +22,29 @@ description: 驗證專案是否符合指定的 VibeCoding 工作流模板規範�
 5. **architecture** → `05_architecture_and_design_document.md`
 6. **api** → `06_api_design_specification.md`
 
-### 階段 3: 詳細設計 (07-09)
+### 階段 3: 詳細設計 (07-09, 18)
 7. **tests** → `07_module_specification_and_tests.md`
 8. **structure** → `08_project_structure_guide.md`
 9. **design** → `09_design_and_dependencies.md`
+10. **data-model** → `18_data_model_and_migration_spec.md`
 
 ### 階段 4: 開發品質 (11-12, 17)
 11. **code-review** → `11_code_review_and_refactoring_guide.md`
 12. **frontend-arch** → `12_frontend_architecture_specification.md`
 13. **frontend-ia** → `17_frontend_information_architecture_template.md`
 
-### 階段 5: 安全部署 (13-14)
+### 階段 5: 安全部署 (13-14, 19-20)
 14. **security** → `13_security_and_readiness_checklists.md`
-15. **deployment** → `14_deployment_and_operations_guide.md`
+15. **threat-model** → `20_threat_model_template.md`
+16. **deployment** → `14_deployment_and_operations_guide.md`
+17. **observability** → `19_observability_and_slo_spec.md`
 
 ### 階段 6: 維護管理 (15-16)
-16. **documentation** → `15_documentation_and_maintenance_guide.md`
-17. **wbs** → `16_wbs_development_plan_template.md`
+18. **documentation** → `15_documentation_and_maintenance_guide.md`
+19. **wbs** → `16_wbs_development_plan_template.md`
+
+### 階段 7: AI 功能 (21)
+20. **ai-llm** → `21_ai_llm_integration_spec.md`
 
 ## 合規分析
 

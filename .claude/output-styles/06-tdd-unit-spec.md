@@ -595,7 +595,7 @@ it('works correctly', () => {});
 ## 輸出格式
 
 - 測試文件命名: `*.test.ts` 或 `*.spec.ts`
-- 遵循 VibeCoding_Workflow_Templates/07_module_specification_and_tests.md 結構
+- 遵循 .claude/skills/project-docs/templates/07_module_specification_and_tests.md 結構
 - 使用專案統一的測試框架 (Jest/Vitest/Mocha等)
 
 ## 審查清單
@@ -613,7 +613,7 @@ it('works correctly', () => {});
 ## 關聯文件
 
 - **領域模型**: 04-ddd-aggregate-spec.md (聚合不變量測試)
-- **模組規格**: VibeCoding_Workflow_Templates/07_module_specification_and_tests.md
+- **模組規格**: .claude/skills/project-docs/templates/07_module_specification_and_tests.md
 - **Code Review**: 07-code-review-checklist.md (測試質量審查)
 
 ---

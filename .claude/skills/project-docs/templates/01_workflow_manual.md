@@ -1,6 +1,6 @@
 # 產品開發流程使用說明書
 
-> **版本:** v3.0 | **更新:** 2026-04-23 | **狀態:** 活躍
+> **版本:** v5.0 | **更新:** 2026-07-24 | **狀態:** 活躍
 
 ---
 
@@ -33,7 +33,16 @@
 |---|---|---|---|
 | demo | 精簡 PRD（1 份） | `docs/prd.md` | `/docs-init --demo` |
 | mvp | Tech Spec（合併 02+05+06+08） | `docs/tech-spec.md` | `/docs-init --mvp` |
-| full | VibeCoding 完整 16 份 | `docs/01_prd.md`、`02_bdd.md`… | `/docs-init --full` |
+| full | VibeCoding 完整文件集（16 份必備 + 條件式 18-21） | `docs/01_prd.md`、`02_bdd.md`… | `/docs-init --full` |
+
+**條件式文件（18-21，依專案特性納入）**：
+
+| 編號 | 文件 | 納入條件 |
+|---|---|---|
+| 18 | 資料模型與 Migration 規範 | 有資料庫 / schema 會演進 |
+| 19 | 可觀測性與 SLO | 會上線並持續維運 |
+| 20 | 威脅模型（STRIDE） | full 建議；觸及認證/金流/個資**必產** |
+| 21 | AI/LLM 整合規範 | 專案含 LLM/AI 功能 |
 
 **升級路徑**：`demo → /docs-init --mvp` 或 `mvp → /docs-init --full`，保留既有文件並補足。
 
@@ -52,11 +61,12 @@ graph LR
 | :--- | :--- | :--- | :--- |
 | A0 啟動 | 對齊目標、邊界、風險 | 啟動簡報、里程碑 | 利益相關者共識 |
 | A1 PRD | 定義問題、受眾、範圍、KPI | `02_prd.md` | PRD 簽核、KPI 可量測 |
-| A2 架構 | 系統邊界、技術選型、NFR | `05_architecture.md` + `04_adr.md` | ADR 齊備、NFR 可驗證 |
-| A3 詳細設計 | 可實作規格與契約 | `07_module.md` + `06_api.md` + `08_structure.md` | 契約穩定、測試策略完整 |
+| A2 架構 | 系統邊界、技術選型、NFR | `05_architecture.md` + `04_adr.md`（MADR 4.0） | ADR 齊備、Quality Scenario 可驗證 |
+| A3 詳細設計 | 可實作規格與契約 | `07_module.md` + `06_api.md` + `08_structure.md` +（`18_data_model.md`） | 契約穩定（OpenAPI/Pact）、測試策略完整 |
 | A4 開發 | 增量交付 | 程式碼、測試、建置產物 | 測試綠燈、覆蓋率達標 |
-| A5 品質 | 消除高風險弱點 | `13_security.md` | 高/中風險已整改 |
-| A6 上線 | 可靠性、可觀測性就緒 | Go/No-Go 簽核 | SLO/Alert 就緒、回滾演練通過 |
+| A5 品質 | 消除高風險弱點 | `13_security.md` +（`20_threat_model.md`） | 高/中風險已整改、威脅緩解已驗證 |
+| A6 上線 | 可靠性、可觀測性就緒 | Go/No-Go 簽核 +（`19_slo.md`） | SLO/Burn-rate 告警就緒、回滾演練通過 |
+| A7 AI（選） | AI 功能安全上線 | `21_ai_llm.md` | Eval 門檻通過、Guardrails 就緒、成本告警設定 |
 
 **跨階段**: 變更需更新 ADR 與相依文檔；重大變更需重過 Gate。
 

@@ -687,7 +687,7 @@ export const OrderSummaryCard = ({ order, onViewDetail, onCancel }: Props) => {
 
 - **API 設計**: 05-api-contract-spec.md (數據結構依據)
 - **測試規範**: 06-tdd-unit-spec.md (測試原則)
-- **前端架構**: VibeCoding_Workflow_Templates/12_frontend_architecture_specification.md
+- **前端架構**: .claude/skills/project-docs/templates/12_frontend_architecture_specification.md
 
 ---
 

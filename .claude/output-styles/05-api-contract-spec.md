@@ -754,7 +754,7 @@ afterAll(() => server.close());
 
 - 主文件: `openapi.yaml` (OpenAPI 3.0 格式)
 - 分模組: `openapi/orders.yaml`, `openapi/products.yaml`
-- 遵循 VibeCoding_Workflow_Templates/06_api_design_specification.md
+- 遵循 .claude/skills/project-docs/templates/06_api_design_specification.md
 
 ## 審查清單
 

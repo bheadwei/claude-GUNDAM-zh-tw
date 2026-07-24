@@ -25,7 +25,7 @@ SOFTWARE.
 This template incorporates the following components:
 
 ### VibeCoding Workflow Templates
-The VibeCoding_Workflow_Templates/ directory contains workflow templates
+The .claude/skills/project-docs/templates/ directory contains workflow templates
 for enterprise-grade development lifecycle management.
 
 ### Claude Code Subagent System

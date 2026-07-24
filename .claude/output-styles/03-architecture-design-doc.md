@@ -384,7 +384,7 @@ graph TB
 ## 輸出格式
 
 - 使用 Markdown + Mermaid 圖表
-- 遵循 VibeCoding_Workflow_Templates/05_architecture_and_design_document.md 結構
+- 遵循 .claude/skills/project-docs/templates/05_architecture_and_design_document.md 結構
 - 關鍵決策必須鏈接到對應的 ADR 文件
 - 所有圖表需提供文字說明,不可僅有圖無說明
 

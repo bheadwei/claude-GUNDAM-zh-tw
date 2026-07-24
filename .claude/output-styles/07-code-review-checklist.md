@@ -621,7 +621,7 @@ graph TD
 ## 輸出格式
 
 - 使用 Markdown 格式
-- 遵循 VibeCoding_Workflow_Templates/11_code_review_and_refactoring_guide.md 結構
+- 遵循 .claude/skills/project-docs/templates/11_code_review_and_refactoring_guide.md 結構
 - 使用表情符號標示嚴重程度: ✅ (良好) ⚠️ (建議改進) 🔴 (必須修正)
 
 ## 審查清單

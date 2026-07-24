@@ -141,7 +141,7 @@ i18n：zh-TW + en
 
 ### 1. 建立 IA 文檔
 
-根據 VibeCoding 範本 17（`VibeCoding_Workflow_Templates/17_frontend_information_architecture_template.md`），填入 Q&A 答案，產出：
+根據 VibeCoding 範本 17（`.claude/skills/project-docs/templates/17_frontend_information_architecture_template.md`），填入 Q&A 答案，產出：
 
 ```
 docs/17_frontend_information_architecture.md
@@ -157,7 +157,7 @@ docs/17_frontend_information_architecture.md
 
 ### 2. 建立前端架構文檔
 
-根據 VibeCoding 範本 12（`VibeCoding_Workflow_Templates/12_frontend_architecture_specification.md`），填入技術決策：
+根據 VibeCoding 範本 12（`.claude/skills/project-docs/templates/12_frontend_architecture_specification.md`），填入技術決策：
 
 ```
 docs/12_frontend_architecture.md

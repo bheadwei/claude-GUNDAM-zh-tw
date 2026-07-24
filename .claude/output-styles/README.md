@@ -59,7 +59,7 @@ cat .claude/settings.local.json | grep outputStyle
 "我想開發一個線上預約系統,目標用戶是診所與病患,請幫我產出 PRD"
 ```
 
-**關聯模板**: `VibeCoding_Workflow_Templates/02_project_brief_and_prd.md`
+**關聯模板**: `.claude/skills/project-docs/templates/02_project_brief_and_prd.md`
 
 ---
 
@@ -80,7 +80,7 @@ cat .claude/settings.local.json | grep outputStyle
 "根據 PRD 中的預約功能,產出 BDD Feature 檔案"
 ```
 
-**關聯模板**: `VibeCoding_Workflow_Templates/03_behavior_driven_development_guide.md`
+**關聯模板**: `.claude/skills/project-docs/templates/03_behavior_driven_development_guide.md`
 
 ---
 
@@ -104,7 +104,7 @@ cat .claude/settings.local.json | grep outputStyle
 "設計線上預約系統的架構,需支持高並發與多租戶"
 ```
 
-**關聯模板**: `VibeCoding_Workflow_Templates/05_architecture_and_design_document.md`
+**關聯模板**: `.claude/skills/project-docs/templates/05_architecture_and_design_document.md`
 
 ---
 
@@ -127,7 +127,7 @@ cat .claude/settings.local.json | grep outputStyle
 "設計預約聚合,包含時段鎖定、衝突檢查等業務規則"
 ```
 
-**關聯模板**: `VibeCoding_Workflow_Templates/05_architecture_and_design_document.md` (DDD 章節)
+**關聯模板**: `.claude/skills/project-docs/templates/05_architecture_and_design_document.md` (DDD 章節)
 
 ---
 
@@ -150,7 +150,7 @@ cat .claude/settings.local.json | grep outputStyle
 "設計預約系統的 RESTful API,包含預約創建、查詢、取消等端點"
 ```
 
-**關聯模板**: `VibeCoding_Workflow_Templates/06_api_design_specification.md`
+**關聯模板**: `.claude/skills/project-docs/templates/06_api_design_specification.md`
 
 ---
 
@@ -173,7 +173,7 @@ cat .claude/settings.local.json | grep outputStyle
 "根據預約聚合,設計 PostgreSQL 資料庫綱要"
 ```
 
-**關聯模板**: `VibeCoding_Workflow_Templates/05_architecture_and_design_document.md` (數據架構章節)
+**關聯模板**: `.claude/skills/project-docs/templates/05_architecture_and_design_document.md` (數據架構章節)
 
 ---
 
@@ -198,7 +198,7 @@ cat .claude/settings.local.json | grep outputStyle
 "用 TDD 實作預約衝突檢查函式"
 ```
 
-**關聯模板**: `VibeCoding_Workflow_Templates/07_module_specification_and_tests.md`
+**關聯模板**: `.claude/skills/project-docs/templates/07_module_specification_and_tests.md`
 
 ---
 
@@ -223,7 +223,7 @@ cat .claude/settings.local.json | grep outputStyle
 "審查這個 PR 的預約服務實作 (提供代碼或 PR 連結)"
 ```
 
-**關聯模板**: `VibeCoding_Workflow_Templates/11_code_review_and_refactoring_guide.md`
+**關聯模板**: `.claude/skills/project-docs/templates/11_code_review_and_refactoring_guide.md`
 
 ---
 
@@ -248,7 +248,7 @@ cat .claude/settings.local.json | grep outputStyle
 "進行預約系統的安全審查,重點關注用戶數據保護與 API 安全"
 ```
 
-**關聯模板**: `VibeCoding_Workflow_Templates/13_security_and_readiness_checklists.md`
+**關聯模板**: `.claude/skills/project-docs/templates/13_security_and_readiness_checklists.md`
 
 ---
 
@@ -356,7 +356,7 @@ graph LR
 
 ### 新手 (第一次使用)
 
-1. **閱讀**: `VibeCoding_Workflow_Templates/01_workflow_manual.md`
+1. **閱讀**: `.claude/skills/project-docs/templates/01_workflow_manual.md`
 2. **實踐**: 從 `01-prd-product-spec` 開始,完成一個小功能的完整流程
 3. **參考**: 對照 `VibeCoding_Workflow_Templates` 中的對應模板
 

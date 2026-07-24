@@ -528,7 +528,7 @@ async function fetchUrl(url: string): Promise<any> {
 ## 輸出格式
 
 - 使用 Markdown 格式
-- 遵循 VibeCoding_Workflow_Templates/13_security_and_readiness_checklists.md 結構
+- 遵循 .claude/skills/project-docs/templates/13_security_and_readiness_checklists.md 結構
 - 使用 🔴 🟠 🟡 🟢 標示風險等級
 
 ## 審查清單
@@ -548,7 +548,7 @@ async function fetchUrl(url: string): Promise<any> {
 
 - **Code Review**: 07-code-review-checklist.md (代碼層面安全)
 - **API 設計**: 05-api-contract-spec.md (API 安全)
-- **部署指南**: VibeCoding_Workflow_Templates/14_deployment_and_operations_guide.md
+- **部署指南**: .claude/skills/project-docs/templates/14_deployment_and_operations_guide.md
 
 ---
 

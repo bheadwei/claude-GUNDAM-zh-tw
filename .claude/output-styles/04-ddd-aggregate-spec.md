@@ -629,7 +629,7 @@ describe('Order Domain Events', () => {
 
 - 使用 TypeScript 風格的程式碼範例 (可替換為專案使用的語言)
 - 使用 Mermaid 類圖與序列圖
-- 遵循 VibeCoding_Workflow_Templates/05_architecture_and_design_document.md 的 DDD 章節
+- 遵循 .claude/skills/project-docs/templates/05_architecture_and_design_document.md 的 DDD 章節
 
 ## 審查清單
 

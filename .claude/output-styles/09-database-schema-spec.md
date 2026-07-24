@@ -671,7 +671,7 @@ RENAME COLUMN new_email TO email;
 
 - DDL 腳本使用 SQL 格式
 - ERD 使用 Mermaid 語法
-- 遵循 VibeCoding_Workflow_Templates/05_architecture_and_design_document.md 的資料架構章節
+- 遵循 .claude/skills/project-docs/templates/05_architecture_and_design_document.md 的資料架構章節
 
 ## 審查清單
 

@@ -108,7 +108,7 @@ template_ref: "02_project_brief_and_prd.md"
 
 ## 輸出格式
 
-- 使用 Markdown,遵循 VibeCoding_Workflow_Templates/02_project_brief_and_prd.md 結構
+- 使用 Markdown,遵循 .claude/skills/project-docs/templates/02_project_brief_and_prd.md 結構
 - 所有表格使用標準 Markdown 表格格式
 - 圖表使用 Mermaid 語法 (用戶旅程、流程圖等)
 - 數據與假設需明確標註來源

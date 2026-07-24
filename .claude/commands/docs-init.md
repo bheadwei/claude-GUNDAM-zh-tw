@@ -16,7 +16,7 @@ description: 依開發情境產出規格文件（demo / mvp / full）。demo 產
 |---|---|---|---|
 | **demo** | 精簡 PRD（1 份） | `docs/prd.md` | 快速驗證想法、個人實驗、< 1 天 |
 | **mvp** | Tech Spec（1 份合併 02+05+06+08） | `docs/tech-spec.md` | 內部工具、小型產品、< 1 週 |
-| **full** | VibeCoding 完整文件集（多份編號檔） | `docs/01_prd.md`、`docs/02_bdd.md`… | 正式產品、跨團隊、> 1 週 |
+| **full** | VibeCoding 完整文件集（多份編號檔，含條件式範本 18-21） | `docs/01_prd.md`、`docs/02_bdd.md`… | 正式產品、跨團隊、> 1 週 |
 
 **共通**：三種模式都會產出 PRD 與 WBS，差別在深度與文件數量。
 
@@ -52,7 +52,7 @@ description: 依開發情境產出規格文件（demo / mvp / full）。demo 產
 |------|------|
 | **demo** | 只產精簡 PRD（名稱/問題/使用者/核心功能/成功標準）。適合快速驗證 |
 | **mvp (Recommended)** | 單檔 Tech Spec：PRD + 架構 + API + 結構。適合內部工具與小產品 |
-| **full** | VibeCoding 完整 16 份文件集。適合正式產品 |
+| **full** | VibeCoding 完整文件集（16 必備 + 條件式 18-21）。適合正式產品 |
 
 ### 步驟 2：讀取既有上下文
 
@@ -117,7 +117,7 @@ description: 依開發情境產出規格文件（demo / mvp / full）。demo 產
 
 #### 路徑 B：mvp 模式
 
-讀取 `VibeCoding_Workflow_Templates/02_project_brief_and_prd.md`、`05_architecture_and_design_document.md`、`06_api_design_specification.md`、`08_project_structure_guide.md` 的骨架，**取最小集合**合併為一份。
+讀取 `.claude/skills/project-docs/templates/02_project_brief_and_prd.md`、`05_architecture_and_design_document.md`、`06_api_design_specification.md`、`08_project_structure_guide.md` 的骨架，**取最小集合**合併為一份。
 
 用 `AskUserQuestion` 補問（已從 task-init 取得的不重問）：
 1. 關鍵 OKR 或成功指標（1-2 個量化數字）
@@ -162,19 +162,29 @@ description: 依開發情境產出規格文件（demo / mvp / full）。demo 產
 依 VibeCoding 順序**依序產出**完整文件集。每份文件由 `project-docs` skill 處理：
 
 ```
-02 PRD → 03 BDD → 04 ADR → 05 架構 → 06 API → 07 模組
-  → 08 結構 → 09 設計與依賴 → 11 審查 → (12/17 前端) → 13 安全 → 14 部署 → 15 文檔
+02 PRD → 03 BDD → 04 ADR → 05 架構 → 06 API → 07 模組 → (18 資料模型)
+  → 08 結構 → 09 設計與依賴 → 11 審查 → (12/17 前端) → 13 安全 → (20 威脅模型) → 14 部署 → (19 SLO) → 15 文檔 → (21 AI/LLM)
 ```
 
 WBS（16）由本指令後續產出，不在 docs-init 階段產。
 
+**條件式範本（括號者）**：進入 full 流程前，用一次 `AskUserQuestion`（multiSelect）確認專案特性，決定要納入哪些：
+
+| 範本 | 納入條件 |
+|---|---|
+| 18 資料模型與 Migration | 有資料庫 / schema 會演進 |
+| 20 威脅模型 | 建議納入；觸及認證/金流/個資則**強制** |
+| 19 可觀測性與 SLO | 會上線並持續維運（非一次性工具） |
+| 21 AI/LLM 整合規範 | 專案含 LLM/AI 功能 |
+
 **產出檔名**：`docs/01_prd.md`、`docs/02_bdd.md`、`docs/03_adr.md`…（依階段編號，與 VibeCoding 範本編號對齊）
 
 **執行方式**：
-1. 讀 `VibeCoding_Workflow_Templates/INDEX.md` 確認階段順序
-2. 依序呼叫 `project-docs` skill 處理每份
-3. 每份完成後 `AskUserQuestion` 詢問「繼續產下一份？還是暫停？」
-4. 使用者可隨時中斷，下次執行 `/docs-init --full --resume` 從上次進度接續
+1. 讀 `.claude/skills/project-docs/templates/INDEX.md` 確認階段順序
+2. 條件式範本以 `AskUserQuestion` 勾選後排入序列
+3. 依序呼叫 `project-docs` skill 處理每份
+4. 每份完成後 `AskUserQuestion` 詢問「繼續產下一份？還是暫停？」
+5. 使用者可隨時中斷，下次執行 `/docs-init --full --resume` 從上次進度接續
 
 ### 步驟 4：更新 project.json
 
