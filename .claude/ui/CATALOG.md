@@ -1,6 +1,6 @@
 # UI 設計風格目錄
 
-本目錄收錄 57 種設計系統規範，供 `/ui-style` 指令及前端開發時查詢使用。
+本目錄收錄 69 種設計系統規範，供 `/ui-style` 指令及前端開發時查詢使用。
 
 每個風格的完整規範位於 `.claude/ui/<codename>/DESIGN.md`（英文原文，含色票、字體、間距、元件）。
 
@@ -27,6 +27,9 @@
 - **mintlify** — 文檔淨空感、側欄清晰、重閱讀節奏
 - **superhuman** — 毛玻璃層次、鍵盤優先、精練資訊密度
 - **wise** — 溫和綠色、金融專業、去複雜化
+- **openai** — 純黑白研究機構感、全 pill 幾何、OpenAI Sans 唯一字體
+- **shadcn** — zinc 中性灰階、CSS 語意 token 系統、元件庫預設美學
+- **perplexity** — 米白紙感、深青單一強調、知識書卷氣
 
 ### 資料密集 (Data-dense)
 > 表格為王、高資訊密度、密集元件、功能優先
@@ -36,6 +39,8 @@
 - **sentry** — 錯誤追蹤、紫色警示、時間序列
 - **supabase** — 綠色電光、資料庫介面、深色預設
 - **airtable** — 表格優先、橘色強調、試算表 UX
+- **attio** — 新世代 CRM、無彩度精準灰階、12px 高密度表格美學
+- **huggingface** — AI 社群、灰階列表 + 品牌黃點綴、tag pills 密集內容
 - **semrush** — 行銷儀表板、橘藍對比、密集 KPI
 - **mongodb** — 綠色技術、資料模型視覺化
 - **sanity** — CMS 專業、藍色系、結構化內容
@@ -49,6 +54,9 @@
 - **opencode.ai** — 開源開發、簡潔命令
 - **raycast** — 啟動器美學、鍵盤驅動、紅色品牌
 - **ollama** — 本地 LLM、黑白極簡、技術極客
+- **zed** — 高效編輯器、暖灰紙感 + 工程藍、襯線標題 + 實體按鍵陰影
+- **neon** — 純黑 + 電光綠 pill、大字階、終端指令即 CTA
+- **railway** — 深紫黑夜景、亮紫層次、襯線編輯感標題
 
 ### 科技未來感 (Futuristic / Cyber)
 > 霓虹漸層、動態效果、賽博感、AI 氛圍
@@ -69,6 +77,7 @@
 > 圓角柔和、立體陰影、童趣、人情味
 
 - **clay** — 黏土質感、擬物立體、遊戲感
+- **granola** — 紙感筆記、橄欖綠 + 超大襯線標題、有機手作溫度
 - **lovable** — AI 建站、粉紫漸層、可愛感
 - **intercom** — 對話客服、溫暖橘、圓潤元件
 - **pinterest** — 視覺靈感、紅色、瀑布流
@@ -86,6 +95,7 @@
 > 保守穩重、藍灰系、結構化資訊、信任感
 
 - **ibm** — 藍巨人、經典企業、Carbon Design
+- **clerk** — auth SaaS、紫強調、精工多層按鈕陰影
 - **hashicorp** — DevOps 專業、多產品線、藍紫
 - **coinbase** — 加密金融、藍色穩重、合規感
 - **kraken** — 交易所、深紫專業、金融強度
@@ -119,19 +129,19 @@
 ## 按品牌類型分類（依產業對標）
 
 ### AI / LLM
-claude, cohere, mistral.ai, x.ai, ollama, runwayml, replicate, elevenlabs, minimax, together.ai, voltagent
+claude, openai, perplexity, huggingface, cohere, mistral.ai, x.ai, ollama, runwayml, replicate, elevenlabs, minimax, together.ai, voltagent
 
 ### 開發工具 / IDE
-cursor, warp, raycast, figma, framer, vercel, webflow, lovable, opencode.ai, expo, composio
+cursor, zed, warp, raycast, figma, framer, vercel, webflow, lovable, opencode.ai, expo, composio, shadcn
 
 ### 資料 / 後端 / DevOps
-supabase, mongodb, clickhouse, sentry, posthog, sanity, hashicorp
+supabase, neon, railway, clerk, mongodb, clickhouse, sentry, posthog, sanity, hashicorp
 
 ### 金融 / 支付 / 加密
 stripe, wise, revolut, coinbase, kraken
 
 ### 生產力 SaaS
-linear.app, notion, airtable, cal, miro, zapier, superhuman, intercom, mintlify, resend
+linear.app, notion, airtable, attio, granola, cal, miro, zapier, superhuman, intercom, mintlify, resend
 
 ### 消費者 App
 airbnb, uber, spotify, pinterest
