@@ -72,8 +72,6 @@ claude_v2026/
 ├── .mcp.json                         # MCP Server 設定（不入 Git）
 ├── .mcp.json.windows.example         # MCP 範本（Windows）
 ├── .mcp.json.linux.example           # MCP 範本（Linux）
-├── VibeCoding_Workflow_Templates/    # 搬遷指標 README（範本已移至 .claude/skills/project-docs/templates/）
-│
 └── .claude/                          # 核心配置
     ├── README.md                     # 配置目錄詳細說明
     ├── settings.json                 # 主設定（權限、StatusLine、Hooks）
