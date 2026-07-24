@@ -28,7 +28,7 @@ StatusLine 不是即時更新，而是**每次你送出訊息或收到回覆時�
 ```json
 {
   "session_id": "...",
-  "model": { "id": "claude-opus-4-7[1m]", "display_name": "Opus 4.7 (1M context)" },
+  "model": { "id": "claude-opus-4-8[1m]", "display_name": "Opus 4.8 (1M context)" },
   "cwd": "D:\\project",
   "context_window": {
     "context_window_size": 1000000,
@@ -58,7 +58,7 @@ StatusLine 不是即時更新，而是**每次你送出訊息或收到回覆時�
 ## 目前顯示格式
 
 ```
-Opus 4.7 (1M context) │ 43% (439k/1.0m) │ project-name (main*) │ 4h35m │ $42.84
+Opus 4.8 (1M context) │ 43% (439k/1.0m) │ project-name (main*) │ 4h35m │ $42.84
 current ●●●○○○○○○○  28% ⟳ 19:00
 weekly  ●●●●●●●●○○  79% ⟳ 03/23 10:00
 extra   ○○○○○○○○○○ $0.00/$50.00
@@ -241,7 +241,7 @@ cache_max_age=300    # 更省流量（5 分鐘）
 ### 精簡風格
 
 ```
-Opus 4.7 │ 43% │ project (main*) │ $42.84
+Opus 4.8 │ 43% │ project (main*) │ $42.84
 ```
 
 做法：移除 token 數、session 時間、整個 rate limit。
@@ -249,7 +249,7 @@ Opus 4.7 │ 43% │ project (main*) │ $42.84
 ### 完整風格（目前）
 
 ```
-Opus 4.7 (1M context) │ 43% (439k/1.0m) │ project (main*) │ 4h35m │ $42.84
+Opus 4.8 (1M context) │ 43% (439k/1.0m) │ project (main*) │ 4h35m │ $42.84
 current ●●●○○○○○○○  28% ⟳ 19:00
 weekly  ●●●●●●●●○○  79% ⟳ 03/23 10:00
 extra   ○○○○○○○○○○ $0.00/$50.00
@@ -258,7 +258,7 @@ extra   ○○○○○○○○○○ $0.00/$50.00
 ### 方塊風格
 
 ```
-Opus 4.7 │ 43% (439k/1.0m) │ project (main*) │ 4h35m │ $42.84
+Opus 4.8 │ 43% (439k/1.0m) │ project (main*) │ 4h35m │ $42.84
 5h █░░░░░░░░░  12%  reset 19:00
 7d ████████░░  79%  reset 03/23
 ```

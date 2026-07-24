@@ -22,8 +22,8 @@ origin: ECC
 自動為簡單任務選擇便宜模型，複雜任務才用貴的模型。
 
 ```python
-MODEL_SONNET = "claude-sonnet-4-6"
-MODEL_HAIKU = "claude-haiku-4-5-20251001"
+MODEL_SONNET = "claude-sonnet-5"
+MODEL_HAIKU = "claude-haiku-4-5"
 
 _SONNET_TEXT_THRESHOLD = 10_000  # 字元數
 _SONNET_ITEM_THRESHOLD = 30     # 項目數
@@ -151,13 +151,16 @@ def process(text: str, config: Config, tracker: CostTracker) -> tuple[Result, Co
     return parse_result(response), tracker
 ```
 
-## 定價參考（2025-2026）
+## 定價參考（2026-07，實際請以官方定價頁為準）
 
-| 模型 | 輸入 ($/1M tokens) | 輸出 ($/1M tokens) | 相對成本 |
-|------|--------------------|--------------------|----------|
-| Haiku 4.5 | $0.80 | $4.00 | 1x |
-| Sonnet 4.6 | $3.00 | $15.00 | ~4x |
-| Opus 4.7 | $15.00 | $75.00 | ~19x |
+| 模型 | Model ID | 輸入 ($/1M tokens) | 輸出 ($/1M tokens) | 相對成本 |
+|------|----------|--------------------|--------------------|----------|
+| Haiku 4.5 | `claude-haiku-4-5` | $1.00 | $5.00 | 1x |
+| Sonnet 5 | `claude-sonnet-5` | $3.00 | $15.00 | ~3x |
+| Opus 4.8 | `claude-opus-4-8` | $5.00 | $25.00 | ~5x |
+| Fable 5 | `claude-fable-5` | $10.00 | $50.00 | ~10x |
+
+> 注意：Claude 5 家族（Fable 5 / Sonnet 5 / Opus 4.8/4.7）已移除 `temperature`/`top_p`/`top_k` 與 `budget_tokens`（送出會 400）；thinking 一律用 `{"type": "adaptive"}`。路由程式碼若帶這些參數需分模型處理。
 
 ## 最佳實踐
 
