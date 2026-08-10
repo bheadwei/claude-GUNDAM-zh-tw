@@ -35,15 +35,27 @@ description: 分析當前 session 並擷取值得保存的可重用模式作為�
 - 做出的架構決策
 - 整合模式
 
-## 輸出格式
+## 輸出格式（兩種，先問使用者選哪個）
 
-建立技能檔案於 `.claude/skills/learned/[模式名稱].md`:
+> **重要**：舊版把檔案寫到 `.claude/skills/learned/[名稱].md`，
+> 那**不是合法的 skill 格式**（skill 必須是 `skills/<name>/SKILL.md` 且帶 frontmatter），
+> 因此永遠不會被索引或載入，實質只是筆記卻佔著 skills 命名空間。已修正為下列兩種。
+
+用 `AskUserQuestion` 問一題：這個發現要成為**可載入的 skill**，還是**查閱用筆記**？
+
+### 選項 A：真 skill（模式夠通用、未來會想自動觸發）
+
+建立 `.claude/skills/<kebab-name>/SKILL.md`：
 
 ```markdown
+---
+name: <kebab-name>
+description: <一句話說明內容>。Use when <明確的觸發條件——寫成情境導向，不是內容摘要>。
+---
+
 # [描述性模式名稱]
 
 **擷取日期:** [日期]
-**情境:** [簡述此模式何時適用]
 
 ## 問題
 [此模式解決什麼問題 - 要具體]
@@ -53,22 +65,28 @@ description: 分析當前 session 並擷取值得保存的可重用模式作為�
 
 ## 範例
 [適用時附上程式碼範例]
-
-## 使用時機
-[觸發條件 - 什麼情況應啟動此技能]
 ```
+
+寫完後**更新 `.claude/skills/INDEX.md`** 加一行，否則沒人知道它存在。
+
+### 選項 B：專案筆記（一次性排錯心得、專案特有慣例）
+
+建立 `.claude/context/learned/[kebab-name].md`，格式自由，開頭寫明擷取日期與情境。
+不需 frontmatter，不會被當 skill 載入——需要時由人或 agent 主動去讀。
 
 ## 流程
 
 1. 審查 session 中可擷取的模式
 2. 識別最有價值/可重用的洞察
-3. 撰寫技能檔案草稿
-4. 請使用者確認後再儲存
-5. 儲存至 `.claude/skills/learned/`
+3. 用 `AskUserQuestion` 問要 skill 還是筆記
+4. 撰寫草稿並請使用者確認後再儲存
+5. 若為 skill，同步更新 `skills/INDEX.md`
 
 ## 注意事項
 
 - 不擷取瑣碎修復（打字錯誤、簡單語法錯誤）
 - 不擷取一次性問題（特定 API 中斷等）
 - 專注於能在未來 session 節省時間的模式
-- 保持技能聚焦 -- 一個模式一個技能
+- 保持聚焦 -- 一個模式一個檔案
+- **skill 的 `description` 決定它會不會被想起來**——寫觸發條件，不要寫內容摘要。
+  「PostgreSQL 索引知識」是壞的；「Use when 設計 schema 或查詢變慢時」是好的

@@ -7,7 +7,7 @@ description: 單頁深化：讀 IA 契約 + Q&A 補細節 → 生成符合風格
 
 **相關規範：**
 
-- `.claude/rules/ui-design.md`（強制三階段檢查）
+- `ui-style-compliance` skill（強制三階段檢查）
 - `.claude/rules/interactive-qa.md`（一次一題 Q&A）
 
 ## 使用方式
@@ -24,7 +24,7 @@ description: 單頁深化：讀 IA 契約 + Q&A 補細節 → 生成符合風格
 
 ### 1. 前置檢查
 
-#### 1.1 風格載入（參 `rules/ui-design.md` 階段 1）
+#### 1.1 風格載入（參 `ui-style-compliance` skill 階段 1）
 
 ```
 Read .claude/taskmaster-data/ui-style.json
@@ -124,7 +124,7 @@ Read .claude/ui/<codename>/DESIGN.md
 - 風格確認（DESIGN.md 關鍵規範）
 - 響應式需求
 
-agent 會嚴格遵循 `.claude/rules/ui-design.md` 的三階段檢查。
+agent 會嚴格遵循 `ui-style-compliance` skill 的三階段檢查。
 
 ### 5. 後處理
 

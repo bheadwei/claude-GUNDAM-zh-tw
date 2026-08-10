@@ -33,12 +33,6 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
   阻塞:   [X] 個
   進度:   [=====-----] X%
 
-VibeCoding 模板合規:
-  05_architecture_and_design_document.md    [通過]
-  07_module_specification_and_tests.md      [待檢查]
-  08_project_structure_guide.md             [通過]
-  13_security_and_readiness_checklists.md   [待檢查]
-
 任務清單:
   [完成] 1.1 專案初始化                          Plan: —
   [完成] 1.2 需求分析                            Plan: —
@@ -49,6 +43,9 @@ VibeCoding 模板合規:
 
 下一步建議: /task-next
 ```
+
+> 本指令**不做模板合規檢查**（那是 `/template-check` 的職責）。
+> 只在需要時於「下一步建議」附帶提示。
 
 ### Plan 進度符號
 
@@ -91,4 +88,4 @@ VibeCoding 模板合規:
 /task-status --metrics    # 含效能指標和時間追蹤
 ```
 
-**相關規範：** `.claude/rules/plan-persistence.md`
+**相關規範：** `plan-format` skill

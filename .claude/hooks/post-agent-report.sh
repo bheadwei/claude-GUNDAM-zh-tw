@@ -36,7 +36,21 @@ case "$AGENT_NAME" in
     security-infrastructure-auditor)  AREA="security" ;;
     test-automation-engineer)         AREA="testing" ;;
     e2e-validation-specialist)        AREA="e2e" ;;
+    planner)                          AREA="planning" ;;
+    architect)                        AREA="decisions" ;;
+    tdd-guide)                        AREA="testing" ;;
+    refactor-cleaner)                 AREA="quality" ;;
+    ui-builder)                       AREA="quality" ;;
+    deployment-expert)                AREA="deployment" ;;
 esac
+
+# quick 模式下 tdd-guide 刻意不寫報告（小任務不值得這開銷）→ 不稽核，避免假警報
+if [ "$AGENT_NAME" = "tdd-guide" ]; then
+    TM_FILE="$CLAUDE_DIR/taskmaster-data/.current-task-mode"
+    if [ -f "$TM_FILE" ] && [ "$(tr -d '[:space:]' < "$TM_FILE" 2>/dev/null)" = "quick" ]; then
+        AREA=""
+    fi
+fi
 
 if [ -n "$AREA" ]; then
     CONTEXT_DIR="$CLAUDE_DIR/context/$AREA"

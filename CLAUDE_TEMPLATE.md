@@ -28,7 +28,7 @@
 初始化後的專案應遵循：
 - 跨 session 技術發現 → `.claude/context/<area>/`（agent 自動寫入）
 - 跨 session 工作交接 → `.claude/sessions/`（`/save-session` 手動）
-- 可重用 pattern → `.claude/skills/learned/`（`/learn` 手動）
+- 可重用 pattern → `.claude/skills/<name>/SKILL.md` 或 `.claude/context/learned/`（`/learn` 手動二選一）
 - **不使用** Auto-memory（`~/.claude/projects/.../memory/`），所有記憶留在專案內
 
 詳見 `.claude/guides/MECHANISMS.md`。

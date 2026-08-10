@@ -88,7 +88,7 @@ description: 專案初始化，建立 WBS 任務清單、分析複雜度、選�
    
    **完整流程：** 直接呼叫 `/ui-style` 指令完整流程
    
-   **稍後設定：** 不建立 `ui-style.json`，前端任務將使用 `rules/ui-design.md` 的 fallback 預設風格
+   **稍後設定：** 不建立 `ui-style.json`，前端任務將使用 `ui-style-compliance` skill 的 fallback 預設風格
 
 ### 步驟 2.6: Package Manager 選擇（條件式）
 
@@ -111,7 +111,7 @@ description: 專案初始化，建立 WBS 任務清單、分析複雜度、選�
 
    **bun / pnpm / npm：** 直接呼叫 `/pm-choose` 完成完整流程（含 lock 檔偵測與衝突處理），或簡化為直接 Write `package-manager.json`（若無 lock 檔衝突）
    
-   **稍後設定：** 不建立 `package-manager.json`，第一次需要跑 Node 指令時會由 `rules/package-manager.md` 自動觸發 `/pm-choose`
+   **稍後設定：** 不建立 `package-manager.json`，第一次需要跑 Node 指令時會由 `node-package-manager` skill 自動觸發 `/pm-choose`
 
 ### 步驟 3: 確認設定
 

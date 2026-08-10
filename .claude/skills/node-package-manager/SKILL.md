@@ -1,6 +1,11 @@
+---
+name: node-package-manager
+description: Node.js 專案的 package manager（bun/pnpm/npm）由使用者在專案層決定並寫入設定檔，Claude 不自選。含指令對照表、lock 檔衝突偵測與原生模組 fallback。MUST BE USED before running any npm/pnpm/bun/npx/bunx command, before install/run/test/audit on a Node project, or before touching package.json, node_modules, or any lockfile.
+---
+
 # Package Manager 規則（Node.js 生態）
 
-Node.js / 前端專案的 package manager（套件管理器）選擇由使用者決定，寫入專案設定檔後強制執行。本規則定義選擇、儲存、讀取、切換的全流程。
+Node.js / 前端專案的 package manager 選擇由使用者決定，寫入專案設定檔後強制執行。
 
 ## 🚨 CRITICAL：執行任何 Node 指令前必檢
 
@@ -17,7 +22,8 @@ Node.js / 前端專案的 package manager（套件管理器）選擇由使用者
 1. **檔案存在** → 讀取 `manager` 欄位，一律用該 PM 的指令語法（見下方對照表）
 2. **檔案不存在** → 觸發 `/pm-choose` 指令詢問使用者，寫入後再繼續
 
-**例外**：使用者在當次請求中**明確**指定 PM（例："用 pnpm 裝 react"）→ 尊重當次選擇，但提醒其與設定檔不符並詢問是否更新設定
+**例外**：使用者在當次請求中**明確**指定 PM（例：「用 pnpm 裝 react」）→ 尊重當次選擇，
+但提醒其與設定檔不符並詢問是否更新設定。
 
 ---
 
@@ -63,7 +69,7 @@ Node.js / 前端專案的 package manager（套件管理器）選擇由使用者
 
 ### 偵測 lock 檔衝突
 
-執行 `<pm> install` 前，若專案內出現**多個** lock 檔（例：同時有 `package-lock.json` 和 `bun.lock`），**停止**並提示使用者：
+執行 `<pm> install` 前，若專案內出現**多個** lock 檔，**停止**並提示使用者：
 
 ```
 ⚠️ 偵測到 lock 檔衝突：
@@ -94,7 +100,8 @@ Node.js / 前端專案的 package manager（套件管理器）選擇由使用者
 
 ### 原生模組 fallback
 
-若 `bun install` 或 `pnpm install` 因原生模組失敗（如 `sharp`、`canvas`、`node-gyp` 編譯錯），可臨時用 `npm install <該套件>` 繞過，但**必須**：
+若 `bun install` 或 `pnpm install` 因原生模組失敗（如 `sharp`、`canvas`、`node-gyp` 編譯錯），
+可臨時用 `npm install <該套件>` 繞過，但**必須**：
 
 1. 在設定檔 `reason` 欄位追加 TODO 備註
 2. 在 commit message 說明原因
@@ -102,13 +109,9 @@ Node.js / 前端專案的 package manager（套件管理器）選擇由使用者
 
 ---
 
-## 與其他規則的協作
+## 模板預設
 
-- **Python uv 規則**（`development-workflow.md`）處理 Python；本規則處理 Node.js，兩者互不覆蓋
-- **UI 風格規則**（`ui-design.md`）在建立前端專案時應確保本規則已執行
-- **Pencil 設計規則**（`pencil-design-location.md`）不受本規則影響（不跑 Node 指令）
-
----
+新專案優先推薦 `bun`（速度與 DX 最佳），但**必須透過 `/pm-choose` 讓使用者確認**，不可略過。
 
 ## 相關指令
 

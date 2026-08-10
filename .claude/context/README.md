@@ -24,9 +24,10 @@
 
 ```
 context/
-├── decisions/     # 主 Agent 技術決策記錄
+├── decisions/     # 主 Agent + architect 的技術決策記錄（ADR）
+├── planning/      # planner 報告
 ├── quality/       # code-quality-specialist 報告
-├── testing/       # test-automation-engineer 報告
+├── testing/       # tdd-guide + test-automation-engineer 報告
 ├── e2e/          # e2e-validation-specialist 報告
 ├── security/      # security-infrastructure-auditor 報告
 ├── deployment/    # deployment-expert 報告
@@ -40,8 +41,11 @@ context/
 範例: `ADR-2025-09-23-001-database-selection.md`
 
 ### Agent 報告
-格式: `{agent-name}-report-{YYYY-MM-DD-HHMM}.md`
-範例: `code-quality-specialist-report-2025-09-23-1530.md`
+格式: `{agent-name}-{YYYY-MM-DD-HHMM}.md`
+範例: `code-quality-specialist-2026-08-10-1530.md`
+
+> 同一領域可有多個 agent 寫入（例如 `testing/` 由 tdd-guide 與 test-automation-engineer
+> 共用），靠檔名的 agent 前綴區分，彼此互讀。
 
 ## 各目錄職責
 
@@ -50,6 +54,12 @@ context/
 - **內容**: 系統架構決策、技術選型、跨領域決策
 - **格式**: ADR (Architecture Decision Record)
 - **更新頻率**: 按需要，重大決策時
+
+### planning/
+- **負責 Agent**: planner
+- **內容**: 實作計畫摘要、階段拆解依據、識別的風險與技術依賴
+- **格式**: 標準化報告（計畫本體另存 `taskmaster-data/plans/`，此處只放給下游 agent 的摘要）
+- **更新頻率**: 每次 `/plan` 完成後
 
 ### quality/
 - **負責 Agent**: code-quality-specialist

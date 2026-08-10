@@ -39,7 +39,8 @@
 
 ## 注意事項
 
-- **不要重複** `.claude/rules/` 已包含的規則（不可變性、80% 覆蓋率、commit 規則等）
+- **不要重複** `.claude/rules/` 已包含的規則（不可變性、任務分級、commit 規則等）
+  或 `.claude/skills/` 的按需知識（測試門檻、UI 風格、套件管理、plan 格式）
   rules 會自動載入，CLAUDE.md 不需要再列一次
 - CLAUDE.md 應該專注於**該專案獨有**的資訊：技術棧、資料模型、外部 API、領域術語
 - 通用最佳實踐應留在 rules，不要放 CLAUDE.md

@@ -12,7 +12,7 @@ description: 選擇專案的 Node.js package manager（bun / pnpm / npm），寫
 
 - 使用者主動執行 `/pm-choose`
 - `/task-init` 偵測到前端需求時自動呼叫
-- `.claude/rules/package-manager.md` 偵測到要執行 Node 指令但設定檔不存在時自動呼叫
+- `node-package-manager` skill 偵測到要執行 Node 指令但設定檔不存在時自動呼叫
 
 ---
 
@@ -108,7 +108,7 @@ description: 選擇專案的 Node.js package manager（bun / pnpm / npm），寫
   - 執行測試：<pm test 指令>
 
 想切換？執行 /pm-switch
-完整規則：.claude/rules/package-manager.md
+完整規則：`node-package-manager` skill
 ```
 
 ---
