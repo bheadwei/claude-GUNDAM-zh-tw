@@ -125,7 +125,7 @@ Plan 獨有的技術層面依賴，非 WBS 的任務依賴：
 
 - [ ] 所有階段狀態為 ✅
 - [ ] 測試覆蓋率達門檻（見 `testing-standards` skill）
-- [ ] `/review-code` 無 CRITICAL/HIGH 問題
+- [ ] `/code-review` 無 CRITICAL/HIGH 問題
 - [ ] 已更新 WBS 任務為 ✅
 ```
 

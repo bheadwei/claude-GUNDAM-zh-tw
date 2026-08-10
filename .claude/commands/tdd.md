@@ -19,7 +19,7 @@ description: 強制執行測試驅動開發工作流，會自動載入當前任�
 判定後：
 
 - **`quick`** → 進入 Fast Lane（見下方）
-- **`critical`** → 進入 Strict Lane：100% 覆蓋率，且階段完成前必須執行 `/review-code`
+- **`critical`** → 進入 Strict Lane：100% 覆蓋率，且階段完成前必須執行 `/code-review`
 - **`standard`** → 走下方標準流程
 
 ### Fast Lane（quick 模式）
@@ -142,6 +142,6 @@ npm run test:coverage
 /plan             規劃並寫入 plans/<id>-<slug>.md
 /tdd              自動載入當前 plan，按階段 TDD 推進
 /build-fix        建置錯誤修復
-/review-code      程式碼審查
+/code-review      程式碼審查
 /verify           驗證覆蓋率與整體驗收標準 → 標 WBS 為 ✅
 ```

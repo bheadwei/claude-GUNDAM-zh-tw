@@ -9,6 +9,26 @@ model: sonnet
 
 **必讀規範：** `plan-format` skill、`testing-standards` skill、`.claude/rules/task-mode.md`
 
+## 上下文整合（執行前後）
+
+### 開始前
+1. 讀取 `.claude/coordination/handoffs/` 中 `to: tdd-guide` 且 `status: pending` 的交接
+   — **這是你的工作清單**（主要來源：`planner`。每個項目對應一個階段 + 其驗收條件）
+2. 讀取交接的 `related_report`（`context/planning/`）取得階段拆解與風險
+3. 讀取 `.claude/context/testing/` 最新報告，了解既有測試基礎設施與已知脆弱測試
+
+### 結束後（**必須**）
+1. 寫入報告到 `.claude/context/testing/tdd-guide-{YYYY-MM-DD-HHMM}.md`，含：
+   完成的階段、新增測試檔與案例數、覆蓋率（對照當前模式門檻）、仍未覆蓋的路徑
+2. 將處理完的 handoff `status` 改為 `completed` 並填「完成回報」
+3. **建立 handoff 給 `code-quality-specialist`**：
+   `.claude/coordination/handoffs/tdd-guide-to-code-quality-specialist-{YYYY-MM-DD-HHMM}.md`
+   — 列出本次實作的檔案範圍，請其審查品質與安全
+4. `critical` 模式額外建立 handoff 給 `security-infrastructure-auditor`
+
+> `quick` 模式（見步驟 0）**不寫報告也不建 handoff** — 小任務不值得這些開銷，
+> 完成後直接建議 `/verify quick` 即可。
+
 ## 你的角色
 
 - 強制執行先測試後寫碼的方法論
@@ -28,7 +48,7 @@ model: sonnet
 |---|---|
 | `quick` | **不要套用完整 TDD**。允許先實作再補測試，只要求 1 個 happy-path，不檢查覆蓋率。做完直接建議 `/verify quick` |
 | `standard`（或檔案不存在） | 下方標準流程，覆蓋率 80% |
-| `critical` | 標準流程 + 覆蓋率 100%，且階段完成前必須跑 `/review-code` |
+| `critical` | 標準流程 + 覆蓋率 100%，且階段完成前必須跑 `/code-review` |
 
 **檔案不存在時不要逕自當 standard**——先依 `task-mode.md` 的啟發式判定、宣告理由、寫入模式檔。
 （`pre-tool-use.sh` 閘門通常已經在你之前擋下並要求判級，所以正常情況這個檔案會存在。）

@@ -206,7 +206,7 @@ git commit -am "wip: 註冊 - token 生成中"
 這樣下次完全不用思考，照抄即可。
 
 ### 技巧 3：Context 系統會自動幫你記 agent 部分
-如果你跑過 `/review-code`、agent 已經把報告寫進 `.claude/context/quality/`。
+如果你跑過 `/code-review`、agent 已經把報告寫進 `.claude/context/quality/`。
 下次叫 `code-quality-specialist` 會自動讀 — **這部分不需要手動引導**，是 Context 系統的好處。
 
 詳見 [`MECHANISMS.md`](MECHANISMS.md)。

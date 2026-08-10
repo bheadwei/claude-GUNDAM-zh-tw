@@ -8,7 +8,7 @@
 |---|---|---|---|
 | `quick` | < 30min ・ 單檔 ・ 文案/樣式/小 bug ・ 設定調整 | 直接寫 → `/verify quick` | 不檢查 |
 | `standard` | 1-4h ・ 跨檔 ・ 新增功能 ・ 重構 | `/plan` → `/tdd` → `/verify` | 80% |
-| `critical` | 金流 ・ 認證 ・ 安全 ・ migration ・ 核心商業邏輯 | `/plan`（必要）→ `/tdd` → `/review-code` → `/verify pre-pr` | 100% |
+| `critical` | 金流 ・ 認證 ・ 安全 ・ migration ・ 核心商業邏輯 | `/plan`（必要）→ `/tdd` → `/code-review` → `/verify pre-pr` | 100% |
 
 ## 自動分級啟發式
 
@@ -53,7 +53,7 @@
 | 指令 | 行為差異 |
 |---|---|
 | `/plan` | quick 跳過；standard 依門檻（跨 ≥2 檔 或 ≥1h）；critical 一律需要 |
-| `/tdd` | quick 走 Fast Lane（不強制 test-first、不檢查覆蓋率）；standard 標準流程；critical 加 `/review-code` |
+| `/tdd` | quick 走 Fast Lane（不強制 test-first、不檢查覆蓋率）；standard 標準流程；critical 加 `/code-review` |
 | `/verify` | quick → `verify quick`；standard → `verify full`；critical → `verify pre-pr` |
 
 覆蓋率門檻的唯一來源是 `testing-standards` skill，不在其他地方重述。

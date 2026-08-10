@@ -61,10 +61,14 @@
 
 | 元件 | 角色 |
 |---|---|
-| `/review-code` command | 完整 code review 入口 |
+| `/code-review`（**Claude Code 內建**） | 程式碼審查入口，支援 `ultra` 多 agent 雲端審查、`--fix`、`--comment`、指定 PR/分支 |
+| `/template-check` command | VibeCoding 模板合規（21 個範本） |
 | `/check-quality` command | 品質評估 + agent 推薦 |
 | `code-quality-specialist` agent | 審查程式碼可維護性 |
 | `security-infrastructure-auditor` agent | 審查安全漏洞 |
+
+> 本模板**不自建** code review 指令——內建的 `/code-review` 功能更完整。
+> 舊有的 `/review-code` 已刪除（它名為審查、內容其實是模板合規清單，職責歸 `/template-check`）。
 
 ### 規劃領域
 
@@ -84,7 +88,7 @@
 
 | 類型 | 命名 | 範例 |
 |---|---|---|
-| Command | 動詞或動賓 | `/plan`、`/review-code` |
+| Command | 動詞或動賓 | `/plan`、`/check-quality`（避開內建指令名） |
 | Skill | 名詞 + workflow/patterns | `deep-research`、`e2e-testing` |
 | Agent | 角色名 + specialist/expert/guide | `code-quality-specialist`、`tdd-guide` |
 | Hook | 事件 + 動作 | `post-write.sh`、`session-start.sh` |

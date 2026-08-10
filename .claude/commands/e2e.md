@@ -77,4 +77,4 @@ npx playwright show-report
 - 用 `/plan` 識別要測試的關鍵旅程
 - 用 `/tdd` 做單元測試（更快、更細粒度）
 - 用 `/e2e` 做整合和使用者旅程測試
-- 用 `/review-code` 驗證測試品質
+- 用 `/code-review` 驗證測試品質

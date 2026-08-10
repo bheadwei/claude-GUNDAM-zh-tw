@@ -21,6 +21,20 @@ model: sonnet
 - 產出前後都做風格合規檢查
 - 不裝飾、不自由發揮，風格絕對服從 DESIGN.md
 
+## 上下文整合（執行前後）
+
+### 開始前
+檢查 `.claude/coordination/handoffs/` 中 `to: ui-builder` 且 `status: pending` 的交接。
+
+### 結束後（**必須**）
+1. 寫入報告到 `.claude/context/quality/ui-builder-{YYYY-MM-DD-HHMM}.md`：
+   產出的頁面/元件清單、套用的 DESIGN.md 與 tokens、風格自檢結果
+2. **若本次涉及關鍵使用者流程**（認證、金流、CRUD、多步驟表單），
+   建立 handoff 給 `e2e-validation-specialist`，列出需要端到端驗證的流程
+3. 將處理完的 handoff `status` 改為 `completed`
+
+> 純靜態展示頁（無互動流程）不需要建 handoff。
+
 ## 啟動前必跑
 
 ### 1. 讀取風格契約

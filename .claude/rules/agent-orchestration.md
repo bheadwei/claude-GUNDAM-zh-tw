@@ -35,6 +35,18 @@
 
 > Hook 只能注入提示，無法直接啟動 agent。**主模型是執行者**——看到 pending handoff 且符合當前目標時要主動接手。
 
+### 哪些 agent 實作了接力
+
+**會寫報告 + 建 handoff（10）**：planner、architect、tdd-guide、code-quality-specialist、
+test-automation-engineer、security-infrastructure-auditor、e2e-validation-specialist、
+deployment-expert、refactor-cleaner、ui-builder
+
+**終端節點，不建 handoff（4）**：build-error-resolver（單點修完即止）、
+documentation-specialist、workflow-template-manager、general-purpose
+
+也就是說上表所有鏈的**每一棒都會自動交接**，主模型只需在收到注入提示時啟動下一棒。
+`quick` 模式例外——tdd-guide 在 quick 下不寫報告也不建 handoff（小任務不值得這些開銷）。
+
 ## 反模式（避免）
 
 - ❌ `quick` 小修改卻啟動 planner + tdd-guide 全套

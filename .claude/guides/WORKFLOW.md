@@ -47,7 +47,7 @@
 │ quick     直接寫 → /verify quick    │  跳過 plan 與 TDD
 │ standard  /plan → /tdd → /verify    │  覆蓋率 80%
 │ critical  /plan（必要）→ /tdd        │  覆蓋率 100%
-│           → /review-code            │
+│           → /code-review            │
 │           → /verify pre-pr          │
 └─────────────────────────────────────┘
    ▼
@@ -82,7 +82,7 @@ PreToolUse 閘門攔截（.current-task-mode 不存在）
 
 ```bash
 /verify pre-pr      # 完整檢查 + 安全掃描
-/review-code        # 需要時單獨跑審查
+/code-review        # 需要時單獨跑審查
 /deploy             # 部署（強制先過 security 閘門）
 /time-log           # 開發時間報表
 /save-session       # 儲存 session 狀態
@@ -160,7 +160,7 @@ PreToolUse 閘門攔截（.current-task-mode 不存在）
 | `/plan [wbs-id]` | 規劃 → 寫入 `plans/<id>-<slug>.md` |
 | `/tdd [mode]` | TDD 推進，自動載入 plan 按階段執行 |
 | `/build-fix` | 修復建置/型別錯誤 |
-| `/review-code` | 程式碼審查 |
+| `/code-review` | 程式碼審查 |
 | `/e2e` | E2E 測試 |
 | `/verify [profile]` | 驗證（`quick`/`full`/`pre-commit`/`pre-pr`） |
 | `/deploy` | 部署（先過安全閘門） |
@@ -193,10 +193,12 @@ PreToolUse 閘門攔截（.current-task-mode 不存在）
 
 誠實標註，避免以為它會自己動：
 
-1. **agent handoff 鏈只有 5/14 實作** —— `planner`、`tdd-guide`、`architect` 等 9 個
-   agent 不寫也不讀 handoff，所以 `planner → tdd-guide` 那段仍需主模型手動接棒。
-2. **品質指令重疊** —— `/review-code`、`/check-quality`、`/template-check`、
-   `/task-status` 四處都碰模板合規；`/review-code` 的內容其實是模板清單而非審查清單。
+1. ~~agent handoff 鏈只有 5/14 實作~~ —— **已修**。現為 10/14，
+   `agent-orchestration.md` 表列的每條鏈都會自動交接；其餘 4 個是終端節點，本就不需要。
+   仍需注意：hook 只能**注入提示**，實際啟動下一棒的是主模型，不是全自動。
+2. **模板合規仍散在三處** —— `/template-check`（正主）、`/check-quality`（第 5 項）、
+   `/task-status`（輸出區塊）。原本名實不符的 `/review-code` 已刪除，程式碼審查
+   統一走內建 `/code-review`，但另外兩處的重述尚未收斂。
 3. **`/learn` 的產出不是合法 skill 格式** —— 寫進 `skills/learned/` 但缺 frontmatter，
    不會被索引，實質只是筆記。
 4. **skill 召回不是硬保證** —— rules 搬成 skill 後改為「要被想起來才載入」，
