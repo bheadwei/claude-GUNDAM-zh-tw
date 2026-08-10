@@ -86,6 +86,11 @@ if [ "$SUGGEST_MODE" != "low" ]; then
     if has 'test|測試|coverage|覆蓋率|pytest|jest|vitest'; then
         add "偵測到測試相關 → **先載入 \`testing-standards\` skill** 確認當前任務模式的覆蓋率門檻（quick 免檢）。"
     fi
+    # 新增功能 → 提醒先補 WBS 那一行，否則 plan 會被迫兼差當 backlog
+    if [ -f "$CLAUDE_DIR/taskmaster-data/wbs.md" ] \
+       && has '新增功能|加功能|加一個功能|再加|還想做|想加|新功能|追加|擴充功能|下一階段|第二階段'; then
+        add "偵測到「新增功能」→ 建議先用 **/task-add** 把它追加進 WBS（自動拆解、接編號、算依賴），再走 /plan。直接跳 /plan 會讓 WBS 漏掉這筆，之後進度與時間統計會失真。"
+    fi
 fi
 
 # low 模式且非高訊號 → 不注入

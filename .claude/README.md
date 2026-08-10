@@ -17,7 +17,7 @@
 │   ├── PAUSE_RESUME_GUIDE.md  # 暫停/恢復 SOP
 │   └── STATUSLINE_GUIDE.md    # StatusLine 客製化手冊
 ├── agents/       (13 個)      # 專業 Agent 定義
-├── commands/     (24 個)      # Slash Command
+├── commands/     (25 個)      # Slash Command
 ├── rules/        ( 6 個)      # 自動載入規則
 ├── skills/       (12 個)      # 專案特定領域知識
 ├── hooks/                     # Hook 腳本庫
