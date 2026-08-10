@@ -42,10 +42,14 @@
 | 系統 | 位置 | 內容 | 觸發 |
 |---|---|---|---|
 | **Context** | `.claude/context/` | Agent 結構化技術發現 | Agent wiring |
+| **/adr** | `.claude/context/decisions/` | **決策與理由**——為什麼選 A 不選 B、否決過什麼 | `/adr` 手動；planner 完成時提議 |
 | **save-session** | `.claude/sessions/` | Session 進度快照 | `/save-session` 手動 |
-| **/learn** | `.claude/skills/<name>/SKILL.md`（真 skill）<br>或 `.claude/context/learned/`（筆記） | 可重用 pattern | `/learn` 手動，二選一 |
-| **TaskMaster** | `.claude/taskmaster-data/` | WBS、時間紀錄 | hook 自動 |
+| **/learn** | `.claude/skills/<name>/SKILL.md`（真 skill）<br>或 `.claude/context/learned/`（筆記） | 可重用 pattern（know-how） | `/learn` 手動，二選一 |
+| **TaskMaster** | `.claude/taskmaster-data/` | WBS（活躍）+ `wbs-archive.md`（已歸檔里程碑）、時間紀錄 | hook 自動 + `/verify` 提議歸檔 |
 | **logs** | `.claude/logs/` | 活動 log | hook 自動 |
+
+四者容易混淆，一句話區分：
+**ADR = 為什麼這樣決定 ・ learn = 怎麼做到 ・ session = 做到哪 ・ context = 觀察到什麼**
 
 ## 5. 職責邊界
 

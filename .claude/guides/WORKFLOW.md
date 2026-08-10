@@ -119,15 +119,28 @@ PreToolUse 閘門攔截（.current-task-mode 不存在）
 
 ---
 
-## Phase 2：收尾
+## Phase 2：收尾與交付
 
 ```bash
 /verify pre-pr      # 完整檢查 + 安全掃描
-/code-review        # 需要時單獨跑審查
+/code-review        # 需要時單獨跑審查（Claude Code 內建）
+/pr                 # 開 PR：分析完整 commit 歷史 + 測試計畫，可選先跑把關鏈
 /deploy             # 部署（強制先過 security 閘門）
 /time-log           # 開發時間報表
 /save-session       # 儲存 session 狀態
 ```
+
+## 定期維護（不綁任務循環）
+
+```bash
+/deps               # 依賴維護：分批升級，每批測試後才 commit
+/adr                # 記錄技術決策（為什麼選 A 不選 B）
+/refactor-clean     # 死碼清理
+/template-check     # 模板合規
+```
+
+`/deps` 建議每月或每個里程碑結束時跑，**不要在功能開發到一半跑**——
+會混淆「是我改壞的還是升級弄壞的」。
 
 ---
 
@@ -206,7 +219,10 @@ PreToolUse 閘門攔截（.current-task-mode 不存在）
 | `/code-review` | 程式碼審查 |
 | `/e2e` | E2E 測試 |
 | `/verify [profile]` | 驗證（`quick`/`full`/`pre-commit`/`pre-pr`） |
+| `/pr` | 建立 Pull Request（含把關與測試計畫） |
 | `/deploy` | 部署（先過安全閘門） |
+| `/deps` | 依賴維護（分批升級 + 每批測試） |
+| `/adr` | 記錄技術決策與被否決的方案 |
 
 ### 環境設定
 

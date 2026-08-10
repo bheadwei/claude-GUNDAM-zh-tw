@@ -96,6 +96,15 @@ if [ "$SUGGEST_MODE" != "low" ]; then
        && has '新增功能|加功能|加一個功能|再加|還想做|想加|新功能|追加|擴充功能|下一階段|第二階段'; then
         add "偵測到「新增功能」→ 建議先用 **/task-add** 把它追加進 WBS（自動拆解、接編號、算依賴），再走 /plan。直接跳 /plan 會讓 WBS 漏掉這筆，之後進度與時間統計會失真。"
     fi
+    if has 'pull request|開 pr|發 pr|送審|merge request|合併請求'; then
+        add "偵測到要開 PR → 用 **/pr**（分析完整 commit 歷史與 \`diff base...HEAD\`、可選先跑把關鏈、產出含測試計畫的內容）。"
+    fi
+    if has '升級套件|更新依賴|依賴升級|過期套件|outdated|npm audit|漏洞修復|dependabot|套件更新'; then
+        add "偵測到依賴維護 → 用 **/deps**（依風險分批：安全 → patch → minor → major，每批測試後才 commit；major 一次一個並先讀遷移指南）。"
+    fi
+    if has '要用哪個|選哪個|該用|哪個比較好|A 還是 B|決定用|技術選型|取捨|trade-?off'; then
+        add "偵測到技術選型 → 決定後建議用 **/adr** 記錄「為什麼選 A 不選 B」，含被否決的方案。否則下個 session 會重新爭論已經決定過的事。"
+    fi
 fi
 
 # low 模式且非高訊號 → 不注入
