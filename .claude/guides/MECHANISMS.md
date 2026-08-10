@@ -43,7 +43,7 @@
 |---|---|---|---|
 | **Context** | `.claude/context/` | Agent 結構化技術發現 | Agent wiring |
 | **save-session** | `.claude/sessions/` | Session 進度快照 | `/save-session` 手動 |
-| **/learn** | `.claude/skills/learned/` | 可重用 pattern | `/learn` 手動 |
+| **/learn** | `.claude/skills/<name>/SKILL.md`（真 skill）<br>或 `.claude/context/learned/`（筆記） | 可重用 pattern | `/learn` 手動，二選一 |
 | **TaskMaster** | `.claude/taskmaster-data/` | WBS、時間紀錄 | hook 自動 |
 | **logs** | `.claude/logs/` | 活動 log | hook 自動 |
 
