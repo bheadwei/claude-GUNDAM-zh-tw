@@ -203,6 +203,9 @@ expect_contains "有 WBS 時提示 /task-add"    "/task-add"             "$(run 
 reset
 expect_contains "執行期 bug → debug-investigator"  "debug-investigator" "$(run user-prompt-submit.sh "$(p '登入之後頁面沒反應，怪怪的')")"
 expect_contains "建置錯誤 → build-error-resolver"  "build-error-resolver" "$(run user-prompt-submit.sh "$(p 'tsc 型別錯誤修不掉')")"
+expect_contains "開 PR → /pr"                "/pr"                   "$(run user-prompt-submit.sh "$(p '幫我開 PR')")"
+expect_contains "依賴維護 → /deps"           "/deps"                 "$(run user-prompt-submit.sh "$(p '幫我升級套件')")"
+expect_contains "技術選型 → /adr"            "/adr"                  "$(run user-prompt-submit.sh "$(p 'Redux 還是 Zustand 比較好？要用哪個')")"
 
 reset; echo off > "$SM_FILE"
 expect_empty   "suggest-mode=off 不注入"     "$(run user-prompt-submit.sh "$(p '實作登入認證')")"
