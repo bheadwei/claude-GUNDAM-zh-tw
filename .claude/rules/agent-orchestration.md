@@ -17,7 +17,8 @@
 | 任務類型 | 建議鏈 |
 |---|---|
 | **新功能** | planner → **tdd-guide** → code-quality-specialist → test-automation-engineer →（critical 才）security-infrastructure-auditor |
-| **修 bug** | **tdd-guide（先寫重現測試）** → code-quality-specialist |
+| **修 bug（執行期行為不對）** | **debug-investigator（先重現再定根因）** →（critical 才交棒）tdd-guide → code-quality-specialist |
+| **修 bug（建置/型別錯誤）** | **build-error-resolver**（不需要調查，直接最小差異修） |
 | **重構 / 清理** | refactor-cleaner → code-quality-specialist → test-automation-engineer |
 | **建置 / 型別錯誤** | **build-error-resolver**（單點，修完即止） |
 | **前端 UI** | （/ui-style →）ui-builder →（關鍵流程才）e2e-validation-specialist |
@@ -38,9 +39,9 @@
 
 ### 哪些 agent 實作了接力
 
-**會寫報告 + 建 handoff（10）**：planner、architect、tdd-guide、code-quality-specialist、
+**會寫報告 + 建 handoff（11）**：planner、architect、tdd-guide、code-quality-specialist、
 test-automation-engineer、security-infrastructure-auditor、e2e-validation-specialist、
-deployment-expert、refactor-cleaner、ui-builder
+deployment-expert、refactor-cleaner、ui-builder、debug-investigator
 
 **終端節點，不建 handoff（3）**：build-error-resolver（單點修完即止）、
 documentation-specialist、workflow-template-manager

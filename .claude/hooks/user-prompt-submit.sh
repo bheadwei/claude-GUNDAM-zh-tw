@@ -74,6 +74,11 @@ if [ "$SUGGEST_MODE" != "low" ]; then
     if has 'build error|compile|編譯錯誤|型別錯誤|tsc|建置失敗|build failed'; then
         add "偵測到建置/型別錯誤 → 建議委派 build-error-resolver（最小差異修復）。"
     fi
+    # 執行期 bug —— 與上面的建置錯誤分流：這裡是「跑起來行為不對」
+    if has '壞了|不動了|沒反應|不work|不 work|怪怪的|為什麼會|怎麼會|異常|出錯|報錯|失敗了' \
+       || has 'bug|broken|not working|unexpected|crash|當掉|閃退|卡住|重現'; then
+        add "偵測到執行期 bug → 建議委派 **debug-investigator**（強制先穩定重現 → 二分縮小 → 可證偽假設 → 寫重現測試，才動手修）。建置/型別錯誤請改用 build-error-resolver。"
+    fi
     if has 'ui|前端|頁面|畫面|component|元件|tailwind|css|pencil|設計稿'; then
         add "偵測到前端 UI/設計稿 → **先載入 \`ui-style-compliance\` skill**（風格三階段檢查已從常駐 rules 移出）；可用 /ui-page 或委派 ui-builder。"
     fi

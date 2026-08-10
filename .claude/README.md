@@ -16,7 +16,7 @@
 │   ├── MCP_CONFIGS.md         # MCP Server 推薦清單
 │   ├── PAUSE_RESUME_GUIDE.md  # 暫停/恢復 SOP
 │   └── STATUSLINE_GUIDE.md    # StatusLine 客製化手冊
-├── agents/       (13 個)      # 專業 Agent 定義
+├── agents/       (14 個)      # 專業 Agent 定義
 ├── commands/     (25 個)      # Slash Command
 ├── rules/        ( 6 個)      # 自動載入規則
 ├── skills/       (12 個)      # 專案特定領域知識
@@ -31,7 +31,7 @@
     └── .current-task          # 當前進行中任務 ID
 ```
 
-## Agents（13 個）
+## Agents（14 個）
 
 | Agent | Model | 用途 |
 | :--- | :--- | :--- |
@@ -44,7 +44,8 @@
 | e2e-validation-specialist | sonnet | E2E 測試 |
 | refactor-cleaner | sonnet | 死碼清理 |
 | deployment-expert | sonnet | 部署運維 |
-| build-error-resolver | haiku | 建置修復 |
+| debug-investigator | sonnet | 執行期 bug 根因調查 |
+| build-error-resolver | haiku | 建置/型別錯誤修復 |
 | documentation-specialist | haiku | 文檔生成 |
 | workflow-template-manager | haiku | 模板管理 |
 | ui-builder | sonnet | 前端 UI 產出（嚴格遵循 DESIGN.md） |

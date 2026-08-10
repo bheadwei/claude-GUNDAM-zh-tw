@@ -26,7 +26,9 @@ description: 查看開發時間報表，按日期和 WBS 任務追蹤實際開�
 1. 讀取 `timelog.jsonl`，每行一筆 JSON
 2. 讀取 `.session-snapshot`（如果存在），加入當前 session 的即時數據
 3. 按日期分組彙總 `duration_ms` 和 `cost_usd`
-4. 如有 WBS 檔案（`wbs.md`），交叉比對任務名稱和預估時間
+4. 如有 WBS 檔案（`wbs.md`），交叉比對任務名稱和預估時間。
+   **在 `wbs.md` 找不到該任務編號時，再查一次 `wbs-archive.md`**——
+   已歸檔的任務仍有時間紀錄，不可顯示為「未分類」（歸檔規則見 `/task-status`）
 5. 輸出報表
 
 ## 輸出格式
