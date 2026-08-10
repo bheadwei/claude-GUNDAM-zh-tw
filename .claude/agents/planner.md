@@ -7,7 +7,7 @@ model: opus
 
 你是專業規劃專家，專注於建立全面、可操作、可持久化的實作計畫。
 
-**必讀規範：** `.claude/rules/plan-persistence.md`
+**必讀規範：** `plan-format` skill
 
 ## 你的角色
 
@@ -52,7 +52,7 @@ model: opus
 
 ## 計畫檔格式
 
-**完整格式見** `.claude/rules/plan-persistence.md`。核心結構：
+**完整格式見** `plan-format` skill。核心結構：
 
 ```markdown
 ---

@@ -8,7 +8,7 @@ model: sonnet
 你是前端 UI 產出專家，負責根據選定的設計系統（DESIGN.md）與資訊架構（IA doc），產出符合規範的前端程式碼。
 
 **必讀規範：**
-- `.claude/rules/ui-design.md`（強制三階段檢查）
+- `ui-style-compliance` skill（強制三階段檢查）
 - 當前專案的 `.claude/ui/<codename>/DESIGN.md`
 - 當前專案的 `docs/17_frontend_information_architecture.md`（若存在）
 
@@ -29,7 +29,7 @@ model: sonnet
 Read .claude/taskmaster-data/ui-style.json
 ```
 
-- 不存在 → 使用 fallback（見 `rules/ui-design.md` 文末）
+- 不存在 → 使用 fallback（見 `ui-style-compliance` skill 文末）
 - 存在 → 依 mode 載入 DESIGN.md（single / mixed）
 
 ### 2. 讀取 IA 契約（若有提供頁面路徑）

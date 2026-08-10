@@ -54,7 +54,7 @@ HIGH_SIGNAL=0  # 安全/金流等高訊號，low 模式也會顯示
 if has 'auth|login|oauth|jwt|session|password|認證|授權|登入|密碼' \
    || has 'payment|billing|stripe|checkout|金流|支付|付款|帳務'; then
     HIGH_SIGNAL=1
-    add "偵測到認證/金流關鍵字 → 建議任務模式 **critical**；實作後啟動 security-infrastructure-auditor，覆蓋率目標 100%。"
+    add "偵測到認證/金流關鍵字 → 建議任務模式 **critical**；critical 一律需要 /plan（見 plan-format skill），實作後啟動 security-infrastructure-auditor，覆蓋率目標 100%。"
 fi
 
 # --- migration / schema ---
@@ -74,8 +74,17 @@ if [ "$SUGGEST_MODE" != "low" ]; then
     if has 'build error|compile|編譯錯誤|型別錯誤|tsc|建置失敗|build failed'; then
         add "偵測到建置/型別錯誤 → 建議委派 build-error-resolver（最小差異修復）。"
     fi
-    if has 'ui|前端|頁面|畫面|component|元件|tailwind|css'; then
-        add "偵測到前端 UI → 可用 /ui-page 或委派 ui-builder（遵循 DESIGN.md tokens）。"
+    if has 'ui|前端|頁面|畫面|component|元件|tailwind|css|pencil|設計稿'; then
+        add "偵測到前端 UI/設計稿 → **先載入 \`ui-style-compliance\` skill**（風格三階段檢查已從常駐 rules 移出）；可用 /ui-page 或委派 ui-builder。"
+    fi
+    if has 'npm|pnpm|bun|yarn|package\.json|node_modules|lockfile|套件安裝'; then
+        add "偵測到 Node 套件操作 → **先載入 \`node-package-manager\` skill**，讀 package-manager.json 決定用哪個 PM，勿自選。"
+    fi
+    if has 'pip|poetry|uv |virtualenv|venv|pyproject|requirements\.txt'; then
+        add "偵測到 Python 環境操作 → **先載入 \`python-uv\` skill**（一律 uv，禁 pip/poetry）。"
+    fi
+    if has 'test|測試|coverage|覆蓋率|pytest|jest|vitest'; then
+        add "偵測到測試相關 → **先載入 \`testing-standards\` skill** 確認當前任務模式的覆蓋率門檻（quick 免檢）。"
     fi
 fi
 

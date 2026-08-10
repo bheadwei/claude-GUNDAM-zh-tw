@@ -9,7 +9,7 @@
 ├── README.md                # 本文件
 ├── session-start.sh         # SessionStart：模板偵測、時間歸檔、log 輪替
 ├── user-prompt-submit.sh    # UserPromptSubmit：/task-init 偵測 + 意圖路由注入
-├── pre-tool-use.sh          # PreToolUse(Write|Edit)：輕量 log
+├── pre-tool-use.sh          # PreToolUse(Write|Edit|Bash)：任務模式閘門 + TTL + 裸 cd 攔截
 ├── post-write.sh            # PostToolUse(Write)：WBS/檔案寫入記錄
 ├── agent-monitor.sh         # Pre/PostToolUse(Agent)：subagent 活動記錄
 ├── post-agent-report.sh     # PostToolUse(Agent)：報告稽核 + pending handoff 注入
@@ -25,7 +25,7 @@
 |---|---|---|
 | `session-start.sh` | `SessionStart` | 偵測 `CLAUDE_TEMPLATE.md` 顯示提示；歸檔上次 session 時間；**啟動時一次性輪替 log**；jq 缺失健檢 |
 | `user-prompt-submit.sh` | `UserPromptSubmit` | 偵測 `/task-init` 建資料夾；依關鍵字注入「建議任務模式 + 建議 agent 鏈」（受 `.suggest-mode` 控制） |
-| `pre-tool-use.sh` | `PreToolUse` `Write\|Edit` | 輕量記錄 tool 名到 `logs/hooks.log`（**已移除 Read**：高頻低價值） |
+| `pre-tool-use.sh` | `PreToolUse` `Write\|Edit\|MultiEdit\|Bash` | **模板唯一的硬閘門**：①寫程式碼檔前未判級 → `deny` 並要求先判級 ②模式檔逾 `TASKMODE_TTL_HOURS`（預設 8h）自動清除，解掉「verify 沒清 → 判級永久不觸發」的互鎖 ③裸 `cd` 攔截。逃生門：`.suggest-mode=off` 或 `TASKMODE_GATE=off` |
 | `post-write.sh` | `PostToolUse` `Write\|Edit` | WBS 更新寫歷史；記錄寫入/編輯事件（hook 內按路徑過濾） |
 | `agent-monitor.sh` | `Pre/PostToolUse` `Agent` | 記錄 subagent 啟動/完成（人類可讀 `agent-activity.log` + 結構化 `agent-activity.jsonl`） |
 | `post-agent-report.sh` | `PostToolUse` `Agent` | 稽核需寫報告的 agent；掃描 `coordination/handoffs/` 的 pending 交接並注入主對話（受 `.suggest-mode` 控制） |
@@ -67,7 +67,7 @@ export TASKMASTER_DEBUG=true
 3. **jq 可能缺失** — `command -v jq || exit 0` 軟降級，不阻擋。
 4. **效能** — hook 在主迴圈內同步執行；減少 process spawn（例如一次 jq 解析多欄位，而非逐欄呼叫）。
 5. **避免在高頻事件做重活** — `Read`、`Edit` 觸發極頻繁；一次性工作（如 log 輪替）放 `SessionStart`。
-6. **CWD 不污染** — 需要切目錄時用 subshell `(cd ... && ...)`（見 `.claude/rules/bash-cwd.md`）。
+6. **CWD 不污染** — 需要切目錄時用 subshell `(cd ... && ...)`（見 `.claude/hooks/pre-tool-use.sh`）。
 
 ---
 

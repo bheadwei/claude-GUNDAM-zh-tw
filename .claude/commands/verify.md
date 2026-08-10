@@ -58,14 +58,14 @@ Ready for PR: [YES/NO]
 
 1. 讀取 plan 檔的「驗收標準（整體）」checklist
 2. 逐項比對前面驗證結果：
-   - 「測試覆蓋率 ≥ 80%」→ 由步驟 4 結果填入
+   - 「測試覆蓋率達門檻」→ 由步驟 4 結果填入，門檻依任務模式（見 `testing-standards` skill）
    - 「所有階段狀態為 ✅」→ 讀 plan frontmatter `status`
    - 「`/review-code` 無 CRITICAL/HIGH 問題」→ 若未執行，提示使用者執行
    - 其他自訂條件 → 呈現給使用者確認
 3. **Plan 檔內的 checklist 同步勾選**（已通過的標 `[x]`）
 4. 若全部 checklist 通過 → 視為整體驗收 PASS
 
-**相關規範：** `.claude/rules/plan-persistence.md`
+**相關規範：** `plan-format` skill
 
 ## 任務完成銜接
 

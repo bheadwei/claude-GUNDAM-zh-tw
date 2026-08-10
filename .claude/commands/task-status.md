@@ -91,4 +91,4 @@ VibeCoding 模板合規:
 /task-status --metrics    # 含效能指標和時間追蹤
 ```
 
-**相關規範：** `.claude/rules/plan-persistence.md`
+**相關規範：** `plan-format` skill

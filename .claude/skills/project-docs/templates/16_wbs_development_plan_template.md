@@ -202,7 +202,7 @@ WBS 是**專案層級的 backlog（What）**；每個 WBS 任務的**實作藍�
 | 階段拆解、風險、驗收標準、實作細節 | **Plan 檔** |
 | Appetite（投入上限）、Problem/Solution 脈絡 | **第 1 節 Pitch** |
 
-**完整規範：** `.claude/rules/plan-persistence.md`
+**完整規範：** `plan-format` skill
 
 ### WBS 備註欄範例
 

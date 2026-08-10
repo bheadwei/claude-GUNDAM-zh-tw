@@ -1,3 +1,8 @@
+---
+name: plan-format
+description: 實作計畫（plan）的檔案格式、命名、儲存位置、與 WBS 的職責分工、狀態同步規則，以及 files: frontmatter（平行開發衝突判斷的依據）。Use when running /plan, /tdd, /verify, or /task-next; when creating or updating any file under taskmaster-data/plans/; or when deciding whether a task needs a plan at all.
+---
+
 # 計畫持久化規則（Plan Persistence）
 
 規範 `/plan` 產出的實作藍圖如何儲存、與 WBS 的職責分工、以及 `/tdd` 如何接續執行。
@@ -19,8 +24,6 @@ Plan 檔**不重複** WBS 已有欄位。
 
 ## 檔案位置與命名
 
-### 目錄
-
 ```
 .claude/taskmaster-data/
 ├── wbs.md
@@ -32,13 +35,8 @@ Plan 檔**不重複** WBS 已有欄位。
     └── adhoc-2026-04-20-fix-login.md   ← 無 WBS 對應的臨時計畫
 ```
 
-### 命名規則
-
-- **有 WBS 對應**：`<task-id>-<kebab-slug>.md`
-  - 例：`2.1-auth-middleware.md`、`3.2-oauth-flow.md`
-  - slug 取自任務標題，英數小寫 + 連字號，20 字元內
+- **有 WBS 對應**：`<task-id>-<kebab-slug>.md`（slug 取自任務標題，英數小寫 + 連字號，20 字元內）
 - **無 WBS 對應（ad-hoc）**：`adhoc-YYYY-MM-DD-<kebab-slug>.md`
-  - 例：`adhoc-2026-04-20-fix-login.md`
 
 ### INDEX.md
 
@@ -66,19 +64,13 @@ wbs_task: "2.1"              # WBS 任務編號，ad-hoc 填 "none"
 slug: "auth-middleware"
 created: "2026-04-20"
 updated: "2026-04-20"
-status: "🔄 進行中"           # 整體狀態：⏳ 未開始 / 🔄 進行中 / ✅ 完成
+status: "🔄 進行中"           # ⏳ 未開始 / 🔄 進行中 / ✅ 完成
 current_phase: 2              # 目前在第幾階段
-files:                       # 本任務會「新增/修改」的檔案範圍（給平行開發判斷衝突用）
+files:                       # 本任務會「新增/修改」的檔案範圍
   - "src/lib/auth/middleware.ts"
   - "src/types/auth.ts"
   - "tests/auth/**"
 ---
-
-> **`files:` 欄位（平行開發的依據）**
-> 列出本任務會新增/修改的檔案或 glob。`/task-next` 用它來判斷哪些「依賴已滿足」的任務**彼此檔案範圍不重疊**，進而提供「平行開發」選項（見 `task-mode.md` 無關，詳見 `task-next.md` 的平行偵測）。
-> - 寫**會被寫入/編輯**的檔案即可（讀取的共用檔不必列）。
-> - 不確定範圍時**寧可多列**（多列只會讓系統更保守、少誤判可平行）。
-> - **沒有 plan 檔或沒寫 `files:` 的任務 → 一律視為「範圍未知，不可自動平行」**，只能循序開發。
 
 # 實作計畫：Auth Middleware
 
@@ -116,38 +108,35 @@ Plan 獨有的技術層面依賴，非 WBS 的任務依賴：
 - [ ] 處理過期、簽章錯誤、格式錯誤
 - [ ] 整合測試（mock Redis）
 - **預估**：1.5h
-- **驗收**：所有測試 GREEN，覆蓋率 ≥ 80%
+- **驗收**：所有測試 GREEN，覆蓋率達當前任務模式門檻
 
-### 階段 3: Blacklist 整合 ⏳
+### 階段 3-4: 整合 / 打磨
 
-- [ ] 串接 Redis blacklist
-- [ ] 登出時加入 blacklist
-- [ ] 驗證時檢查 blacklist
-- **預估**：1h
-- **驗收**：E2E 測試通過（登出後 token 即失效）
-
-### 階段 4: 路由整合與文件 ⏳
-
-- [ ] 掛載到 `/api/*` 路由
-- [ ] 更新 API 文件
-- [ ] 手動驗證瀏覽器流程
-- **預估**：1h
-- **驗收**：關鍵路由受保護，文件更新
+（同上結構：步驟 checklist + 預估 + 驗收）
 
 ## 風險與緩解
 
 | 風險 | 影響 | 緩解 |
 |---|---|---|
-| Redis 連線失敗導致所有請求失敗 | HIGH | 加入 circuit breaker + graceful degradation |
-| Token refresh 競態 | MEDIUM | 使用原子操作 + 短 TTL |
+| Redis 連線失敗導致所有請求失敗 | HIGH | circuit breaker + graceful degradation |
+| Token refresh 競態 | MEDIUM | 原子操作 + 短 TTL |
 
 ## 驗收標準（整體）
 
 - [ ] 所有階段狀態為 ✅
-- [ ] 測試覆蓋率 ≥ 80%
+- [ ] 測試覆蓋率達門檻（見 `testing-standards` skill）
 - [ ] `/review-code` 無 CRITICAL/HIGH 問題
-- [ ] 已更新 WBS 任務 2.1 為 ✅
+- [ ] 已更新 WBS 任務為 ✅
 ```
+
+### `files:` 欄位（平行開發的依據）
+
+列出本任務會新增/修改的檔案或 glob。`/task-next` 用它來判斷哪些「依賴已滿足」的任務
+**彼此檔案範圍不重疊**，進而提供「平行開發」選項。
+
+- 寫**會被寫入/編輯**的檔案即可（讀取的共用檔不必列）
+- 不確定範圍時**寧可多列**（多列只會讓系統更保守、少誤判可平行）
+- **沒有 plan 檔或沒寫 `files:` 的任務 → 一律視為「範圍未知，不可自動平行」**
 
 ---
 
@@ -159,19 +148,19 @@ Plan 獨有的技術層面依賴，非 WBS 的任務依賴：
 |---|---|---|
 | `/plan` | 建立、覆寫整份 | 初次規劃或使用者要求重寫 |
 | `/tdd` | 只改階段狀態、current_phase、updated | 每完成一階段 |
-| `/verify` | 只標記整體 status=✅ | 所有階段完成且驗證通過 |
+| `/verify` | 只標記整體 status=✅ 並歸檔 | 所有階段完成且驗證通過 |
 | 使用者手動 | 任何時候 | 但會被 `/tdd` 下次讀取時覆寫階段狀態 |
 
 ### 與 WBS 的雙向同步
 
 - **Plan 建立時** → WBS 對應任務的「備註」欄加上 `[計畫](plans/2.1-xxx.md)` 連結
-- **Plan 所有階段完成時** → 提示使用者執行 `/verify`，驗證通過後 WBS 對應任務標 ✅
+- **Plan 所有階段完成時** → 提示執行 `/verify`，通過後 WBS 對應任務標 ✅
 - **WBS 任務被跳過/刪除時** → Plan 檔保留但標記 `status: "⚠️ WBS 已移除"`
 
-### Ad-hoc 計畫的特殊處理
+### Ad-hoc 計畫
 
 - 不寫入 WBS
-- 完成後使用者可選擇是否補登 WBS（事後追加任務）
+- 完成後使用者可選擇是否補登 WBS
 - 歸檔到 `plans/archive/` 後保留，供日後查閱
 
 ---
@@ -180,5 +169,7 @@ Plan 獨有的技術層面依賴，非 WBS 的任務依賴：
 
 - 單檔案、< 30 分鐘的修改 — 直接做，不需要計畫
 - 已在 WBS 且極簡單的任務（例：更新一個常數）
-- 探索性實驗、還不確定方向 — 先用 `/brainstorm` 式討論（透過 `AskUserQuestion`）
-- `/plan` 門檻：**跨 ≥ 2 檔案、預估 ≥ 1h、或有非 trivial 風險**
+- 探索性實驗、還不確定方向 — 先用 `AskUserQuestion` 討論
+
+**`/plan` 門檻**：跨 ≥ 2 檔案、預估 ≥ 1h、或有非 trivial 風險。
+`critical` 模式一律需要 plan（見 `rules/task-mode.md`）。

@@ -66,34 +66,41 @@
 
 按需從 `custom-rule&skill/skills/` 複製語言特定 skill。
 
-## Rules（13 個，自動載入）
+## Rules（6 個，自動載入）
 
-每次對話自動注入 context，無需手動觸發。
+每次對話自動注入 context，無需手動觸發。**只保留「任何任務都適用」的規則**——
+領域專屬知識改由 skill 按需載入，可強制的約束交給 hook。
 
 | 規則 | 內容 |
 | :--- | :--- |
-| bash-cwd | Bash CWD 汙染防護 |
-| coding-style | 不可變性、檔案大小、錯誤處理 |
-| development-workflow | 研究先行 → Plan → TDD → Review，Python 強制 uv，Node 強制 `/pm-choose` |
+| coding-style | 克制原則、不可變性、檔案大小、錯誤處理、CWD、Context 管理 |
+| task-mode | quick/standard/critical 三檔分級（由 `pre-tool-use.sh` 強制判級） |
+| agent-orchestration | 各任務類型的 agent 鏈、handoff 接力、安全平行 |
+| security | commit 前安全檢查 |
 | git-workflow | Conventional Commits |
 | interactive-qa | AskUserQuestion 一次一題 |
-| security | commit 前安全檢查 |
-| testing | 80%+ 覆蓋率、TDD |
-| performance | 模型選擇、Context 管理 |
-| patterns | Repository Pattern、API 格式 |
-| plan-persistence | `/plan` 持久化、WBS/Plan 職責分工 |
-| package-manager | Node 指令前讀取 PM 設定（bun/pnpm/npm），不符則觸發 `/pm-choose` |
-| pencil-design-location | Pencil `.pen` 檔強制落地 `design/`，禁用 `open_document("new")` |
-| ui-design | Apple 風格簡約設計、毛玻璃效果 |
+
+### 從 rules 移出的去向
+
+| 原 rule | 現在在哪 |
+| :--- | :--- |
+| bash-cwd | `pre-tool-use.sh` 硬擋裸 `cd` + coding-style 一句話 |
+| testing | `testing-standards` skill |
+| plan-persistence | `plan-format` skill |
+| ui-design + pencil-design-location | `ui-style-compliance` skill |
+| package-manager | `node-package-manager` skill |
+| development-workflow | `python-uv` skill + `node-package-manager` skill + task-mode |
+| patterns | 併入 coding-style |
+| performance | `guides/MODELS.md` + 併入 coding-style |
 
 ## Hooks
 
 | 事件 | 腳本 | 用途 |
 | :--- | :--- | :--- |
 | SessionStart | session-start.sh | 時間歸檔、偵測模板、提示初始化 |
-| UserPromptSubmit | user-prompt-submit.sh | 偵測 /task-* 命令 |
+| UserPromptSubmit | user-prompt-submit.sh | 意圖路由：依關鍵字建議任務模式、agent、該載入的 skill |
 | PreToolUse (Agent) | agent-monitor.sh | 記錄 subagent 啟動 |
-| PreToolUse (Write/Edit/Read) | pre-tool-use.sh | 輕量 log |
+| **PreToolUse (Write/Edit/Bash)** | **pre-tool-use.sh** | **任務模式閘門：未判級不得寫程式碼；模式檔 TTL 過期自動清除；裸 `cd` 攔截** |
 | PostToolUse (Agent) | agent-monitor.sh + post-agent-report.sh | 記錄完成 + 驗證報告 |
 | PostToolUse (Write) | post-write.sh | WBS 更新 log |
 

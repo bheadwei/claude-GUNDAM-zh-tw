@@ -6,7 +6,7 @@ description: 重述需求、評估風險、建立逐步實作計畫。等待使�
 
 此指令呼叫 **planner** agent 建立全面的實作計畫，並在確認後寫入 `.claude/taskmaster-data/plans/`。
 
-**相關規範：** 計畫檔格式、命名、狀態同步請依 `.claude/rules/plan-persistence.md`。
+**相關規範：** 計畫檔格式、命名、狀態同步請依 `plan-format` skill。
 
 ## 使用方式
 
@@ -75,7 +75,7 @@ planner agent：
 
 ## 何時不該用 /plan
 
-參見 `.claude/rules/plan-persistence.md` 的「何時不該用 /plan」章節。快速判斷：
+參見 `plan-format` skill 的「何時不該用 /plan」章節。快速判斷：
 
 - 單檔案、< 30 分鐘 → 直接做
 - 跨 ≥ 2 檔案、預估 ≥ 1h、或有非 trivial 風險 → 用 `/plan`

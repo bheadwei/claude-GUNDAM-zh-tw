@@ -159,4 +159,4 @@ description: 從 WBS 取得下一個任務建議，分析優先級和依賴關�
 /task-next        取得下一個
 ```
 
-**相關規範：** `.claude/rules/plan-persistence.md`
+**相關規範：** `plan-format` skill

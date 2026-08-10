@@ -1,6 +1,12 @@
+---
+name: ui-style-compliance
+description: UI/前端產出前後的強制風格檢查（調度器）—— 載入專案選定的 DESIGN.md、禁止硬編碼色票/散亂間距、反 AI slop、產出後附合規自檢；另含 Pencil MCP 設計稿必須落在 design/ 的規則。MUST BE USED before writing any frontend page or component code (React/Vue/Svelte/HTML/Tailwind/CSS), before running /ui-site or /ui-page, and before calling any pencil MCP tool.
+---
+
 # UI/UX 設計風格（調度器 + 強制檢查）
 
-本規則是 UI 風格的**調度器**與**檢查器**。實際風格規範由選定的設計系統提供（`.claude/ui/<codename>/DESIGN.md`），本規則強制執行前中後三階段檢查，確保產出符合風格。
+本 skill 是 UI 風格的**調度器**與**檢查器**。實際風格規範由選定的設計系統提供
+（`.claude/ui/<codename>/DESIGN.md`），本 skill 強制執行前中後三階段檢查。
 
 ---
 
@@ -90,9 +96,11 @@ Read .claude/ui/{primary}/DESIGN.md
 <button className="bg-primary text-on-primary">
 ```
 
-例外：若專案完全未建立 tokens，第一次建立時可直接從 DESIGN.md 抄 hex 值到 `tailwind.config.ts` 或 `styles/tokens.css`，**但後續元件必須引用 token，不再抄 hex**。
+例外：若專案完全未建立 tokens，第一次建立時可直接從 DESIGN.md 抄 hex 值到
+`tailwind.config.ts` 或 `styles/tokens.css`，**但後續元件必須引用 token，不再抄 hex**。
 
-> Token 分層與交換格式對齊 W3C DTCG（global → semantic/alias → component），詳見範本 `12_frontend_architecture_specification.md`。
+> Token 分層與交換格式對齊 W3C DTCG（global → semantic/alias → component），
+> 詳見範本 `12_frontend_architecture_specification.md`。
 
 ### 2.2 字體禁令
 
@@ -106,7 +114,8 @@ Read .claude/ui/{primary}/DESIGN.md
 
 ### 2.4 元件一致性
 
-同類元件（按鈕、卡片、輸入框）**不得同時存在 2 種風格**。已建立 `Button` 就不要再寫 inline `<button>`；已有 `Card` 不要再寫自訂卡片。
+同類元件（按鈕、卡片、輸入框）**不得同時存在 2 種風格**。已建立 `Button` 就不要再寫
+inline `<button>`；已有 `Card` 不要再寫自訂卡片。
 
 ### 2.5 反 AI slop 禁令（除非選定的 DESIGN.md 明確要求）
 
@@ -118,7 +127,8 @@ Read .claude/ui/{primary}/DESIGN.md
 - Cookie-cutter 版型：hero 大標 + 三欄 icon 卡片 + 置中 CTA 的罐頭結構
 - 擁擠間距（元素貼邊、區塊間無呼吸空間）
 
-✅ 正確做法：從選定的 DESIGN.md 取得明確的色彩/字體/版型個性；無 DESIGN.md 時遵循 fallback 的克制中性色 + 單一強調色。
+✅ 正確做法：從選定的 DESIGN.md 取得明確的色彩/字體/版型個性；無 DESIGN.md 時遵循
+fallback 的克制中性色 + 單一強調色。
 
 ---
 
@@ -171,6 +181,65 @@ Read .claude/ui/{primary}/DESIGN.md
 - **表格/列表：** 行間距充足，斑馬紋或細分隔線二選一
 
 **建議：** 若專案有前端需求，執行 `/ui-style` 選擇正式風格。
+
+---
+
+# Pencil 設計稿落地規則（強制）
+
+Pencil MCP 產出的 `.pen` 檔必須落地在專案根目錄的 `design/` 資料夾。
+本規則在呼叫 Pencil MCP 工具前強制執行。
+
+## 🚨 呼叫 Pencil MCP 前必檢
+
+### 規則 1：新增 `.pen` 檔一律指定 `design/` 路徑
+
+❌ **禁止**使用 `"new"` 參數（會存到 IDE 預設位置，離開專案目錄）：
+
+```
+mcp__pencil__open_document("new")   // BAD
+```
+
+✅ **必須**傳入 `design/<name>.pen` 路徑：
+
+```
+mcp__pencil__open_document("design/login-page.pen")
+mcp__pencil__open_document("design/components/button-kit.pen")
+```
+
+### 規則 2：確認 `design/` 目錄存在
+
+呼叫 `open_document` 前，若目錄尚未建立，**先用 Bash/Write 建立**（`mkdir -p design`）。
+
+### 規則 3：命名規範
+
+- 英數小寫 + 連字號（kebab-case）
+- 描述性名稱：`login-page.pen`、`checkout-flow.pen`、`button-kit.pen`
+- **禁止** `untitled.pen`、`new.pen`、`test.pen`
+- 需要時透過 `AskUserQuestion` 徵詢命名
+
+### 規則 4：子資料夾建議分類
+
+```
+design/
+├── pages/          # 完整頁面
+├── components/     # 元件庫
+├── mobile/         # 行動版
+└── web/            # 網頁版
+```
+
+## 標準流程
+
+1. `AskUserQuestion` 問名稱與子類（若不清楚）
+2. 確認目標目錄存在（不存在則 `mkdir -p`）
+3. `mcp__pencil__open_document("design/<name>.pen")`
+4. `mcp__pencil__get_guidelines` 載入設計指南
+5. `mcp__pencil__batch_design` 操作
+
+## 例外
+
+- 使用者**明確指定**絕對路徑 → 尊重使用者意圖
+- 使用者**明確要求**放其他資料夾 → 尊重，但提醒預設是 `design/`
+- 純讀取既有 `.pen` 檔做分析 → 不受限制
 
 ---
 

@@ -7,7 +7,7 @@ description: 網站雛形產生器：Q&A 引導收集需求 → 產資訊架構�
 為前端網站從零建立**多頁雛形**，產出包含：IA 資訊架構文檔、前端架構文檔、多頁 stub、共用 layout、設計 tokens、路由設定。
 
 **相關規範：**
-- `.claude/rules/ui-design.md`（強制三階段檢查）
+- `ui-style-compliance` skill（強制三階段檢查）
 - `.claude/rules/interactive-qa.md`（一次一題 Q&A）
 
 ## 使用方式

@@ -6,7 +6,7 @@ description: 強制執行測試驅動開發工作流，會自動載入當前任�
 
 此指令呼叫 **tdd-guide** agent 強制執行 TDD，並**自動載入當前 WBS 任務的 plan 檔**（若存在）按階段推進。
 
-**相關規範：** `.claude/rules/plan-persistence.md`、`.claude/rules/task-mode.md`
+**相關規範：** `plan-format` skill、`.claude/rules/task-mode.md`
 
 ## 任務模式分流（最先檢查）
 
@@ -93,8 +93,8 @@ npm test
 ### 6. 驗證覆蓋率
 ```bash
 npm run test:coverage
-# 要求: 80%+
 ```
+門檻依任務模式（quick 不檢查 / standard 80% / critical 100%）。
 
 ### 7. 更新 plan 階段狀態（若從 plan 執行）
 
@@ -105,8 +105,10 @@ npm run test:coverage
 
 ## 覆蓋率要求
 
-- **80% 最低**適用於所有程式碼
-- **100% 要求**：財務計算、認證邏輯、安全關鍵程式碼、核心商業邏輯
+依當前任務模式，**唯一來源是 `testing-standards` skill**：
+`quick` 不檢查 ・ `standard` 80% ・ `critical` 100%。
+
+不要在這裡或其他地方重述成「80% 適用所有程式碼」——那會與 Fast Lane 打架。
 
 ## 使用時機
 
