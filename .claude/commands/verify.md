@@ -82,6 +82,22 @@ Ready for PR: [YES/NO]
    - 「查看目前進度」 — 顯示 WBS 狀態摘要
    - 「結束，稍後再繼續」 — 停止
 
+## 里程碑完成時：提議歸檔
+
+標記任務為 ✅ 後，檢查**該任務所屬的里程碑是否全部完成**
+（所有任務皆為 ✅ 完成 或 ⏭️ 跳過）。若是，用 `AskUserQuestion` 問：
+
+```
+🎉 里程碑「M1: MVP」全部完成（12 個任務 / 預估 24.5h / 實際 27h）
+
+要歸檔嗎？歸檔後 wbs.md 只留活躍任務，歷史移到 wbs-archive.md。
+```
+
+- **歸檔**（Recommended）— 執行 `/task-status` 定義的歸檔程序
+- **先不要，我想再看看** — 不動
+
+**完整歸檔程序見 `.claude/commands/task-status.md` 的「WBS 歸檔」節**（唯一來源，勿在此重述）。
+
 ## Ad-hoc plan 完成後：補登 WBS
 
 若本次驗收的是 **ad-hoc plan**（`plans/adhoc-*.md`，`wbs_task: "none"`）且結果為 PASS，

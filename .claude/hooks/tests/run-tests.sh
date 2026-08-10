@@ -199,6 +199,11 @@ expect_empty   "無 WBS 時不提 /task-add"     "$(run user-prompt-submit.sh "$
 reset; : > "$SANDBOX/.claude/taskmaster-data/wbs.md"
 expect_contains "有 WBS 時提示 /task-add"    "/task-add"             "$(run user-prompt-submit.sh "$(p '我想加一個通知功能')")"
 
+# 執行期 bug 與建置錯誤要分流到不同 agent
+reset
+expect_contains "執行期 bug → debug-investigator"  "debug-investigator" "$(run user-prompt-submit.sh "$(p '登入之後頁面沒反應，怪怪的')")"
+expect_contains "建置錯誤 → build-error-resolver"  "build-error-resolver" "$(run user-prompt-submit.sh "$(p 'tsc 型別錯誤修不掉')")"
+
 reset; echo off > "$SM_FILE"
 expect_empty   "suggest-mode=off 不注入"     "$(run user-prompt-submit.sh "$(p '實作登入認證')")"
 

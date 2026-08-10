@@ -70,6 +70,31 @@
 > plan 就被迫兼差當 backlog（這正是「plan 感覺很像 WBS」的成因）。
 > WBS = 還有什麼要做（一行）；Plan = 這件事怎麼做（一份檔）。
 
+### 東西壞了
+
+直接說「這個壞了 / 沒反應 / 為什麼會這樣」，會委派 **debug-investigator**。
+它的價值是**不讓人跳步**：
+
+```
+穩定重現（最常被跳過）→ 二分縮小是哪一層 → 寫下可證偽的假設
+   → 寫重現測試（RED）→ 修根因不修症狀 → 驗證 + 記錄排除過的假設
+```
+
+無法重現時它會停下來回報，不會瞎猜——「無法重現」本身是情報，不是失敗。
+建置/型別錯誤走另一條（`build-error-resolver`，不需調查，直接最小差異修）。
+
+### WBS 太大包時
+
+一個里程碑的任務全部完成 → `/verify` 會問要不要歸檔：
+
+```
+wbs.md          只留活躍任務 + 里程碑摘要（長度跟「還沒做完的事」掛鉤）
+wbs-archive.md  已完成里程碑的完整任務列（含實際耗時，可回顧估準不準）
+```
+
+編號**永不重用**，`/task-add` 會同時掃兩個檔決定新編號。
+`/task-status` 顯示「活躍 8 ・已歸檔 34」，`/time-log` 找不到任務時會回查歸檔。
+
 ### Ad-hoc 路徑（沒跑 /task-next，直接叫我改東西）
 
 這條路以前是斷的——沒人判級、也不會產計畫。現在由 hook 保證：
@@ -151,7 +176,8 @@ PreToolUse 閘門攔截（.current-task-mode 不存在）
 | 任務類型 | 鏈 |
 |---|---|
 | 新功能 | planner → **tdd-guide** → code-quality-specialist → test-automation-engineer →（critical）security-infrastructure-auditor |
-| 修 bug | **tdd-guide（先寫重現測試）** → code-quality-specialist |
+| 修 bug（跑起來行為不對） | **debug-investigator（先重現再定根因）** →（critical）tdd-guide → code-quality-specialist |
+| 修 bug（建置/型別錯誤） | **build-error-resolver**（直接最小差異修，不需調查） |
 | 重構/清理 | refactor-cleaner → code-quality-specialist → test-automation-engineer |
 | 建置/型別錯誤 | **build-error-resolver**（單點） |
 | 前端 UI | （/ui-style →）ui-builder →（關鍵流程）e2e-validation-specialist |

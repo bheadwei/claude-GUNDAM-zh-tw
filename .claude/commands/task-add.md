@@ -35,8 +35,11 @@ description: 把新功能追加到既有 WBS。自動拆解、接上編號、算
 ### 步驟 1：讀取現況（自動，不問使用者）
 
 1. 讀 `wbs.md`，理解：編號體系（`1.x` / `2.x` …）、既有分組標題、各任務狀態
-2. 讀 `.claude/taskmaster-data/project.json` 取得專案模式（demo/mvp/full）與語言
-3. 掃 `plans/INDEX.md`，知道哪些任務已有計畫
+2. **同時讀 `wbs-archive.md`（若存在）** —— 歸檔的編號永久保留、**不可重用**。
+   決定新編號時必須把兩個檔案的編號都算進去，否則會撞號並讓
+   `timelog.jsonl` 與 plan 檔的對應錯亂。（歸檔規則見 `/task-status` 的「WBS 歸檔」節）
+3. 讀 `.claude/taskmaster-data/project.json` 取得專案模式（demo/mvp/full）與語言
+4. 掃 `plans/INDEX.md`，知道哪些任務已有計畫
 
 ### 步驟 2：問要加什麼
 
