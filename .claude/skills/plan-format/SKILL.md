@@ -159,9 +159,27 @@ Plan 獨有的技術層面依賴，非 WBS 的任務依賴：
 
 ### Ad-hoc 計畫
 
-- 不寫入 WBS
-- 完成後使用者可選擇是否補登 WBS
+- 建立時不寫入 WBS
+- **完成驗收後 `/verify` 會主動問要不要補登 WBS**（不是靠使用者自己記得）
 - 歸檔到 `plans/archive/` 後保留，供日後查閱
+
+> 不補登會讓 WBS 逐漸偏離實際做過的事，`/task-status` 與 `/time-log` 的統計失真。
+
+---
+
+## 「Plan 好像跟 WBS 很像？」
+
+會有這個感覺，通常是因為**新增功能時跳過了 WBS**：直接開 plan，那一行從沒被建立，
+於是 plan 成了唯一紀錄、被迫兼差當 backlog。
+
+正確做法是先補那一行：
+
+```
+想加功能  →  /task-add   （追加 WBS 行：自動拆解、接編號、算依賴）
+          →  /plan <id>  （只在達門檻時才產：跨 ≥2 檔 / ≥1h / critical）
+```
+
+`/task-next` 在 WBS 待辦清空時、`/verify` 在 ad-hoc plan 完成時，都會主動提起 `/task-add`。
 
 ---
 

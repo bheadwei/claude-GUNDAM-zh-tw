@@ -193,6 +193,12 @@ expect_contains "migration → 提示先 /plan"   "/plan"                 "$(run
 expect_empty   "斜線指令不路由"              "$(run user-prompt-submit.sh "$(p '/task-next')")"
 expect_empty   "無關鍵字不注入"              "$(run user-prompt-submit.sh "$(p '今天天氣如何')")"
 
+# 新增功能提示：只有在 wbs.md 存在時才該出現（沒 WBS 談不上追加）
+reset
+expect_empty   "無 WBS 時不提 /task-add"     "$(run user-prompt-submit.sh "$(p '我想加一個通知功能')")"
+reset; : > "$SANDBOX/.claude/taskmaster-data/wbs.md"
+expect_contains "有 WBS 時提示 /task-add"    "/task-add"             "$(run user-prompt-submit.sh "$(p '我想加一個通知功能')")"
+
 reset; echo off > "$SM_FILE"
 expect_empty   "suggest-mode=off 不注入"     "$(run user-prompt-submit.sh "$(p '實作登入認證')")"
 

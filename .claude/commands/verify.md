@@ -82,6 +82,24 @@ Ready for PR: [YES/NO]
    - 「查看目前進度」 — 顯示 WBS 狀態摘要
    - 「結束，稍後再繼續」 — 停止
 
+## Ad-hoc plan 完成後：補登 WBS
+
+若本次驗收的是 **ad-hoc plan**（`plans/adhoc-*.md`，`wbs_task: "none"`）且結果為 PASS，
+在歸檔後**必須**用 `AskUserQuestion` 問一題：
+
+```
+剛完成的是臨時任務（未登記在 WBS）：<plan 標題>
+
+要補登到 WBS 嗎？補登後進度統計與時間報表才會涵蓋它。
+```
+
+- **補登為已完成**（Recommended）— 追加一行到 `wbs.md`，狀態直接標 `✅ 完成`，
+  備註填 `[計畫](plans/archive/<filename>)`
+- **不用，這是一次性的** — 不動 WBS
+- **補登並順便加後續任務** — 補登後接 `/task-add` 流程
+
+> 不補登會讓 WBS 逐漸偏離實際做過的事，`/task-status` 與 `/time-log` 的統計也會失真。
+
 這樣使用者不用手動再跑 `/task-next`，形成 **自動任務接力**，且計畫自動歸檔不佔主目錄。
 
 ## 參數
