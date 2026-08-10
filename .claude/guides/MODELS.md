@@ -18,7 +18,7 @@
 | 模型 | Agents |
 |---|---|
 | `haiku`（3） | build-error-resolver、documentation-specialist、workflow-template-manager |
-| `sonnet`（8） | code-quality-specialist、tdd-guide、test-automation-engineer、e2e-validation-specialist、refactor-cleaner、deployment-expert、ui-builder、general-purpose |
+| `sonnet`（7） | code-quality-specialist、tdd-guide、test-automation-engineer、e2e-validation-specialist、refactor-cleaner、deployment-expert、ui-builder |
 | `opus`（3） | planner、architect、security-infrastructure-auditor |
 
 主 session 模型由 `.claude/settings.json` 的 `model` 欄位決定（目前 `opus`），

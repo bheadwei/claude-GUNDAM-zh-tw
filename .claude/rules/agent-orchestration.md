@@ -4,7 +4,8 @@
 
 ## 核心原則
 
-1. **有專業 agent 就優先委派** — `general-purpose` 只在無人適配時當後備
+1. **有專業 agent 就優先委派** — 都不適配時才退回 Claude Code 內建的 `general-purpose`
+   （本模板不自訂它：同名會 shadow 掉內建版，換來的是更小的工具集）
 2. **委派要看任務模式** — `quick` 原則上不拉 planner/tdd-guide；`standard`/`critical` 才走完整鏈
 3. **交棒靠 handoff，不靠記憶** — 後續工作以 `coordination/handoffs/` 傳遞；`post-agent-report.sh` 會把 pending 交接注入對話，**看到提示就接手對應的「to」agent**
 4. **委派前先宣告** — 一句話說明「為什麼是這個 agent、預期產出」，讓使用者可當場否決
@@ -41,8 +42,8 @@
 test-automation-engineer、security-infrastructure-auditor、e2e-validation-specialist、
 deployment-expert、refactor-cleaner、ui-builder
 
-**終端節點，不建 handoff（4）**：build-error-resolver（單點修完即止）、
-documentation-specialist、workflow-template-manager、general-purpose
+**終端節點，不建 handoff（3）**：build-error-resolver（單點修完即止）、
+documentation-specialist、workflow-template-manager
 
 也就是說上表所有鏈的**每一棒都會自動交接**，主模型只需在收到注入提示時啟動下一棒。
 `quick` 模式例外——tdd-guide 在 quick 下不寫報告也不建 handoff（小任務不值得這些開銷）。

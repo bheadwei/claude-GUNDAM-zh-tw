@@ -16,10 +16,10 @@
 │   ├── MCP_CONFIGS.md         # MCP Server 推薦清單
 │   ├── PAUSE_RESUME_GUIDE.md  # 暫停/恢復 SOP
 │   └── STATUSLINE_GUIDE.md    # StatusLine 客製化手冊
-├── agents/       (14 個)      # 專業 Agent 定義
-├── commands/     (25 個)      # Slash Command
-├── rules/        (15 個)      # 自動載入規則
-├── skills/       (7 個)       # 專案特定領域知識
+├── agents/       (13 個)      # 專業 Agent 定義
+├── commands/     (24 個)      # Slash Command
+├── rules/        ( 6 個)      # 自動載入規則
+├── skills/       (12 個)      # 專案特定領域知識
 ├── hooks/                     # Hook 腳本庫
 ├── context/                   # 跨 Agent 上下文共享
 ├── coordination/              # Agent 協調配置
@@ -43,14 +43,13 @@
 | tdd-guide | sonnet | TDD 引導 |
 | e2e-validation-specialist | sonnet | E2E 測試 |
 | refactor-cleaner | sonnet | 死碼清理 |
-| general-purpose | sonnet | 通用問題解決 |
 | deployment-expert | sonnet | 部署運維 |
 | build-error-resolver | haiku | 建置修復 |
 | documentation-specialist | haiku | 文檔生成 |
 | workflow-template-manager | haiku | 模板管理 |
 | ui-builder | sonnet | 前端 UI 產出（嚴格遵循 DESIGN.md） |
 
-## Skills（7 個精選）
+## Skills（12 個，按需載入）
 
 僅保留模型不知道的專案特定知識。
 

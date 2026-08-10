@@ -189,17 +189,21 @@ PreToolUse 閘門攔截（.current-task-mode 不存在）
 
 ---
 
-## 已知未接上的環節
+## 剩下的已知限制
 
-誠實標註，避免以為它會自己動：
+體檢報告的 12 項已全數處理。剩下這兩點是**設計上的取捨**，不是待修的 bug：
 
-1. ~~agent handoff 鏈只有 5/14 實作~~ —— **已修**。現為 10/14，
-   `agent-orchestration.md` 表列的每條鏈都會自動交接；其餘 4 個是終端節點，本就不需要。
-   仍需注意：hook 只能**注入提示**，實際啟動下一棒的是主模型，不是全自動。
-2. **模板合規仍散在三處** —— `/template-check`（正主）、`/check-quality`（第 5 項）、
-   `/task-status`（輸出區塊）。原本名實不符的 `/review-code` 已刪除，程式碼審查
-   統一走內建 `/code-review`，但另外兩處的重述尚未收斂。
-3. **`/learn` 的產出不是合法 skill 格式** —— 寫進 `skills/learned/` 但缺 frontmatter，
-   不會被索引，實質只是筆記。
-4. **skill 召回不是硬保證** —— rules 搬成 skill 後改為「要被想起來才載入」，
-   `user-prompt-submit.sh` 的關鍵字提示是第二層保險，但非強制。
+1. **交接是「注入提示」，不是全自動** —— hook 掃到 pending handoff 後只能把提示注入對話，
+   實際啟動下一棒的是主模型。這是 Claude Code hook 機制的邊界，無法繞過。
+2. **skill 召回不是硬保證** —— rules 搬成 skill 後改為「要被想起來才載入」。
+   兩層保險：skill 的 `description` 寫成觸發條件導向、`user-prompt-submit.sh` 的關鍵字提示。
+   要再硬一點的話，可以比照任務模式閘門，在 `pre-tool-use.sh` 加「寫 `.tsx/.vue/.css`
+   但未載入 `ui-style-compliance` → deny」，機制現成。
+
+## 改動 hook 之後
+
+```bash
+bash .claude/hooks/tests/run-tests.sh
+```
+
+56 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
