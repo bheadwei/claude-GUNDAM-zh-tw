@@ -77,6 +77,8 @@ Ready for PR: [YES/NO]
    - 將 plan frontmatter 標 `status: "✅ 完成"`、`archived: "YYYY-MM-DD"`
    - 移動至 `.claude/taskmaster-data/plans/archive/`（目錄不存在則建立）
    - 更新 `plans/INDEX.md`：該行的狀態改為 `✅ 完成（已歸檔）`，路徑改為 `archive/<filename>`
+   - **更新 WBS 該任務的 `Plan` 欄**改指 `plans/archive/<filename>`
+     （漏掉這步，歸檔後從 WBS 點過去會是死連結）
 4. 用 `AskUserQuestion` 詢問下一步（遵守 `.claude/rules/interactive-qa.md`）：
    - 「繼續下一個任務」(Recommended) — 自動執行 `/task-next` 流程
    - 「查看目前進度」 — 顯示 WBS 狀態摘要

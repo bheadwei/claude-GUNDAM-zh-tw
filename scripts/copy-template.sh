@@ -86,6 +86,9 @@ EXCLUDES=(
     "*.tmp"
     "*.bak"
 
+    # 模板本身的開發須知（新專案的 CLAUDE.md 由 /task-init 產生）
+    "CLAUDE.md"
+
     # 模板開發工作目錄（不該帶到新專案）
     "workshop/"
 )

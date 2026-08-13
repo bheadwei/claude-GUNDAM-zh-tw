@@ -146,4 +146,9 @@ echo ""
 if [ "$DRY_RUN" -eq 0 ] && [ "$NO_BACKUP" -eq 0 ]; then
   echo "🛟 如需還原：解壓 .claude-backups/ 內最新的 tar.gz 覆蓋回 .claude/"
 fi
+if [ "$DRY_RUN" -eq 0 ]; then
+  echo ""
+  echo "👉 下一步：到目標專案開 Claude Code 跑一次 /task-status"
+  echo "   若 wbs.md 還沒有 Plan 欄，它會提議把既有 plan 回填成連結（一次性遷移）"
+fi
 echo ""

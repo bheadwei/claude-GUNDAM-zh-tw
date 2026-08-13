@@ -182,6 +182,11 @@ Write-Host ""
 if (-not $DryRun -and -not $NoBackup) {
     Write-Host "🛟 如需還原：解壓 .claude-backups\ 內最新的 zip 覆蓋回 .claude\" -ForegroundColor Cyan
 }
+if (-not $DryRun) {
+    Write-Host ""
+    Write-Host "👉 下一步：到目標專案開 Claude Code 跑一次 /task-status" -ForegroundColor Cyan
+    Write-Host "   若 wbs.md 還沒有 Plan 欄，它會提議把既有 plan 回填成連結（一次性遷移）"
+}
 Write-Host ""
 
 # robocopy 的成功碼(1-7)會讓 $LASTEXITCODE 非零，明確以 0 收尾避免呼叫端誤判失敗
