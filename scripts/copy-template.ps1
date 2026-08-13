@@ -67,6 +67,7 @@ $excludeDirs = @(
 )
 
 $excludeFiles = @(
+    'CLAUDE.md',
     'settings.local.json',
     '.env',
     '.env.local',

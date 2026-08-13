@@ -84,6 +84,9 @@ description: 把新功能追加到既有 WBS。自動拆解、接上編號、算
 總計 +3 個任務、+6.5h
 ```
 
+> 寫回 `wbs.md` 時，`狀態` 欄填 `⏳ 待處理`、`Plan` 欄填 `-`
+> （計畫還不存在，由後續 `/plan` 回填）。欄位定義見 `/task-init` 的 WBS 範本。
+
 用 `AskUserQuestion` 問：
 
 - **確認追加**（Recommended）

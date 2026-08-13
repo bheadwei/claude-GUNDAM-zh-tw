@@ -153,8 +153,13 @@ Plan 獨有的技術層面依賴，非 WBS 的任務依賴：
 
 ### 與 WBS 的雙向同步
 
-- **Plan 建立時** → WBS 對應任務的「備註」欄加上 `[計畫](plans/2.1-xxx.md)` 連結
+- **Plan 建立時** → WBS 對應任務的 **`Plan` 欄**填入 `[計畫](plans/2.1-xxx.md)`
+  （不要塞「備註」欄——那欄留給其他說明）
 - **Plan 所有階段完成時** → 提示執行 `/verify`，通過後 WBS 對應任務標 ✅
+- **Plan 歸檔時**（`/verify`）→ WBS 的 `Plan` 欄同步改指 `plans/archive/<filename>`，
+  否則歸檔後連結會斷
+
+反向連結由 plan frontmatter 的 `wbs_task` 提供，兩個方向都要維護才點得到。
 - **WBS 任務被跳過/刪除時** → Plan 檔保留但標記 `status: "⚠️ WBS 已移除"`
 
 ### Ad-hoc 計畫
