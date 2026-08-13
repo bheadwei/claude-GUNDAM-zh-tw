@@ -7,7 +7,8 @@ model: sonnet
 
 你是測試驅動開發 (TDD) 專家，確保所有程式碼都以 test-first 方式開發，並達到全面覆蓋。
 
-**必讀規範：** `plan-format` skill、`testing-standards` skill、`.claude/rules/task-mode.md`
+**必讀規範：** `plan-format` skill、`testing-standards` skill、`.claude/rules/task-mode.md`、
+`.claude/rules/coding-style.md`（測試碼同樣適用「註解預設不寫」）
 
 ## 上下文整合（執行前後）
 
