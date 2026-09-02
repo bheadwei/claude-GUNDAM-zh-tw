@@ -6,7 +6,6 @@
       "Bash(pwd:*)",
       "Bash(tree:*)",
       "Bash(mkdir:*)",
-      "Bash(rm:*)",
       "Bash(mv:*)",
       "Bash(cp:*)",
       "Bash(tee:*)",
@@ -33,10 +32,7 @@
       "Bash(command:*)",
       "Bash(echo:*)",
       "Bash(source:*)",
-      "Bash(chmod:*)",
       "Bash(jq:*)",
-      "Bash(bash:*)",
-      "Bash(sudo:*)",
       "Bash(dnf:*)",
       "Bash(yum:*)",
       "Bash(apt:*)",
@@ -47,8 +43,15 @@
       "Glob(*)",
       "Grep(*)"
     ],
-    "deny": [],
-    "ask": []
+    "deny": [
+      "Bash(sudo:*)"
+    ],
+    "ask": [
+      "Bash(rm:*)",
+      "Bash(bash:*)",
+      "Bash(sh:*)",
+      "Bash(chmod:*)"
+    ]
   },
   "statusLine": {
     "type": "command",
