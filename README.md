@@ -1,6 +1,6 @@
 # Claude Code 全面開發配置
 
-> **版本:** v5.4 | **更新:** 2026-09-07 | **平台:** Windows（需 Git Bash）/ Linux / macOS
+> **版本:** v5.5 | **更新:** 2026-09-07 | **平台:** Windows（需 Git Bash）/ Linux / macOS
 
 人類主導的文檔導向智能協作開發平台。
 
@@ -86,10 +86,10 @@ claude_v2026/
     ├── settings.json                 # 主設定（權限、StatusLine、Hooks）
     ├── statusline.sh                 # StatusLine 腳本
     │
-    ├── rules/        ( 6 個)         # 自動載入規則（每次對話注入）
+    ├── rules/        ( 5 個)         # 自動載入規則（每次對話注入）
     ├── agents/       (14 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
-    ├── skills/       (16 個)         # 按需載入（不佔常駐 context）
+    ├── skills/       (17 個)         # 按需載入（不佔常駐 context）
     ├── hooks/                        # Hook 腳本 + lib/ + 137 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）
     ├── ui/           (69 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
@@ -211,9 +211,9 @@ claude_v2026/
 
 ---
 
-## Rules（6 個，自動載入）
+## Rules（5 個，自動載入）
 
-每次對話自動注入。從 15 條瘦身至 6 條——常駐規則的成本是**注意力稀釋**，
+每次對話自動注入。從 15 條瘦身至 5 條（v5.3 砍到 6、v5.5 再把 `git-workflow` 拆掉）——常駐規則的成本是**注意力稀釋**，
 「只在特定情境才該生效」的規則被淹沒後反而失效，因此改搬成按需載入的 skill。
 
 | 規則 | 強制內容 |
@@ -223,7 +223,6 @@ claude_v2026/
 | **coding-style** | 克制原則、**註解預設不寫**、不可變性、檔案 < 800 行、函式 < 50 行 |
 | **interactive-qa** | `AskUserQuestion` 一次一題、問答歷史落檔 |
 | **security** | commit 前安全檢查清單、秘密管理、事件回應 |
-| **git-workflow** | Conventional Commits、PR 流程 |
 
 ### 從 rules 移出的去向
 
@@ -243,7 +242,7 @@ claude_v2026/
 
 ---
 
-## Skills（16 個，按需載入）
+## Skills（17 個，按需載入）
 
 不佔常駐 context，由 `description` 的觸發條件決定何時載入。**唯一例外是第一個**。
 
@@ -321,6 +320,7 @@ claude_v2026/
 
 | 版本 | 日期 | 變更 |
 | :--- | :--- | :--- |
+| v5.5 | 2026-09-07 | **worktree 平行開發修正**（官方文件明講 hook 路徑不跟著 worktree 走——`${CLAUDE_PROJECT_DIR}` 留在 session 啟動處、`cwd` 才是 worktree 根，而 7 支 hook 全部只用前者 → 平行 worktree 共用同一份 `.current-task-mode`；新增 `hooks/lib/resolve-roots.sh` 統一解析）、**接上原生 worktree 支援**（`.worktreeinclude`、`settings.json` 的 `worktree` 設定、`refactor-cleaner` 加 `isolation: worktree`、`worktree-orchestration` skill、`/worktree` 指令）、**`.gitignore` 細分**（規格與計畫進版控——沒進版控的話 worktree 裡連 plan 都沒有；只忽略短命狀態；順手修掉 `.env.production` 會被 commit 的秘密外洩）、**CI**（`.github/workflows/template-ci.yml` 六個 job，含 Windows/Git Bash 與文件計數一致性；`scripts/check-counts.sh` 寫完立刻抓到 3 處既有 drift）、**規格收斂**（`spec-convergence` skill：漏做／範圍蔓延／描述失真三查，不自動改 PRD）、**需求回述確認**（`/task-init` 步驟 2.7：補問 non-goals 與最大風險、產 `docs/00_brief.md`、逐段確認）、**擴充指引**（`writing-extensions` skill：五層決策表 + 壓力測試法 + `tests/skill-compliance/` 雛形）、agent 模型重新分派（haiku 歸零、opus 3→5）、hooks 回歸測試 127→137 案例 |
 | v5.4 | 2026-09-07 | **自然語言也能派 agent**（`session-start.sh` 用 `hookSpecificOutput.additionalContext` 全文注入 `using-taskmaster` skill，含 Red Flags 反合理化表——根因是 slash command 在 Claude Code 裡算 skill 故 `/tdd` 派得動，自然語言沒有那張授權）、**坑閘門**（`pre-tool-use.sh` 比對 `context/learned/*.md` 的 `files:` glob，命中則 deny-once 並貼出教訓）、**執行型委派**（`subagent-execution` skill：逐階段派 implementer subagent + 帳本 + 階段審查 + 修復迴圈 5 輪模型升級 + 裁決而非停等，由 `/tdd` 用 Q&A 選擇）、**報告稽核改延後檢查並注入**（非同步 agent 在 PostToolUse 當下還沒動工，改記期望後於對話邊界重查）、agent 全面加結構化回傳碼（`DONE`/`DONE_WITH_CONCERNS`/`NEEDS_CONTEXT`/`BLOCKED`）、`user-prompt-submit.sh` 補文件類路由並改命令式、修正 `copy-template` 漏帶 `context/` 骨架與 `update-template` 會外流模板報告、補上從未建立的 `context/planning/`、`debug-investigator` 納入報告稽核、**文件債關卡**（`post-write.sh` 偵測改到 API／schema／對外介面 → 記進 `.doc-impact`，`/verify` 標 WBS ✅ 前必須處理；治的是「程式寫出來但文件沒跟上」）、`planner`／`architect` 補上關鍵字入口、agent 模型重新分派（haiku 歸零、opus 由 3 增至 5）、hooks 回歸測試 63→127 案例 |
 | v5.3 | 2026-08-14 | **任務分級改由 hook 強制**（`pre-tool-use.sh` 擋下未判級的寫入）、**rules 15→6**（其餘搬成按需 skill，解注意力稀釋）、**agent 交接鏈接回**（11 個 agent 自動寫報告 + 建 handoff）、新增 `debug-investigator`、拆除名實不符的 `/review-code`（改用內建 `/code-review`）、新增 `/task-add` `/pr` `/deps` `/adr` `/deploy` `/agent-log`、`update-template` 無痛更新既有專案、project-docs 範本搬入 skill 自包含（20 份）、UI 擴充至 69 種設計系統、模型參照更新至 Claude 5 家族、hooks 精簡 + 63 案例回歸測試、WBS 里程碑歸檔、可選平行開發（worktree 編排）、註解規則強化（預設不寫）、WBS↔Plan 雙向連結 |
 | v5.2 | 2026-04-23 | 文件先行流程（`/task-init` 選 demo/mvp/full → `/docs-init` 產文件 → WBS 從文件反推）、Package Manager 選擇系統、Pencil MCP 接入與 `.pen` 檔強制落地 `design/` |

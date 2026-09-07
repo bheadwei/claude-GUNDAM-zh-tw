@@ -1,6 +1,6 @@
 # Skills 索引
 
-16 個 skill，**按需載入**（不佔常駐 context）。分兩類：從 rules 移出的專案約定、以及原有的領域知識包。
+17 個 skill，**按需載入**（不佔常駐 context）。分兩類：從 rules 移出的專案約定、以及原有的領域知識包。
 
 ## 常駐注入（唯一的例外）
 
@@ -14,6 +14,15 @@
 
 > 實證：`/tdd` 這類 slash command 能成功派 agent（command 本身算 skill，等於取得授權），
 > 但自然語言輸入（「整理更新文件」）不會。這個 skill 就是補上那張授權。
+
+## 擴充這個模板時
+
+| Skill | 用途 | 啟動時機 |
+| :--- | :--- | :--- |
+| **writing-extensions** | 該做成 hook／rule／skill／command／agent 的決策表、`description` 怎麼寫才會被喚起、怎麼壓力測試驗證真的生效 | 要加或改 `.claude/` 底下任何東西之前；`/learn` 產 skill 前；某條 rule／skill 一直被忽略時 |
+
+這個模板實際踩過**四次「選錯層」**（把該用 hook 的事寫成文字規則），
+佔了歷次修補的大半。決策表就是為此存在。
 
 ## 專案約定（原本是常駐 rule，改為按需）
 
@@ -51,15 +60,41 @@
 都寫成**觸發條件導向**（"MUST BE USED before …"），而不是內容摘要。
 UI 與 Node 兩類另有 `user-prompt-submit.sh` 的關鍵字提示當第二層保險。
 
-## 不需要 Skill 的場景
+## 什麼該做成 Skill、什麼不該
 
-以下知識模型已內建：
+**判準不是「這個主題重要嗎」，是「模型缺的是知識還是可執行的模式」。**
 
-- Python 語法、PEP 8、pytest → 模型內建知識
-- React/Vue/Angular 前端模式 → 用 **context7 MCP** 查最新文檔
-- REST API / GraphQL 後端模式 → 專案約定見 `rules/coding-style.md`
-- Docker / 通用安全 → 見 `rules/security.md`
-- Claude API / SDK → 已是 **Claude Code 內建 skill**
+### 不做 Skill（模型已經會，或有更好的來源）
+
+| 主題 | 為什麼不用 |
+|---|---|
+| Python 語法、PEP 8、pytest 用法 | 模型內建知識 |
+| React/Vue/Angular 的框架模式 | 用 **context7 MCP** 查當前版本的官方文檔，比寫死在 skill 裡不會過期 |
+| REST／GraphQL 的通則 | 專案約定在 `rules/coding-style.md` |
+| Docker、通用安全概念 | 見 `rules/security.md` |
+| Claude API／SDK | 已是 **Claude Code 內建 skill** |
+
+### 做 Skill（有具體到值得記下來的操作模式）
+
+留著的七個領域包不是「主題重要」，是它們各自帶了**模型不會憑空產出的具體東西**：
+
+| Skill | 帶的是什麼具體東西 |
+|---|---|
+| `project-docs` | 20 份 VibeCoding 範本的實際骨架與章節順序 |
+| `database-migrations` | zero-downtime DDL 的實際步驟順序（先加欄位再回填再切換） |
+| `postgres-patterns` | RLS 政策與索引選擇的實際語法，不是「該加索引」這種通則 |
+| `e2e-testing` | Page Object Model 的實際結構與 flaky 處理策略 |
+| `cost-aware-llm-pipeline` | 模型路由與預算追蹤的實作骨架 |
+| `mcp-builder` | FastMCP／MCP SDK 的 server 骨架 |
+| `deep-research` | 多源交叉驗證的流程（不是「去查資料」，是查完怎麼比對與引用） |
+
+**它們的常駐成本接近零** —— skill 只有 `description` 進 context（七個合計 729 字元），
+本體要被喚起才載入。所以「留著」的代價很小，而「移走後哪天需要要記得回備份池撈」
+的代價比較大。
+
+> 舊版本檔這一節只寫了「不需要 Skill 的場景」，論點是「模型內建知識夠了」，
+> 卻同時留著六個領域包——讀起來像自相矛盾。實際上兩邊的判準不同，
+> 上面兩張表把它講清楚了。
 
 ## 擴充方式
 
