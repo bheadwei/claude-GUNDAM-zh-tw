@@ -71,6 +71,41 @@ Ready for PR: [YES/NO]
 
 若 `.claude/taskmaster-data/.current-task` 存在（表示有進行中的任務），且驗證結果為 PASS：
 
+### 0. 文件同步關卡（**先做，未處理不得標 ✅**）
+
+讀 `.claude/taskmaster-data/.doc-impact`。這份清單由 `post-write.sh` 自動累積——
+本任務改到過的「文件會描述的檔案」（API／路由／schema／對外介面／migration／CLI）。
+
+**清單非空時，必須用 `AskUserQuestion` 問一題再往下**：
+
+```
+本任務改到 3 個文件會描述的檔案：
+  src/api/reconcile/route.ts
+  src/models/ledger.ts
+  src/api/index.ts
+
+文件要怎麼處理？
+  [Recommended] 委派 documentation-specialist 同步
+      從程式碼反推 codemap／API 文檔／技術 README，一次處理完清單上全部檔案
+  我已經自己更新過了
+      標記完成，不再詢問
+  這次不需要（記錄原因）
+      寫進 plan 的「未同步文件」欄，下次碰到同一批檔案還會再問
+```
+
+- 選第一個 → 用 `Agent` 工具，`subagent_type: "documentation-specialist"`，
+  **把 `.doc-impact` 的完整清單放進 prompt**（它需要知道要看哪些檔案）
+- 三個選項任一完成後 → 刪除 `.doc-impact` 與 `.doc-impact-notified`
+- 清單為空 → 不問，直接往下
+
+> **為什麼要擋**：新需求／客戶 CR 的程式一定會被寫出來，但文件常常沒跟上。
+> 原因是 `documentation-specialist` 在任務完成路徑上原本沒有位置——`/verify` 只驗
+> 建置/型別/lint/測試，從不問文件。這道關卡是唯一會強迫做這個決定的地方。
+>
+> 逃生門：環境變數 `DOC_SYNC_GATE=off`（連偵測一起關）。
+
+### 標記與歸檔
+
 1. 將 WBS 該任務狀態更新為 `✅ 完成`
 2. 清除 `.current-task`
 3. **Plan 歸檔**（若存在對應 plan 檔）：
@@ -144,6 +179,14 @@ $ARGUMENTS 可以是：
 
 **相關規範：** `.claude/rules/task-mode.md`
 
-## 任務完成後清除模式
+## 任務完成後清除狀態檔
 
-第「任務完成銜接」階段標記 WBS 為 ✅ 後，**同步清除** `.current-task-mode`（連同 `.current-task`），避免下個任務沿用舊模式。
+第「任務完成銜接」階段標記 WBS 為 ✅ 後，**同步清除**這些檔案，避免下個任務沿用舊狀態：
+
+| 檔案 | 不清的後果 |
+|---|---|
+| `.current-task` | 下個任務被誤認為同一個 |
+| `.current-task-mode` | 沿用舊的任務模式（TTL 8h 是機器保底，但不該靠它） |
+| `.doc-impact` ・ `.doc-impact-notified` | 下個任務一開始就被上個任務的文件債擋住 |
+| `.pitfall-seen` | 不需清 —— 它由 `session-start.sh` 每個 session 重置 |
+| `.report-expectations.jsonl` | 不需清 —— 由稽核器自己按 deadline 汰除 |

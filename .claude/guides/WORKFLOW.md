@@ -188,7 +188,7 @@ PreToolUse 閘門攔截（.current-task-mode 不存在）
 | 你送出訊息 | `user-prompt-submit.sh` | 依關鍵字路由：任務模式、**該委派哪個 agent（含 `subagent_type`）**、該載入哪個 skill |
 | 我要寫檔/跑 Bash | `pre-tool-use.sh` | **任務模式閘門**、**坑閘門**、模式檔 TTL 過期清除、裸 `cd` 攔截 |
 | Agent 完成 | `post-agent-report.sh` | 把 pending handoff 注入對話，提示接下一棒；**非同步啟動的 agent 記下報告期望，交由延後稽核** |
-| 寫入 WBS | `post-write.sh` | 記錄 WBS 變更歷史 |
+| 寫檔後 | `post-write.sh` | 記錄 WBS 變更歷史；**文件影響偵測**（改到 API／schema／對外介面時記進 `.doc-impact` 並提醒一次） |
 | Context 將壓縮 | `pre-compact.sh` | 自動快照 |
 
 ### 閘門的逃生門
@@ -199,6 +199,8 @@ PreToolUse 閘門攔截（.current-task-mode 不存在）
 | `TASKMODE_GATE=off` | 環境變數，單次或整段 session 關閉 |
 | `TASKMODE_TTL_HOURS=N` | 調整模式檔過期時間（預設 8h） |
 | `PITFALL_GATE=off` | 只關坑閘門，保留任務模式閘門 |
+| `DOC_SYNC_GATE=off` | 只關文件影響偵測與 `/verify` 的文件關卡 |
+| `REPORT_AUDIT=off` | 只關 agent 報告稽核 |
 
 ### 坑閘門：同一個坑不踩第二次
 
@@ -257,6 +259,40 @@ lib/check-report-expectations.sh 重新檢查
 
 > `AREA` 對應表（agent → `context/<area>/`）必須與各 agent 檔的「寫入報告到」路徑一致。
 > 改 agent 報告落點時要同步 `post-agent-report.sh`，否則稽核永遠找不到報告。
+
+### 文件同步關卡：程式寫了、文件沒跟上
+
+這是新需求與客戶 CR 最常見的失敗，而原因是結構性的——`documentation-specialist`
+在任務完成路徑上**原本沒有位置**。`/verify` 只驗建置/型別/lint/測試，從不問文件。
+
+```
+你改到 src/api/reconcile/route.ts
+   ▼
+post-write.sh 認出這是「文件描述的對象」
+   ├─ 記進 taskmaster-data/.doc-impact（去重累積）
+   └─ 本任務第一次命中 → additionalContext 提醒一次（之後安靜）
+   ▼
+繼續實作（不要停下來處理文件）
+   ▼
+/verify 通過，準備標 WBS ✅
+   ▼
+讀 .doc-impact → 非空則**必須**問一題：
+   ├─ 委派 documentation-specialist 同步（把整份清單放進 prompt）
+   ├─ 我已經自己更新過了
+   └─ 這次不需要（記錄原因）
+   ▼
+處理完才清除 .doc-impact 並標 ✅
+```
+
+**哪些檔案算「文件描述的對象」**：`*/api/*`、`*/routes/*`、`*/controllers/*`、
+`*/handlers/*`、`*openapi*`、`*.proto`、`*.graphql`、`*schema*`、`*/migrations/*`、
+`*/models/*`、`*/entities/*`、`*/dto/*`、`*/index.ts`、`*.d.ts`、`*/cli/*`、`.env.example`。
+
+**排除**：`.claude/**`、`docs/**`（改文件本身不算文件債）、測試檔（`*test*`／`*spec*`／
+`__tests__`／`fixtures`）、依賴與建置產物。
+
+> 為什麼提醒只發一次：每改一個 API 檔就吵一次會被無視。真正的關卡在 `/verify`，
+> 那裡才是「不處理就不能標完成」的地方。
 
 ### Skills（按需載入）
 
@@ -372,4 +408,4 @@ lib/check-report-expectations.sh 重新檢查
 bash .claude/hooks/tests/run-tests.sh
 ```
 
-99 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
+127 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。

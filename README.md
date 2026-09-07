@@ -90,7 +90,7 @@ claude_v2026/
     ├── agents/       (14 個)         # 專業 Agent 定義
     ├── commands/     (28 個)         # Slash Commands
     ├── skills/       (14 個)         # 按需載入（不佔常駐 context）
-    ├── hooks/                        # Hook 腳本 + lib/ + 99 案例回歸測試
+    ├── hooks/                        # Hook 腳本 + lib/ + 127 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）
     ├── ui/           (69 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │
@@ -321,7 +321,7 @@ claude_v2026/
 
 | 版本 | 日期 | 變更 |
 | :--- | :--- | :--- |
-| v5.4 | 2026-09-07 | **自然語言也能派 agent**（`session-start.sh` 用 `hookSpecificOutput.additionalContext` 全文注入 `using-taskmaster` skill，含 Red Flags 反合理化表——根因是 slash command 在 Claude Code 裡算 skill 故 `/tdd` 派得動，自然語言沒有那張授權）、**坑閘門**（`pre-tool-use.sh` 比對 `context/learned/*.md` 的 `files:` glob，命中則 deny-once 並貼出教訓）、**執行型委派**（`subagent-execution` skill：逐階段派 implementer subagent + 帳本 + 階段審查 + 修復迴圈 5 輪模型升級 + 裁決而非停等，由 `/tdd` 用 Q&A 選擇）、**報告稽核改延後檢查並注入**（非同步 agent 在 PostToolUse 當下還沒動工，改記期望後於對話邊界重查）、agent 全面加結構化回傳碼（`DONE`/`DONE_WITH_CONCERNS`/`NEEDS_CONTEXT`/`BLOCKED`）、`user-prompt-submit.sh` 補文件類路由並改命令式、修正 `copy-template` 漏帶 `context/` 骨架與 `update-template` 會外流模板報告、補上從未建立的 `context/planning/`、`debug-investigator` 納入報告稽核、hooks 回歸測試 63→99 案例 |
+| v5.4 | 2026-09-07 | **自然語言也能派 agent**（`session-start.sh` 用 `hookSpecificOutput.additionalContext` 全文注入 `using-taskmaster` skill，含 Red Flags 反合理化表——根因是 slash command 在 Claude Code 裡算 skill 故 `/tdd` 派得動，自然語言沒有那張授權）、**坑閘門**（`pre-tool-use.sh` 比對 `context/learned/*.md` 的 `files:` glob，命中則 deny-once 並貼出教訓）、**執行型委派**（`subagent-execution` skill：逐階段派 implementer subagent + 帳本 + 階段審查 + 修復迴圈 5 輪模型升級 + 裁決而非停等，由 `/tdd` 用 Q&A 選擇）、**報告稽核改延後檢查並注入**（非同步 agent 在 PostToolUse 當下還沒動工，改記期望後於對話邊界重查）、agent 全面加結構化回傳碼（`DONE`/`DONE_WITH_CONCERNS`/`NEEDS_CONTEXT`/`BLOCKED`）、`user-prompt-submit.sh` 補文件類路由並改命令式、修正 `copy-template` 漏帶 `context/` 骨架與 `update-template` 會外流模板報告、補上從未建立的 `context/planning/`、`debug-investigator` 納入報告稽核、**文件債關卡**（`post-write.sh` 偵測改到 API／schema／對外介面 → 記進 `.doc-impact`，`/verify` 標 WBS ✅ 前必須處理；治的是「程式寫出來但文件沒跟上」）、`planner`／`architect` 補上關鍵字入口、agent 模型重新分派（haiku 歸零、opus 由 3 增至 5）、hooks 回歸測試 63→127 案例 |
 | v5.3 | 2026-08-14 | **任務分級改由 hook 強制**（`pre-tool-use.sh` 擋下未判級的寫入）、**rules 15→6**（其餘搬成按需 skill，解注意力稀釋）、**agent 交接鏈接回**（11 個 agent 自動寫報告 + 建 handoff）、新增 `debug-investigator`、拆除名實不符的 `/review-code`（改用內建 `/code-review`）、新增 `/task-add` `/pr` `/deps` `/adr` `/deploy` `/agent-log`、`update-template` 無痛更新既有專案、project-docs 範本搬入 skill 自包含（20 份）、UI 擴充至 69 種設計系統、模型參照更新至 Claude 5 家族、hooks 精簡 + 63 案例回歸測試、WBS 里程碑歸檔、可選平行開發（worktree 編排）、註解規則強化（預設不寫）、WBS↔Plan 雙向連結 |
 | v5.2 | 2026-04-23 | 文件先行流程（`/task-init` 選 demo/mvp/full → `/docs-init` 產文件 → WBS 從文件反推）、Package Manager 選擇系統、Pencil MCP 接入與 `.pen` 檔強制落地 `design/` |
 | v5.1 | 2026-04-20 | Plan 持久化系統（`/plan` 寫入 `plans/`、`/tdd` 接續階段、`/verify` 驗收歸檔）、模型別名收租、settings.json 權限改 uv |

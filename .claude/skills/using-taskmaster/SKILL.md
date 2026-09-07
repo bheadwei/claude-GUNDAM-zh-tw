@@ -43,6 +43,15 @@ description: Use when starting any conversation in a TaskMaster project — esta
 
 都不適配才退回 Claude Code 內建的 `general-purpose`。**「我自己做比較快」不是退回的理由。**
 
+## 改到 API／schema／對外介面 → 文件債已經開始累積
+
+`post-write.sh` 會在你改到「文件描述的對象」（API／路由／schema／migration／
+對外 index／CLI）時記進 `.claude/taskmaster-data/.doc-impact`，並在本任務第一次命中時
+提醒你一次。**不要停下來處理**，繼續實作；`/verify` 在標記 WBS ✅ 前會擋下來要求處理。
+
+收尾時的正解是**委派 `documentation-specialist` 一次處理完整份清單**，不是自己一個一個
+檔案改。新需求與客戶 CR 最常見的失敗就是程式寫出來了、文件沒跟上。
+
 ## 動工前必讀：這個坑踩過沒有
 
 要修改任何程式碼檔之前，先讀 `.claude/context/learned/`——那是這個專案**踩過的坑**。

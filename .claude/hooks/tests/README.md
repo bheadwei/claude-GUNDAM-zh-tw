@@ -4,7 +4,7 @@
 bash .claude/hooks/tests/run-tests.sh
 ```
 
-99 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。
+127 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。
 **Windows Git Bash 上約需 1.5 分鐘**——大量 `bash` + `jq` 子行程，process spawn 是主要成本。
 
 ## 為什麼這套測試存在
