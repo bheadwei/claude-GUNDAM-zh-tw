@@ -277,6 +277,105 @@ expect_decision "無模式檔時仍先擋任務模式"         deny  "$out"
 expect_contains "且理由是判級而非坑"               "尚未判定任務模式" "$out"
 
 # =========================================================================
+section "報告稽核 — 非同步延後檢查"
+# =========================================================================
+EXPECT_FILE="$SANDBOX/.claude/taskmaster-data/.report-expectations.jsonl"
+CHECKER="$HOOK_DIR/lib/check-report-expectations.sh"
+
+# Agent payload：$1=agent 名稱，$2=async|sync
+ag() {
+    if [ "$2" = "async" ]; then
+        jq -nc --arg a "$1" '{tool_name:"Agent", tool_input:{subagent_type:$a},
+            tool_response:{response:"{\"isAsync\": true, \"status\": \"async_launched\"}"}}'
+    else
+        jq -nc --arg a "$1" '{tool_name:"Agent", tool_input:{subagent_type:$a},
+            tool_response:"完成"}'
+    fi
+}
+# 把期望的 epoch 往回推 N 秒，模擬時間流逝
+age_expectations() {
+    jq -c --argjson n "$1" '.epoch -= $n' "$EXPECT_FILE" > "$EXPECT_FILE.t" \
+        && mv -f "$EXPECT_FILE.t" "$EXPECT_FILE"
+}
+
+reset; mkdir -p "$SANDBOX/.claude/context/quality"
+out=$(run post-agent-report.sh "$(ag code-quality-specialist async)")
+expect_empty   "非同步啟動當下不誤報"            "$out"
+if [ -s "$EXPECT_FILE" ]; then ok "非同步啟動會記下報告期望"
+else ng "非同步啟動會記下報告期望" "期望檔非空" "（空）"; fi
+expect_contains "log 記 DEFER 而非 WARN"  "DEFER" \
+    "$(cat "$SANDBOX/.claude/logs/context-reports.log" 2>/dev/null)"
+
+expect_empty   "寬限期內（<120s）完全安靜"       "$(bash "$CHECKER" "$SANDBOX/.claude" 2>/dev/null)"
+
+age_expectations 300
+expect_contains "過寬限期且缺報告 → 要求補寫"    "code-quality-specialist" \
+    "$(bash "$CHECKER" "$SANDBOX/.claude" 2>/dev/null)"
+expect_empty   "已通知過不重複吵（notified=1）"  "$(bash "$CHECKER" "$SANDBOX/.claude" 2>/dev/null)"
+
+reset; mkdir -p "$SANDBOX/.claude/context/quality"
+run post-agent-report.sh "$(ag code-quality-specialist async)" >/dev/null
+age_expectations 300
+echo "# 報告" > "$SANDBOX/.claude/context/quality/code-quality-specialist-2026-09-07-1000.md"
+expect_empty   "報告已寫 → 不再要求"             "$(bash "$CHECKER" "$SANDBOX/.claude" 2>/dev/null)"
+if [ ! -s "$EXPECT_FILE" ]; then ok "報告已寫 → 期望被清除"
+else ng "報告已寫 → 期望被清除" "期望檔為空" "$(cat "$EXPECT_FILE")"; fi
+
+# 舊報告（啟動前就存在）不該被誤認成這次的產出 —— 靠 -newermt 而非 -mmin
+reset; mkdir -p "$SANDBOX/.claude/context/quality"
+echo "# 舊報告" > "$SANDBOX/.claude/context/quality/code-quality-specialist-2026-01-01-0000.md"
+touch -d '2026-01-01' "$SANDBOX/.claude/context/quality/code-quality-specialist-2026-01-01-0000.md" 2>/dev/null
+run post-agent-report.sh "$(ag code-quality-specialist async)" >/dev/null
+age_expectations 300
+expect_contains "啟動前的舊報告不算數"           "code-quality-specialist" \
+    "$(bash "$CHECKER" "$SANDBOX/.claude" 2>/dev/null)"
+
+# 超過 deadline → 放棄追蹤，不再吵
+reset; mkdir -p "$SANDBOX/.claude/context/quality"
+run post-agent-report.sh "$(ag code-quality-specialist async)" >/dev/null
+age_expectations 99999
+expect_empty   "逾 deadline 放棄追蹤"            "$(bash "$CHECKER" "$SANDBOX/.claude" 2>/dev/null)"
+
+# 逃生門
+reset; mkdir -p "$SANDBOX/.claude/context/quality"
+run post-agent-report.sh "$(ag code-quality-specialist async)" >/dev/null
+age_expectations 300
+expect_empty   "REPORT_AUDIT=off 關閉稽核" \
+    "$(REPORT_AUDIT=off bash "$CHECKER" "$SANDBOX/.claude" 2>/dev/null)"
+
+# 同步完成的 agent 仍走當下稽核（沿用舊行為）
+reset; mkdir -p "$SANDBOX/.claude/context/quality"
+run post-agent-report.sh "$(ag code-quality-specialist sync)" >/dev/null
+if [ ! -s "$EXPECT_FILE" ]; then ok "同步 agent 不記期望（當下稽核）"
+else ng "同步 agent 不記期望（當下稽核）" "期望檔為空" "$(cat "$EXPECT_FILE")"; fi
+expect_contains "同步且缺報告 → log 記 WARN"     "WARN" \
+    "$(cat "$SANDBOX/.claude/logs/context-reports.log" 2>/dev/null)"
+
+# debug-investigator 曾經不在 AREA 映射裡 → 完全不稽核
+reset; mkdir -p "$SANDBOX/.claude/context/quality"
+run post-agent-report.sh "$(ag debug-investigator async)" >/dev/null
+if [ -s "$EXPECT_FILE" ]; then ok "debug-investigator 已納入稽核"
+else ng "debug-investigator 已納入稽核" "期望檔非空" "（空）"; fi
+
+# 稽核訊息會被注入（不只寫 log）—— 這是原本「沒有牙齒」的核心問題
+reset; mkdir -p "$SANDBOX/.claude/context/quality"
+run post-agent-report.sh "$(ag code-quality-specialist async)" >/dev/null
+age_expectations 300
+inj=$(run post-agent-report.sh "$(ag planner sync)")
+if echo "$inj" | jq -e '.hookSpecificOutput.additionalContext | test("沒寫報告")' >/dev/null 2>&1; then
+    ok "缺報告會經 additionalContext 注入"
+else
+    ng "缺報告會經 additionalContext 注入" "含「沒寫報告」的注入" "${inj:0:80}"
+fi
+
+# 斜線指令也要收到稽核（使用者下一句常是 /verify）
+reset; mkdir -p "$SANDBOX/.claude/context/quality"
+run post-agent-report.sh "$(ag code-quality-specialist async)" >/dev/null
+age_expectations 300
+expect_contains "斜線指令仍收到稽核"             "code-quality-specialist" \
+    "$(run user-prompt-submit.sh "$(p '/verify')")"
+
+# =========================================================================
 section "session-start.sh — 委派指示注入"
 # =========================================================================
 reset

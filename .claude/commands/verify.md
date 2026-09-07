@@ -76,6 +76,8 @@ Ready for PR: [YES/NO]
 3. **Plan 歸檔**（若存在對應 plan 檔）：
    - 將 plan frontmatter 標 `status: "✅ 完成"`、`archived: "YYYY-MM-DD"`
    - 移動至 `.claude/taskmaster-data/plans/archive/`（目錄不存在則建立）
+   - **同名的執行帳本 `<plan 同名>.progress.md` 一起搬到 `archive/`**（若存在）——
+     留在 `plans/` 會讓下次同 ID 的任務誤認為「有續跑中的帳本」
    - 更新 `plans/INDEX.md`：該行的狀態改為 `✅ 完成（已歸檔）`，路徑改為 `archive/<filename>`
    - **更新 WBS 該任務的 `Plan` 欄**改指 `plans/archive/<filename>`
      （漏掉這步，歸檔後從 WBS 點過去會是死連結）

@@ -9,7 +9,9 @@
 ├── README.md                # 本文件
 ├── session-start.sh         # SessionStart：模板偵測、時間歸檔、log 輪替
 ├── user-prompt-submit.sh    # UserPromptSubmit：/task-init 偵測 + 意圖路由注入
-├── pre-tool-use.sh          # PreToolUse(Write|Edit|Bash)：任務模式閘門 + TTL + 裸 cd 攔截
+├── pre-tool-use.sh          # PreToolUse(Write|Edit|Bash)：任務模式閘門 + 坑閘門 + TTL + 裸 cd 攔截
+├── lib/
+│   └── check-report-expectations.sh  # 延後式報告稽核（被 post-agent-report 與 user-prompt-submit 共用）
 ├── post-write.sh            # PostToolUse(Write)：WBS/檔案寫入記錄
 ├── agent-monitor.sh         # Pre/PostToolUse(Agent)：subagent 活動記錄
 ├── post-agent-report.sh     # PostToolUse(Agent)：報告稽核 + pending handoff 注入
@@ -25,10 +27,10 @@
 |---|---|---|
 | `session-start.sh` | `SessionStart` | 偵測 `CLAUDE_TEMPLATE.md` 顯示提示；歸檔上次 session 時間；**啟動時一次性輪替 log**；jq 缺失健檢 |
 | `user-prompt-submit.sh` | `UserPromptSubmit` | 偵測 `/task-init` 建資料夾；依關鍵字注入「建議任務模式 + 建議 agent 鏈」（受 `.suggest-mode` 控制） |
-| `pre-tool-use.sh` | `PreToolUse` `Write\|Edit\|MultiEdit\|Bash` | **模板唯一的硬閘門**：①寫程式碼檔前未判級 → `deny` 並要求先判級 ②模式檔逾 `TASKMODE_TTL_HOURS`（預設 8h）自動清除，解掉「verify 沒清 → 判級永久不觸發」的互鎖 ③裸 `cd` 攔截。逃生門：`.suggest-mode=off` 或 `TASKMODE_GATE=off` |
+| `pre-tool-use.sh` | `PreToolUse` `Write\|Edit\|MultiEdit\|Bash` | **模板唯一的硬閘門**：①寫程式碼檔前未判級 → `deny` 並要求先判級 ②模式檔逾 `TASKMODE_TTL_HOURS`（預設 8h）自動清除，解掉「verify 沒清 → 判級永久不觸發」的互鎖 ③**坑閘門**：要寫的檔案在 `context/learned/*.md` 的 `files:` glob 命中時 `deny` 一次並貼出 symptom/root-cause/guard，讀完重試即通過（同檔案一 session 只擋一次） ④裸 `cd` 攔截。逃生門：`.suggest-mode=off`、`TASKMODE_GATE=off`、`PITFALL_GATE=off`（只關坑閘門） |
 | `post-write.sh` | `PostToolUse` `Write\|Edit` | WBS 更新寫歷史；記錄寫入/編輯事件（hook 內按路徑過濾） |
 | `agent-monitor.sh` | `Pre/PostToolUse` `Agent` | 記錄 subagent 啟動/完成（人類可讀 `agent-activity.log` + 結構化 `agent-activity.jsonl`） |
-| `post-agent-report.sh` | `PostToolUse` `Agent` | 稽核需寫報告的 agent；掃描 `coordination/handoffs/` 的 pending 交接並注入主對話（受 `.suggest-mode` 控制） |
+| `post-agent-report.sh` | `PostToolUse` `Agent` | ①**報告稽核**：非同步啟動（`tool_response` 帶 `async_launched`）的 agent 此刻還沒動工，立即 find 必假警報 → 只記期望到 `.report-expectations.jsonl`，由 `lib/check-report-expectations.sh` 在後續對話邊界重查並**注入**要求補寫；同步完成的仍當下稽核 ②掃描 `coordination/handoffs/` 的 pending 交接並注入主對話（受 `.suggest-mode` 控制）。逃生門：`REPORT_AUDIT=off` |
 | `pre-compact.sh` | `PreCompact` | context 壓縮（manual/auto）前，將當前任務 / git 狀態 / 最近 agent 活動快照到 `sessions/auto-precompact-<ts>.md`（敘事式存檔仍用 `/save-session`） |
 | `watch-agents.sh` | （手動）| `--summary` / `--last N` / `--json` / `--clear`；被 `/agent-log` 包裝 |
 

@@ -2,7 +2,10 @@
 # post-agent-report.sh — PostToolUse(Agent) hook
 #
 # 兩個職責：
-#   (1) 報告稽核：驗證需寫報告的 agent 是否依規範寫入 context 報告（沿用，僅記 log）
+#   (1) 報告稽核：非同步啟動的 agent（tool_response 帶 "status":"async_launched"）
+#       在此刻還沒動工，立即 find 必定假警報 → 只記下「期望」，交由
+#       lib/check-report-expectations.sh 在後續對話邊界重新檢查並**注入**要求補寫。
+#       同步完成的 agent 仍在當下稽核。
 #   (2) Handoff 主動化：掃描 coordination/handoffs/ 的 pending 交接，
 #       透過 hookSpecificOutput.additionalContext 注入主對話，
 #       讓主模型「看見」待處理交接並據以啟動下一棒 agent。
@@ -30,6 +33,8 @@ TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 # ============================================================================
 # (1) 報告稽核 — 只對需寫報告的 agent
 # ============================================================================
+# 這張表必須與各 agent 檔「結束後（必須）」的「寫入報告到」路徑一致。
+# 改 agent 的報告落點時要同步這裡，否則稽核會永遠找不到報告（見 CLAUDE.md 連帶檢查）。
 AREA=""
 case "$AGENT_NAME" in
     code-quality-specialist)          AREA="quality" ;;
@@ -42,6 +47,7 @@ case "$AGENT_NAME" in
     refactor-cleaner)                 AREA="quality" ;;
     ui-builder)                       AREA="quality" ;;
     deployment-expert)                AREA="deployment" ;;
+    debug-investigator)               AREA="quality" ;;
 esac
 
 # quick 模式下 tdd-guide 刻意不寫報告（小任務不值得這開銷）→ 不稽核，避免假警報
@@ -55,13 +61,35 @@ fi
 if [ -n "$AREA" ]; then
     CONTEXT_DIR="$CLAUDE_DIR/context/$AREA"
     mkdir -p "$CONTEXT_DIR" 2>/dev/null || true
-    RECENT_REPORT=$(find "$CONTEXT_DIR" -maxdepth 1 -name "${AGENT_NAME}-*.md" -mmin -5 2>/dev/null | head -1)
-    if [ -z "$RECENT_REPORT" ]; then
-        echo "[$TIMESTAMP] WARN: $AGENT_NAME completed but no report written to context/$AREA/" >> "$LOG_FILE" 2>/dev/null || true
+
+    # 非同步啟動判定：tool_response 可能是物件也可能是 JSON 字串，一律轉字串再比對
+    RESP=$(echo "$PAYLOAD" | jq -r '(.tool_response.response // .tool_response // "") | tostring' 2>/dev/null || echo "")
+    IS_ASYNC=0
+    case "$RESP" in
+        *async_launched*|*'"isAsync": true'*|*'"isAsync":true'*) IS_ASYNC=1 ;;
+    esac
+
+    if [ "$IS_ASYNC" = "1" ]; then
+        # 此刻 agent 還沒動工，立即 find 必定假警報 → 記下期望，延後稽核
+        EXPECT_FILE="$CLAUDE_DIR/taskmaster-data/.report-expectations.jsonl"
+        mkdir -p "$(dirname "$EXPECT_FILE")" 2>/dev/null || true
+        jq -nc --arg a "$AGENT_NAME" --arg ar "$AREA" --arg ts "$TIMESTAMP" \
+               --argjson ep "$(date +%s)" \
+            '{ts:$ts, epoch:$ep, agent:$a, area:$ar, notified:0}' \
+            >> "$EXPECT_FILE" 2>/dev/null || true
+        echo "[$TIMESTAMP] DEFER: $AGENT_NAME 非同步啟動，報告稽核延後" >> "$LOG_FILE" 2>/dev/null || true
     else
-        echo "[$TIMESTAMP] OK: $AGENT_NAME wrote $(basename "$RECENT_REPORT")" >> "$LOG_FILE" 2>/dev/null || true
+        RECENT_REPORT=$(find "$CONTEXT_DIR" -maxdepth 1 -name "${AGENT_NAME}-*.md" -mmin -5 2>/dev/null | head -1)
+        if [ -z "$RECENT_REPORT" ]; then
+            echo "[$TIMESTAMP] WARN: $AGENT_NAME completed but no report written to context/$AREA/" >> "$LOG_FILE" 2>/dev/null || true
+        else
+            echo "[$TIMESTAMP] OK: $AGENT_NAME wrote $(basename "$RECENT_REPORT")" >> "$LOG_FILE" 2>/dev/null || true
+        fi
     fi
 fi
+
+# 延後稽核：檢查先前記下的期望，缺報告則產生要求補寫的文字（可能為空）
+REPORT_AUDIT_MSG=$(bash "$(dirname "${BASH_SOURCE[0]}")/lib/check-report-expectations.sh" "$CLAUDE_DIR" 2>/dev/null || echo "")
 
 # ============================================================================
 # (2) Pending handoff 掃描 + 注入
@@ -75,15 +103,15 @@ if [ -f "$SM_FILE" ]; then
     [ -z "$SUGGEST_MODE" ] && SUGGEST_MODE="medium"
 fi
 
-# off → 完全不注入
+# off → 完全不注入（連報告稽核也一併靜音，這是文件化的逃生門）
 [ "$SUGGEST_MODE" = "off" ] && exit 0
-[ -d "$HANDOFF_DIR" ] || exit 0
 
 NL=$'\n'
 LINES=""
 COUNT=0
 
-for f in "$HANDOFF_DIR"/*.md; do
+# handoff 目錄不存在時仍要讓報告稽核有機會注入 → 用 if 包住掃描而非 exit
+[ -d "$HANDOFF_DIR" ] && for f in "$HANDOFF_DIR"/*.md; do
     [ -e "$f" ] || continue
     [ "$(basename "$f")" = "_HANDOFF_TEMPLATE.md" ] && continue
 
@@ -109,9 +137,18 @@ for f in "$HANDOFF_DIR"/*.md; do
     [ "$COUNT" -ge 5 ] && break
 done
 
-[ "$COUNT" -eq 0 ] && exit 0
+MSG=""
 
-MSG="🔗 偵測到 ${COUNT} 個待處理 agent 交接（status: pending）。若符合當前目標，建議啟動對應的「to」agent 接手——各 agent 啟動時會自行讀取其 handoff 工作清單：${LINES}${NL}${NL}完成後請將對應 handoff 的 status 改為 completed（保留檔案作審計軌跡）。"
+if [ "$COUNT" -gt 0 ]; then
+    MSG="🔗 偵測到 ${COUNT} 個待處理 agent 交接（status: pending）。若符合當前目標，建議啟動對應的「to」agent 接手——各 agent 啟動時會自行讀取其 handoff 工作清單：${LINES}${NL}${NL}完成後請將對應 handoff 的 status 改為 completed（保留檔案作審計軌跡）。"
+fi
+
+if [ -n "$REPORT_AUDIT_MSG" ]; then
+    [ -n "$MSG" ] && MSG="${MSG}${NL}${NL}"
+    MSG="${MSG}${REPORT_AUDIT_MSG}"
+fi
+
+[ -z "$MSG" ] && exit 0
 
 jq -n --arg ctx "$MSG" '{
   hookSpecificOutput: {

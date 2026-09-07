@@ -27,11 +27,6 @@ fi
 # (2) 意圖路由
 # ============================================================================
 
-# 斜線指令不路由（使用者已明確指定流程）
-case "$USER_INPUT" in
-    /*) exit 0 ;;
-esac
-
 # 讀 suggest-mode（預設 medium）
 SUGGEST_MODE="medium"
 SM_FILE="$CLAUDE_DIR/taskmaster-data/.suggest-mode"
@@ -40,6 +35,21 @@ if [ -f "$SM_FILE" ]; then
     [ -z "$SUGGEST_MODE" ] && SUGGEST_MODE="medium"
 fi
 [ "$SUGGEST_MODE" = "off" ] && exit 0
+
+# 延後式報告稽核
+#
+# 刻意放在斜線指令判斷「之前」：非同步 agent 到這個對話邊界通常已跑完，
+# 而使用者下一句常常正是 /verify 或 /task-next——那時最需要知道報告缺了沒。
+# post-agent-report.sh 也會呼叫同一支腳本，覆蓋「agent 連續接力」的情形。
+REPORT_AUDIT_MSG=$(bash "$(dirname "${BASH_SOURCE[0]}")/lib/check-report-expectations.sh" "$CLAUDE_DIR" 2>/dev/null || echo "")
+
+# 斜線指令不做意圖路由（使用者已明確指定流程），但稽核結果仍要送達
+case "$USER_INPUT" in
+    /*)
+        [ -n "$REPORT_AUDIT_MSG" ] && echo "$REPORT_AUDIT_MSG"
+        exit 0
+        ;;
+esac
 
 # 小工具：關鍵字命中判斷（大小寫不敏感；中文以位元組比對）
 has() { echo "$USER_INPUT" | grep -iqE "$1"; }
@@ -123,9 +133,15 @@ if [ "$SUGGEST_MODE" != "low" ]; then
     fi
 fi
 
-# low 模式且非高訊號 → 不注入
-[ "$SUGGEST_MODE" = "low" ] && [ "$HIGH_SIGNAL" -eq 0 ] && exit 0
-[ -z "$HINTS" ] && exit 0
+# low 模式且非高訊號 → 只剩報告稽核（那是既成事實，不是建議）
+if [ "$SUGGEST_MODE" = "low" ] && [ "$HIGH_SIGNAL" -eq 0 ]; then
+    HINTS=""
+fi
 
-echo "🎯 意圖路由（依關鍵字命中；委派前先用一句話宣告理由，使用者可當場否決。密度調整：/suggest-mode）：${HINTS}"
+if [ -n "$HINTS" ]; then
+    echo "🎯 意圖路由（依關鍵字命中；委派前先用一句話宣告理由，使用者可當場否決。密度調整：/suggest-mode）：${HINTS}"
+fi
+
+[ -n "$REPORT_AUDIT_MSG" ] && { [ -n "$HINTS" ] && echo; echo "$REPORT_AUDIT_MSG"; }
+
 exit 0

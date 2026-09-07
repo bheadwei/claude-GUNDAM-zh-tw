@@ -31,9 +31,14 @@ Plan 檔**不重複** WBS 已有欄位。
 └── plans/
     ├── INDEX.md
     ├── 2.1-auth-middleware.md          ← 對應 WBS 任務 2.1
+    ├── 2.1-auth-middleware.progress.md ← 執行帳本（僅執行型委派會產生）
     ├── 3.2-oauth-flow.md
     └── adhoc-2026-04-20-fix-login.md   ← 無 WBS 對應的臨時計畫
 ```
+
+`*.progress.md` 是**執行帳本**，只在走執行型委派時產生（見 `subagent-execution` skill）。
+它記派工、commit、審查結果與裁決，是 context 被壓縮後的復原依據——
+**不是** plan 的替代品，也不放 plan 已有的資訊。
 
 - **有 WBS 對應**：`<task-id>-<kebab-slug>.md`（slug 取自任務標題，英數小寫 + 連字號，20 字元內）
 - **無 WBS 對應（ad-hoc）**：`adhoc-YYYY-MM-DD-<kebab-slug>.md`
@@ -148,8 +153,12 @@ Plan 獨有的技術層面依賴，非 WBS 的任務依賴：
 |---|---|---|
 | `/plan` | 建立、覆寫整份 | 初次規劃或使用者要求重寫 |
 | `/tdd` | 只改階段狀態、current_phase、updated | 每完成一階段 |
-| `/verify` | 只標記整體 status=✅ 並歸檔 | 所有階段完成且驗證通過 |
+| `/verify` | 只標記整體 status=✅ 並歸檔（**帳本一起歸檔**） | 所有階段完成且驗證通過 |
 | 使用者手動 | 任何時候 | 但會被 `/tdd` 下次讀取時覆寫階段狀態 |
+
+**implementer subagent 沒有寫入權。** 執行型委派時，plan 檔只有主模型能改——
+派工 prompt 必須明講「plan 檔只讀」，否則 subagent 會跟主模型搶著改階段狀態。
+帳本（`*.progress.md`）同理，只有主模型寫。
 
 ### 與 WBS 的雙向同步
 

@@ -66,6 +66,17 @@ description: Use when starting any conversation in a TaskMaster project — esta
 | 「反正我做完會自己檢查」 | 自檢不等於 code-quality-specialist 的檢查。 |
 | 「hook 沒提示我，應該不用派」 | hook 的關鍵字表不完整。**沒提示不代表不用派。** |
 
+## 執行多階段計畫時：agent 不只是顧問
+
+`standard`/`critical` 且 plan 有 ≥2 階段時，**載入 `subagent-execution` skill**——
+它把每個階段交給一個全新的 implementer subagent 實作，帶階段審查、有界修復迴圈、
+以及能撐過 context 壓縮的帳本。
+
+不要自己一路把 4 個階段寫完：長任務裡你會慢慢偏離 plan，而且沒有任何紀錄能讓人
+（包括下一個 session 的你）看出是從哪一步開始偏的。
+
+`quick` 模式不適用——開 subagent 的開銷大於收益。
+
 ## agent 回來之後：照狀態碼分流
 
 每個 agent 結束時會輸出 `STATUS: <碼>`。照這張表處理，**不要自己揣測**：
