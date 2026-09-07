@@ -11,6 +11,9 @@
 4. **記錄問答歷史** — 所有問答寫入 `.claude/qa-history/YYYY-MM-DD-HHMMSS-<command-name>.md`
    - 先在記憶中收集所有問答，流程結束後**一次性 Write 整份檔案**（省 token）
    - 格式：每題含選項、答案、時間；結尾寫最終結論
+   - **寫入前檢查敏感資料**：`qa-history/` 進版控，git 歷史刪不掉。
+     使用者在回答裡貼的憑證、客戶資料、個資、未公開客戶名稱，一律移除或遮蔽後才寫。
+     完整檢查清單見 `.claude/commands/save-session.md` 的「敏感資料檢查」
 
 ## 例外（不需走 Q&A）
 

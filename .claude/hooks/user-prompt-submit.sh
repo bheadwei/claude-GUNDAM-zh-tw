@@ -6,11 +6,20 @@
 #
 # 受 .suggest-mode 控制：off→不注入、low→僅高訊號(安全/金流)、medium·high→全部。
 
-PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd 2>/dev/null)}"
-CLAUDE_DIR="$PROJECT_ROOT/.claude"
-mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null || true
-
 INPUT=$(cat)
+
+source "$(dirname "${BASH_SOURCE[0]}")/lib/resolve-roots.sh" 2>/dev/null || true
+if declare -F resolve_roots >/dev/null 2>&1; then
+    resolve_roots "$INPUT"
+else
+    MAIN_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd 2>/dev/null)}"
+    MAIN_CLAUDE="$MAIN_ROOT/.claude"; WORK_ROOT="$MAIN_ROOT"; WORK_CLAUDE="$MAIN_CLAUDE"; IN_WORKTREE=0
+fi
+
+PROJECT_ROOT="$WORK_ROOT"
+CLAUDE_DIR="$MAIN_CLAUDE"                  # suggest-mode / wbs.md 偵測 / log 都在主 checkout
+WORK_DATA="$WORK_CLAUDE/taskmaster-data"   # 報告期望：每個 worktree 各自
+mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null || true
 USER_INPUT=""
 # UserPromptSubmit 的欄位是 .prompt（舊版誤用 .content）；保留 fallback
 command -v jq >/dev/null 2>&1 && USER_INPUT=$(echo "$INPUT" | jq -r '.prompt // .content // .message // ""' 2>/dev/null)
@@ -41,7 +50,7 @@ fi
 # 刻意放在斜線指令判斷「之前」：非同步 agent 到這個對話邊界通常已跑完，
 # 而使用者下一句常常正是 /verify 或 /task-next——那時最需要知道報告缺了沒。
 # post-agent-report.sh 也會呼叫同一支腳本，覆蓋「agent 連續接力」的情形。
-REPORT_AUDIT_MSG=$(bash "$(dirname "${BASH_SOURCE[0]}")/lib/check-report-expectations.sh" "$CLAUDE_DIR" 2>/dev/null || echo "")
+REPORT_AUDIT_MSG=$(bash "$(dirname "${BASH_SOURCE[0]}")/lib/check-report-expectations.sh" "$WORK_CLAUDE" "$MAIN_CLAUDE" 2>/dev/null || echo "")
 
 # 斜線指令不做意圖路由（使用者已明確指定流程），但稽核結果仍要送達
 case "$USER_INPUT" in

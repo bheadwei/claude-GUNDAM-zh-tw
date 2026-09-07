@@ -61,16 +61,27 @@ documentation-specialist、workflow-template-manager
 
 平行不是反模式，**「會互改同一批檔案」才是**。
 
-- **判斷依據**：各任務 plan 檔的 `files:` frontmatter（見 `plan-format` skill）。無交集 → 可平行；沒 plan／沒 `files:` → 保守視為不可平行
-- **入口與編排細節**：見 `.claude/commands/task-next.md`（worktree 建立、合併、清理的完整步驟）
-- **委派**：用 `Agent` 工具 + `isolation: "worktree"` 時，務必確保各 agent 檔案範圍不重疊
+- **判斷依據**：各任務 plan 檔的 `files:` frontmatter（見 `plan-format` skill）。
+  無交集 → 可平行；沒 plan／沒 `files:` → 保守視為不可平行
+- **完整程序**：見 `worktree-orchestration` skill（**唯一來源**）——狀態隔離邊界、
+  原生 `claude -w`、依相依順序合併、清理判準
+- **入口**：`/task-next` 的平行選項（WBS 驅動）、`/worktree`（臨時隔離）
+- **委派**：`Agent` 工具帶 `isolation: "worktree"`，或 agent frontmatter 寫
+  `isolation: worktree`（`refactor-cleaner` 已如此設定）
+- **並行數 2-4 個**。再多你自己看不過來，磁碟與 context 成本也會超過收益
 
 > 一句話：**循序是預設、平行是選項**。
+>
+> 但要知道 Claude Code 會**強制**隔離：worktree session（含它派出的 subagent）
+> 對主 checkout 的寫入、cwd 逃逸、`git -C` 重導都會被擋。這比本檔寫「不要互改
+> 同一批檔案」強得多——那是自律，這是機器。
 
 ## 相關
 
 - `.claude/rules/task-mode.md` — 任務強度分級
 - `plan-format` skill — plan 的 `files:` 欄
+- `worktree-orchestration` skill — worktree 的完整程序與狀態隔離邊界
+- `.claude/commands/worktree.md` — 臨時隔離工作區的入口
 - `.claude/coordination/README.md` — 交接檔格式
 - `.claude/commands/suggest-mode.md` — 調整建議/注入密度
 - `.claude/commands/hub-delegate.md` — 手動委派單一 agent

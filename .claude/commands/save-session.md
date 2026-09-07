@@ -32,6 +32,25 @@ mkdir -p .claude/sessions
 > **儲存位置**：放在**專案內** `.claude/sessions/`，不是 `~/.claude/sessions/`。
 > 理由：session 紀錄屬於專案開發歷程，應跟著 repo 走，可被 git 追蹤、跨機器同步、context 清楚。
 
+### ⚠️ 寫入前必須做的敏感資料檢查（**不可略過**）
+
+`.claude/sessions/` **會進版控**，而 git 歷史刪不掉——`git rm` 只是新增一個刪除的
+commit，內容仍留在歷史裡。所以寫檔**之前**逐項確認：
+
+| 檢查 | 常見來源 |
+|---|---|
+| **憑證** —— API key、token、密碼、連線字串、私鑰 | 貼進對話的 `.env` 內容、錯誤訊息裡的連線字串、curl 指令的 header |
+| **客戶資料／個資** —— 姓名、身分證、電話、Email、帳號、地址 | 除錯時貼的資料樣本、DB 查詢結果、log 節錄 |
+| **內部機密** —— 未公開的客戶名稱、合約內容、內部系統主機名與 IP | 需求討論、部署設定 |
+
+發現就**移除或遮蔽**（`sk-live-****`、`客戶 A`、`<redacted>`），不要照抄。
+
+需要保留技術脈絡時，寫**形狀**不寫**內容**：
+「連線字串的 `sslmode` 參數缺失導致連線失敗」可以，把整條連線字串貼上去不行。
+
+> 這條同樣適用 `.claude/qa-history/`（見 `rules/interactive-qa.md`）與
+> `.claude/context/learned/`（見 `/learn`）——三者都進版控。
+
 ### 步驟 3: 寫入 session 檔案
 
 建立 `.claude/sessions/YYYY-MM-DD-<short-id>-session.md`（相對於專案根目錄）

@@ -457,6 +457,72 @@ expect_contains "注入含 documentation-specialist"  "documentation-specialist"
 expect_contains "注入含坑目錄指示"                 "context/learned"   "$sess_ctx"
 
 # =========================================================================
+section "worktree 感知 — 狀態隔離邊界"
+# =========================================================================
+# 官方：「Hook paths don't follow the worktree. ${CLAUDE_PROJECT_DIR} stays put;
+# the cwd field in the hook's input JSON is the worktree root.」
+# 所以短命旗標必須跟著 worktree，共享產物必須留在主 checkout。
+
+# 在沙箱裡造一個真的 linked worktree
+WT_SEQ=0
+setup_worktree() {
+    reset
+    # reset 刪掉 .claude（含 worktree 目錄）但 git 仍記著它 → 先 prune，
+    # 並用遞增名稱避免分支重複
+    ( cd "$SANDBOX" && git init -q . 2>/dev/null       && echo x > seed && git add seed       && git -c user.email=t@t -c user.name=t commit -qm init       && git worktree prune ) >/dev/null 2>&1
+    WT_SEQ=$((WT_SEQ + 1))
+    WT="$SANDBOX/.claude/worktrees/wt$WT_SEQ"
+    ( cd "$SANDBOX" && git worktree add -q "$WT" -b "wt$WT_SEQ" ) >/dev/null 2>&1
+    mkdir -p "$WT/.claude/taskmaster-data" "$WT/src/deep" "$WT/src/api" 2>/dev/null
+}
+# payload 帶 cwd（模擬 worktree session）
+wcwd() { jq -nc --arg f "$1" --arg c "$2" \
+    '{tool_name:"Write", tool_input:{file_path:$f}, cwd:$c}'; }
+
+setup_worktree
+if [ -f "$WT/.git" ]; then ok "沙箱能建出 linked worktree（.git 是檔案）"
+else ng "沙箱能建出 linked worktree（.git 是檔案）" ".git 為檔案" "不是"; fi
+
+# 主 checkout 有模式檔、worktree 沒有 → 在 worktree 裡應該被擋
+echo standard > "$MODE_FILE"
+expect_decision "worktree 不吃主 checkout 的模式檔" deny \
+    "$(run pre-tool-use.sh "$(wcwd "$WT/src/a.ts" "$WT")")"
+expect_decision "同一時間主 checkout 仍放行" allow \
+    "$(run pre-tool-use.sh "$(wcwd "$SANDBOX/src/a.ts" "$SANDBOX")")"
+
+# worktree 自己的模式檔才算
+echo quick > "$WT/.claude/taskmaster-data/.current-task-mode"
+expect_decision "worktree 有自己的模式檔就放行" allow \
+    "$(run pre-tool-use.sh "$(wcwd "$WT/src/a.ts" "$WT")")"
+
+# cwd 是 worktree 子目錄（Claude 跑過 cd）也要認得
+expect_decision "cwd 為子目錄仍解析到 worktree 根" allow \
+    "$(run pre-tool-use.sh "$(wcwd "$WT/src/a.ts" "$WT/src/deep")")"
+
+# 坑紀錄是共享的：只放在主 checkout 也要在 worktree 生效
+setup_worktree
+echo standard > "$WT/.claude/taskmaster-data/.current-task-mode"
+mkdir -p "$SANDBOX/.claude/context/learned"
+printf -- '---\ndate: 2026-09-07\ntitle: 共享的坑\nfiles:\n  - "src/*.ts"\nsymptom: s\nroot-cause: r\nguard: g\n---\n' \
+    > "$SANDBOX/.claude/context/learned/shared.md"
+out=$(run pre-tool-use.sh "$(wcwd "$WT/src/a.ts" "$WT")")
+expect_decision "主 checkout 的坑在 worktree 也會擋"  deny "$out"
+expect_contains "且貼出的是共享那筆"  "共享的坑" "$out"
+
+# .doc-impact 跟著 worktree
+setup_worktree
+run post-write.sh "$(wcwd "$WT/src/api/x.ts" "$WT")" >/dev/null
+if [ -f "$WT/.claude/taskmaster-data/.doc-impact" ]; then ok "doc-impact 寫進 worktree"
+else ng "doc-impact 寫進 worktree" "worktree 有 .doc-impact" "沒有"; fi
+if [ ! -f "$SANDBOX/.claude/taskmaster-data/.doc-impact" ]; then ok "doc-impact 沒污染主 checkout"
+else ng "doc-impact 沒污染主 checkout" "主 checkout 無此檔" "有"; fi
+
+# 非 worktree 情境（無 cwd 欄位）行為不變
+reset
+expect_decision "無 cwd 欄位時沿用舊行為（被擋）" deny \
+    "$(run pre-tool-use.sh "$(w /p/src/api.ts)")"
+
+# =========================================================================
 section "全體 hooks — 語法與健壯性"
 # =========================================================================
 for h in "$HOOK_DIR"/*.sh; do

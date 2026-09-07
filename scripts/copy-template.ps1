@@ -56,6 +56,7 @@ $excludeDirs = @(
     '.idea',
     'tmp',
     'workshop',
+    '.github',
     # .claude 子目錄
     'taskmaster-data',
     'qa-history',

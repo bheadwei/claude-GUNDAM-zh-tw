@@ -100,27 +100,16 @@ description: 從 WBS 取得下一個任務建議，分析優先級和依賴關�
 
 ### 平行開發編排（使用者選了「平行開發」才執行）
 
-採 **git worktree 隔離**，每個任務獨立分支、互不踩檔，完成後依序合併：
+**完整程序見 `worktree-orchestration` skill（唯一來源，勿在此重述）。** 以下只列本指令的職責：
 
-1. **前置檢查**：工作目錄需乾淨（`git status` 無未提交變更）；否則提示先提交/暫存。
-2. **為每個並行任務建立 worktree**：
-   ```bash
-   git worktree add ".claude/worktrees/<task-id>" -b "task/<task-id>-<slug>"
-   ```
-3. **並行開發**：每個任務在自己的 worktree 內走既有鏈（`/tdd` → `/verify`）。可用 `Agent` 工具並 `isolation: "worktree"` 委派，或逐一進入各 worktree 開發。每個任務各自寫 `.current-task` / plan 階段狀態（互不干擾）。
-4. **合併回主分支**（逐一、依序，降低衝突）：
-   ```bash
-   git -C "<主repo>" merge --no-ff "task/<task-id>-<slug>"
-   ```
-   - 合併前該任務需 `/verify` 通過。
-   - 若仍出現合併衝突（代表 `files:` 估算有漏）→ 停下、人工解、並提醒補正該 plan 的 `files:`。
-5. **清理**：
-   ```bash
-   git worktree remove ".claude/worktrees/<task-id>"
-   ```
-6. **更新 WBS**：每個完成的任務標 `✅ 完成`。
+1. **前置檢查**：工作目錄乾淨（`git status` 無未提交變更）；否則先提交或暫存。
+2. **共用型別先進 main**：若這幾個任務會用到共同的型別／介面／schema，
+   **先把它們 commit 到 main 再開 worktree**。這是降低合併衝突最有效的一步——
+   各 worktree 看不到彼此，共用定義必須先存在。
+3. **載入 `worktree-orchestration` skill**，照它的流程建立 worktree、派工、合併、清理。
+4. **更新 WBS**：每個合併完成的任務標 `✅ 完成`。
 
-> 規範細節與反模式見 `.claude/rules/agent-orchestration.md`「安全平行（worktree 編排）」。
+> **並行數建議 2-4 個。** 再多的話你自己看不過來，而且磁碟與 context 成本會超過收益。
 
 ### 選擇任務模式（quick / standard / critical）
 

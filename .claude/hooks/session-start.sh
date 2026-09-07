@@ -57,7 +57,18 @@ PLATFORM=$(detect_platform)
 # CLAUDE_PROJECT_DIR 優先（與其他 hook 一致，也讓 tests/ 能在沙箱內隔離執行）；
 # 缺席時退回腳本位置推導。
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
-PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." 2>/dev/null && pwd)}"
+
+# SessionStart 也可能在 worktree 裡啟動（claude --worktree）。
+# log 與時間紀錄集中主 checkout；短命旗標則跟著當前 checkout。
+SS_INPUT=$(cat 2>/dev/null || echo '{}')
+source "$SCRIPT_DIR/lib/resolve-roots.sh" 2>/dev/null || true
+if declare -F resolve_roots >/dev/null 2>&1; then
+    resolve_roots "$SS_INPUT"
+    PROJECT_ROOT="$MAIN_ROOT"
+else
+    PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." 2>/dev/null && pwd)}"
+    MAIN_CLAUDE="$PROJECT_ROOT/.claude"; WORK_CLAUDE="$MAIN_CLAUDE"; WORK_ROOT="$PROJECT_ROOT"; IN_WORKTREE=0
+fi
 CLAUDE_DIR="$PROJECT_ROOT/.claude"
 
 # 路徑驗證（所有平台）
@@ -101,7 +112,8 @@ banner() { echo -e "$1" > "$BANNER_SINK" 2>/dev/null || true; }
 # 這是「主模型會不會主動委派 agent」的唯一機器保證——rules/ 是軟規則，
 # 對撞 Claude Code 內建的「非必要不開 Agent」預設會輸；SessionStart 注入不會。
 emit_context() {
-    local skill_file="$CLAUDE_DIR/skills/using-taskmaster/SKILL.md"
+    local skill_file="$WORK_CLAUDE/skills/using-taskmaster/SKILL.md"
+    [ -f "$skill_file" ] || skill_file="$CLAUDE_DIR/skills/using-taskmaster/SKILL.md"
     local payload="" skill_body=""
 
     [ -f "$skill_file" ] && skill_body=$(cat "$skill_file" 2>/dev/null)
@@ -199,6 +211,7 @@ date '+%H:%M' > "$TIMELOG_DIR/.session-start" 2>/dev/null
 # 坑閘門的「本 session 已提示過」清單：每個 session 重新開始，
 # 否則第二個 session 就不會再提醒同一個檔案的坑。
 rm -f "$TIMELOG_DIR/.pitfall-seen" 2>/dev/null
+rm -f "$WORK_CLAUDE/taskmaster-data/.pitfall-seen" 2>/dev/null
 
 # 檢查是否存在 CLAUDE_TEMPLATE.md
 if [ -f "$PROJECT_ROOT/CLAUDE_TEMPLATE.md" ]; then

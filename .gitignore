@@ -1,34 +1,84 @@
-# MCP 設定（含 API keys，不可提交）
+# ============================================================================
+# 不可提交：秘密與個人設定
+# ============================================================================
 .mcp.json
 !.mcp.json.*.example
-
-# Claude Code 個人設定
 .claude/settings.local.json
-.claude/taskmaster-data/
-.claude/sessions/
 
-# Node
+# 所有 .env 變體（.env.production / .env.staging / .env.test / *.local …）
+# 只列 .env 與 .env.local 會讓 .env.production 進版控 —— 那是 production 秘密外洩。
+# 例外：*.example 是給人看的範本，要進版控。
+.env*
+!.env.example
+!.env*.example
+
+# ============================================================================
+# 執行時短命狀態
+#
+# 判準：這些是「單一 session／單一 worktree 私有」的旗標與紀錄，
+# 換個 session 就該重來、換個 worktree 就該獨立。進版控只會製造衝突。
+# ============================================================================
+.claude/taskmaster-data/.current-task
+.claude/taskmaster-data/.current-task-mode
+.claude/taskmaster-data/.doc-impact
+.claude/taskmaster-data/.doc-impact-notified
+.claude/taskmaster-data/.pitfall-seen
+.claude/taskmaster-data/.report-expectations.jsonl
+.claude/taskmaster-data/.session-start
+.claude/taskmaster-data/.session-snapshot
+.claude/taskmaster-data/.suggest-mode
+.claude/taskmaster-data/timelog.jsonl
+.claude/taskmaster-data/wbs-history.log
+
+# Claude Code 建立的 worktree（官方建議忽略，否則主 checkout 會滿是 untracked）
+.claude/worktrees/
+
+# ============================================================================
+# 以下刻意「進版控」—— 不要加進本檔
+#
+#   taskmaster-data/wbs.md · wbs-archive.md    專案 backlog
+#   taskmaster-data/plans/ · *.progress.md     實作計畫與執行帳本
+#   taskmaster-data/project.json               專案設定
+#   taskmaster-data/package-manager.json       套件管理器選擇
+#   taskmaster-data/ui-style.json              UI 風格選擇
+#   context/                                   agent 報告、ADR、踩過的坑
+#   coordination/                              agent 交接紀錄
+#   sessions/                                  開發歷程（理由見 /save-session）
+#   qa-history/                                需求問答軌跡（見 rules/interactive-qa.md）
+#
+# 理由：規格、計畫、決策紀錄本身就是專案的一部分，要能被 review、被 diff、
+# 被追溯，也要能跨機器同步。這與 spec-kit / OpenSpec / BMAD 的做法一致。
+# logs/ 由 .claude/logs/.gitignore 巢狀處理。
+#
+# ⚠️ sessions/ 與 qa-history/ 會記錄對話內容。寫入前務必確認沒有憑證、
+#    客戶資料或個資 —— 進了 git 歷史就刪不掉。
+# ============================================================================
+
+# ============================================================================
+# 依賴與建置產物
+# ============================================================================
 node_modules/
-
-# Python
 __pycache__/
 *.py[cod]
 venv/
-.env
+.venv/
+dist/
+build/
+.next/
+target/
 
-# OS
+# ============================================================================
+# 編輯器與 OS
+# ============================================================================
 .DS_Store
 Thumbs.db
-
-# IDE
 .vscode/
 .idea/
 
-# 暫存
+# ============================================================================
+# 暫存與備份
+# ============================================================================
 tmp/
 *.tmp
 *.bak
-
-# update-template 備份
 .claude-backups/
-

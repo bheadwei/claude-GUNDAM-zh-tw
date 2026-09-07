@@ -21,19 +21,29 @@
 
 set -u
 
-PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd 2>/dev/null)}"
-CLAUDE_DIR="$PROJECT_ROOT/.claude"
-DATA_DIR="$CLAUDE_DIR/taskmaster-data"
+INPUT=$(cat)
+
+# worktree 感知：任務模式等短命旗標跟著 worktree，坑紀錄與 log 留在主 checkout
+source "$(dirname "${BASH_SOURCE[0]}")/lib/resolve-roots.sh" 2>/dev/null || true
+if declare -F resolve_roots >/dev/null 2>&1; then
+    resolve_roots "$INPUT"
+else
+    MAIN_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd 2>/dev/null)}"
+    MAIN_CLAUDE="$MAIN_ROOT/.claude"; WORK_ROOT="$MAIN_ROOT"; WORK_CLAUDE="$MAIN_CLAUDE"; IN_WORKTREE=0
+fi
+
+PROJECT_ROOT="$WORK_ROOT"          # 閘門要判斷的檔案在當前 checkout 裡
+CLAUDE_DIR="$MAIN_CLAUDE"          # log 集中主 checkout
+DATA_DIR="$WORK_CLAUDE/taskmaster-data"   # 任務模式：每個 worktree 獨立
 MODE_FILE="$DATA_DIR/.current-task-mode"
+LEARNED_ROOT="$MAIN_CLAUDE"        # 坑紀錄：跨 worktree 共享
 TTL_HOURS="${TASKMODE_TTL_HOURS:-8}"
 
 mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null || true
 
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] pre-tool: $*" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] pre-tool${IN_WORKTREE:+[wt]}: $*" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
 }
-
-INPUT=$(cat)
 
 # jq 不可用 → 只 log 不攔（避免因環境缺依賴而擋住所有寫入）
 if ! command -v jq >/dev/null 2>&1; then
@@ -51,10 +61,14 @@ log "$TOOL_NAME ${FILE_PATH:-${COMMAND:0:60}}"
 [ "${TASKMODE_GATE:-on}" = "off" ] && exit 0
 
 SUGGEST_MODE="medium"
-if [ -f "$DATA_DIR/.suggest-mode" ]; then
-    SUGGEST_MODE=$(tr -d '[:space:]' < "$DATA_DIR/.suggest-mode" 2>/dev/null || echo "medium")
-    [ -z "$SUGGEST_MODE" ] && SUGGEST_MODE="medium"
-fi
+# 讀主 checkout：/suggest-mode 是專案級設定，不該每個 worktree 各設一次
+for smf in "$MAIN_CLAUDE/taskmaster-data/.suggest-mode" "$DATA_DIR/.suggest-mode"; do
+    if [ -f "$smf" ]; then
+        SUGGEST_MODE=$(tr -d '[:space:]' < "$smf" 2>/dev/null || echo "medium")
+        [ -z "$SUGGEST_MODE" ] && SUGGEST_MODE="medium"
+        break
+    fi
+done
 [ "$SUGGEST_MODE" = "off" ] && exit 0
 
 # 輸出 deny 決策（reason 會回饋給主模型，讓它自我修正後重試）
@@ -115,14 +129,41 @@ fi
 # ============================================================================
 
 # 正規化成正斜線，方便比對
-NORM=$(printf '%s' "$FILE_PATH" | tr '\\' '/')
+NORM=$(printf '%s' "$FILE_PATH" | tr '\' '/')
 
-# 排除：模板自身設定、依賴、建置產物 —— 這些不算「實作型」寫入
-case "$NORM" in
-    */.claude/*|.claude/*) exit 0 ;;
-    */node_modules/*|*/.venv/*|*/venv/*|*/dist/*|*/build/*|*/.next/*|*/target/*) exit 0 ;;
-    */docs/*|*/.git/*) exit 0 ;;
-esac
+# 轉成「相對當前 checkout root」再比對排除規則。
+#
+# 為什麼不能用絕對路徑做子字串比對：worktree 住在 `.claude/worktrees/<name>/`，
+# 所以 worktree 裡**每個**檔案的絕對路徑都含有 `/.claude/`。用 `*/.claude/*`
+# 比對會把整個 worktree 的檔案都當成「模板自身設定」放行，任務模式閘門與
+# 坑閘門在 worktree 裡就全部失效。（此 bug 由 tests 的 worktree 案例抓出。）
+WORK_NORM=$(printf '%s' "$WORK_ROOT" | tr '\' '/')
+REL_PATH="${NORM#"$WORK_NORM"/}"
+
+if [ "$REL_PATH" != "$NORM" ]; then
+    # 成功相對化 → 樣式錨定在開頭，不會被路徑中段的同名目錄誤命中
+    case "$REL_PATH" in
+        .claude/*) exit 0 ;;
+        node_modules/*|.venv/*|venv/*|dist/*|build/*|.next/*|target/*) exit 0 ;;
+        docs/*|.git/*) exit 0 ;;
+    esac
+    # monorepo 的巢狀依賴／產物
+    case "$REL_PATH" in
+        */node_modules/*|*/.venv/*|*/venv/*|*/dist/*|*/build/*|*/.next/*|*/target/*) exit 0 ;;
+        */.git/*) exit 0 ;;
+    esac
+else
+    # 檔案不在當前 checkout 內（或無法相對化）→ 退回絕對路徑比對，維持舊行為，
+    # 但 worktree 內的檔案不套用 .claude 放行
+    case "$NORM" in
+        */.claude/worktrees/*) ;;
+        */.claude/*|.claude/*) exit 0 ;;
+    esac
+    case "$NORM" in
+        */node_modules/*|*/.venv/*|*/venv/*|*/dist/*|*/build/*|*/.next/*|*/target/*) exit 0 ;;
+        */docs/*|*/.git/*) exit 0 ;;
+    esac
+fi
 
 # 只有這些副檔名視為程式碼
 case "$NORM" in
@@ -142,8 +183,8 @@ esac
 #
 # 逃生門：PITFALL_GATE=off（或 .suggest-mode off，已於上方處理）
 # ============================================================================
-LEARNED_DIR="$CLAUDE_DIR/context/learned"
-SEEN_FILE="$DATA_DIR/.pitfall-seen"
+LEARNED_DIR="$LEARNED_ROOT/context/learned"   # 共享
+SEEN_FILE="$DATA_DIR/.pitfall-seen"          # 每個 worktree 各自提醒一次
 
 # 取 frontmatter 的純量欄位
 fm_field() {

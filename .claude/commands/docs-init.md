@@ -58,7 +58,12 @@ description: 依開發情境產出規格文件（demo / mvp / full）。demo 產
 
 從以下來源讀取已收集的專案資訊，避免重問：
 
-1. `.claude/qa-history/YYYY-MM-DD-HHMMSS-task-init.md`（若由 `/task-init` 觸發）
+0. **`docs/00_brief.md`（優先，若存在）** —— `/task-init` 步驟 2.7 產出且**已由使用者逐段確認**的需求 brief。
+   比解析問答歷史可靠得多：它已經收斂過、含 non-goals 與風險、且「仍未釐清」那段誠實標出了缺口。
+   **有 brief 就不要再問它已經涵蓋的問題。**
+   - 特別注意 brief 的「**仍未釐清**」段：那些是使用者當時說「還不確定」的事。
+     產文件時**不要自己填答案**——在文件對應處標 `TBD` 並列出待確認清單
+1. `.claude/qa-history/YYYY-MM-DD-HHMMSS-task-init.md`（若由 `/task-init` 觸發，或 brief 不存在時的退路）
 2. `.claude/taskmaster-data/project.json`
 3. 既有 `docs/` 下的檔案（若為升級模式）
 

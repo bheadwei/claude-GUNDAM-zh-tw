@@ -10,7 +10,10 @@
 # 改法：非同步啟動時只「記下期望」，由本腳本在後續的對話邊界（UserPromptSubmit
 # 或下一個 agent 完成時）重新檢查，缺報告則注入要求補寫。
 #
-# 用法：bash check-report-expectations.sh <CLAUDE_DIR>
+# 用法：bash check-report-expectations.sh <WORK_CLAUDE> [MAIN_CLAUDE]
+#   WORK_CLAUDE  當前 worktree 的 .claude —— 期望檔放這裡（每個 worktree 各自）
+#   MAIN_CLAUDE  主 checkout 的 .claude —— 報告與 log 找這裡（跨 worktree 共享）
+#                省略時等同 WORK_CLAUDE（非 worktree 情境）
 #   stdout：有事要講時輸出純文字（呼叫端負責包成 additionalContext）；沒事則無輸出
 #   exit ：一律 0（稽核不該擋任何事）
 #
@@ -21,13 +24,15 @@
 
 set -uo pipefail
 
-CLAUDE_DIR="${1:-}"
-[ -n "$CLAUDE_DIR" ] && [ -d "$CLAUDE_DIR" ] || exit 0
+WORK_CLAUDE="${1:-}"
+MAIN_CLAUDE="${2:-$WORK_CLAUDE}"
+[ -n "$WORK_CLAUDE" ] && [ -d "$WORK_CLAUDE" ] || exit 0
+[ -d "$MAIN_CLAUDE" ] || MAIN_CLAUDE="$WORK_CLAUDE"
 [ "${REPORT_AUDIT:-on}" = "off" ] && exit 0
 command -v jq >/dev/null 2>&1 || exit 0
 
-EXPECT_FILE="$CLAUDE_DIR/taskmaster-data/.report-expectations.jsonl"
-LOG_FILE="$CLAUDE_DIR/logs/context-reports.log"
+EXPECT_FILE="$WORK_CLAUDE/taskmaster-data/.report-expectations.jsonl"
+LOG_FILE="$MAIN_CLAUDE/logs/context-reports.log"
 [ -s "$EXPECT_FILE" ] || exit 0
 
 GRACE="${REPORT_GRACE_SECONDS:-120}"
@@ -65,7 +70,7 @@ while IFS= read -r line; do
     # 找「這次啟動之後才出現」的報告：-newermt 比 -mmin 精確，
     # 而且避免把 agent 上一輪的舊報告誤認為這次的產出
     found=""
-    ctx="$CLAUDE_DIR/context/$area"
+    ctx="$MAIN_CLAUDE/context/$area"
     if [ -d "$ctx" ]; then
         found=$(find "$ctx" -maxdepth 1 -name "${agent}-*.md" \
                      -newermt "@$epoch" 2>/dev/null | head -1)
