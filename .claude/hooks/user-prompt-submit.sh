@@ -66,18 +66,28 @@ fi
 # 以下為一般訊號（low 模式略過）
 if [ "$SUGGEST_MODE" != "low" ]; then
     if has 'deploy|部署|發布|上線|ci/cd|docker|kubernetes|k8s|rollback|回滾'; then
-        add "偵測到部署/維運 → 建議委派 deployment-expert。"
+        add "偵測到部署/維運 → **委派 deployment-expert**（\`subagent_type: \"deployment-expert\"\`）。先過 security 閘門。"
     fi
     if has 'refactor|重構|dead code|死碼|cleanup|清理|整併'; then
-        add "偵測到重構/清理 → 建議委派 refactor-cleaner（分批移除、每批測試+commit）。"
+        add "偵測到重構/清理 → **委派 refactor-cleaner**（\`subagent_type: \"refactor-cleaner\"\`），分批移除、每批測試+commit。"
     fi
     if has 'build error|compile|編譯錯誤|型別錯誤|tsc|建置失敗|build failed'; then
-        add "偵測到建置/型別錯誤 → 建議委派 build-error-resolver（最小差異修復）。"
+        add "偵測到建置/型別錯誤 → **委派 build-error-resolver**（\`subagent_type: \"build-error-resolver\"\`），最小差異修復。"
     fi
     # 執行期 bug —— 與上面的建置錯誤分流：這裡是「跑起來行為不對」
     if has '壞了|不動了|沒反應|不work|不 work|怪怪的|為什麼會|怎麼會|異常|出錯|報錯|失敗了' \
        || has 'bug|broken|not working|unexpected|crash|當掉|閃退|卡住|重現'; then
-        add "偵測到執行期 bug → 建議委派 **debug-investigator**（強制先穩定重現 → 二分縮小 → 可證偽假設 → 寫重現測試，才動手修）。建置/型別錯誤請改用 build-error-resolver。"
+        add "偵測到執行期 bug → **委派 debug-investigator**（\`subagent_type: \"debug-investigator\"\`）。它強制先穩定重現 → 二分縮小 → 可證偽假設 → 寫重現測試才動手修，並且會先讀 \`context/learned/\` 確認這個坑踩過沒有。建置/型別錯誤請改用 build-error-resolver。"
+    fi
+    # 文件維護 —— 這條以前不存在，是 documentation-specialist 與
+    # workflow-template-manager 從未被啟動過的直接原因（agent-activity.jsonl 可查）
+    if has '文件|文檔|docs|documentation|readme|codemap|api 文件|api 文檔|註解文件|技術文件' \
+       || has '整理.{0,10}(文件|文檔|docs)|更新.{0,10}(文件|文檔|docs|readme)|同步.{0,10}(文件|文檔|docs)'; then
+        if has 'prd|adr|架構文檔|設計文檔|規格書|流程模板'; then
+            add "偵測到流程性文件（PRD/ADR/設計文檔）→ **委派 workflow-template-manager**（\`subagent_type: \"workflow-template-manager\"\`）。"
+        else
+            add "偵測到文件維護 → **委派 documentation-specialist**（\`subagent_type: \"documentation-specialist\"\`），它會從程式碼反推 codemap／API 文檔／技術 README。不要自己一個一個檔案改。"
+        fi
     fi
     if has 'ui|前端|頁面|畫面|component|元件|tailwind|css|pencil|設計稿'; then
         add "偵測到前端 UI/設計稿 → **先載入 \`ui-style-compliance\` skill**（風格三階段檢查已從常駐 rules 移出）；可用 /ui-page 或委派 ui-builder。"
@@ -117,5 +127,5 @@ fi
 [ "$SUGGEST_MODE" = "low" ] && [ "$HIGH_SIGNAL" -eq 0 ] && exit 0
 [ -z "$HINTS" ] && exit 0
 
-echo "💡 意圖路由提示（依關鍵字，僅供參考；可用 /suggest-mode 調整密度）：${HINTS}"
+echo "🎯 意圖路由（依關鍵字命中；委派前先用一句話宣告理由，使用者可當場否決。密度調整：/suggest-mode）：${HINTS}"
 exit 0

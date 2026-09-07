@@ -23,7 +23,7 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 SANDBOX=$(mktemp -d)
-trap 'rm -rf "$SANDBOX"' EXIT
+trap 'rm -rf "$SANDBOX" 2>/dev/null || true' EXIT
 
 MODE_FILE="$SANDBOX/.claude/taskmaster-data/.current-task-mode"
 SM_FILE="$SANDBOX/.claude/taskmaster-data/.suggest-mode"
@@ -207,8 +207,94 @@ expect_contains "開 PR → /pr"                "/pr"                   "$(run u
 expect_contains "依賴維護 → /deps"           "/deps"                 "$(run user-prompt-submit.sh "$(p '幫我升級套件')")"
 expect_contains "技術選型 → /adr"            "/adr"                  "$(run user-prompt-submit.sh "$(p 'Redux 還是 Zustand 比較好？要用哪個')")"
 
+reset
+expect_contains "文件維護 → documentation-specialist" "documentation-specialist" \
+    "$(run user-prompt-submit.sh "$(p '幫我整理更新文件')")"
+expect_contains "更新 README → documentation-specialist" "documentation-specialist" \
+    "$(run user-prompt-submit.sh "$(p '更新一下 README 和 API 文檔')")"
+expect_contains "PRD/ADR → workflow-template-manager" "workflow-template-manager" \
+    "$(run user-prompt-submit.sh "$(p '把 PRD 的架構文檔同步一下')")"
+expect_contains "路由用命令式而非建議式"      'subagent_type' \
+    "$(run user-prompt-submit.sh "$(p '幫我整理更新文件')")"
+
 reset; echo off > "$SM_FILE"
 expect_empty   "suggest-mode=off 不注入"     "$(run user-prompt-submit.sh "$(p '實作登入認證')")"
+
+# =========================================================================
+section "pre-tool-use.sh — 坑閘門（context/learned/）"
+# =========================================================================
+# 建一份坑紀錄：files: 用區塊寫法，另一份用行內寫法，兩種都要能觸發
+mk_pitfall() {
+    mkdir -p "$SANDBOX/.claude/context/learned"
+    cat > "$SANDBOX/.claude/context/learned/$1.md" <<EOF
+---
+date: 2026-08-19
+title: $2
+files:
+  - "$3"
+symptom: 換 site 後回 401
+root-cause: token 快取沒把 site 併進 key
+guard: 快取 key 必須含 site_id
+severity: high
+---
+EOF
+}
+
+reset; echo standard > "$MODE_FILE"
+mk_pitfall "oauth-site-scope" "OAuth token 不能跨 site 重用" "backend/mcp/*.py"
+out=$(run pre-tool-use.sh "$(w "$SANDBOX/backend/mcp/client.py")")
+expect_decision "命中 learned 的檔案被擋一次"      deny  "$out"
+expect_contains "deny 理由含根因"                  "token 快取沒把 site 併進 key" "$out"
+expect_contains "deny 理由含避法"                  "快取 key 必須含 site_id"      "$out"
+expect_decision "同檔案第二次放行（deny-once）"    allow "$(run pre-tool-use.sh "$(w "$SANDBOX/backend/mcp/client.py")")"
+expect_decision "無關檔案不受影響"                 allow "$(run pre-tool-use.sh "$(w "$SANDBOX/frontend/Button.tsx")")"
+
+reset; echo standard > "$MODE_FILE"
+mk_pitfall "inline-form" "行內 files 寫法" "x"
+printf -- '---\ndate: 2026-08-19\ntitle: 行內寫法\nfiles: ["src/api/**/*.ts"]\nsymptom: s\nroot-cause: r\nguard: g\nseverity: low\n---\n' \
+    > "$SANDBOX/.claude/context/learned/inline-form.md"
+expect_decision "files 行內寫法也能觸發"           deny  "$(run pre-tool-use.sh "$(w "$SANDBOX/src/api/v1/h.ts")")"
+
+reset; echo standard > "$MODE_FILE"
+mkdir -p "$SANDBOX/.claude/context/learned"
+cp "$SANDBOX/../.gitkeep" /dev/null 2>/dev/null || true
+printf -- '---\ndate: 2026-01-01\ntitle: 範本\nfiles:\n  - "backend/models.py"\nsymptom: s\nroot-cause: r\nguard: g\n---\n' \
+    > "$SANDBOX/.claude/context/learned/_PITFALL_TEMPLATE.md"
+expect_decision "_ 開頭的範本檔不被當真紀錄"       allow "$(run pre-tool-use.sh "$(w "$SANDBOX/backend/models.py")")"
+
+reset; echo standard > "$MODE_FILE"
+mk_pitfall "escape" "逃生門測試" "backend/mcp/*.py"
+expect_decision "PITFALL_GATE=off 關閉坑閘門"      allow "$(run pre-tool-use.sh "$(w "$SANDBOX/backend/mcp/a.py")" PITFALL_GATE=off)"
+
+reset; echo standard > "$MODE_FILE"
+expect_decision "沒有 learned 目錄時不誤擋"        allow "$(run pre-tool-use.sh "$(w "$SANDBOX/backend/mcp/a.py")")"
+
+# 任務模式閘門優先於坑閘門（沒判級時先要求判級，訊息不該混淆）
+reset
+mk_pitfall "order" "順序測試" "backend/mcp/*.py"
+out=$(run pre-tool-use.sh "$(w "$SANDBOX/backend/mcp/a.py")")
+expect_decision "無模式檔時仍先擋任務模式"         deny  "$out"
+expect_contains "且理由是判級而非坑"               "尚未判定任務模式" "$out"
+
+# =========================================================================
+section "session-start.sh — 委派指示注入"
+# =========================================================================
+reset
+# 沙箱內備一份 skill：session-start 會讀 $CLAUDE_PROJECT_DIR/.claude/skills/... 注入
+mkdir -p "$SANDBOX/.claude/skills/using-taskmaster"
+cp "$HOOK_DIR/../skills/using-taskmaster/SKILL.md" \
+   "$SANDBOX/.claude/skills/using-taskmaster/SKILL.md" 2>/dev/null || true
+sess_out=$(run session-start.sh '{}')
+if echo "$sess_out" | jq -e '.hookSpecificOutput.hookEventName == "SessionStart"' >/dev/null 2>&1; then
+    ok "session-start 輸出合法 JSON"
+else
+    ng "session-start 輸出合法 JSON" "可被 jq 解析的 SessionStart 事件" "${sess_out:0:80}"
+fi
+sess_ctx=$(echo "$sess_out" | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null)
+expect_contains "注入 using-taskmaster 全文"       "using-taskmaster"  "$sess_ctx"
+expect_contains "注入含強制委派標記"               "EXTREMELY"         "$sess_ctx"
+expect_contains "注入含 documentation-specialist"  "documentation-specialist" "$sess_ctx"
+expect_contains "注入含坑目錄指示"                 "context/learned"   "$sess_ctx"
 
 # =========================================================================
 section "全體 hooks — 語法與健壯性"

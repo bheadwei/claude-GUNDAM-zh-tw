@@ -41,7 +41,8 @@ description: 分析當前 session 並擷取值得保存的可重用模式作為�
 > 那**不是合法的 skill 格式**（skill 必須是 `skills/<name>/SKILL.md` 且帶 frontmatter），
 > 因此永遠不會被索引或載入，實質只是筆記卻佔著 skills 命名空間。已修正為下列兩種。
 
-用 `AskUserQuestion` 問一題：這個發現要成為**可載入的 skill**，還是**查閱用筆記**？
+用 `AskUserQuestion` 問一題：這個發現要成為**可載入的 skill**（跨專案通用的技巧），
+還是**坑紀錄**（這個專案特有、會在特定檔案重演的雷）？
 
 ### 選項 A：真 skill（模式夠通用、未來會想自動觸發）
 
@@ -69,10 +70,28 @@ description: <一句話說明內容>。Use when <明確的觸發條件——寫�
 
 寫完後**更新 `.claude/skills/INDEX.md`** 加一行，否則沒人知道它存在。
 
-### 選項 B：專案筆記（一次性排錯心得、專案特有慣例）
+### 選項 B：坑紀錄（這個專案踩過的雷、會在特定檔案重演）
 
-建立 `.claude/context/learned/[kebab-name].md`，格式自由，開頭寫明擷取日期與情境。
-不需 frontmatter，不會被當 skill 載入——需要時由人或 agent 主動去讀。
+建立 `.claude/context/learned/[kebab-name].md`，**照 `_PITFALL_TEMPLATE.md` 的 frontmatter**：
+
+```yaml
+---
+date: <今天>
+title: 一句話講清楚這個坑
+files:                    # 這個坑會在哪些檔案重演（glob，相對專案根）
+  - "backend/mcp/*.py"
+symptom: 看到的現象
+root-cause: 真正的原因，不是症狀複述
+guard: 下次碰這些檔案該怎麼做才不會再踩
+severity: high | medium | low
+---
+```
+
+**`files:` 不是裝飾**——`pre-tool-use.sh` 的坑閘門靠它比對：下次任何人或 agent 要寫入
+命中的檔案，會被擋一次並看到這份紀錄。留空或寫錯 = 永遠不會被觸發，等於沒寫。
+
+寫完後檢查一件事：**這個坑能不能用 regex 或測試表達？** 能的話優先升級成機器保證
+（加測試，或在 `pre-tool-use.sh` 加規則），文件留給判斷題。
 
 ## 流程
 

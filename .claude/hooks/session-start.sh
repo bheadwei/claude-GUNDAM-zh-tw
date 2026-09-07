@@ -54,8 +54,10 @@ PLATFORM=$(detect_platform)
 # set -e 會導致在 Windows 環境下任何非零退出碼都中斷執行
 
 # 跨平台路徑處理
+# CLAUDE_PROJECT_DIR 優先（與其他 hook 一致，也讓 tests/ 能在沙箱內隔離執行）；
+# 缺席時退回腳本位置推導。
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." 2>/dev/null && pwd)"
+PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." 2>/dev/null && pwd)}"
 CLAUDE_DIR="$PROJECT_ROOT/.claude"
 
 # 路徑驗證（所有平台）
@@ -75,10 +77,73 @@ log() {
 
 log "🪝 TaskMaster Session Start Hook 觸發 (Platform: $PLATFORM)"
 
+# ============================================================================
+# 輸出通道分流
+#
+# 本 hook 的 stdout 必須是單一 JSON（hookSpecificOutput.additionalContext），
+# 混入裝飾性 banner 會讓 Claude Code 解析失敗。因此：
+#   - 給人看的 ANSI banner → /dev/tty（直寫終端，繞過 stdout）
+#   - 給模型看的指示       → 累積進 CONTEXT_NOTES，最後由 finish() 一次輸出
+# 無 tty 時（CI、非互動）banner 直接丟棄，指示仍然送達。
+# ============================================================================
+# -c/-w 測試會誤判：Git Bash 下 /dev/tty 存在且看似可寫，但 stdin 被重導時
+# 實際開啟會噴 "No such device or address"。唯一可靠的判斷是真的試寫一次。
+BANNER_SINK="/dev/null"
+if { printf '' > /dev/tty; } 2>/dev/null; then BANNER_SINK="/dev/tty"; fi
+
+CONTEXT_NOTES=""
+note() { CONTEXT_NOTES="${CONTEXT_NOTES}$1
+"; }
+
+banner() { echo -e "$1" > "$BANNER_SINK" 2>/dev/null || true; }
+
+# 把 using-taskmaster skill 全文包成強制指示注入。
+# 這是「主模型會不會主動委派 agent」的唯一機器保證——rules/ 是軟規則，
+# 對撞 Claude Code 內建的「非必要不開 Agent」預設會輸；SessionStart 注入不會。
+emit_context() {
+    local skill_file="$CLAUDE_DIR/skills/using-taskmaster/SKILL.md"
+    local payload="" skill_body=""
+
+    [ -f "$skill_file" ] && skill_body=$(cat "$skill_file" 2>/dev/null)
+
+    if [ -n "$skill_body" ]; then
+        payload="<EXTREMELY_IMPORTANT>
+你在一個 TaskMaster 專案裡。以下是 \`using-taskmaster\` skill 全文——它規定了
+你何時**必須**委派專業 subagent、以及動工前必須先讀專案踩過的坑。
+其餘 skill 用 Skill 工具按需載入。
+
+${skill_body}
+</EXTREMELY_IMPORTANT>"
+    fi
+
+    [ -n "$CONTEXT_NOTES" ] && payload="${payload}
+
+${CONTEXT_NOTES}"
+
+    [ -z "$payload" ] && return 0
+
+    if command -v jq >/dev/null 2>&1; then
+        jq -n --arg c "$payload" '{
+            hookSpecificOutput: {
+                hookEventName: "SessionStart",
+                additionalContext: $c
+            }
+        }'
+    else
+        # jq 缺席時的純 bash 轉義（每個 ${s//old/new} 是一次 C 層掃描，夠快）
+        local s="$payload"
+        s="${s//\\/\\\\}"; s="${s//\"/\\\"}"
+        s="${s//$'\n'/\\n}"; s="${s//$'\r'/\\r}"; s="${s//$'\t'/\\t}"
+        printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$s"
+    fi
+}
+
+finish() { emit_context; exit 0; }
+
 # 依賴健檢：多個 hook（agent-monitor、handoff 注入、意圖路由）依賴 jq；缺少時提示使用者
 if ! command -v jq >/dev/null 2>&1; then
     log "⚠️ jq 未安裝：agent 監控與 handoff 自動注入將靜默停用"
-    echo "⚠️ 偵測到 jq 未安裝 — .claude 的 agent 監控與 handoff 自動注入會停用。安裝：Windows \`winget install jqlang.jq\`（或 scoop install jq）、macOS \`brew install jq\`、Linux \`apt install jq\`。"
+    note "⚠️ jq 未安裝 — agent 監控與 handoff 自動注入會停用。安裝：Windows \`winget install jqlang.jq\`、macOS \`brew install jq\`、Linux \`apt install jq\`。"
 fi
 
 # ============================================================================
@@ -131,6 +196,10 @@ fi
 mkdir -p "$TIMELOG_DIR" 2>/dev/null
 date '+%H:%M' > "$TIMELOG_DIR/.session-start" 2>/dev/null
 
+# 坑閘門的「本 session 已提示過」清單：每個 session 重新開始，
+# 否則第二個 session 就不會再提醒同一個檔案的坑。
+rm -f "$TIMELOG_DIR/.pitfall-seen" 2>/dev/null
+
 # 檢查是否存在 CLAUDE_TEMPLATE.md
 if [ -f "$PROJECT_ROOT/CLAUDE_TEMPLATE.md" ]; then
     log "📄 偵測到 CLAUDE_TEMPLATE.md"
@@ -140,25 +209,27 @@ if [ -f "$PROJECT_ROOT/CLAUDE_TEMPLATE.md" ]; then
         log "🚀 準備自動觸發 TaskMaster 初始化"
 
         # 顯示提示訊息（Jobs 式極簡設計）
-        echo ""
-        echo -e "\033[1;37m╭─────────────────────────────────────────────────────────────╮\033[0m"
-        echo -e "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-        echo -e "\033[1;37m│\033[0m     \033[1;97m🚀 TaskMaster Ready\033[0m                                  \033[1;37m│\033[0m"
-        echo -e "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-        echo -e "\033[1;37m│\033[0m     \033[0;90mTemplate detected. Start with:\033[0m                      \033[1;37m│\033[0m"
-        echo -e "\033[1;37m│\033[0m     \033[1;36m/task-init [project-name]\033[0m                           \033[1;37m│\033[0m"
-        echo -e "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-        echo -e "\033[1;37m├─────────────────────────────────────────────────────────────┤\033[0m"
-        echo -e "\033[1;37m│\033[0m \033[1;97mWorkflow\033[0m                                                   \033[1;37m│\033[0m"
-        echo -e "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-        echo -e "\033[1;37m│\033[0m   \033[1;32m①\033[0m  \033[0;37mCollect requirements\033[0m           \033[0;90m→ Human review\033[0m    \033[1;37m│\033[0m"
-        echo -e "\033[1;37m│\033[0m   \033[1;33m②\033[0m  \033[0;37mGenerate project docs\033[0m          \033[0;90m→ Quality gate\033[0m    \033[1;37m│\033[0m"
-        echo -e "\033[1;37m│\033[0m   \033[1;36m③\033[0m  \033[0;37mStart development\033[0m              \033[0;90m→ After approval\033[0m  \033[1;37m│\033[0m"
-        echo -e "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-        echo -e "\033[1;37m╰─────────────────────────────────────────────────────────────╯\033[0m"
-        echo ""
+        banner ""
+        banner "\033[1;37m╭─────────────────────────────────────────────────────────────╮\033[0m"
+        banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+        banner "\033[1;37m│\033[0m     \033[1;97m🚀 TaskMaster Ready\033[0m                                  \033[1;37m│\033[0m"
+        banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+        banner "\033[1;37m│\033[0m     \033[0;90mTemplate detected. Start with:\033[0m                      \033[1;37m│\033[0m"
+        banner "\033[1;37m│\033[0m     \033[1;36m/task-init [project-name]\033[0m                           \033[1;37m│\033[0m"
+        banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+        banner "\033[1;37m├─────────────────────────────────────────────────────────────┤\033[0m"
+        banner "\033[1;37m│\033[0m \033[1;97mWorkflow\033[0m                                                   \033[1;37m│\033[0m"
+        banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+        banner "\033[1;37m│\033[0m   \033[1;32m①\033[0m  \033[0;37mCollect requirements\033[0m           \033[0;90m→ Human review\033[0m    \033[1;37m│\033[0m"
+        banner "\033[1;37m│\033[0m   \033[1;33m②\033[0m  \033[0;37mGenerate project docs\033[0m          \033[0;90m→ Quality gate\033[0m    \033[1;37m│\033[0m"
+        banner "\033[1;37m│\033[0m   \033[1;36m③\033[0m  \033[0;37mStart development\033[0m              \033[0;90m→ After approval\033[0m  \033[1;37m│\033[0m"
+        banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+        banner "\033[1;37m╰─────────────────────────────────────────────────────────────╯\033[0m"
+        banner ""
 
-        exit 0
+        note "📄 這是尚未初始化的 TaskMaster 專案。使用者若還沒說要做什麼，請引導他跑 \`/task-init\`。"
+
+        finish
     else
         log "ℹ️ TaskMaster 已初始化"
 
@@ -166,22 +237,24 @@ if [ -f "$PROJECT_ROOT/CLAUDE_TEMPLATE.md" ]; then
         if [ -f "$CLAUDE_DIR/taskmaster-data/wbs.md" ]; then
             log "📋 偵測到現有 WBS 任務清單"
 
-            echo ""
-            echo -e "\033[1;37m╭─────────────────────────────────────────────────────────────╮\033[0m"
-            echo -e "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-            echo -e "\033[1;37m│\033[0m     \033[1;97m📋 WBS 任務清單已載入\033[0m                              \033[1;37m│\033[0m"
-            echo -e "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-            echo -e "\033[1;37m│\033[0m     \033[0;90mResume with:\033[0m                                        \033[1;37m│\033[0m"
-            echo -e "\033[1;37m│\033[0m     \033[1;36m/task-status\033[0m  查看進度                              \033[1;37m│\033[0m"
-            echo -e "\033[1;37m│\033[0m     \033[1;36m/task-next\033[0m    取得下一個任務                        \033[1;37m│\033[0m"
-            echo -e "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-            echo -e "\033[1;37m╰─────────────────────────────────────────────────────────────╯\033[0m"
-            echo ""
+            banner ""
+            banner "\033[1;37m╭─────────────────────────────────────────────────────────────╮\033[0m"
+            banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+            banner "\033[1;37m│\033[0m     \033[1;97m📋 WBS 任務清單已載入\033[0m                              \033[1;37m│\033[0m"
+            banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+            banner "\033[1;37m│\033[0m     \033[0;90mResume with:\033[0m                                        \033[1;37m│\033[0m"
+            banner "\033[1;37m│\033[0m     \033[1;36m/task-status\033[0m  查看進度                              \033[1;37m│\033[0m"
+            banner "\033[1;37m│\033[0m     \033[1;36m/task-next\033[0m    取得下一個任務                        \033[1;37m│\033[0m"
+            banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+            banner "\033[1;37m╰─────────────────────────────────────────────────────────────╯\033[0m"
+            banner ""
+
+            note "📋 本專案已有 WBS。使用者若要繼續開發，用 \`/task-next\` 取任務，不要憑印象猜下一步。"
         fi
 
-        exit 0
+        finish
     fi
 else
     log "ℹ️ 未偵測到 CLAUDE_TEMPLATE.md，TaskMaster 待命中"
-    exit 0
+    finish
 fi

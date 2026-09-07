@@ -157,9 +157,38 @@ if (-not $ClaudeOnly) {
 }
 
 Write-Host "▶ MERGE 骨架目錄（保留執行資料）..." -ForegroundColor Green
+# 只補骨架檔（README.md / _*.md / .gitkeep）與目錄結構。
+#
+# 為什麼不用 Invoke-Sync -AdditiveOnly：那會整包複製，把**模板 repo 自己**累積的
+# agent 報告（context\quality\*.md 等）灌進使用者專案。骨架是模板資產，報告是專案
+# 資料。與 update-template.sh 及 copy-template.{sh,ps1} 同一套規則，四份必須一致。
+$srcRootU = (Resolve-Path $source).Path.TrimEnd('\')
 foreach ($d in $mergeClaudeDirs) {
-    # AdditiveOnly：永不刪除目標已有的報告 / handoff
-    Invoke-Sync (Join-Path $source ".claude\$d") (Join-Path $destPath ".claude\$d") -AdditiveOnly
+    $srcDir = Join-Path $srcRootU ".claude\$d"
+    if (-not (Test-Path $srcDir)) { continue }
+
+    Get-ChildItem -Path $srcDir -Recurse -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+        $rel = $_.FullName.Substring($srcRootU.Length).TrimStart('\')
+        $target = Join-Path $destPath $rel
+        if ($DryRun) {
+            if (-not (Test-Path $target)) { Write-Host "   [dry] mkdir $target" -ForegroundColor DarkGray }
+        } else {
+            New-Item -ItemType Directory -Path $target -Force | Out-Null
+        }
+    }
+
+    Get-ChildItem -Path $srcDir -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -eq 'README.md' -or $_.Name -like '_*.md' -or $_.Name -eq '.gitkeep' } |
+        ForEach-Object {
+            $rel = $_.FullName.Substring($srcRootU.Length).TrimStart('\')
+            $target = Join-Path $destPath $rel
+            if ($DryRun) {
+                Write-Host "   [dry] $target" -ForegroundColor DarkGray
+            } else {
+                New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force | Out-Null
+                Copy-Item -Path $_.FullName -Destination $target -Force
+            }
+        }
 }
 
 # ============================================================================
