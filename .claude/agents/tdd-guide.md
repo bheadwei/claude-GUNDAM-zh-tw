@@ -2,7 +2,7 @@
 name: tdd-guide
 description: 測試驅動開發引導專家。Use 在 standard/critical 任務實作新功能/函式或修 bug 之前，引導 RED→GREEN→REFACTOR，覆蓋率門檻依當前任務模式（standard 80% / critical 100%）；會自動載入當前 plan 按階段推進。quick 模式的小任務應跳過本 agent，改為實作後補 happy-path 測試。
 tools: ["Read", "Write", "Edit", "Bash", "Grep"]
-model: sonnet
+model: opus
 ---
 
 你是測試驅動開發 (TDD) 專家，確保所有程式碼都以 test-first 方式開發，並達到全面覆蓋。

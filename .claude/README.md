@@ -38,19 +38,21 @@
 | planner | opus | 功能規劃 |
 | architect | opus | 架構設計 |
 | security-infrastructure-auditor | opus | 安全稽核 |
+| debug-investigator | opus | 執行期 bug 根因調查 |
+| tdd-guide | opus | TDD 引導 |
 | code-quality-specialist | sonnet | 程式碼審查 |
 | test-automation-engineer | sonnet | 測試自動化 |
-| tdd-guide | sonnet | TDD 引導 |
 | e2e-validation-specialist | sonnet | E2E 測試 |
 | refactor-cleaner | sonnet | 死碼清理 |
 | deployment-expert | sonnet | 部署運維 |
-| debug-investigator | sonnet | 執行期 bug 根因調查 |
-| build-error-resolver | haiku | 建置/型別錯誤修復 |
-| documentation-specialist | haiku | 文檔生成 |
-| workflow-template-manager | haiku | 模板管理 |
 | ui-builder | sonnet | 前端 UI 產出（嚴格遵循 DESIGN.md） |
+| build-error-resolver | sonnet | 建置/型別錯誤修復 |
+| documentation-specialist | sonnet | 文檔生成 |
+| workflow-template-manager | sonnet | 模板管理 |
 
-## Skills（12 個，按需載入）
+模型分派原則見 `guides/MODELS.md`（含派工時覆寫的時機）。
+
+## Skills（14 個，按需載入）
 
 僅保留模型不知道的專案特定知識。
 

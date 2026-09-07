@@ -194,17 +194,17 @@ claude_v2026/
 | planner | opus | 功能規劃、階段拆解、持久化 plan |
 | architect | opus | 架構設計、技術選型 → **自動產 ADR** |
 | security-infrastructure-auditor | opus | OWASP Top 10、秘密偵測、依賴與基礎設施安全 |
+| debug-investigator | opus | 執行期 bug 根因調查（先重現再定因） |
+| tdd-guide | opus | 實作前 TDD 門禁（RED→GREEN→REFACTOR） |
 | code-quality-specialist | sonnet | 程式碼品質與安全審查 |
 | test-automation-engineer | sonnet | 實作後測試補強 |
-| tdd-guide | sonnet | 實作前 TDD 門禁（RED→GREEN→REFACTOR） |
-| debug-investigator | sonnet | 執行期 bug 根因調查（先重現再定因） |
 | e2e-validation-specialist | sonnet | Playwright 端到端驗證 |
 | refactor-cleaner | sonnet | 死碼清理與合併 |
 | deployment-expert | sonnet | 部署、CI/CD、IaC、上線監控 |
 | ui-builder | sonnet | 前端 UI 產出（嚴格遵循 DESIGN.md） |
-| build-error-resolver | haiku | 建置/型別錯誤最小差異修復 |
-| documentation-specialist | haiku | codemap、API 文檔 |
-| workflow-template-manager | haiku | PRD/ADR 等流程模板管理 |
+| build-error-resolver | sonnet | 建置/型別錯誤最小差異修復 |
+| documentation-specialist | sonnet | codemap、API 文檔 |
+| workflow-template-manager | sonnet | PRD/ADR 等流程模板管理 |
 
 通用任務退回 Claude Code **內建的 `general-purpose`**——本模板不自訂它，同名會 shadow
 掉內建版，換來的是更小的工具集。
