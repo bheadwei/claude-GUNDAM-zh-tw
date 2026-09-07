@@ -130,7 +130,33 @@ else
 fi
 
 echo "▶ MERGE 骨架目錄（保留執行資料）..."
-for d in "${MERGE_CLAUDE_DIRS[@]}"; do sync_dir "$SOURCE/.claude/$d" "$DEST/.claude/$d" additive; done
+# 只補「骨架檔」：README.md、_*_TEMPLATE.md、以及各 area 的目錄與 .gitkeep。
+#
+# 為什麼不能用 sync_dir additive：那是 rsync -a 整包複製，會把**模板 repo 自己**
+# 累積的 agent 報告（context/quality/*.md 等）灌進使用者專案。骨架是模板資產，
+# 報告是專案資料，兩者必須分開。與 copy-template.{sh,ps1} 的後置處理同一套規則。
+for d in "${MERGE_CLAUDE_DIRS[@]}"; do
+  src="$SOURCE/.claude/$d"
+  [ -d "$src" ] || continue
+
+  # 目錄結構（含 _archive）先補齊，但不搬任何內容
+  while IFS= read -r dir; do
+    rel="${dir#"$src"/}"
+    [ "$dir" = "$src" ] && rel=""
+    target="$DEST/.claude/$d${rel:+/$rel}"
+    if [ "$DRY_RUN" -eq 1 ]; then
+      [ -d "$target" ] || echo "   [dry] mkdir $target"
+    else
+      mkdir -p "$target"
+    fi
+  done < <(find "$src" -type d 2>/dev/null)
+
+  # 骨架檔逐檔覆寫
+  while IFS= read -r f; do
+    rel="${f#"$src"/}"
+    copy_file "$f" "$DEST/.claude/$d/$rel"
+  done < <(find "$src" -type f \( -name 'README.md' -o -name '_*.md' -o -name '.gitkeep' \) 2>/dev/null)
+done
 
 echo ""
 if [ "$DRY_RUN" -eq 1 ]; then

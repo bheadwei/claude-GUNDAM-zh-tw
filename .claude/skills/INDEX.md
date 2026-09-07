@@ -1,6 +1,19 @@
 # Skills 索引
 
-12 個 skill，**按需載入**（不佔常駐 context）。分兩類：從 rules 移出的專案約定、以及原有的領域知識包。
+14 個 skill，**按需載入**（不佔常駐 context）。分兩類：從 rules 移出的專案約定、以及原有的領域知識包。
+
+## 常駐注入（唯一的例外）
+
+| Skill | 用途 | 啟動時機 |
+| :--- | :--- | :--- |
+| **using-taskmaster** | 強制委派專業 agent 的命令 + Red Flags 反合理化表 + 路由表 + 動工前先讀坑 | **每個 session 由 `session-start.sh` 全文注入**，不需被想起來 |
+
+這個 skill 反其道而行——它是**唯一**常駐的，因為它要解決的問題正好是「軟規則會被
+忽略」：`rules/agent-orchestration.md` 寫「有專業 agent 就優先委派」，對撞 Claude Code
+內建的「非必要不開 Agent」預設會輸。SessionStart 的 `additionalContext` 注入不會。
+
+> 實證：`/tdd` 這類 slash command 能成功派 agent（command 本身算 skill，等於取得授權），
+> 但自然語言輸入（「整理更新文件」）不會。這個 skill 就是補上那張授權。
 
 ## 專案約定（原本是常駐 rule，改為按需）
 
@@ -10,6 +23,7 @@
 | :--- | :--- | :--- |
 | **testing-standards** | 覆蓋率門檻（依任務模式分級）、TDD 流程、測試反模式 | 寫/修測試、跑 `/tdd`、決定覆蓋率目標 |
 | **plan-format** | plan 檔格式、命名、`files:` 欄、與 WBS 的職責分工 | `/plan`、`/tdd`、`/verify`、`/task-next`，或動 `plans/` 下的檔案 |
+| **subagent-execution** | 逐階段派 implementer subagent 執行 plan：帳本、階段審查、有界修復迴圈、裁決而非停等 | `standard`/`critical` 且 plan 有 ≥2 階段時，由 `/tdd` 的「選執行方式」帶入 |
 | **ui-style-compliance** | UI 三階段強制檢查（載入 DESIGN.md → 禁硬編碼 → 產出自檢）+ Pencil `.pen` 落地 `design/` | 寫任何前端頁面/元件、`/ui-site`、`/ui-page`、呼叫 pencil MCP 前 |
 | **node-package-manager** | bun/pnpm/npm 由使用者決定，含指令對照與 lock 衝突處理 | 跑任何 npm/pnpm/bun 指令、動 package.json 或 lockfile 前 |
 | **python-uv** | Python 一律 uv，禁 pip/poetry | 跑 Python 套件/環境指令、建 Python 專案骨架前 |

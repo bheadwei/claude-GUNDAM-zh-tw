@@ -6,8 +6,9 @@
 #
 #   1. 寫入程式碼檔前，若 .current-task-mode 不存在 → deny，要求主模型先判級再重試
 #   2. TTL 過期自動清除 —— 解掉「/verify 沒清 → 判級永久不觸發」的互鎖
-#   3. 裸 cd 偵測（Bash）—— 取代已移除的 rules/bash-cwd.md，改由機器強制
-#   4. 輕量 log
+#   3. 坑閘門 —— 要寫的檔案在 context/learned/ 有紀錄時擋一次，把教訓貼給模型
+#   4. 裸 cd 偵測（Bash）—— 取代已移除的 rules/bash-cwd.md，改由機器強制
+#   5. 輕量 log
 #
 # 逃生門（任一成立即完全不攔）：
 #   - .suggest-mode 內容為 off
@@ -16,6 +17,7 @@
 #
 # 可調參數：
 #   TASKMODE_TTL_HOURS  模式檔多久算過期（預設 8，即一個工作 session）
+#   PITFALL_GATE=off    只關坑閘門，保留任務模式閘門
 
 set -u
 
@@ -130,8 +132,113 @@ case "$NORM" in
     *) exit 0 ;;
 esac
 
-# 模式已存在 → 放行（一個任務只會擋第一次）
-[ -f "$MODE_FILE" ] && [ -s "$MODE_FILE" ] && exit 0
+# ============================================================================
+# 坑閘門：這個檔案以前踩過坑嗎
+#
+# 為什麼要攔而不是提示：PreToolUse 不支援 additionalContext（只認
+# permissionDecision / permissionDecisionReason），所以「提醒」在這個 hook 事件
+# 裡無法非阻斷式送達。改用與任務模式閘門相同的 deny-once 模式：擋第一次、
+# 把坑貼給模型看、記錄後放行。同一個檔案一個 session 只會擋一次。
+#
+# 逃生門：PITFALL_GATE=off（或 .suggest-mode off，已於上方處理）
+# ============================================================================
+LEARNED_DIR="$CLAUDE_DIR/context/learned"
+SEEN_FILE="$DATA_DIR/.pitfall-seen"
+
+# 取 frontmatter 的純量欄位
+fm_field() {
+    awk -v key="$2" '
+        NR==1 && $0 !~ /^---/ { exit }
+        /^---[[:space:]]*$/ { fm++; if (fm==2) exit; next }
+        fm==1 && index($0, key ":") == 1 {
+            sub("^" key ":[[:space:]]*", "", $0)
+            gsub(/^["'"'"']|["'"'"']$/, "", $0)
+            print; exit
+        }
+    ' "$1" 2>/dev/null
+}
+
+# 取 frontmatter 的 files: 樣式（同時支援 inline ["a","b"] 與區塊 - "a" 兩種寫法）
+fm_files() {
+    awk '
+        NR==1 && $0 !~ /^---/ { exit }
+        /^---[[:space:]]*$/ { fm++; if (fm==2) exit; next }
+        fm==1 {
+            if (index($0, "files:") == 1) {
+                rest = $0; sub(/^files:[[:space:]]*/, "", rest)
+                if (rest != "") { print rest } else { inlist = 1 }
+                next
+            }
+            if (inlist && $0 ~ /^[[:space:]]*-[[:space:]]*/) {
+                sub(/^[[:space:]]*-[[:space:]]*/, "", $0); print; next
+            }
+            if (inlist && $0 ~ /^[^[:space:]-]/) { inlist = 0 }
+        }
+    ' "$1" 2>/dev/null | tr -d '[]",' | tr "'" ' '
+}
+
+pitfall_gate() {
+    local target="$1"
+    [ "${PITFALL_GATE:-on}" = "off" ] && return 0
+    [ -d "$LEARNED_DIR" ] || return 0
+
+    # 專案根相對路徑：learned 的 files: 用相對路徑寫，但工具給的是絕對路徑
+    local root_norm rel
+    root_norm=$(printf '%s' "$PROJECT_ROOT" | tr '\\' '/')
+    rel="${target#"$root_norm"/}"
+
+    local hits="" f base pat title guard symptom cause sev matched
+    for f in "$LEARNED_DIR"/*.md; do
+        [ -f "$f" ] || continue
+        base=$(basename "$f")
+        case "$base" in _*|README.md) continue ;; esac
+
+        matched=0
+        for pat in $(fm_files "$f"); do
+            [ -n "$pat" ] || continue
+            case "$rel" in $pat) matched=1 ;; esac
+            case "$target" in $pat|*/$pat) matched=1 ;; esac
+            [ "$matched" -eq 1 ] && break
+        done
+        [ "$matched" -eq 1 ] || continue
+
+        # 同一 session 同一 (檔案, 坑) 只擋一次
+        grep -qxF "$rel|$base" "$SEEN_FILE" 2>/dev/null && continue
+
+        title=$(fm_field "$f" title);      [ -z "$title" ] && title="$base"
+        guard=$(fm_field "$f" guard)
+        symptom=$(fm_field "$f" symptom)
+        cause=$(fm_field "$f" root-cause)
+        sev=$(fm_field "$f" severity);     [ -z "$sev" ] && sev="medium"
+
+        hits="${hits}
+▸ [$sev] $title
+   症狀：${symptom:-（未記錄）}
+   根因：${cause:-（未記錄）}
+   避法：${guard:-（未記錄）}
+   全文：.claude/context/learned/$base
+"
+        mkdir -p "$DATA_DIR" 2>/dev/null
+        printf '%s|%s\n' "$rel" "$base" >> "$SEEN_FILE" 2>/dev/null || true
+    done
+
+    [ -z "$hits" ] && return 0
+
+    log "pitfall gate: $rel"
+    deny "⚠️ 這個檔案以前踩過坑，先讀完再改：
+${hits}
+這些紀錄來自 \`.claude/context/learned/\`（本專案累積的教訓）。
+
+請確認你的修改沒有重蹈覆轍，然後**重試同一次編輯**即可通過（同一檔案一個 session 只擋一次）。
+若判斷該紀錄已過期或不再適用，改掉或刪掉那份 learned 檔，不要繞過閘門。
+（完全關閉：環境變數 PITFALL_GATE=off）"
+}
+
+# 模式已存在 → 任務模式閘門放行，但仍要過坑閘門
+if [ -f "$MODE_FILE" ] && [ -s "$MODE_FILE" ]; then
+    pitfall_gate "$NORM"
+    exit 0
+fi
 
 log "gate triggered: no task mode for $NORM"
 deny "尚未判定任務模式，不能開始寫程式碼（rules/task-mode.md 的入口自動分級）。

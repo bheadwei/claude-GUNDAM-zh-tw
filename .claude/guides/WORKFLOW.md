@@ -6,7 +6,7 @@
 |---|---|---|---|
 | **Hooks** | 6 | 事件觸發，機器執行 | 只有明確逃生門 |
 | **Rules** | 6 | 每個 session 全量載入 | 否（但靠模型遵守） |
-| **Skills** | 12 | 情境觸發，按需載入 | 是（需被想起來） |
+| **Skills** | 14 | 情境觸發，按需載入 | 是（需被想起來） |
 | **Commands** | 25 | 使用者主動叫 | — |
 | **Agents** | 14 | 委派時啟動 | — |
 
@@ -53,6 +53,40 @@
    ▼
 /verify 通過 → WBS 標 ✅ → plan 歸檔 → 問要不要接下一個任務
 ```
+
+### 多階段 plan：兩種執行方式
+
+`standard`/`critical` 且 plan 有 ≥2 階段時，`/tdd` 會問一題：
+
+```
+[Recommended] 逐階段派 implementer subagent
+    每階段一個全新 subagent + 階段審查 + 有界修復迴圈，過程記進帳本
+我直接照 plan 實作
+    委派 tdd-guide 走標準 RED-GREEN-REFACTOR
+```
+
+選第一個走 `subagent-execution` skill：
+
+```
+準備：建立/接續帳本 plans/<plan 同名>.progress.md → 讀相關的坑
+   ▼
+每階段：記 BASE commit → 派 implementer（明確指定 model）→ 讀狀態碼
+        → 規格合規審查 + code-quality-specialist → 有問題進修復迴圈
+   ▼
+修復迴圈上限 5 輪：R1-R3 交回同一個 implementer；R4-R5 換新的 + 升級模型
+   ▼
+全部階段完成 → 全域審查 → /verify（帳本隨 plan 一起歸檔）
+```
+
+三個關鍵設計：
+
+- **帳本是復原地圖**：第一行寫 `# 執行帳本 — plan: <路徑>` 當身分。context 被壓縮後
+  **相信帳本與 `git log`，不要相信記憶**——帳本點名的 commit 在 git 裡真的存在
+- **裁決而非停等**：跑起來之後不問人。衝突自己決定並記成
+  `Ruling: <決定> — <理由> — <錯了的代價>`。只有四件事會停：不可逆操作、安全敏感、
+  副作用超出 plan 的 `files:` 範圍、全部完成
+- **每次派工都指定 `model`**：機械任務 `haiku`、整合判斷 `sonnet`、架構 `opus`。
+  但**回合數比單價貴**——便宜模型來回五次比貴模型一次做對更貴，規格模糊時直接上一級
 
 ### 做到一半想加功能
 
@@ -150,10 +184,10 @@ PreToolUse 閘門攔截（.current-task-mode 不存在）
 
 | 時機 | Hook | 做什麼 |
 |---|---|---|
-| Session 開始 | `session-start.sh` | 時間歸檔、模板偵測、log 輪替、jq 健檢 |
-| 你送出訊息 | `user-prompt-submit.sh` | 依關鍵字提示：建議任務模式、建議 agent、**該載入哪個 skill** |
-| 我要寫檔/跑 Bash | `pre-tool-use.sh` | **任務模式閘門**、模式檔 TTL 過期清除、裸 `cd` 攔截 |
-| Agent 完成 | `post-agent-report.sh` | 把 pending handoff 注入對話，提示接下一棒 |
+| Session 開始 | `session-start.sh` | **注入 `using-taskmaster`（強制委派指令）**、時間歸檔、模板偵測、log 輪替、jq 健檢 |
+| 你送出訊息 | `user-prompt-submit.sh` | 依關鍵字路由：任務模式、**該委派哪個 agent（含 `subagent_type`）**、該載入哪個 skill |
+| 我要寫檔/跑 Bash | `pre-tool-use.sh` | **任務模式閘門**、**坑閘門**、模式檔 TTL 過期清除、裸 `cd` 攔截 |
+| Agent 完成 | `post-agent-report.sh` | 把 pending handoff 注入對話，提示接下一棒；**非同步啟動的 agent 記下報告期望，交由延後稽核** |
 | 寫入 WBS | `post-write.sh` | 記錄 WBS 變更歷史 |
 | Context 將壓縮 | `pre-compact.sh` | 自動快照 |
 
@@ -164,19 +198,77 @@ PreToolUse 閘門攔截（.current-task-mode 不存在）
 | `/suggest-mode off` | 關閉閘門與所有建議注入 |
 | `TASKMODE_GATE=off` | 環境變數，單次或整段 session 關閉 |
 | `TASKMODE_TTL_HOURS=N` | 調整模式檔過期時間（預設 8h） |
+| `PITFALL_GATE=off` | 只關坑閘門，保留任務模式閘門 |
+
+### 坑閘門：同一個坑不踩第二次
+
+`.claude/context/learned/` 的每份紀錄都有 `files:` glob。要寫入命中的檔案時，
+`pre-tool-use.sh` **擋一次**並把 `symptom` / `root-cause` / `guard` 貼進對話，
+讀完重試同一次編輯即通過（同一檔案一個 session 只擋一次）。
+
+```
+debug-investigator 找到根因
+   ▼
+必須寫一筆 learned/<slug>.md（frontmatter 四欄不能空）
+   ▼
+下次任何人（或 agent）要改 files: 命中的檔案
+   ▼
+PreToolUse 擋下 → 貼出教訓 → 重試通過
+```
+
+`files:` 寫錯或留空 = 這份紀錄永遠不會被觸發，等於沒寫。
+坑修掉了就改掉／刪掉那份檔案，不要用 `PITFALL_GATE=off` 繞過——
+留著過期紀錄比沒紀錄更糟，大家會學會忽略它。
+
+> 為什麼是「擋一次」而不是「溫和提示」：PreToolUse 事件**不支援**
+> `additionalContext`（只認 `permissionDecision` / `permissionDecisionReason`），
+> 非阻斷式提醒在這個 hook 點無法送達。這是 Claude Code 的機制邊界。
 
 > TTL 存在的理由：`/verify` 完成任務時應清除模式檔，但那是靠自律的。
 > TTL 是機器保證——就算沒清，逾時也會自動失效並重新要求判級。
+
+### 報告稽核：非同步 agent 的延後檢查
+
+`post-agent-report.sh` 原本在 PostToolUse 當下就 `find` 報告檔，但 Agent tool 常是
+**非同步啟動**（`tool_response` 帶 `"status":"async_launched"`），那一刻 agent 根本還沒動工
+→ 真有寫報告也被記成 WARN。而且只寫 log 不注入，等於沒有牙齒。
+
+現在改成：
+
+```
+非同步啟動 → 只記下「報告期望」到 taskmaster-data/.report-expectations.jsonl
+   ▼
+後續對話邊界（UserPromptSubmit 或下一個 agent 完成）
+   ▼
+lib/check-report-expectations.sh 重新檢查
+   ├─ 寬限期內（<120s）→ 安靜，不吵
+   ├─ 報告已寫（-newermt 比對啟動時間，舊報告不算）→ 清除期望，log 記 OK
+   ├─ 缺報告 → **經 additionalContext 注入**要求補寫（同一筆只吵一次）
+   └─ 逾 30 分鐘 → 放棄追蹤，log 記 WARN
+```
+
+同步完成的 agent 仍走當下稽核（原行為）。
+
+| 參數 | 預設 | 作用 |
+|---|---|---|
+| `REPORT_GRACE_SECONDS` | 120 | 幾秒內不檢查，避免 agent 還在跑就催 |
+| `REPORT_DEADLINE_SECONDS` | 1800 | 超過就放棄追蹤 |
+| `REPORT_AUDIT=off` | — | 完全關閉稽核 |
+
+> `AREA` 對應表（agent → `context/<area>/`）必須與各 agent 檔的「寫入報告到」路徑一致。
+> 改 agent 報告落點時要同步 `post-agent-report.sh`，否則稽核永遠找不到報告。
 
 ### Skills（按需載入）
 
 | 情境 | Skill |
 |---|---|
+| （每個 session 自動注入，不需想起來） | `using-taskmaster` — 強制委派 + 動工前先讀坑 |
 | 寫前端頁面/元件、開 Pencil 設計稿 | `ui-style-compliance` |
 | 跑 npm/pnpm/bun、動 package.json | `node-package-manager` |
 | Python 套件/環境操作 | `python-uv` |
 | 寫測試、決定覆蓋率門檻 | `testing-standards` |
 | 建立或更新 plan 檔 | `plan-format` |
+| 執行多階段 plan（standard/critical） | `subagent-execution` — 逐階段派 implementer + 帳本 |
 | 產專案文件 | `project-docs` |
 | E2E 測試 | `e2e-testing` |
 | DB schema 變更 | `database-migrations` / `postgres-patterns` |
@@ -250,14 +342,29 @@ PreToolUse 閘門攔截（.current-task-mode 不存在）
 
 ## 剩下的已知限制
 
-體檢報告的 12 項已全數處理。剩下這兩點是**設計上的取捨**，不是待修的 bug：
+1. **啟動 agent 的執行者永遠是主模型** —— hook 只能注入 context，無法直接呼叫 Agent 工具。
+   這是 Claude Code 的機制邊界。目前用三層把「注入」做到夠強：
+   SessionStart 全文注入 `using-taskmaster`（含 Red Flags 反合理化表）、
+   `user-prompt-submit.sh` 的關鍵字路由（帶 `subagent_type`）、
+   agent 完成後的 pending handoff 注入。
+2. **skill 召回不是硬保證** —— 除了常駐注入的 `using-taskmaster`，其餘 13 個 skill
+   仍是「要被想起來才載入」。兩層保險：`description` 寫成觸發條件導向、
+   `user-prompt-submit.sh` 的關鍵字提示。要再硬一點的話，可以比照任務模式閘門，
+   在 `pre-tool-use.sh` 加「寫 `.tsx/.vue/.css` 但未載入 `ui-style-compliance` → deny」，
+   機制現成（坑閘門就是照這個模式做的）。
+3. **執行型委派是選項不是預設** —— `subagent-execution` 需要 plan 有 ≥2 階段，
+   而且由使用者在 `/tdd` 的「選執行方式」決定。沒有 plan 的 ad-hoc 路徑不適用。
 
-1. **交接是「注入提示」，不是全自動** —— hook 掃到 pending handoff 後只能把提示注入對話，
-   實際啟動下一棒的是主模型。這是 Claude Code hook 機制的邊界，無法繞過。
-2. **skill 召回不是硬保證** —— rules 搬成 skill 後改為「要被想起來才載入」。
-   兩層保險：skill 的 `description` 寫成觸發條件導向、`user-prompt-submit.sh` 的關鍵字提示。
-   要再硬一點的話，可以比照任務模式閘門，在 `pre-tool-use.sh` 加「寫 `.tsx/.vue/.css`
-   但未載入 `ui-style-compliance` → deny」，機制現成。
+### 尚未做的（已規劃）
+
+- **plugin 化發佈** —— 把 `skills/ commands/ agents/ hooks/` 拆成 Claude Code plugin 走
+  marketplace，改版號即自動更新（取代手動 `update-template.sh`）。
+  代價：指令會變 `/taskmaster:task-next`；且 plugin 帶不了 `rules/`，需先把 rules 改寫成
+  SessionStart 注入的 skill（`using-taskmaster` 已示範這個路徑）。
+- **`converge` 類收斂檢查** —— `/verify` 目前只驗建置/型別/lint/測試/console.log 與 plan
+  驗收標準，沒有「codebase 還符合當初的 PRD 嗎」這層（對標 spec-kit 的 `/speckit.converge`）。
+- **constitution（專案不變量）** —— `rules/` 是模板通用規範，缺「這個專案不可違反的原則」。
+- **CI** —— `.github/` 不存在。`run-tests.sh` 失敗時 exit 1，可直接掛。
 
 ## 改動 hook 之後
 
@@ -265,4 +372,4 @@ PreToolUse 閘門攔截（.current-task-mode 不存在）
 bash .claude/hooks/tests/run-tests.sh
 ```
 
-56 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
+99 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。

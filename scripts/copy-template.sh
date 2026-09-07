@@ -134,6 +134,31 @@ fi
 mkdir -p "$DEST/.claude/logs"
 mkdir -p "$DEST/.claude/taskmaster-data"
 
+# ----------------------------------------------------------------------------
+# context/ 與 coordination/ 的骨架
+#
+# 這兩個目錄整體被排除（裡面是本 repo 的執行產物），但它們的 README 與
+# _*_TEMPLATE.md 是**模板資產**：多個 agent 的「結束後（必須）」直接指向
+# context/_REPORT_TEMPLATE.md 與 coordination/handoffs/_HANDOFF_TEMPLATE.md，
+# 而坑閘門（pre-tool-use.sh）需要 context/learned/ 存在才會生效。
+# 只複製骨架，不帶任何實際報告或交接紀錄。
+# ----------------------------------------------------------------------------
+echo "🦴 建立 context/ 與 coordination/ 骨架..."
+for d in decisions deployment devteam docs e2e learned planning quality security testing; do
+    mkdir -p "$DEST/.claude/context/$d/_archive"
+    [ -f "$DEST/.claude/context/$d/.gitkeep" ] || : > "$DEST/.claude/context/$d/.gitkeep"
+done
+mkdir -p "$DEST/.claude/coordination/handoffs" "$DEST/.claude/coordination/conflicts"
+: > "$DEST/.claude/coordination/conflicts/.gitkeep"
+
+# README 與範本逐檔複製（find 只挑骨架檔名，實際報告一律不帶）
+while IFS= read -r f; do
+    rel="${f#"$SRC"/}"
+    mkdir -p "$DEST/$(dirname "$rel")"
+    cp -f "$f" "$DEST/$rel" 2>/dev/null || true
+done < <(find "$SRC/.claude/context" "$SRC/.claude/coordination" \
+             -type f \( -name 'README.md' -o -name '_*.md' \) 2>/dev/null)
+
 # 建立最小化的 settings.local.json
 cat > "$DEST/.claude/settings.local.json" <<'EOF'
 {

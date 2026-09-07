@@ -132,6 +132,42 @@ if ($exitCode -ge 8) {
 New-Item -ItemType Directory -Path (Join-Path $Destination '.claude\logs') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $Destination '.claude\taskmaster-data') -Force | Out-Null
 
+# ----------------------------------------------------------------------------
+# context/ 與 coordination/ 骨架（與 copy-template.sh 同步，兩份必須一致）
+#
+# 這兩個目錄整體被 /XD 排除，但其 README 與 _*_TEMPLATE.md 是模板資產：
+# agent 的「結束後（必須）」指向 context\_REPORT_TEMPLATE.md 與
+# coordination\handoffs\_HANDOFF_TEMPLATE.md，且坑閘門需要 context\learned\ 存在。
+# ----------------------------------------------------------------------------
+Write-Host "🦴 建立 context/ 與 coordination/ 骨架..." -ForegroundColor Cyan
+
+$contextAreas = @('decisions','deployment','devteam','docs','e2e','learned','planning','quality','security','testing')
+foreach ($area in $contextAreas) {
+    $areaPath = Join-Path $Destination ".claude\context\$area"
+    New-Item -ItemType Directory -Path (Join-Path $areaPath '_archive') -Force | Out-Null
+    $keep = Join-Path $areaPath '.gitkeep'
+    if (-not (Test-Path $keep)) { New-Item -ItemType File -Path $keep | Out-Null }
+}
+
+New-Item -ItemType Directory -Path (Join-Path $Destination '.claude\coordination\handoffs') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $Destination '.claude\coordination\conflicts') -Force | Out-Null
+$conflictKeep = Join-Path $Destination '.claude\coordination\conflicts\.gitkeep'
+if (-not (Test-Path $conflictKeep)) { New-Item -ItemType File -Path $conflictKeep | Out-Null }
+
+$srcRoot = $source.Path.TrimEnd('\')
+foreach ($sub in @('.claude\context', '.claude\coordination')) {
+    $srcSub = Join-Path $srcRoot $sub
+    if (-not (Test-Path $srcSub)) { continue }
+    Get-ChildItem -Path $srcSub -Recurse -File |
+        Where-Object { $_.Name -eq 'README.md' -or $_.Name -like '_*.md' } |
+        ForEach-Object {
+            $rel = $_.FullName.Substring($srcRoot.Length).TrimStart('\')
+            $target = Join-Path $Destination $rel
+            New-Item -ItemType Directory -Path (Split-Path $target -Parent) -Force | Out-Null
+            Copy-Item -Path $_.FullName -Destination $target -Force
+        }
+}
+
 # 建立最小化的 settings.local.json
 $minimalSettings = @'
 {

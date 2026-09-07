@@ -10,7 +10,7 @@
 
 | 路徑 | 注意 |
 |---|---|
-| `.claude/custom-rule&skill/` | **備份池，不參與執行。** 94 個 skill + 多份 rule 放在這裡供取材，執行路徑只有 `.claude/skills/`（12 個）與 `.claude/rules/`（6 個）。改錯地方等於沒改 |
+| `.claude/custom-rule&skill/` | **備份池，不參與執行。** 94 個 skill + 多份 rule 放在這裡供取材，執行路徑只有 `.claude/skills/`（14 個）與 `.claude/rules/`（6 個）。改錯地方等於沒改 |
 | `workshop/VibeCoding_Workshop.pptx` | **由使用者手動編輯。** 不要跑 `generate_pptx.py` 重生，會洗掉手改內容 |
 | `.claude/context/`、`.claude/coordination/` | 執行時產物，已排除複製。修改 agent 的報告/交接格式時記得對應更新 `_REPORT_TEMPLATE.md` 與 `_HANDOFF_TEMPLATE.md` |
 
@@ -19,9 +19,24 @@
 - **改 `.claude/` 的目錄結構** → 同步 `scripts/copy-template.sh` 的 `EXCLUDES` **和** `scripts/copy-template.ps1` 的 `$excludeDirs` / `$excludeFiles`（兩份要一致，容易漏改 ps1）
 - **新增 skill** → 更新 `.claude/skills/INDEX.md`，否則沒人知道它存在
 - **改 hook** → `.claude/hooks/tests/run-tests.sh` 有測試
-- **改 agent 的報告或 handoff 行為** → `post-agent-report.sh` 的 `AREA` 對應表要同步
+- **改 agent 的報告落點或 handoff 行為** → `post-agent-report.sh` 的 `AREA` 對應表要同步，**否則稽核永遠找不到報告**
+- **新增 `context/` 的 area 子目錄** → 同步 `copy-template.sh` 的 `for d in ...` **和** `copy-template.ps1` 的 `$contextAreas`（四份腳本的骨架規則要一致：`copy-template.{sh,ps1}` 建目錄、`update-template.{sh,ps1}` 只補 `README.md`／`_*.md`／`.gitkeep`）
+- **改 `using-taskmaster` skill** → 它由 `session-start.sh` 全文注入，**每個 session 都會載入**；加東西前先想清楚值不值得佔常駐 context
 
 ## 已知落差
 
-- **agent 報告機制命中率低**：`post-agent-report.sh` 的稽核在 PostToolUse 當下檢查，但 Agent tool 常是非同步啟動（log 裡的 `"status":"async_launched"`），檢查時 agent 還沒動工 → 真有寫報告也被記成 WARN。且稽核只寫 log 不注入，等於沒有牙齒。對照組：同檔案的 handoff 那半用 `additionalContext` 注入，完成率 100%
-- **新專案缺 `_REPORT_TEMPLATE.md`**：`.claude/context/` 整個被排除複製，但多個 agent 的「結束後」都寫「格式遵循 `.claude/context/_REPORT_TEMPLATE.md`」——新專案裡那個檔不存在
+- **發佈仍是 pull 式**：`copy-template` / `update-template` 要手動跑。真正的自動更新要走 Claude Code plugin marketplace（改版號即更新），但 plugin **帶不了 `rules/`**，且指令會變 `/taskmaster:task-next`。`using-taskmaster` 已示範「rules 改寫成 SessionStart 注入的 skill」這條遷移路徑
+- **沒有 converge 收斂檢查**：`/verify` 驗建置/型別/lint/測試 + plan 驗收標準，但沒有「codebase 還符合當初 PRD 嗎」這層（對標 spec-kit 的 `/speckit.converge`）
+- **沒有 constitution**：`rules/` 是模板通用規範，缺「這個專案不可違反的原則」那一層
+- **沒有 CI**：`.github/` 不存在，但 `run-tests.sh` 失敗時 exit 1，可直接掛
+
+### 已修（2026-09-04）
+
+- ~~新專案缺 `_REPORT_TEMPLATE.md`~~ → `copy-template.{sh,ps1}` 後置處理改為複製 `context/` 與 `coordination/` 的骨架（`README.md` + `_*.md` + 各 area 目錄），實際報告仍不帶。兩份腳本產出已比對一致
+- ~~自然語言輸入不會派 agent~~ → `session-start.sh` 改用 `hookSpecificOutput.additionalContext` 全文注入 `skills/using-taskmaster/SKILL.md`（含 Red Flags 反合理化表）。**根因**：slash command 在 Claude Code 裡算 skill，滿足內建的 *"unless a skill asks for it"* 所以 `/tdd` 能派 agent；自然語言沒有這張授權
+- ~~`documentation-specialist` / `workflow-template-manager` 零入口~~ → `user-prompt-submit.sh` 補文件類關鍵字，且全表語氣從「建議委派」改為帶 `subagent_type` 的命令式
+- ~~踩過的坑只靠自律~~ → `pre-tool-use.sh` 新增**坑閘門**：比對 `context/learned/*.md` 的 `files:` glob，命中則 deny-once 並貼出教訓（PreToolUse 不支援 `additionalContext`，只能用 deny）。`debug-investigator` 的「結束後（必須）」已改為強制寫 learned
+- ~~agent 報告稽核無牙齒~~ → 非同步啟動改為只記期望到 `taskmaster-data/.report-expectations.jsonl`，由 `hooks/lib/check-report-expectations.sh` 在後續對話邊界重查並**經 `additionalContext` 注入**要求補寫。用 `-newermt` 比對啟動時間（`-mmin` 會把 agent 上一輪的舊報告誤認成這次產出）。同步完成的 agent 仍走當下稽核
+- ~~agent 仍是「顧問」不是「工人」~~ → 新增 `subagent-execution` skill：逐階段派 implementer subagent + 帳本（`plans/<plan 同名>.progress.md`，第一行身分行）+ 階段審查（規格合規與程式品質分開審）+ 修復迴圈上限 5 輪（R≥4 換新 implementer 並升級模型）+ 「裁決而非停等」。由 `/tdd` 的「3.5 選執行方式」用 `AskUserQuestion` 帶入，**是選項不是強制**
+- ~~`context/planning/` 目錄不存在~~ → `planner` 與 `tdd-guide` 都往那寫、`context/README.md:28` 也記載了它，但骨架從未建立。已加入兩份 copy-template 的 area 清單
+- ~~`debug-investigator` 不在報告稽核映射裡~~ → 已補進 `post-agent-report.sh` 的 `AREA` 表（它寫 `context/quality/`）

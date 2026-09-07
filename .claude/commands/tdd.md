@@ -4,9 +4,13 @@ description: 強制執行測試驅動開發工作流，會自動載入當前任�
 
 # TDD 指令
 
-此指令呼叫 **tdd-guide** agent 強制執行 TDD，並**自動載入當前 WBS 任務的 plan 檔**（若存在）按階段推進。
+用 `Agent` 工具委派 **tdd-guide**（`subagent_type: "tdd-guide"`）強制執行 TDD，
+並**自動載入當前 WBS 任務的 plan 檔**（若存在）按階段推進。
 
-**相關規範：** `plan-format` skill、`.claude/rules/task-mode.md`
+多階段的 `standard`/`critical` 任務另有一條路：**執行型委派**——每階段派一個全新的
+implementer subagent，帶階段審查與帳本。見下方「3.5 選執行方式」與 `subagent-execution` skill。
+
+**相關規範：** `plan-format` skill、`subagent-execution` skill、`.claude/rules/task-mode.md`
 
 ## 任務模式分流（最先檢查）
 
@@ -51,6 +55,30 @@ tdd-guide agent 啟動時：
      從階段 1 重新開始
      忽略計畫，自由 TDD
    ```
+
+3.5 **選執行方式**（僅當 plan 有 ≥2 階段 且模式為 `standard`/`critical`）
+
+   先檢查帳本 `plans/<plan 同名>.progress.md`：**已存在且身分行指向同一個 plan
+   → 這是續跑，直接沿用上次選的方式，不要再問。**
+
+   否則用 `AskUserQuestion` 問一題：
+
+   ```
+   這個計畫有 4 個階段，要怎麼執行？
+     [Recommended] 逐階段派 implementer subagent
+       每階段一個全新 subagent 實作 + 階段審查 + 有界修復迴圈，
+       過程記進帳本（context 被壓縮也能續跑）。慢一些、貴一些，
+       但長任務不會偏離 plan。
+     我直接照 plan 實作
+       委派 tdd-guide 走標準 RED-GREEN-REFACTOR。快、省，
+       但階段多時容易累積偏離。
+   ```
+
+   - 選第一個 → **載入 `subagent-execution` skill**，照它的流程走，本檔以下的
+     TDD 循環由各階段的 implementer 各自執行（測試先行寫進它的驗收條件）
+   - 選第二個 → 委派 `tdd-guide`（`subagent_type: "tdd-guide"`），走本檔以下流程
+
+   把選擇記進帳本第一段，避免下次重複問。
 
 4. 若**找不到計畫**但當前任務門檻達標（≥ 2 檔案 或 ≥ 1h 預估）→ 提示：
 
