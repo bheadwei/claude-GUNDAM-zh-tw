@@ -59,6 +59,17 @@
     "padding": 0
   },
   "model": "opus",
+  "worktree": {
+    "baseRef": "fresh",
+    "symlinkDirectories": [
+      "node_modules",
+      ".venv",
+      ".next",
+      "dist",
+      "build"
+    ],
+    "cleanupPeriodDays": 14
+  },
   "hooks": {
     "SessionStart": [
       {

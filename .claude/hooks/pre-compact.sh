@@ -9,15 +9,25 @@
 #
 # 掛載：settings.json → hooks.PreCompact（無 matcher）
 
-ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+# 消費 stdin（PreCompact payload：含 trigger=manual|auto、custom_instructions、cwd）
+input=$(cat 2>/dev/null)
+
+# worktree 感知：任務狀態與 git 狀態都要看**當前** checkout，
+# 否則在 worktree 裡壓縮會存下主 checkout 的狀態，快照就失真了
+source "$(dirname "${BASH_SOURCE[0]}")/lib/resolve-roots.sh" 2>/dev/null || true
+if declare -F resolve_roots >/dev/null 2>&1; then
+    resolve_roots "$input"
+    ROOT="$WORK_ROOT"
+else
+    ROOT="${CLAUDE_PROJECT_DIR:-$(pwd)}"
+    IN_WORKTREE=0
+fi
+
 TS=$(date +%Y%m%d-%H%M%S 2>/dev/null || echo unknown)
 SNAP_DIR="$ROOT/.claude/sessions"
 SNAP="$SNAP_DIR/auto-precompact-$TS.md"
 
 mkdir -p "$SNAP_DIR" 2>/dev/null
-
-# 消費 stdin（PreCompact payload：含 trigger=manual|auto、custom_instructions）
-input=$(cat 2>/dev/null)
 trigger=$(printf '%s' "$input" | grep -oE '"trigger"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
 
 TASK=$(cat "$ROOT/.claude/taskmaster-data/.current-task" 2>/dev/null)
@@ -29,6 +39,7 @@ MODE=$(cat "$ROOT/.claude/taskmaster-data/.current-task-mode" 2>/dev/null)
     echo "> 由 pre-compact.sh 在 context 壓縮前自動產生。完整敘事請改用 /save-session。"
     echo
     echo "- trigger: ${trigger:-n/a}"
+    [ "${IN_WORKTREE:-0}" = "1" ] && echo "- worktree: $ROOT"
     echo "- current task: ${TASK:-（無）}"
     echo "- task mode: ${MODE:-（無）}"
     echo

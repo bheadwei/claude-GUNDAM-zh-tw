@@ -14,12 +14,20 @@
 #
 # 逃生門：DOC_SYNC_GATE=off、或 .suggest-mode 為 off
 
-PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd 2>/dev/null)}"
-CLAUDE_DIR="$PROJECT_ROOT/.claude"
-DATA_DIR="$CLAUDE_DIR/taskmaster-data"
-mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null || true
-
 INPUT=$(cat)
+
+source "$(dirname "${BASH_SOURCE[0]}")/lib/resolve-roots.sh" 2>/dev/null || true
+if declare -F resolve_roots >/dev/null 2>&1; then
+    resolve_roots "$INPUT"
+else
+    MAIN_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd 2>/dev/null)}"
+    MAIN_CLAUDE="$MAIN_ROOT/.claude"; WORK_ROOT="$MAIN_ROOT"; WORK_CLAUDE="$MAIN_CLAUDE"; IN_WORKTREE=0
+fi
+
+PROJECT_ROOT="$WORK_ROOT"                  # 判斷寫入檔案是否為「文件描述的對象」
+CLAUDE_DIR="$MAIN_CLAUDE"                  # log 集中
+DATA_DIR="$WORK_CLAUDE/taskmaster-data"    # .doc-impact：每個 worktree 各自累積
+mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null || true
 FILE_PATH=""
 command -v jq >/dev/null 2>&1 && FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // ""')
 

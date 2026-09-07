@@ -41,10 +41,9 @@ $syncClaudeFiles = @(
     'settings.json', 'README.md'
 )
 $syncRootDirs  = @('scripts')   # 倉庫根目錄下的輔助腳本（含本腳本自己）
-$syncRootFiles = @(
-    '.mcp.json.linux.example', '.mcp.json.windows.example',
-    'CLAUDE_TEMPLATE.md', '.gitattributes'
-)
+$syncRootFiles = @('.mcp.json.linux.example', '.mcp.json.windows.example', 'CLAUDE_TEMPLATE.md', '.gitattributes')
+# SEED：只在目標「不存在」時建立，永不覆寫（專案會自己加規則，且根目錄檔案沒備份）
+$seedRootFiles = @('.worktreeinclude')
 
 # --- MERGE：補骨架（README/_TEMPLATE/.gitkeep），但保留執行資料，永不刪除 ---
 $mergeClaudeDirs = @('context', 'coordination')
@@ -156,13 +155,26 @@ if (-not $ClaudeOnly) {
     Write-Host "   ⏭  跳過根目錄檔案: $($syncRootFiles -join ', ')" -ForegroundColor DarkGray
 }
 
+$srcRootU = (Resolve-Path $source).Path.TrimEnd('\')
+Write-Host "▶ SEED 根目錄檔案（只補缺少的，永不覆寫）..." -ForegroundColor Green
+foreach ($f in $seedRootFiles) {
+    $target = Join-Path $destPath $f
+    if (Test-Path $target) {
+        Write-Host "   ⏭  已存在，跳過: $f" -ForegroundColor DarkGray
+    } elseif ($DryRun) {
+        Write-Host "   [dry] $target" -ForegroundColor DarkGray
+    } else {
+        Copy-Item -Path (Join-Path $srcRootU $f) -Destination $target -Force
+        Write-Host "   ✚ 已建立: $f" -ForegroundColor Cyan
+    }
+}
+
 Write-Host "▶ MERGE 骨架目錄（保留執行資料）..." -ForegroundColor Green
 # 只補骨架檔（README.md / _*.md / .gitkeep）與目錄結構。
 #
 # 為什麼不用 Invoke-Sync -AdditiveOnly：那會整包複製，把**模板 repo 自己**累積的
 # agent 報告（context\quality\*.md 等）灌進使用者專案。骨架是模板資產，報告是專案
 # 資料。與 update-template.sh 及 copy-template.{sh,ps1} 同一套規則，四份必須一致。
-$srcRootU = (Resolve-Path $source).Path.TrimEnd('\')
 foreach ($d in $mergeClaudeDirs) {
     $srcDir = Join-Path $srcRootU ".claude\$d"
     if (-not (Test-Path $srcDir)) { continue }

@@ -88,9 +88,9 @@ claude_v2026/
     │
     ├── rules/        ( 6 個)         # 自動載入規則（每次對話注入）
     ├── agents/       (14 個)         # 專業 Agent 定義
-    ├── commands/     (28 個)         # Slash Commands
-    ├── skills/       (14 個)         # 按需載入（不佔常駐 context）
-    ├── hooks/                        # Hook 腳本 + lib/ + 127 案例回歸測試
+    ├── commands/     (29 個)         # Slash Commands
+    ├── skills/       (15 個)         # 按需載入（不佔常駐 context）
+    ├── hooks/                        # Hook 腳本 + lib/ + 137 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）
     ├── ui/           (69 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │
@@ -149,7 +149,7 @@ claude_v2026/
 建立 handoff，`post-agent-report.sh` 掃到 pending 交接即注入提示。編排劇本見
 `.claude/rules/agent-orchestration.md`。
 
-### 指令速查（28 個）
+### 指令速查（29 個）
 
 | 階段 | 指令 | 用途 |
 | :--- | :--- | :--- |
@@ -243,7 +243,7 @@ claude_v2026/
 
 ---
 
-## Skills（14 個，按需載入）
+## Skills（15 個，按需載入）
 
 不佔常駐 context，由 `description` 的觸發條件決定何時載入。**唯一例外是第一個**。
 

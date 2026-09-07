@@ -21,6 +21,8 @@
 - **改 hook** → `.claude/hooks/tests/run-tests.sh` 有測試
 - **改 agent 的報告落點或 handoff 行為** → `post-agent-report.sh` 的 `AREA` 對應表要同步，**否則稽核永遠找不到報告**
 - **新增 `context/` 的 area 子目錄** → 同步 `copy-template.sh` 的 `for d in ...` **和** `copy-template.ps1` 的 `$contextAreas`（四份腳本的骨架規則要一致：`copy-template.{sh,ps1}` 建目錄、`update-template.{sh,ps1}` 只補 `README.md`／`_*.md`／`.gitkeep`）
+- **改 hook 讀寫的狀態檔** → 先想清楚它屬「短命旗標」還是「共享產物」，照 `worktree-orchestration` skill 的邊界表選 `WORK_CLAUDE` 或 `MAIN_CLAUDE`。用錯的話平行開發會靜默壞掉
+- **改閘門的路徑排除規則** → 一律先相對化到 `WORK_ROOT` 再比對，樣式錨定開頭。用絕對路徑子字串比對會被 `.claude/worktrees/` 誤命中
 - **改 `using-taskmaster` skill** → 它由 `session-start.sh` 全文注入，**每個 session 都會載入**；加東西前先想清楚值不值得佔常駐 context
 
 ## 已知落差
@@ -31,6 +33,11 @@
 - **沒有 CI**：`.github/` 不存在，但 `run-tests.sh` 失敗時 exit 1，可直接掛
 
 ### 已修（2026-09-07）
+
+- ~~worktree 平行開發的狀態分裂~~ → **這是 bug 不是缺功能**。官方文件明講「hook 路徑不跟著 worktree 走：`${CLAUDE_PROJECT_DIR}` 留在 session 啟動處，`cwd` 才是 worktree 根」，而 7 支 hook 全部只用 `CLAUDE_PROJECT_DIR` → 三個平行 worktree 共用同一份 `.current-task-mode`，A 判 quick、B 判 critical 互相覆寫。新增 `hooks/lib/resolve-roots.sh` 統一解析（往上找 `.git`，因為 `cwd` 會隨 `cd` 移動成子目錄），短命旗標跟 worktree、共享產物留主 checkout
+- ~~閘門在 worktree 裡全部失效~~ → worktree 住在 `.claude/worktrees/`，所以裡面每個檔案的絕對路徑都含 `/.claude/`，而閘門用 `*/.claude/*` 放行以免自鎖 → 整個 worktree 被放行。修法：排除判斷先相對化到當前 checkout root、樣式錨定開頭。**由新增的 worktree 測試案例抓出**
+- ~~沒接 Claude Code 原生 worktree 支援~~ → 新增 `.worktreeinclude`（worktree 是乾淨 checkout，沒它就缺 `.env` 跑不動）、`settings.json` 的 `worktree` 設定、`refactor-cleaner` 加 `isolation: worktree`；`task-next.md` 的平行段改用 `claude -w` 並**刪掉那句錯的「每個任務各自寫 .current-task（互不干擾）」**
+- ~~update-template 會覆寫專案的根目錄檔案~~ → 新增 **SEED** 分類：只在目標不存在時建立、永不覆寫。`.worktreeinclude` 走這條（專案會自己加規則，而 update-template 的備份只包 `.claude/`，根目錄檔案覆寫等於無備份的破壞）
 
 - ~~新需求／CR 的程式寫出來但文件沒同步~~ → **根因是結構性的**：`documentation-specialist` 在任務完成路徑上原本沒有位置，`/verify` 只驗建置/型別/lint/測試，從不問文件。修法：`post-write.sh` 偵測「文件描述的對象」（`*/api/*`、`*openapi*`、`*/migrations/*`、`*/index.ts`…）→ 記進 `taskmaster-data/.doc-impact` 並提醒一次；`/verify` 在標 WBS ✅ 前**必須**處理該清單（委派 documentation-specialist／已自行更新／明確豁免）。逃生門 `DOC_SYNC_GATE=off`
 - ~~`planner` 與 `architect` 沒有關鍵字入口~~ → 「新功能／CR」那條補上 `subagent_type: "planner"`，「技術選型」那條補上 `subagent_type: "architect"`。原本只提示 `/task-add` 與 `/adr`

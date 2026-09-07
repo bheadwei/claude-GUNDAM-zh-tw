@@ -174,7 +174,15 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
 
 ### 遷移程序
 
-1. 確認 `.gitignore` 已是新版細分規則（若還是舊版，先跑 `update-template`）
+1. **外科式修改專案的 `.gitignore`**（`update-template` **不會**同步它——
+   專案會自己加建置產物等規則，而根目錄檔案不在 update-template 的備份範圍內，
+   覆寫等於無備份的破壞）：
+
+   - **刪掉**這兩行（若存在）：`.claude/taskmaster-data/`、`.claude/sessions/`
+   - **加入**模板 `.gitignore` 的「執行時短命狀態」整段（11 條 `.claude/taskmaster-data/.*`
+     加上 `.claude/worktrees/`）—— 直接從模板那份複製過去
+   - 專案自己原有的規則**一條都不要動**
+
 2. `git add .claude/taskmaster-data/` —— 細分規則會自動擋掉短命狀態檔
 3. **`git status` 給使用者看清單再 commit**，不要自動 commit
 4. **提醒敏感資料**：`plans/` 與 `wbs.md` 可能含客戶名稱、內部系統名。

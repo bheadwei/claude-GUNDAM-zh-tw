@@ -6,8 +6,8 @@
 |---|---|---|---|
 | **Hooks** | 7 | 事件觸發，機器執行 | 只有明確逃生門 |
 | **Rules** | 6 | 每個 session 全量載入 | 否（但靠模型遵守） |
-| **Skills** | 14 | 情境觸發，按需載入 | 是（需被想起來） |
-| **Commands** | 28 | 使用者主動叫 | — |
+| **Skills** | 15 | 情境觸發，按需載入 | 是（需被想起來） |
+| **Commands** | 29 | 使用者主動叫 | — |
 | **Agents** | 14 | 委派時啟動 | — |
 
 **設計原則**：能交給機器的交給 hook；任何任務都適用的才常駐 rule；
@@ -294,6 +294,39 @@ post-write.sh 認出這是「文件描述的對象」
 > 為什麼提醒只發一次：每改一個 API 檔就吵一次會被無視。真正的關卡在 `/verify`，
 > 那裡才是「不處理就不能標完成」的地方。
 
+### worktree 平行開發：狀態隔離邊界
+
+官方文件明確寫著：**hook 路徑不會跟著 worktree 走**——`${CLAUDE_PROJECT_DIR}` 留在
+session 啟動處，hook input JSON 的 `cwd` 才是 worktree 根。所以 hook 必須自己決定
+每份狀態該讀哪個 root，由 `.claude/hooks/lib/resolve-roots.sh` 統一解析。
+
+```
+主 checkout                          worktree（.claude/worktrees/<name>/）
+──────────────────────────────       ──────────────────────────────
+context/learned/    坑（共享知識）      .current-task
+context/decisions/  ADR                .current-task-mode
+context/<area>/     agent 報告          .doc-impact ＋ .doc-impact-notified
+coordination/       agent 交接          .pitfall-seen
+.suggest-mode       專案級設定          .report-expectations.jsonl
+logs/ ＋ timelog    集中一處才查得到
+```
+
+`wbs.md` 與 `plans/` **不在上表**——它們是 git 追蹤的檔案，worktree 自然帶一份、
+改動由 git 合併。這也是 `.gitignore` 必須讓它們進版控的原因：沒進版控的話
+worktree 裡連 plan 都沒有，agent 不知道要實作什麼。
+
+`resolve-roots.sh` 的關鍵是**往上走找 `.git`**——官方說 `cwd` 會隨 Claude 跑 `cd`
+移動，所以它可能是 worktree 的深層子目錄。linked worktree 的 `.git` 是**檔案**
+（主 checkout 是目錄），這就是判準。
+
+> **踩過的坑**：worktree 住在 `.claude/worktrees/` 底下，所以 worktree 裡每個檔案的
+> 絕對路徑都含 `/.claude/`。閘門原本用 `*/.claude/*` 放行（避免自鎖），結果把整個
+> worktree 的檔案都放行了——任務模式閘門與坑閘門在 worktree 裡全部失效。
+> 修法：排除判斷先相對化到當前 checkout root，樣式錨定開頭。由測試案例抓出。
+
+完整程序（建立、派工、合併順序、清理判準）見 `worktree-orchestration` skill。
+入口有兩個：`/task-next` 的平行選項（WBS 驅動）與 `/worktree`（臨時隔離）。
+
 ### Skills（按需載入）
 
 | 情境 | Skill |
@@ -305,6 +338,7 @@ post-write.sh 認出這是「文件描述的對象」
 | 寫測試、決定覆蓋率門檻 | `testing-standards` |
 | 建立或更新 plan 檔 | `plan-format` |
 | 執行多階段 plan（standard/critical） | `subagent-execution` — 逐階段派 implementer + 帳本 |
+| worktree 平行開發、狀態隔離邊界 | `worktree-orchestration` |
 | 產專案文件 | `project-docs` |
 | E2E 測試 | `e2e-testing` |
 | DB schema 變更 | `database-migrations` / `postgres-patterns` |
@@ -361,6 +395,7 @@ post-write.sh 認出這是「文件描述的對象」
 | `/ui-page <path>` | 深化單一頁面 |
 | `/pm-choose` · `/pm-switch` | Node 套件管理器選擇/切換 |
 | `/suggest-mode` | 調整建議密度（也控制閘門開關） |
+| `/worktree` | 臨時隔離工作區（開／看／依序合併／清理） |
 
 ### 觀測與輔助
 
@@ -408,4 +443,4 @@ post-write.sh 認出這是「文件描述的對象」
 bash .claude/hooks/tests/run-tests.sh
 ```
 
-127 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
+137 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。

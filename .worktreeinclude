@@ -1,0 +1,40 @@
+# .worktreeinclude — 建立 worktree 時要一起帶過去的「未進版控」檔案
+#
+# 為什麼需要：worktree 是乾淨 checkout，**只有 git 追蹤的檔案會出現**。
+# 沒有這份清單，每個新 worktree 都缺 .env 與 MCP 設定，開起來就跑不動。
+#
+# 語法同 .gitignore。只有「符合樣式**且本來就被 gitignore**」的檔案會被複製，
+# 所以已進版控的檔案不會被重複帶一份。
+#
+# 適用於 Claude Code 用 git 建立的所有 worktree：`claude --worktree`、
+# 帶 `isolation: worktree` 的 subagent、以及桌面版的平行 session。
+#
+# ⚠️ 這裡列的檔案含秘密（API key、連線字串）。它們會被複製到
+#    .claude/worktrees/ 底下——該目錄已在 .gitignore，別把它移出來。
+#
+# ⚠️ 開 N 個 worktree = 磁碟上有 N 份 production 秘密。`git worktree remove`
+#    會一併刪除，但**被遺棄的 worktree 會讓它們留著**。定期 `git worktree list`
+#    檢查，或用 /worktree 的「清理」。若不希望 production 設定進 worktree，
+#    把 .env* 改成逐項列出並排除 .env.production。
+
+# ── 環境變數 ──
+#
+# 用 .env* 一次涵蓋所有變體：.env / .env.local / .env.development /
+# .env.production / .env.staging / .env.test / *.local 等等。
+#
+# 為什麼這樣安全：官方規則是「只有符合樣式**且本來就被 gitignore** 的檔案會被複製」，
+# 所以已進版控的 .env.example 不會被複製一份（它本來就隨 checkout 出現）。
+.env*
+
+# ── MCP 設定（含 API keys）──
+.mcp.json
+
+# ── Claude Code 個人設定 ──
+# 註：權限核准本身會共享（官方：worktree 裡按「不再詢問」會寫回主 checkout 的
+# settings.local.json），但把檔案帶過去能讓 worktree 一開始就有相同的環境變數設定。
+.claude/settings.local.json
+
+# ── 專案自己要加的 ──
+# 例：
+# config/secrets.local.json
+# certs/dev.pem

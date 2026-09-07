@@ -20,13 +20,22 @@ set -uo pipefail
 # jq 不存在 → 軟降級直接退出（不阻擋）
 command -v jq >/dev/null 2>&1 || exit 0
 
-PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-CLAUDE_DIR="$PROJECT_ROOT/.claude"
+PAYLOAD=$(cat 2>/dev/null || echo '{}')
+
+source "$(dirname "${BASH_SOURCE[0]}")/lib/resolve-roots.sh" 2>/dev/null || true
+if declare -F resolve_roots >/dev/null 2>&1; then
+    resolve_roots "$PAYLOAD"
+else
+    MAIN_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd 2>/dev/null)}"
+    MAIN_CLAUDE="$MAIN_ROOT/.claude"; WORK_ROOT="$MAIN_ROOT"; WORK_CLAUDE="$MAIN_CLAUDE"; IN_WORKTREE=0
+fi
+
+PROJECT_ROOT="$MAIN_ROOT"
+CLAUDE_DIR="$MAIN_CLAUDE"                      # 報告與交接跨 worktree 共享
 LOG_FILE="$CLAUDE_DIR/logs/context-reports.log"
 HANDOFF_DIR="$CLAUDE_DIR/coordination/handoffs"
+WORK_DATA="$WORK_CLAUDE/taskmaster-data"       # 報告期望：每個 worktree 各自
 mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null || true
-
-PAYLOAD=$(cat 2>/dev/null || echo '{}')
 AGENT_NAME=$(echo "$PAYLOAD" | jq -r '.tool_input.subagent_type // empty' 2>/dev/null || echo "")
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
@@ -52,7 +61,7 @@ esac
 
 # quick 模式下 tdd-guide 刻意不寫報告（小任務不值得這開銷）→ 不稽核，避免假警報
 if [ "$AGENT_NAME" = "tdd-guide" ]; then
-    TM_FILE="$CLAUDE_DIR/taskmaster-data/.current-task-mode"
+    TM_FILE="$WORK_DATA/.current-task-mode"
     if [ -f "$TM_FILE" ] && [ "$(tr -d '[:space:]' < "$TM_FILE" 2>/dev/null)" = "quick" ]; then
         AREA=""
     fi
@@ -71,7 +80,7 @@ if [ -n "$AREA" ]; then
 
     if [ "$IS_ASYNC" = "1" ]; then
         # 此刻 agent 還沒動工，立即 find 必定假警報 → 記下期望，延後稽核
-        EXPECT_FILE="$CLAUDE_DIR/taskmaster-data/.report-expectations.jsonl"
+        EXPECT_FILE="$WORK_DATA/.report-expectations.jsonl"
         mkdir -p "$(dirname "$EXPECT_FILE")" 2>/dev/null || true
         jq -nc --arg a "$AGENT_NAME" --arg ar "$AREA" --arg ts "$TIMESTAMP" \
                --argjson ep "$(date +%s)" \
@@ -89,7 +98,7 @@ if [ -n "$AREA" ]; then
 fi
 
 # 延後稽核：檢查先前記下的期望，缺報告則產生要求補寫的文字（可能為空）
-REPORT_AUDIT_MSG=$(bash "$(dirname "${BASH_SOURCE[0]}")/lib/check-report-expectations.sh" "$CLAUDE_DIR" 2>/dev/null || echo "")
+REPORT_AUDIT_MSG=$(bash "$(dirname "${BASH_SOURCE[0]}")/lib/check-report-expectations.sh" "$WORK_CLAUDE" "$MAIN_CLAUDE" 2>/dev/null || echo "")
 
 # ============================================================================
 # (2) Pending handoff 掃描 + 注入
@@ -97,7 +106,7 @@ REPORT_AUDIT_MSG=$(bash "$(dirname "${BASH_SOURCE[0]}")/lib/check-report-expecta
 
 # 讀 suggest-mode（預設 medium）
 SUGGEST_MODE="medium"
-SM_FILE="$CLAUDE_DIR/taskmaster-data/.suggest-mode"
+SM_FILE="$MAIN_CLAUDE/taskmaster-data/.suggest-mode"
 if [ -f "$SM_FILE" ]; then
     SUGGEST_MODE=$(tr -d '[:space:]' < "$SM_FILE" 2>/dev/null || echo "medium")
     [ -z "$SUGGEST_MODE" ] && SUGGEST_MODE="medium"

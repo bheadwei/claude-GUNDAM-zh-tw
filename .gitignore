@@ -4,8 +4,13 @@
 .mcp.json
 !.mcp.json.*.example
 .claude/settings.local.json
-.env
-.env.local
+
+# 所有 .env 變體（.env.production / .env.staging / .env.test / *.local …）
+# 只列 .env 與 .env.local 會讓 .env.production 進版控 —— 那是 production 秘密外洩。
+# 例外：*.example 是給人看的範本，要進版控。
+.env*
+!.env.example
+!.env*.example
 
 # ============================================================================
 # 執行時短命狀態

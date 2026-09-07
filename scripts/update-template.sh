@@ -44,6 +44,10 @@ SYNC_CLAUDE_DIRS=(agents commands rules skills hooks guides output-styles plugin
 SYNC_CLAUDE_FILES=(statusline.sh statusline-debug.sh settings.json README.md)
 SYNC_ROOT_DIRS=(scripts)
 SYNC_ROOT_FILES=(.mcp.json.linux.example .mcp.json.windows.example CLAUDE_TEMPLATE.md .gitattributes)
+# SEED：只在目標「不存在」時建立，永不覆寫。
+# 這兩份檔案專案會自己加規則（.gitignore 加自家建置產物、.worktreeinclude 加自家秘密檔），
+# 而 update-template 的備份只包 .claude/，根目錄檔案沒備份 —— 覆寫等於無備份的破壞。
+SEED_ROOT_FILES=(.worktreeinclude)
 MERGE_CLAUDE_DIRS=(context coordination)
 PRESERVE_NOTE=("settings.local.json" "taskmaster-data/" "sessions/" "logs/" "qa-history/" "worktrees/" "(root) .mcp.json / .env")
 
@@ -128,6 +132,17 @@ if [ "$CLAUDE_ONLY" -eq 0 ]; then
 else
   echo "   ⏭  跳過根目錄檔案: ${SYNC_ROOT_FILES[*]}"
 fi
+
+echo "▶ SEED 根目錄檔案（只補缺少的，永不覆寫）..."
+for f in "${SEED_ROOT_FILES[@]}"; do
+  if [ -e "$DEST/$f" ]; then
+    echo "   ⏭  已存在，跳過: $f"
+  elif [ "$DRY_RUN" -eq 1 ]; then
+    echo "   [dry] $DEST/$f"
+  else
+    cp -f "$SOURCE/$f" "$DEST/$f" && echo "   ✚ 已建立: $f"
+  fi
+done
 
 echo "▶ MERGE 骨架目錄（保留執行資料）..."
 # 只補「骨架檔」：README.md、_*_TEMPLATE.md、以及各 area 的目錄與 .gitkeep。
