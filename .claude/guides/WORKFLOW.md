@@ -6,7 +6,7 @@
 |---|---|---|---|
 | **Hooks** | 7 | 事件觸發，機器執行 | 只有明確逃生門 |
 | **Rules** | 6 | 每個 session 全量載入 | 否（但靠模型遵守） |
-| **Skills** | 15 | 情境觸發，按需載入 | 是（需被想起來） |
+| **Skills** | 16 | 情境觸發，按需載入 | 是（需被想起來） |
 | **Commands** | 29 | 使用者主動叫 | — |
 | **Agents** | 14 | 委派時啟動 | — |
 
@@ -339,6 +339,7 @@ worktree 裡連 plan 都沒有，agent 不知道要實作什麼。
 | 建立或更新 plan 檔 | `plan-format` |
 | 執行多階段 plan（standard/critical） | `subagent-execution` — 逐階段派 implementer + 帳本 |
 | worktree 平行開發、狀態隔離邊界 | `worktree-orchestration` |
+| 里程碑收尾、開 PR 前、問「還符合需求嗎」 | `spec-convergence` |
 | 產專案文件 | `project-docs` |
 | E2E 測試 | `e2e-testing` |
 | DB schema 變更 | `database-migrations` / `postgres-patterns` |
@@ -432,8 +433,6 @@ worktree 裡連 plan 都沒有，agent 不知道要實作什麼。
   marketplace，改版號即自動更新（取代手動 `update-template.sh`）。
   代價：指令會變 `/taskmaster:task-next`；且 plugin 帶不了 `rules/`，需先把 rules 改寫成
   SessionStart 注入的 skill（`using-taskmaster` 已示範這個路徑）。
-- **`converge` 類收斂檢查** —— `/verify` 目前只驗建置/型別/lint/測試/console.log 與 plan
-  驗收標準，沒有「codebase 還符合當初的 PRD 嗎」這層（對標 spec-kit 的 `/speckit.converge`）。
 - **constitution（專案不變量）** —— `rules/` 是模板通用規範，缺「這個專案不可違反的原則」。
 
 ## 改動 hook 之後

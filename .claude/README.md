@@ -19,7 +19,7 @@
 ├── agents/       (14 個)      # 專業 Agent 定義
 ├── commands/     (29 個)      # Slash Command
 ├── rules/        ( 6 個)      # 自動載入規則
-├── skills/       (15 個)      # 專案特定領域知識
+├── skills/       (16 個)      # 專案特定領域知識
 ├── hooks/                     # Hook 腳本庫
 ├── context/                   # 跨 Agent 上下文共享
 ├── coordination/              # Agent 協調配置
@@ -52,7 +52,7 @@
 
 模型分派原則見 `guides/MODELS.md`（含派工時覆寫的時機）。
 
-## Skills（15 個，按需載入）
+## Skills（16 個，按需載入）
 
 僅保留模型不知道的專案特定知識。
 

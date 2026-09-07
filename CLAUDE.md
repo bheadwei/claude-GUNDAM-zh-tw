@@ -29,10 +29,12 @@
 ## 已知落差
 
 - **發佈仍是 pull 式**：`copy-template` / `update-template` 要手動跑。真正的自動更新要走 Claude Code plugin marketplace（改版號即更新），但 plugin **帶不了 `rules/`**，且指令會變 `/taskmaster:task-next`。`using-taskmaster` 已示範「rules 改寫成 SessionStart 注入的 skill」這條遷移路徑
-- **沒有 converge 收斂檢查**：`/verify` 驗建置/型別/lint/測試 + plan 驗收標準，但沒有「codebase 還符合當初 PRD 嗎」這層（對標 spec-kit 的 `/speckit.converge`）
 - **沒有 constitution**：`rules/` 是模板通用規範，缺「這個專案不可違反的原則」那一層
 
 ### 已修（2026-09-07）
+
+- ~~沒有 converge 收斂檢查~~ → `spec-convergence` skill：以 `docs/00_brief.md`＋PRD 為基準，三查（A 漏做／B 範圍蔓延／C 描述失真），輸出報告與提議的 WBS 行。**刻意不自動改 PRD**——「這個 CR 該進 PRD」還是「當初就不該做」是人的判斷。做成 skill 而非塞進 `/verify`，是為了能用自然語言喚起（「現在還符合原本規格嗎」）。三個觸發點：里程碑完成（完整）、`/verify pre-pr`（A+B）、`/task-add` 的 CR 累積提醒
+- ~~需求釐清沒有回述確認~~ → `/task-init` 新增步驟 2.7：補問 non-goals 與最大風險（原本兩題都沒問）、產出 `docs/00_brief.md`、**逐段回述給使用者確認**。原因是文件從步驟 2 的答案產出、WBS 又從文件反推，**誤解會被放大兩次**。`/docs-init` 改為優先讀 brief，並對 brief 的「仍未釐清」段標 `TBD` 而非自己填答案
 
 - ~~沒有 CI~~ → `.github/workflows/template-ci.yml`，六個 job：hook 回歸測試（**Ubuntu + Windows/Git Bash 都跑**，因為踩過平台專屬的雷）、shell 與 PowerShell 語法、**文件計數一致性**、copy/update-template 沙箱實跑。案例數由測試 job 的實跑輸出傳給計數 job，避免兩邊各寫一個數字
 - ~~文件計數靠人工同步~~ → `scripts/check-counts.sh`：比對檔案系統實況 vs README／`.claude/README`／WORKFLOW／INDEX 四處寫的數字，另檢查「每個 skill 有 SKILL.md 且列入 INDEX」「每個 agent 的 model 是合法別名」。**寫完立刻抓到 3 處既有 drift**（`.claude/README.md` 的 skills 12、commands 28、Skills 14）
