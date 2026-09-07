@@ -16,6 +16,7 @@
 
 ## 改動時的連帶檢查
 
+- **新增 agent／skill／command／rule** → 跑 `bash scripts/check-counts.sh`，它會列出所有該同步卻沒同步的計數（CI 也會跑）
 - **改 `.claude/` 的目錄結構** → 同步 `scripts/copy-template.sh` 的 `EXCLUDES` **和** `scripts/copy-template.ps1` 的 `$excludeDirs` / `$excludeFiles`（兩份要一致，容易漏改 ps1）
 - **新增 skill** → 更新 `.claude/skills/INDEX.md`，否則沒人知道它存在
 - **改 hook** → `.claude/hooks/tests/run-tests.sh` 有測試
@@ -30,9 +31,11 @@
 - **發佈仍是 pull 式**：`copy-template` / `update-template` 要手動跑。真正的自動更新要走 Claude Code plugin marketplace（改版號即更新），但 plugin **帶不了 `rules/`**，且指令會變 `/taskmaster:task-next`。`using-taskmaster` 已示範「rules 改寫成 SessionStart 注入的 skill」這條遷移路徑
 - **沒有 converge 收斂檢查**：`/verify` 驗建置/型別/lint/測試 + plan 驗收標準，但沒有「codebase 還符合當初 PRD 嗎」這層（對標 spec-kit 的 `/speckit.converge`）
 - **沒有 constitution**：`rules/` 是模板通用規範，缺「這個專案不可違反的原則」那一層
-- **沒有 CI**：`.github/` 不存在，但 `run-tests.sh` 失敗時 exit 1，可直接掛
 
 ### 已修（2026-09-07）
+
+- ~~沒有 CI~~ → `.github/workflows/template-ci.yml`，六個 job：hook 回歸測試（**Ubuntu + Windows/Git Bash 都跑**，因為踩過平台專屬的雷）、shell 與 PowerShell 語法、**文件計數一致性**、copy/update-template 沙箱實跑。案例數由測試 job 的實跑輸出傳給計數 job，避免兩邊各寫一個數字
+- ~~文件計數靠人工同步~~ → `scripts/check-counts.sh`：比對檔案系統實況 vs README／`.claude/README`／WORKFLOW／INDEX 四處寫的數字，另檢查「每個 skill 有 SKILL.md 且列入 INDEX」「每個 agent 的 model 是合法別名」。**寫完立刻抓到 3 處既有 drift**（`.claude/README.md` 的 skills 12、commands 28、Skills 14）
 
 - ~~worktree 平行開發的狀態分裂~~ → **這是 bug 不是缺功能**。官方文件明講「hook 路徑不跟著 worktree 走：`${CLAUDE_PROJECT_DIR}` 留在 session 啟動處，`cwd` 才是 worktree 根」，而 7 支 hook 全部只用 `CLAUDE_PROJECT_DIR` → 三個平行 worktree 共用同一份 `.current-task-mode`，A 判 quick、B 判 critical 互相覆寫。新增 `hooks/lib/resolve-roots.sh` 統一解析（往上找 `.git`，因為 `cwd` 會隨 `cd` 移動成子目錄），短命旗標跟 worktree、共享產物留主 checkout
 - ~~閘門在 worktree 裡全部失效~~ → worktree 住在 `.claude/worktrees/`，所以裡面每個檔案的絕對路徑都含 `/.claude/`，而閘門用 `*/.claude/*` 放行以免自鎖 → 整個 worktree 被放行。修法：排除判斷先相對化到當前 checkout root、樣式錨定開頭。**由新增的 worktree 測試案例抓出**

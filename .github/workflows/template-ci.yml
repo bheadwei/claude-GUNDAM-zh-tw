@@ -1,0 +1,206 @@
+name: template-ci
+
+# 這個模板的自我檢查。
+#
+# 為什麼需要：hook 是這個模板唯一有強制力的一層，而它壞掉的兩種方式都很難察覺
+# ——誤擋（所有寫入被 deny）或靜默失效（該擋沒擋）。在此之前這些只有手動跑
+# run-tests.sh 才會發現。文件計數的 drift 更是實際發生過六次。
+#
+# 本檔不會被 copy-template 帶到新專案（專案的 CI 是專案自己的事）。
+# 想沿用的話手動複製過去即可 —— hook 測試對專案一樣有效。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hooks:
+    name: Hook 回歸測試（Ubuntu）
+    runs-on: ubuntu-latest
+    outputs:
+      cases: ${{ steps.run.outputs.cases }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安裝 jq
+        run: |
+          command -v jq >/dev/null 2>&1 || sudo apt-get install -y -qq jq
+          jq --version
+
+      - name: 跑 137 案例回歸測試
+        id: run
+        run: |
+          set -o pipefail
+          bash .claude/hooks/tests/run-tests.sh 2>&1 | tee /tmp/tests.log
+          # 把實跑的案例數輸出給後面的計數檢查用，避免兩邊各寫一個數字
+          cases=$(grep -oE '通過 [0-9]+' /tmp/tests.log | tail -1 | grep -oE '[0-9]+')
+          echo "cases=$cases" >> "$GITHUB_OUTPUT"
+          echo "實跑案例數：$cases"
+
+  hooks-windows:
+    name: Hook 回歸測試（Windows / Git Bash）
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安裝 jq
+        shell: pwsh
+        run: choco install jq -y --no-progress
+
+      # 這個模板的主要使用環境是 Windows + Git Bash，且開發過程踩到過
+      # 平台專屬的雷（/dev/tty 的 -c/-w 測試會誤判、PowerShell 的 PathInfo
+      # 沒有 .Length）。只在 Ubuntu 驗證會漏掉這類問題。
+      - name: 跑回歸測試
+        shell: bash
+        run: bash .claude/hooks/tests/run-tests.sh
+
+  shell:
+    name: Shell 與 PowerShell 語法
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: bash -n 所有 .sh
+        run: |
+          fail=0
+          while IFS= read -r f; do
+            bash -n "$f" || { echo "✗ $f"; fail=1; }
+          done < <(find . -name '*.sh' -not -path './.git/*')
+          [ "$fail" -eq 0 ] || exit 1
+          echo "全部 .sh 語法通過"
+
+      - name: shellcheck（僅報告，不阻擋）
+        continue-on-error: true
+        run: |
+          sudo apt-get install -y -qq shellcheck
+          find .claude/hooks scripts -name '*.sh' -print0 \
+            | xargs -0 shellcheck -S warning || true
+
+  powershell:
+    name: PowerShell 語法
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parser 檢查兩份 .ps1
+        shell: pwsh
+        run: |
+          $bad = 0
+          Get-ChildItem -Recurse -Filter *.ps1 | ForEach-Object {
+            $err = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName, [ref]$null, [ref]$err) | Out-Null
+            if ($err.Count -gt 0) {
+              Write-Host "✗ $($_.Name)"
+              $err | ForEach-Object { Write-Host "    $($_.Message)" }
+              $bad = 1
+            }
+          }
+          if ($bad -ne 0) { exit 1 }
+          Write-Host "全部 .ps1 語法通過"
+
+  counts:
+    name: 文件計數一致性
+    runs-on: ubuntu-latest
+    needs: hooks
+    steps:
+      - uses: actions/checkout@v4
+      - name: 比對文件計數 vs 檔案系統
+        run: bash scripts/check-counts.sh --tests "${{ needs.hooks.outputs.cases }}"
+
+  templating:
+    name: copy-template / update-template 沙箱實跑
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安裝 jq
+        run: sudo apt-get install -y -qq jq
+
+      - name: copy-template 建新專案
+        run: |
+          set -e
+          bash scripts/copy-template.sh /tmp/newproj
+          echo "--- 骨架與新資產 ---"
+          for f in \
+            .claude/context/_REPORT_TEMPLATE.md \
+            .claude/context/learned/_PITFALL_TEMPLATE.md \
+            .claude/context/planning/.gitkeep \
+            .claude/coordination/handoffs/_HANDOFF_TEMPLATE.md \
+            .claude/hooks/lib/resolve-roots.sh \
+            .claude/hooks/lib/check-report-expectations.sh \
+            .claude/skills/using-taskmaster/SKILL.md \
+            .claude/skills/subagent-execution/SKILL.md \
+            .claude/skills/worktree-orchestration/SKILL.md \
+            .claude/commands/worktree.md \
+            .worktreeinclude ; do
+            test -e "/tmp/newproj/$f" || { echo "✗ 缺 $f"; exit 1; }
+          done
+          echo "全部到位"
+
+      - name: 新專案不得帶到模板的執行時資料
+        run: |
+          set -e
+          # context/ 只該有骨架（README / _*.md / .gitkeep），不該有實際報告
+          n=$(find /tmp/newproj/.claude/context -type f -name '*.md' \
+                ! -name 'README.md' ! -name '_*' | wc -l)
+          [ "$n" -eq 0 ] || { echo "✗ 帶了 $n 份實際報告"; exit 1; }
+          # taskmaster-data 應為空
+          n=$(ls -A /tmp/newproj/.claude/taskmaster-data 2>/dev/null | wc -l)
+          [ "$n" -eq 0 ] || { echo "✗ taskmaster-data 非空（$n 項）"; exit 1; }
+          echo "乾淨"
+
+      - name: .gitignore 細分規則分流正確
+        run: |
+          set -e
+          cd /tmp/newproj && git init -q .
+          mkdir -p .claude/taskmaster-data/plans .claude/sessions
+          # durable → 該進版控
+          for f in .claude/taskmaster-data/wbs.md \
+                   .claude/taskmaster-data/plans/2.1-x.md \
+                   .claude/sessions/s.md ; do : > "$f"; done
+          # ephemeral → 該忽略
+          for f in .claude/taskmaster-data/.current-task-mode \
+                   .claude/taskmaster-data/.doc-impact \
+                   .claude/taskmaster-data/timelog.jsonl ; do : > "$f"; done
+          # 秘密 → 該忽略；範本 → 該進版控
+          for f in .env .env.production .env.local; do : > "$f"; done
+          : > .env.example
+          git add -A
+          want_tracked=".claude/taskmaster-data/wbs.md .claude/taskmaster-data/plans/2.1-x.md .claude/sessions/s.md .env.example"
+          want_ignored=".claude/taskmaster-data/.current-task-mode .claude/taskmaster-data/.doc-impact .claude/taskmaster-data/timelog.jsonl .env .env.production .env.local"
+          for f in $want_tracked; do
+            git ls-files --error-unmatch "$f" >/dev/null 2>&1 \
+              || { echo "✗ 應進版控卻沒有：$f"; exit 1; }
+          done
+          for f in $want_ignored; do
+            git ls-files --error-unmatch "$f" >/dev/null 2>&1 \
+              && { echo "✗ 應忽略卻進版控：$f"; exit 1; }
+          done
+          echo "分流正確"
+
+      - name: update-template 不覆寫專案資料
+        run: |
+          set -e
+          # 專案自己的資料
+          echo "# 我的報告" > /tmp/newproj/.claude/context/quality/mine.md
+          echo "# 我的 session" > /tmp/newproj/.claude/sessions/mine.md
+          echo "# 專案自己加的" >> /tmp/newproj/.worktreeinclude
+          # 模板 repo 自己的報告（不該外流）
+          mkdir -p .claude/context/quality
+          echo "# 模板報告" > .claude/context/quality/LEAK-TEST.md
+
+          bash scripts/update-template.sh /tmp/newproj --no-backup
+
+          test -f /tmp/newproj/.claude/context/quality/mine.md \
+            || { echo "✗ 專案報告被刪"; exit 1; }
+          test -f /tmp/newproj/.claude/sessions/mine.md \
+            || { echo "✗ 專案 session 被刪"; exit 1; }
+          test ! -f /tmp/newproj/.claude/context/quality/LEAK-TEST.md \
+            || { echo "✗ 模板報告外流到專案"; exit 1; }
+          grep -q '專案自己加的' /tmp/newproj/.worktreeinclude \
+            || { echo "✗ SEED 檔被覆寫"; exit 1; }
+          echo "PRESERVE / MERGE / SEED 行為正確"

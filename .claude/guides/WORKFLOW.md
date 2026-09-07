@@ -435,12 +435,15 @@ worktree 裡連 plan 都沒有，agent 不知道要實作什麼。
 - **`converge` 類收斂檢查** —— `/verify` 目前只驗建置/型別/lint/測試/console.log 與 plan
   驗收標準，沒有「codebase 還符合當初的 PRD 嗎」這層（對標 spec-kit 的 `/speckit.converge`）。
 - **constitution（專案不變量）** —— `rules/` 是模板通用規範，缺「這個專案不可違反的原則」。
-- **CI** —— `.github/` 不存在。`run-tests.sh` 失敗時 exit 1，可直接掛。
 
 ## 改動 hook 之後
 
 ```bash
-bash .claude/hooks/tests/run-tests.sh
+bash .claude/hooks/tests/run-tests.sh        # 137 案例
+bash scripts/check-counts.sh --tests 137   # 文件計數一致性
 ```
+
+CI（`.github/workflows/template-ci.yml`）會在 push 與 PR 時自動跑這兩項，
+加上 Windows/Git Bash 的回歸測試、shell 與 PowerShell 語法、copy/update-template 沙箱實跑。
 
 137 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
