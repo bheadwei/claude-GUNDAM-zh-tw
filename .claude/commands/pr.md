@@ -4,7 +4,8 @@ description: 建立 Pull Request。分析完整 commit 歷史與 diff、可選�
 
 # 建立 Pull Request
 
-`git-workflow.md` 早就定義了 PR 流程，本指令是它的執行入口。
+**PR 流程以本檔為唯一來源。** commit message 格式見 `.claude/rules/coding-style.md`
+（那條常駐，因為 commit 是高頻動作，不能靠 skill 喚起）。
 
 ## 前置檢查（自動，失敗就停）
 
@@ -110,6 +111,6 @@ gh pr create --base "$BASE" --title "<標題>" --body "<內容>"
 
 ## 相關
 
-- `.claude/rules/git-workflow.md` — commit 與 PR 規範
+- `.claude/rules/coding-style.md` — commit message 格式
 - `.claude/rules/agent-orchestration.md` — PR 前把關鏈
 - `/verify pre-pr` — 完整檢查含安全掃描

@@ -88,6 +88,22 @@ return user
 所有 API 使用一致的信封格式：成功/狀態指示器、資料酬載（錯誤時 null）、
 錯誤訊息欄位（成功時 null）、分頁中繼資料（total, page, limit）。
 
+## Commit Message
+
+```
+<type>: <description>
+
+<optional body>
+```
+
+Types: `feat` `fix` `refactor` `docs` `test` `chore` `perf` `ci`
+
+> 這條刻意留在常駐 rule 而非 skill：commit 是高頻動作，而且常常不是被明確要求的
+> （「順手 commit 一下」）。靠 skill 喚起會靜默退化 —— `user-prompt-submit.sh`
+> 沒有 commit 關鍵字規則。
+>
+> **PR 流程不在這裡**，見 `.claude/commands/pr.md`（唯一來源）。
+
 ## Bash 工作目錄
 
 Bash tool 的 CWD 跨呼叫持續存在。優先用絕對路徑；需要切目錄時用 subshell

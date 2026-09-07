@@ -18,8 +18,8 @@
 │   └── STATUSLINE_GUIDE.md    # StatusLine 客製化手冊
 ├── agents/       (14 個)      # 專業 Agent 定義
 ├── commands/     (29 個)      # Slash Command
-├── rules/        ( 6 個)      # 自動載入規則
-├── skills/       (16 個)      # 專案特定領域知識
+├── rules/        ( 5 個)      # 自動載入規則
+├── skills/       (17 個)      # 專案特定領域知識
 ├── hooks/                     # Hook 腳本庫
 ├── context/                   # 跨 Agent 上下文共享
 ├── coordination/              # Agent 協調配置
@@ -52,7 +52,7 @@
 
 模型分派原則見 `guides/MODELS.md`（含派工時覆寫的時機）。
 
-## Skills（16 個，按需載入）
+## Skills（17 個，按需載入）
 
 僅保留模型不知道的專案特定知識。
 
@@ -68,7 +68,7 @@
 
 按需從 `custom-rule&skill/skills/` 複製語言特定 skill。
 
-## Rules（6 個，自動載入）
+## Rules（5 個，自動載入）
 
 每次對話自動注入 context，無需手動觸發。**只保留「任何任務都適用」的規則**——
 領域專屬知識改由 skill 按需載入，可強制的約束交給 hook。
@@ -79,7 +79,6 @@
 | task-mode | quick/standard/critical 三檔分級（由 `pre-tool-use.sh` 強制判級） |
 | agent-orchestration | 各任務類型的 agent 鏈、handoff 接力、安全平行 |
 | security | commit 前安全檢查 |
-| git-workflow | Conventional Commits |
 | interactive-qa | AskUserQuestion 一次一題 |
 
 ### 從 rules 移出的去向

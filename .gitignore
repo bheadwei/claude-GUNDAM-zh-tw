@@ -33,6 +33,10 @@
 # Claude Code 建立的 worktree（官方建議忽略，否則主 checkout 會滿是 untracked）
 .claude/worktrees/
 
+# 壓力測試的原始輸出（每份是一輪完整對話，會夾帶對話內容）
+# 判讀後的結論要留就寫進 context/learned/ 或 session 紀錄，別把原始輸出進版控
+.claude/tests/skill-compliance/results/
+
 # ============================================================================
 # 以下刻意「進版控」—— 不要加進本檔
 #
