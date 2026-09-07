@@ -408,4 +408,4 @@ post-write.sh 認出這是「文件描述的對象」
 bash .claude/hooks/tests/run-tests.sh
 ```
 
-99 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
+127 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
