@@ -160,6 +160,29 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
 回填只做一次。之後 `Plan` 欄由 `/plan` 建立時填入、`/verify` 歸檔時改指 `archive/`
 ——規範見 `plan-format` skill 的「與 WBS 的雙向同步」。
 
+## WBS／plans 進版控（既有專案的一次性遷移）
+
+較舊的專案沿用舊版 `.gitignore`，那份把 `.claude/taskmaster-data/` **整個**忽略掉，
+所以 `wbs.md` 與 `plans/` 從來沒進版控。新版改成細分規則——只忽略執行時短命狀態。
+
+**偵測方式**：專案是 git repo 且 `wbs.md` 存在，但 `git ls-files .claude/taskmaster-data`
+回傳空的。命中就在顯示狀態後用 `AskUserQuestion` 提議（可拒絕）：
+
+> 這個專案的 WBS 與 plans 還沒進版控（舊版 `.gitignore` 把整個 `taskmaster-data/` 忽略了）。
+> 進版控的好處：規格與計畫可 review／可追溯、跨機器同步、**worktree 平行開發才拿得到 plan**。
+> 要現在納入嗎？
+
+### 遷移程序
+
+1. 確認 `.gitignore` 已是新版細分規則（若還是舊版，先跑 `update-template`）
+2. `git add .claude/taskmaster-data/` —— 細分規則會自動擋掉短命狀態檔
+3. **`git status` 給使用者看清單再 commit**，不要自動 commit
+4. **提醒敏感資料**：`plans/` 與 `wbs.md` 可能含客戶名稱、內部系統名。
+   進了 git 歷史刪不掉——檢查清單見 `.claude/commands/save-session.md`
+
+`sessions/` 與 `qa-history/` 同理（舊版也把 `sessions/` 忽略了）。它們**更容易夾帶敏感資料**
+（記錄的是對話內容），所以分開問一次，別跟 WBS 混在同一個 commit。
+
 ## 更新任務狀態
 
 當使用者告知某任務已完成或有進展時：
