@@ -277,6 +277,67 @@ expect_decision "無模式檔時仍先擋任務模式"         deny  "$out"
 expect_contains "且理由是判級而非坑"               "尚未判定任務模式" "$out"
 
 # =========================================================================
+section "post-write.sh — 文件影響偵測"
+# =========================================================================
+IMPACT="$SANDBOX/.claude/taskmaster-data/.doc-impact"
+NOTIFIED="$SANDBOX/.claude/taskmaster-data/.doc-impact-notified"
+pw() { run post-write.sh "$(w "$SANDBOX/$1")"; }
+
+reset
+out=$(pw "src/api/reconcile/route.ts")
+expect_contains "API 檔第一次命中會注入提醒"   "文件影響提醒" "$out"
+expect_contains "提醒指向 /verify 會擋"        "/verify"      "$out"
+expect_empty   "同任務第二次不再吵"            "$(pw "src/models/ledger.ts")"
+if grep -qxF "src/models/ledger.ts" "$IMPACT" 2>/dev/null; then ok "不吵但仍累積進清單"
+else ng "不吵但仍累積進清單" "清單含 src/models/ledger.ts" "$(cat "$IMPACT" 2>/dev/null)"; fi
+
+reset
+expect_empty   "一般實作檔不觸發"              "$(pw "src/utils/format.ts")"
+if [ ! -f "$IMPACT" ]; then ok "一般實作檔不建清單"
+else ng "一般實作檔不建清單" "無 .doc-impact" "$(cat "$IMPACT")"; fi
+
+# 各類「文件會描述的檔案」都要認得
+for f in "src/routes/user.ts" "api/openapi.yaml" "proto/svc.proto" \
+         "db/migrations/001_init.sql" "src/entities/Order.ts" "src/lib/index.ts" \
+         "types/global.d.ts" "src/cli/main.ts" ".env.example"; do
+    reset
+    expect_contains "認得 $f" "文件影響提醒" "$(pw "$f")"
+done
+
+# 排除項
+for f in "src/api/route.test.ts" "src/api/user.spec.ts" "docs/api.md" \
+         ".claude/hooks/x.sh" "node_modules/pkg/index.js" "dist/index.js" \
+         "__tests__/api/index.ts"; do
+    reset
+    expect_empty "排除 $f" "$(pw "$f")"
+done
+
+reset
+expect_empty   "DOC_SYNC_GATE=off 關閉偵測" \
+    "$(run post-write.sh "$(w "$SANDBOX/src/api/x.ts")" DOC_SYNC_GATE=off)"
+
+reset; echo off > "$SM_FILE"
+expect_empty   "suggest-mode=off 也關閉偵測"   "$(pw "src/api/x.ts")"
+
+# WBS 歷史紀錄（原有行為不能被新功能弄壞）
+reset
+run post-write.sh "$(w "$SANDBOX/.claude/taskmaster-data/wbs.md")" >/dev/null
+if [ -f "$SANDBOX/.claude/taskmaster-data/wbs-history.log" ]; then ok "WBS 寫入仍記歷史"
+else ng "WBS 寫入仍記歷史" "有 wbs-history.log" "（無）"; fi
+
+# =========================================================================
+section "user-prompt-submit.sh — planner / architect 路由"
+# =========================================================================
+reset; echo "# WBS" > "$SANDBOX/.claude/taskmaster-data/wbs.md"
+expect_contains "新功能／CR → planner"  'subagent_type: "planner"' \
+    "$(run user-prompt-submit.sh "$(p '客戶提了新的 CR，要加一個對帳 API')")"
+expect_contains "新功能提醒文件同步"    "必須同步文件" \
+    "$(run user-prompt-submit.sh "$(p '我要新增一個匯出報表的功能')")"
+reset
+expect_contains "技術選型 → architect"  'subagent_type: "architect"' \
+    "$(run user-prompt-submit.sh "$(p '這次的技術選型要決定')")"
+
+# =========================================================================
 section "報告稽核 — 非同步延後檢查"
 # =========================================================================
 EXPECT_FILE="$SANDBOX/.claude/taskmaster-data/.report-expectations.jsonl"

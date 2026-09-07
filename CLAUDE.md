@@ -30,6 +30,11 @@
 - **沒有 constitution**：`rules/` 是模板通用規範，缺「這個專案不可違反的原則」那一層
 - **沒有 CI**：`.github/` 不存在，但 `run-tests.sh` 失敗時 exit 1，可直接掛
 
+### 已修（2026-09-07）
+
+- ~~新需求／CR 的程式寫出來但文件沒同步~~ → **根因是結構性的**：`documentation-specialist` 在任務完成路徑上原本沒有位置，`/verify` 只驗建置/型別/lint/測試，從不問文件。修法：`post-write.sh` 偵測「文件描述的對象」（`*/api/*`、`*openapi*`、`*/migrations/*`、`*/index.ts`…）→ 記進 `taskmaster-data/.doc-impact` 並提醒一次；`/verify` 在標 WBS ✅ 前**必須**處理該清單（委派 documentation-specialist／已自行更新／明確豁免）。逃生門 `DOC_SYNC_GATE=off`
+- ~~`planner` 與 `architect` 沒有關鍵字入口~~ → 「新功能／CR」那條補上 `subagent_type: "planner"`，「技術選型」那條補上 `subagent_type: "architect"`。原本只提示 `/task-add` 與 `/adr`
+
 ### 已修（2026-09-04）
 
 - ~~新專案缺 `_REPORT_TEMPLATE.md`~~ → `copy-template.{sh,ps1}` 後置處理改為複製 `context/` 與 `coordination/` 的骨架（`README.md` + `_*.md` + 各 area 目錄），實際報告仍不帶。兩份腳本產出已比對一致
