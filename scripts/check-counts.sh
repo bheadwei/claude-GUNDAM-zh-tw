@@ -70,11 +70,15 @@ N_RULES=$(find .claude/rules -maxdepth 1 -name '*.md' 2>/dev/null | wc -l | tr -
 # hook 腳本：watch-agents.sh 是 /agent-log 的輔助工具，不是 hook，不計入
 N_HOOKS=$(find .claude/hooks -maxdepth 1 -name '*.sh' ! -name 'watch-agents.sh' 2>/dev/null | wc -l | tr -d ' ')
 N_BACKUP_SKILLS=$(find '.claude/custom-rule&skill/skills' -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+# project-docs 的 VibeCoding 範本：INDEX.md 本身不算範本
+# （曾經有兩處寫 21，就是把 INDEX 算進去了）
+N_DOCTPL=$(find .claude/skills/project-docs/templates -maxdepth 1 -name '*.md' ! -name 'INDEX.md' 2>/dev/null | wc -l | tr -d ' ')
 
 echo ""
 echo "檔案系統實況"
-printf '  agents %-4s skills %-4s commands %-4s rules %-4s hooks %-4s 備份池 skills %s\n' \
-    "$N_AGENTS" "$N_SKILLS" "$N_CMDS" "$N_RULES" "$N_HOOKS" "$N_BACKUP_SKILLS"
+printf '  agents %-4s skills %-4s commands %-4s rules %-4s hooks %-4s 備份池 %-4s 文件範本 %s
+' \
+    "$N_AGENTS" "$N_SKILLS" "$N_CMDS" "$N_RULES" "$N_HOOKS" "$N_BACKUP_SKILLS" "$N_DOCTPL"
 echo ""
 echo "比對文件"
 
@@ -101,6 +105,13 @@ verify "五層表 Commands"     "$N_CMDS"   "$W" '\*\*Commands\*\* \| [0-9]+ '
 verify "五層表 Agents"       "$N_AGENTS" "$W" '\*\*Agents\*\* \| [0-9]+ '
 
 verify "INDEX 開頭 skill 數" "$N_SKILLS" .claude/skills/INDEX.md '^[0-9]+ 個 skill'
+
+# VibeCoding 文件範本數（六處寫過這個數字，曾漂走兩處）
+verify "範本數 project-docs skill" "$N_DOCTPL" .claude/skills/project-docs/SKILL.md '[0-9]+ 種文件範本|[0-9]+ 種範本'
+verify "範本數 skills/INDEX"       "$N_DOCTPL" .claude/skills/INDEX.md '[0-9]+ 種範本自帶'
+verify "範本數 README skill 表"    "$N_DOCTPL" README.md '[0-9]+ 份範本自帶'
+verify "範本數 README 章節標題"    "$N_DOCTPL" README.md 'VibeCoding 工作流模板（[0-9]+ 份）'
+verify "範本數 templates/INDEX"    "$N_DOCTPL" .claude/skills/project-docs/templates/INDEX.md '模板清單（[0-9]+ 份'
 
 # 每個 skill 目錄都要有 SKILL.md，且要在 INDEX 裡被提到
 for d in .claude/skills/*/; do

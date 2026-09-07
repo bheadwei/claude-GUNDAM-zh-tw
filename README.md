@@ -271,7 +271,7 @@ claude_v2026/
 
 | Skill | 用途 |
 | :--- | :--- |
-| **project-docs** | 依 VibeCoding 範本產專案文件（**21 份範本自帶於 skill 內**），支援 demo/mvp/full 三檔深度 |
+| **project-docs** | 依 VibeCoding 範本產專案文件（**20 份範本自帶於 skill 內**），支援 demo/mvp/full 三檔深度 |
 | **deep-research** | 多源深度研究（MCP 串接） |
 | **e2e-testing** | Playwright E2E 測試模式 |
 | **cost-aware-llm-pipeline** | LLM API 成本優化（模型路由 + 預算追蹤） |
