@@ -58,6 +58,20 @@ MODE=$(cat "$ROOT/.claude/taskmaster-data/.current-task-mode" 2>/dev/null)
     echo '```'
     tail -15 "$ROOT/.claude/logs/agent-activity.log" 2>/dev/null
     echo '```'
+
+    # 待處理的坑候選 —— 這是唯一必須寫進快照的「非 git 狀態」：
+    # PreCompact 不支援 additionalContext，所以壓縮後這份清單只剩檔案系統這條路。
+    CAND="$ROOT/.claude/taskmaster-data/.learned-candidates"
+    if [ -s "$CAND" ]; then
+        echo
+        echo "## 待處理的坑候選（尚未寫進 context/learned/）"
+        echo '```'
+        cat "$CAND" 2>/dev/null
+        echo '```'
+        echo
+        echo "> 壓縮後請處理這份清單：值得留的用 \`/learn\` 寫進 \`.claude/context/learned/\`，"
+        echo "> 只是打錯字的從 \`.learned-candidates\` 刪掉。"
+    fi
 } > "$SNAP" 2>/dev/null
 
 echo "🛟 PreCompact：已快照工作狀態 → .claude/sessions/auto-precompact-$TS.md（完整存檔可用 /save-session）"

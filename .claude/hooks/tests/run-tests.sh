@@ -305,8 +305,11 @@ for f in "src/routes/user.ts" "api/openapi.yaml" "proto/svc.proto" \
 done
 
 # 排除項
+#
+# 注意 `.claude/hooks/x.sh` 已從這份清單移出：它現在會命中「擴充維護提醒」
+# （見下一組測試）。文件影響偵測仍然不管它——兩個提醒的判斷是分開的。
 for f in "src/api/route.test.ts" "src/api/user.spec.ts" "docs/api.md" \
-         ".claude/hooks/x.sh" "node_modules/pkg/index.js" "dist/index.js" \
+         "node_modules/pkg/index.js" "dist/index.js" \
          "__tests__/api/index.ts"; do
     reset
     expect_empty "排除 $f" "$(pw "$f")"
@@ -318,6 +321,61 @@ expect_empty   "DOC_SYNC_GATE=off 關閉偵測" \
 
 reset; echo off > "$SM_FILE"
 expect_empty   "suggest-mode=off 也關閉偵測"   "$(pw "src/api/x.ts")"
+
+# =========================================================================
+section "post-write.sh — 擴充維護提醒（.claude/ 底下的改動）"
+# =========================================================================
+#
+# 為什麼要這組：改 skill／agent 有三件事會安靜失效（接線沒接上、INDEX 沒同步、
+# description 是內容摘要），而使用者不會知道要主動跑稽核。判斷得出時機就由 hook 提出。
+
+# 應命中的五種擴充
+for f in ".claude/skills/x/SKILL.md" ".claude/agents/x.md" ".claude/commands/x.md" \
+         ".claude/rules/x.md" ".claude/hooks/x.sh"; do
+    reset
+    expect_contains "擴充提醒認得 $f" "擴充維護提醒" "$(pw "$f")"
+done
+
+# 排除：測試與執行時產物（跑測試或寫報告時不該自己觸發自己）
+for f in ".claude/hooks/tests/run-tests.sh" ".claude/tests/skill-compliance/README.md" \
+         ".claude/context/quality/r.md" ".claude/coordination/handoffs/x.md" \
+         ".claude/taskmaster-data/.current-task-mode"; do
+    reset
+    expect_empty "擴充提醒排除 $f" "$(pw "$f")"
+done
+
+# 專案自己的同名目錄不該被誤命中
+reset
+expect_empty "擴充提醒不誤命中 src/hooks/useAuth.ts" "$(pw "src/hooks/useAuth.ts")"
+
+# 本任務只提醒一次
+reset
+pw ".claude/skills/x/SKILL.md" >/dev/null
+expect_empty "擴充提醒只發一次" "$(pw ".claude/agents/y.md")"
+
+# 逃生門
+reset
+expect_empty "SKILL_CURATOR_GATE=off 關閉擴充提醒" \
+    "$(run post-write.sh "$(w "$SANDBOX/.claude/skills/x/SKILL.md")" SKILL_CURATOR_GATE=off)"
+
+# 關掉擴充提醒不該影響文件影響偵測
+reset
+expect_contains "關掉擴充提醒後文件偵測仍運作" "文件影響提醒" \
+    "$(run post-write.sh "$(w "$SANDBOX/src/api/x.ts")" SKILL_CURATOR_GATE=off)"
+
+# 反之：關掉文件偵測不該影響擴充提醒
+reset
+expect_contains "關掉文件偵測後擴充提醒仍運作" "擴充維護提醒" \
+    "$(run post-write.sh "$(w "$SANDBOX/.claude/skills/x/SKILL.md")" DOC_SYNC_GATE=off)"
+
+# 變更清單要累積且去重
+reset
+pw ".claude/skills/a/SKILL.md" >/dev/null
+pw ".claude/agents/b.md" >/dev/null
+pw ".claude/agents/b.md" >/dev/null
+SK_LIST="$SANDBOX/.claude/taskmaster-data/.skill-impact"
+if [ "$(wc -l < "$SK_LIST" 2>/dev/null | tr -d ' ')" = "2" ]; then ok "擴充變更清單去重累積"
+else ng "擴充變更清單去重累積" "2 行" "$(wc -l < "$SK_LIST" 2>/dev/null | tr -d ' ')"; fi
 
 # WBS 歷史紀錄（原有行為不能被新功能弄壞）
 reset
@@ -521,6 +579,77 @@ else ng "doc-impact 沒污染主 checkout" "主 checkout 無此檔" "有"; fi
 reset
 expect_decision "無 cwd 欄位時沿用舊行為（被擋）" deny \
     "$(run pre-tool-use.sh "$(w /p/src/api.ts)")"
+
+# =========================================================================
+section "post-bash.sh — 踩坑偵測（連續失敗後成功）"
+# =========================================================================
+#
+# 為什麼要這個 hook：`using-taskmaster` 要求解完非平凡問題後寫一筆進 learned/，
+# 但那是文字規則，沒有機制在該寫的當下提出來。「連續失敗 N 次然後成功」
+# 是機器判斷得出的踩坑訊號——一次就過的不是坑。
+
+# pb <失敗?> <指令> —— 模擬一次 Bash 工具呼叫的 PostToolUse
+pb() {
+    local failed="$1" cmd="$2" payload
+    if [ "$failed" = "fail" ]; then
+        payload=$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"is_error":true}}' "$cmd")
+    else
+        payload=$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"is_error":false}}' "$cmd")
+    fi
+    run post-bash.sh "$payload"
+}
+CAND_F="$SANDBOX/.claude/taskmaster-data/.learned-candidates"
+
+# 一次就過 → 不是坑
+reset
+expect_empty "一次就成功不算坑" "$(pb ok "npm test")"
+
+# 失敗次數未達門檻 → 不算坑
+reset
+pb fail "x" >/dev/null; pb fail "x" >/dev/null
+expect_empty "失敗 2 次後成功未達門檻" "$(pb ok "x")"
+
+# 達門檻 → 提醒 + 記候選
+reset
+pb fail "x" >/dev/null; pb fail "x" >/dev/null; pb fail "x" >/dev/null
+expect_contains "失敗 3 次後成功會提醒" "這是一個坑" "$(pb ok "uv run pytest")"
+if grep -q '3 次失敗後成功' "$CAND_F" 2>/dev/null; then ok "候選已記入 .learned-candidates"
+else ng "候選已記入 .learned-candidates" "有紀錄" "$(cat "$CAND_F" 2>/dev/null)"; fi
+
+# 成功後計數歸零 —— 不會把上一輪的失敗算進下一輪
+reset
+pb fail "x" >/dev/null; pb fail "x" >/dev/null; pb fail "x" >/dev/null
+pb ok "x" >/dev/null
+pb fail "y" >/dev/null
+expect_empty "成功後失敗計數歸零" "$(pb ok "y")"
+
+# 本任務只提醒一次
+reset
+pb fail "x" >/dev/null; pb fail "x" >/dev/null; pb fail "x" >/dev/null
+pb ok "x" >/dev/null
+pb fail "y" >/dev/null; pb fail "y" >/dev/null; pb fail "y" >/dev/null
+expect_empty "踩坑提醒只發一次" "$(pb ok "y")"
+
+# 逃生門
+reset
+pb fail "x" >/dev/null; pb fail "x" >/dev/null; pb fail "x" >/dev/null
+expect_empty "LEARN_CAPTURE=off 關閉偵測" \
+    "$(run post-bash.sh '{"tool_name":"Bash","tool_input":{"command":"x"},"tool_response":{"is_error":false}}' LEARN_CAPTURE=off)"
+
+reset; echo off > "$SM_FILE"
+pb fail "x" >/dev/null; pb fail "x" >/dev/null; pb fail "x" >/dev/null
+expect_empty "suggest-mode=off 也關閉偵測" "$(pb ok "x")"
+
+# exit_code 形式的失敗也要認得（不同版本欄位名不一致）
+reset
+for _ in 1 2 3; do
+    run post-bash.sh '{"tool_name":"Bash","tool_input":{"command":"x"},"tool_response":{"exit_code":1}}' >/dev/null
+done
+expect_contains "exit_code 非零也算失敗" "這是一個坑" "$(pb ok "x")"
+
+# 無指令的 payload 不爆炸
+reset
+expect_empty "空 command 不處理" "$(run post-bash.sh '{"tool_name":"Bash","tool_input":{}}')"
 
 # =========================================================================
 section "全體 hooks — 語法與健壯性"

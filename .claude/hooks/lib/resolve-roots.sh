@@ -43,7 +43,12 @@ resolve_roots() {
     # 主 checkout：CLAUDE_PROJECT_DIR 優先（官方保證它留在 session 啟動處）
     MAIN_ROOT="${CLAUDE_PROJECT_DIR:-}"
     if [ -z "$MAIN_ROOT" ]; then
-        MAIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)" || MAIN_ROOT="."
+        # 本檔在 .claude/hooks/lib/，所以要往上三層才是 repo root。
+        # 注意：在被 source 的檔案裡 ${BASH_SOURCE[0]} 指的是**本檔**，
+        # 不是呼叫端的 hook——寫 ../.. 會停在 .claude/，讓所有狀態檔
+        # 掉進 .claude/.claude/taskmaster-data/。平常 CLAUDE_PROJECT_DIR
+        # 有設會遮住這個錯，CI 與手動執行時不會。
+        MAIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." 2>/dev/null && pwd)" || MAIN_ROOT="."
     fi
     MAIN_CLAUDE="$MAIN_ROOT/.claude"
 

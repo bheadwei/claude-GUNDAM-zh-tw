@@ -22,6 +22,11 @@
 .claude/taskmaster-data/.current-task-mode
 .claude/taskmaster-data/.doc-impact
 .claude/taskmaster-data/.doc-impact-notified
+.claude/taskmaster-data/.skill-impact
+.claude/taskmaster-data/.skill-impact-notified
+.claude/taskmaster-data/.bash-fail-streak
+.claude/taskmaster-data/.learned-candidates
+.claude/taskmaster-data/.learned-notified
 .claude/taskmaster-data/.pitfall-seen
 .claude/taskmaster-data/.report-expectations.jsonl
 .claude/taskmaster-data/.session-start

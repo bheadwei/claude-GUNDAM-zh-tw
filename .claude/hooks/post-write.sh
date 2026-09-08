@@ -43,7 +43,6 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] post-write: $FILE_PATH" >> "$CLAUDE_DIR/log
 # (2) 文件影響偵測
 # ============================================================================
 [ -z "$FILE_PATH" ] && exit 0
-[ "${DOC_SYNC_GATE:-on}" = "off" ] && exit 0
 command -v jq >/dev/null 2>&1 || exit 0
 
 if [ -f "$DATA_DIR/.suggest-mode" ]; then
@@ -54,6 +53,52 @@ fi
 NORM=$(printf '%s' "$FILE_PATH" | tr '\\' '/')
 ROOT_NORM=$(printf '%s' "$PROJECT_ROOT" | tr '\\' '/')
 REL="${NORM#"$ROOT_NORM"/}"
+
+# ---------------------------------------------------------------- 擴充維護提醒
+#
+# 為什麼是 hook 而不是指令：`/learn`、`/skill-audit` 這類入口都要使用者自己想起來
+# 並手動輸入，而「改了 skill 卻沒接線／沒更新 INDEX」的當下使用者不會知道要跑。
+# 判斷得出時機的事就該由機器提出——照 writing-extensions 的五層決策表。
+#
+# 這裡刻意**不跑** check-counts.sh：hook 在這台機器上單次已要 7-9 秒，
+# 再加一次全掃會讓每次寫檔都變慢。累積清單就好，skill-curator 自己會跑。
+if [ "${SKILL_CURATOR_GATE:-on}" != "off" ]; then
+    # 這裡刻意比對絕對路徑 $NORM 而非相對化的 $REL：`.claude/` 本身就是要找的錨點，
+    # 而 payload 沒帶 `cwd` 時 PROJECT_ROOT 會解析深一層、讓 REL 掉掉 `.claude/` 前綴。
+    # worktree 內的 `.claude/skills/` 也該命中——那是真的在改擴充。
+    EXT_BEARING=0
+    case "/$NORM" in
+        */.claude/skills/*|*/.claude/agents/*|*/.claude/commands/*|*/.claude/rules/*|*/.claude/hooks/*)
+            EXT_BEARING=1 ;;
+    esac
+    # 排除測試與執行時產物，避免跑測試或寫報告時自己觸發自己
+    case "/$NORM" in
+        */.claude/hooks/tests/*|*/.claude/tests/*|*/.claude/context/*|*/.claude/coordination/*|*/.claude/taskmaster-data/*)
+            EXT_BEARING=0 ;;
+    esac
+
+    if [ "$EXT_BEARING" -eq 1 ]; then
+        mkdir -p "$DATA_DIR" 2>/dev/null || true
+        SK_IMPACT="$DATA_DIR/.skill-impact"
+        SK_NOTIFIED="$DATA_DIR/.skill-impact-notified"
+
+        grep -qxF "$REL" "$SK_IMPACT" 2>/dev/null || echo "$REL" >> "$SK_IMPACT" 2>/dev/null || true
+
+        if [ ! -f "$SK_NOTIFIED" ]; then
+            : > "$SK_NOTIFIED" 2>/dev/null || true
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] skill-impact: $REL" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
+            jq -n --arg f "$REL" '{
+              hookSpecificOutput: {
+                hookEventName: "PostToolUse",
+                additionalContext: ("🧩 擴充維護提醒：你剛改了 `" + $f + "`。\n\n改動 `.claude/` 底下的擴充有三件事會**安靜失效**（不會報錯）：接線沒接上（agent 拿不到 `Skill` 工具，只認完整路徑）、`INDEX.md` 沒同步、description 是內容摘要所以永遠不會被喚起。\n\n變更清單累積在 `.claude/taskmaster-data/.skill-impact`。現在不用停下來，繼續做即可；**收尾時委派 `skill-curator`**（`subagent_type: \"skill-curator\"`）一次處理完並跑 `scripts/check-counts.sh`。\n（本任務只提醒這一次。關閉：SKILL_CURATOR_GATE=off）")
+              }
+            }' 2>/dev/null || true
+            exit 0
+        fi
+    fi
+fi
+
+[ "${DOC_SYNC_GATE:-on}" = "off" ] && exit 0
 
 # 先排除：模板自身、依賴、建置產物、文件本身、測試
 case "$REL" in

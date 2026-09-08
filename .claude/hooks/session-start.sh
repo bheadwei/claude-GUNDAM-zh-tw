@@ -159,6 +159,38 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 # ============================================================================
+# 待收割的擴充維護工作
+#
+# 這兩件事都靠使用者「記得下指令」就會無限延後——而它們的時機機器判斷得出來，
+# 所以由 SessionStart 提出。兩者都是提醒，不阻擋任何操作。
+# 逃生門：CURATION_REMINDERS=off
+# ============================================================================
+if [ "${CURATION_REMINDERS:-on}" != "off" ]; then
+    _DATA="$CLAUDE_DIR/taskmaster-data"
+
+    # ① 踩過的坑還沒寫進 learned/
+    #    候選由 post-bash.sh 在「連續失敗後成功」時累積——那就是踩到坑的訊號。
+    _CAND="$_DATA/.learned-candidates"
+    if [ -s "$_CAND" ]; then
+        _N=$(grep -c . "$_CAND" 2>/dev/null || echo 0)
+        note "🧠 有 ${_N} 筆「踩過的坑」候選還沒寫進 \`.claude/context/learned/\`（清單在 \`taskmaster-data/.learned-candidates\`）。這些是連續失敗後才解掉的問題——同一個坑不該踩第二次。**現在就處理掉**：讀清單、逐筆判斷值不值得留，值得的用 \`/learn\` 寫進 \`learned/\`，不值得的直接從清單刪。處理完清空該檔。"
+    fi
+
+    # ② UI 素材庫太久沒跟上潮流
+    #    90 天：設計走向與瀏覽器支援度大約這個週期會有實質變化。
+    _UIREF="$_DATA/.ui-catalog-refreshed"
+    _UISTALE=0
+    if [ ! -f "$_UIREF" ]; then
+        _UISTALE=1; _UIAGE="從未"
+    elif [ -n "$(find "$_UIREF" -mtime +90 2>/dev/null)" ]; then
+        _UISTALE=1; _UIAGE="超過 90 天"
+    fi
+    if [ "$_UISTALE" -eq 1 ] && [ -d "$CLAUDE_DIR/ui" ]; then
+        note "🎨 UI 素材庫（\`.claude/ui/\`）${_UIAGE}更新。**使用者若要做前端工作**，可委派 \`skill-curator\`（\`subagent_type: \"skill-curator\"\`）查一輪當前設計走向並更新——跨風格通用的規則進 \`ui-style-compliance\` 的 2.6 節，個別品牌改版才動那份 DESIGN.md。不做前端就忽略這條，別主動打斷使用者。"
+    fi
+fi
+
+# ============================================================================
 # Log 輪替：僅在 session 啟動時執行一次（避免 per-call 成本），
 # 將各 log 截尾保留最後 N 行，防止無限長大拖慢 /agent-log 等查詢。
 # ============================================================================
