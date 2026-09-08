@@ -18,7 +18,7 @@
 | 模型 | Agents |
 |---|---|
 | `sonnet`（5） | code-quality-specialist、documentation-specialist、e2e-validation-specialist、refactor-cleaner、workflow-template-manager |
-| `opus`（10） | planner、architect、security-infrastructure-auditor、debug-investigator、tdd-guide、skill-curator、build-error-resolver、deployment-expert、test-automation-engineer、ui-builder |
+| `opus`（11） | planner、architect、security-infrastructure-auditor、debug-investigator、tdd-guide、skill-curator、build-error-resolver、deployment-expert、test-automation-engineer、ui-builder、conflict-resolver |
 
 `opus` 的判準是**錯了要人回頭抓、而且抓不到就會一路錯下去**：
 規劃階段拆錯（planner）、架構決策寫錯（architect）、漏報安全問題

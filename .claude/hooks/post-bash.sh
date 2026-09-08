@@ -52,25 +52,47 @@ if [ "${MERGE_GATE:-on}" != "off" ]; then
     case "$CMD" in
         *"git merge"*|*"git cherry-pick"*|*"git rebase"*)
             case "$CMD" in
-                *--abort*|*--continue*|*--skip*|*--quit*) ;;
+                # --abort 是放棄這次合併 → 清掉它的待驗證紀錄
+                *--abort*|*--quit*)
+                    rm -f "$DATA_DIR/.merge-pending" 2>/dev/null || true
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] merge-pending cleared (abort)" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
+                    ;;
+                *--continue*|*--skip*) ;;
                 *)
-                    # 失敗的合併不記（衝突中／被拒），只記真的合進去的
-                    if ! printf '%s' "$INPUT" | jq -e '
+                    # 成功與**衝突**都要記。
+                    #
+                    # 曾經只記成功的（`exit_code == 0`），那是個洞：衝突的 merge
+                    # 退出碼非零 → 不記 → conflict-resolver 解完 commit 之後
+                    # 清單是空的 → 下一次合併直接放行，**跳過驗證**。
+                    # 衝突解完的結果比乾淨合併更需要驗證，不是更不需要。
+                    BR=$(printf '%s' "$CMD" | tr '\n' ' ' | cut -c1-100)
+                    MP="$DATA_DIR/.merge-pending"
+                    grep -qxF "$BR" "$MP" 2>/dev/null || echo "$BR" >> "$MP" 2>/dev/null || true
+
+                    CONFLICTED=0
+                    printf '%s' "$INPUT" | jq -e '
                           (.tool_response.is_error == true)
                        or ((.tool_response.exit_code // 0) != 0)
-                    ' >/dev/null 2>&1; then
-                        BR=$(printf '%s' "$CMD" | tr '\n' ' ' | cut -c1-100)
-                        MP="$DATA_DIR/.merge-pending"
-                        grep -qxF "$BR" "$MP" 2>/dev/null || echo "$BR" >> "$MP" 2>/dev/null || true
-                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] merge-pending: $BR" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
+                    ' >/dev/null 2>&1 && CONFLICTED=1
+
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] merge-pending: $BR (conflicted=$CONFLICTED)" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
+
+                    if [ "$CONFLICTED" -eq 1 ]; then
+                        jq -n '{
+                          hookSpecificOutput: {
+                            hookEventName: "PostToolUse",
+                            additionalContext: ("⚠️ 合併有衝突。\n\n**委派 `conflict-resolver`**（`subagent_type: \"conflict-resolver\"`）。它只碰處於衝突狀態的檔案，理解兩邊各自的意圖後保留雙方，解完跑測試；遇到**設計決策**（API 語意、資料結構取捨、migration 順序）會 `git merge --abort` 並回報，不自己決定。\n\n**它不會 commit。** 解完之後由你跑 `/verify`——閘門會擋住下一次合併直到它通過。衝突解完的結果比乾淨合併**更**需要驗證。\n\n順便一件事：衝突代表那份 plan 的 `files:` 估算有漏，補正它，否則下次同樣組合又會被判成可平行。\n（關閉：MERGE_GATE=off）")
+                          }
+                        }' 2>/dev/null || true
+                    else
                         jq -n '{
                           hookSpecificOutput: {
                             hookEventName: "PostToolUse",
                             additionalContext: ("🔀 合併完成，**這一步還沒驗證**。\n\n各 worktree 自己 `/verify` 過，不代表合併結果是對的——它們看不到彼此，合併才第一次讓兩邊的程式碼真的碰面。\n\n**下一步跑 `/verify`。** 在它通過之前，`pre-tool-use.sh` 會擋下下一次 merge／cherry-pick／rebase（避免疊了好幾個才發現紅、還得回頭二分找元凶）。\n\n`/verify` 除了建置／型別／lint／測試，還會比對已合併任務的 plan 驗收標準；若這是平行開發的最後一個合併，它會再跑一次 `spec-convergence` 確認整體仍符合 WBS 與當初的規格。\n（關閉：MERGE_GATE=off）")
                           }
                         }' 2>/dev/null || true
-                        exit 0
                     fi
+                    exit 0
                     ;;
             esac
             ;;

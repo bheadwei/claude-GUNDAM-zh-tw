@@ -96,12 +96,17 @@ git checkout main && git pull --rebase
 
 對每個 worktree（依相依順序）:
     git merge --no-ff worktree-<name>
-    ├─ 衝突   → **停下來回報**，不自動解（見下方「為什麼不自動解衝突」）
-    └─ 成功   → /verify
-                ├─ FAIL → **停下來回報**，不自動修
-                └─ PASS → 繼續下一個
+    ├─ 衝突 → 委派 conflict-resolver（subagent_type: "conflict-resolver"）
+    │          ├─ DONE     → 檔案已 stage → 往下跑 /verify
+    │          ├─ BLOCKED  → 它已 git merge --abort（設計決策）→ ⛔ 停下回報
+    │          └─ CONCERNS → ⛔ 停下回報（測試紅，或它對某個解法沒把握）
+    └─ 成功 → 往下跑 /verify
 
-全部合完 → 更新 WBS（各任務標 ✅）→ 問要不要移除這些 worktree
+    /verify
+    ├─ FAIL → ⛔ 停下回報，不自動修
+    └─ PASS → 解過衝突的話這裡才 commit → 繼續下一個
+
+全部合完 → 更新 WBS（各任務標 ✅）→ plan 歸檔 → 問要不要移除這些 worktree
 ```
 
 **這個迴圈可以自動跑，是因為閘門在把關**：`post-bash.sh` 在每次合併成功時記一筆
@@ -129,14 +134,26 @@ git checkout main && git pull --rebase
 3. 合併成功 → **跑 `/verify`**（閘門會擋下下一次合併直到它通過）
 4. 問要不要移除該 worktree
 
-### 為什麼不自動解衝突
+### 衝突為什麼可以自動解（以及哪些不行）
 
-衝突的本質是「兩邊對同一段程式碼的意圖不同」，要知道哪個意圖才是對的。
-自動解衝突的失敗模式是最糟的一種：**產出一個能編譯、測試也過、但語意錯誤的合併結果**——
-那比合併失敗難發現得多。
+一般的合併衝突難解，是因為寫那兩段程式碼的人不在場，只能從程式碼猜意圖。
+**平行開發不一樣：兩邊的作者都是 agent，而它們的意圖已經寫在磁碟上了** ——
+各自的 plan、驗收標準、完成報告。那是人工解衝突時拿不到的資訊。
 
-**出現衝突另有一個訊號要處理**：若這個 worktree 來自 `/task-next` 的平行開發，
-衝突代表該 plan 的 `files:` 估算有漏，要回頭補正，否則下次同樣組合還是會被判成可平行。
+所以 `conflict-resolver` 在回答的是「哪個做法符合當初講好的事」，
+而不是「哪段程式碼比較漂亮」。它的依據順序寫在
+`.claude/agents/conflict-resolver.md`（唯一來源）。
+
+**它一定會停下來的情況**：設計決策（API 語意、資料結構取捨、migration 順序、
+env var 意義）、一邊刪掉另一邊在改的東西、兩份 plan 的驗收標準互相矛盾。
+那時它會 `git merge --abort` 並回報，不自己決定。
+
+**它不會 commit。** 完整的 `/verify`（含 plan 驗收比對與 `spec-convergence`）
+是主模型的事——解過衝突的合併比乾淨合併**更**需要驗證。
+
+**衝突另有一個訊號要處理**：它代表該 plan 的 `files:` 估算有漏。
+`conflict-resolver` 會順手補正那份 plan 的 `files:` frontmatter ——
+不補的話下次同樣兩個任務又會被判成可平行、又衝突一次。
 
 ---
 

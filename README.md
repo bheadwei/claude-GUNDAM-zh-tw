@@ -87,10 +87,10 @@ claude_v2026/
     ├── statusline.sh                 # StatusLine 腳本
     │
     ├── rules/        ( 5 個)         # 自動載入規則（每次對話注入）
-    ├── agents/       (15 個)         # 專業 Agent 定義
+    ├── agents/       (16 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
     ├── skills/       (27 個)         # 按需載入（不佔常駐 context）
-    ├── hooks/                        # Hook 腳本 + lib/ + 188 案例回歸測試
+    ├── hooks/                        # Hook 腳本 + lib/ + 190 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）
     ├── ui/           (69 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │
@@ -186,7 +186,7 @@ claude_v2026/
 
 ---
 
-## Agent（15 個）
+## Agent（16 個）
 
 | Agent | Model | 用途 |
 | :--- | :--- | :--- |

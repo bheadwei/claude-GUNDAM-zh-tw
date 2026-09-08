@@ -672,17 +672,26 @@ expect_contains "合併成功會提醒未驗證" "還沒驗證" "$(pbash 'git me
 if grep -q 'git merge' "$MP_FILE" 2>/dev/null; then ok "合併記入 .merge-pending"
 else ng "合併記入 .merge-pending" "有紀錄" "$(cat "$MP_FILE" 2>/dev/null)"; fi
 
-# 失敗的合併不記
+# 衝突的合併**也要**記 —— 曾經只記成功的，那是個洞：
+# 衝突退出碼非零 → 不記 → conflict-resolver 解完 commit 後清單是空的
+# → 下一次合併直接放行、跳過驗證。解過衝突的結果更需要驗證，不是更不需要。
 reset
-run post-bash.sh "$(printf '{"tool_name":"Bash","tool_input":{"command":"git merge x"},"tool_response":{"is_error":true}}')" >/dev/null
-if [ ! -s "$MP_FILE" ]; then ok "失敗的合併不記入清單"
-else ng "失敗的合併不記入清單" "空" "$(cat "$MP_FILE" 2>/dev/null)"; fi
+expect_contains "衝突的合併會導向 conflict-resolver" "conflict-resolver" \
+    "$(run post-bash.sh "$(printf '{"tool_name":"Bash","tool_input":{"command":"git merge x"},"tool_response":{"is_error":true}}')")"
+if grep -q 'git merge' "$MP_FILE" 2>/dev/null; then ok "衝突的合併也記入 .merge-pending"
+else ng "衝突的合併也記入 .merge-pending" "有紀錄" "$(cat "$MP_FILE" 2>/dev/null)"; fi
 
-# --abort / --continue 不算新合併
-reset
+# --abort 要清掉待驗證紀錄（放棄了就沒有東西待驗證）
+reset; mkdir -p "$(dirname "$MP_FILE")"; echo 'git merge x' > "$MP_FILE"
 run post-bash.sh "$(printf '{"tool_name":"Bash","tool_input":{"command":"git merge --abort"},"tool_response":{"is_error":false}}')" >/dev/null
-if [ ! -s "$MP_FILE" ]; then ok "git merge --abort 不記入清單"
-else ng "git merge --abort 不記入清單" "空" "$(cat "$MP_FILE" 2>/dev/null)"; fi
+if [ ! -s "$MP_FILE" ]; then ok "git merge --abort 清掉待驗證紀錄"
+else ng "git merge --abort 清掉待驗證紀錄" "空" "$(cat "$MP_FILE" 2>/dev/null)"; fi
+
+# --continue 不動清單（那是解完衝突要完成合併，仍需驗證）
+reset; mkdir -p "$(dirname "$MP_FILE")"; echo 'git merge x' > "$MP_FILE"
+run post-bash.sh "$(printf '{"tool_name":"Bash","tool_input":{"command":"git merge --continue"},"tool_response":{"is_error":false}}')" >/dev/null
+if grep -q 'git merge x' "$MP_FILE" 2>/dev/null; then ok "git merge --continue 保留待驗證紀錄"
+else ng "git merge --continue 保留待驗證紀錄" "仍有紀錄" "$(cat "$MP_FILE" 2>/dev/null)"; fi
 
 # 閘門：清單非空時擋下下一次合併
 reset; mkdir -p "$(dirname "$MP_FILE")"; echo 'git merge --no-ff worktree-search' > "$MP_FILE"

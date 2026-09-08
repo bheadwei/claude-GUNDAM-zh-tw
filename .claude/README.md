@@ -16,7 +16,7 @@
 │   ├── MCP_CONFIGS.md         # MCP Server 推薦清單
 │   ├── PAUSE_RESUME_GUIDE.md  # 暫停/恢復 SOP
 │   └── STATUSLINE_GUIDE.md    # StatusLine 客製化手冊
-├── agents/       (15 個)      # 專業 Agent 定義
+├── agents/       (16 個)      # 專業 Agent 定義
 ├── commands/     (29 個)      # Slash Command
 ├── rules/        ( 5 個)      # 自動載入規則
 ├── skills/       (27 個)      # 專案特定領域知識
@@ -31,7 +31,7 @@
     └── .current-task          # 當前進行中任務 ID
 ```
 
-## Agents（15 個）
+## Agents（16 個）
 
 | Agent | Model | 用途 |
 | :--- | :--- | :--- |

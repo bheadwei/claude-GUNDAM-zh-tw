@@ -30,6 +30,7 @@ description: Use when starting any conversation in a TaskMaster project — esta
 | 新功能、要做一個 X | planner → **tdd-guide** → code-quality-specialist → test-automation-engineer →（critical）security-infrastructure-auditor |
 | 跑起來行為不對、壞了、沒反應、資料錯 | **debug-investigator** →（critical）tdd-guide → code-quality-specialist |
 | 建置失敗、`tsc`／型別／import 錯誤 | **build-error-resolver**（終端節點，修完即止） |
+| 合併出現衝突（merge／cherry-pick／rebase 停在衝突） | **conflict-resolver**（讀兩邊 plan 與報告判意圖；設計決策會 abort 並回報） |
 | 重構、清死碼、整併 | refactor-cleaner → code-quality-specialist → test-automation-engineer |
 | 前端頁面／元件／設計稿 | 先載入 `ui-style-compliance` skill → **ui-builder** →（關鍵流程）e2e-validation-specialist |
 | **整理／更新／同步文件、codemap、API 文檔、README** | **documentation-specialist** |
