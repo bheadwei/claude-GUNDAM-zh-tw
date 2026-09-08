@@ -166,6 +166,32 @@ implementer 會回 `STATUS: <碼>`（見各 agent 檔的「回報格式」）。
 **審查發現與 plan 文字衝突時**：你裁決，記進帳本，然後帶著這個裁決重新派工。
 不要讓 implementer 自己去猜該聽誰的。
 
+### 審查發現的是「slop」時：另派一次清理，不要往 prompt 疊禁令
+
+slop 指的是這幾種：測試語言／框架本身的行為（驗 `typeof x === 'string'` 過關）、
+為型別已經保證的狀態寫防禦、敘述式註解、為不可能發生的情境加 fallback。
+
+處理方式**不是**在 implementer prompt 上再加一條「不要測型別系統」「不要過度防禦」。
+往派工 prompt 疊否定指令有可觀測的副作用：它會對**所有**測試變保守，
+連該寫的邊界測試也一起不寫，而且你看不出來是被哪一條禁令壓掉的。
+
+正確做法是**讓 implementer 照原樣做完，再派一次專門的清理**：
+
+```
+implementer（照原 prompt 做完，不加禁令）
+   ▼
+清理（新的 subagent，或 refactor-cleaner）
+   範圍：只有這個階段的 diff（git diff <BASE>..HEAD）
+   刪：測語言／框架行為的測試、型別已保證的防禦、敘述式註解、被註解掉的舊碼
+   留：所有商業邏輯測試
+   做完跑一次測試，確認沒刪錯
+   ▼
+再進審查
+```
+
+判準見 `.claude/rules/coding-style.md` 的克制原則與註解四種情況。
+**兩個各自單純的 subagent 比一個被一堆禁令綁住的 subagent 好。**
+
 ---
 
 ## 裁決，不要停等
@@ -214,6 +240,7 @@ implementer 會回 `STATUS: <碼>`（見各 agent 檔的「回報格式」）。
 - ❌ 每階段之間停下來問使用者「要繼續嗎」
 - ❌ 帳本只記「階段 1 完成」——沒記 commit 與 BASE 的帳本無法復原
 - ❌ 讓 implementer 改 plan 檔或 WBS
+- ❌ 審查發現 slop 就往派工 prompt 疊「不要…」——改派一次清理
 
 ## 相關
 

@@ -104,9 +104,8 @@ UI 與 Node 兩類另有 `user-prompt-submit.sh` 的關鍵字提示當第二層�
 | `mcp-builder` | FastMCP／MCP SDK 的 server 骨架 |
 | `deep-research` | 多源交叉驗證的流程（不是「去查資料」，是查完怎麼比對與引用） |
 
-**它們的常駐成本接近零** —— skill 只有 `description` 進 context（七個合計 729 字元），
-本體要被喚起才載入。所以「留著」的代價很小，而「移走後哪天需要要記得回備份池撈」
-的代價比較大。
+**它們的常駐成本接近零** —— skill 只有 `description` 進 context，
+本體要被喚起才載入。所以「留著」的代價很小。
 
 > 舊版本檔這一節只寫了「不需要 Skill 的場景」，論點是「模型內建知識夠了」，
 > 卻同時留著六個領域包——讀起來像自相矛盾。實際上兩邊的判準不同，
@@ -114,8 +113,10 @@ UI 與 Node 兩類另有 `user-prompt-submit.sh` 的關鍵字提示當第二層�
 
 ## 擴充方式
 
-語言/框架特定的 skill 可從備份池按需複製：
+要新增 skill → **委派 `skill-curator`**。它的內容來源優先序是：
+先 grep 這個 repo 有沒有已驗證的作法 → 再用 `WebSearch` 查官方文檔。
 
-```bash
-cp -r ".claude/custom-rule&skill/skills/[skill-name]" .claude/skills/
-```
+> 曾經有一個 `.claude/custom-rule&skill/` 備份池（94 個 skill）供取材，
+> 已於 v5.6 移除。理由：69/94 永久用不到，而取材是一次性動作；
+> 留著的代價是第二套文件範本來源與一條防呆警告。要撈舊內容：
+> `git log --diff-filter=D -- ".claude/custom-rule&skill/"`。
