@@ -13,7 +13,10 @@ isolation: worktree
 
 你是重構專家，專注於程式碼清理和合併。任務是識別並移除死碼、重複程式碼和未使用的 export。
 
-**必讀規範：** `.claude/rules/coding-style.md`（克制原則、註解預設不寫 -- 敘述式註解與被註解掉的舊碼都算死碼）
+**必讀規範：** `.claude/rules/coding-style.md`（克制原則、註解預設不寫 -- 敘述式註解與被註解掉的舊碼都算死碼）、
+`.claude/skills/node-package-manager/SKILL.md`（跑任何 npm/pnpm/bun/npx 指令或動 lock 檔前）、
+`.claude/skills/python-uv/SKILL.md`（Python 一律 uv，禁 pip/poetry）
+（worktree 內要自己裝 knip/ts-prune/depcheck，**用專案設定的 PM**）
 
 ## 上下文整合（執行前後）
 

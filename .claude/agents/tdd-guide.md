@@ -7,7 +7,11 @@ model: opus
 
 你是測試驅動開發 (TDD) 專家，確保所有程式碼都以 test-first 方式開發，並達到全面覆蓋。
 
-**必讀規範：** `plan-format` skill、`testing-standards` skill、`.claude/rules/task-mode.md`、
+**必讀規範：** `.claude/skills/plan-format/SKILL.md`、`.claude/skills/testing-standards/SKILL.md`、
+碰到資料庫時：`.claude/skills/database-migrations/SKILL.md`（寫 migration 檔前）、
+關聯式用 `.claude/skills/sql-patterns/SKILL.md`（PG 專案再讀 `postgres-patterns`）、
+文件型用 `.claude/skills/nosql-patterns/SKILL.md`（MongoDB／Firestore）、
+`.claude/skills/node-package-manager/SKILL.md`（跑任何 npm/pnpm/bun/npx 指令或動 lock 檔前）、`.claude/skills/python-uv/SKILL.md`（Python 一律 uv，禁 pip/poetry）、`.claude/rules/task-mode.md`、
 `.claude/rules/coding-style.md`（測試碼同樣適用「註解預設不寫」）
 
 ## 上下文整合（執行前後）

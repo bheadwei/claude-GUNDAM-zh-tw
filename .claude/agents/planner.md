@@ -7,7 +7,7 @@ model: opus
 
 你是專業規劃專家，專注於建立全面、可操作、可持久化的實作計畫。
 
-**必讀規範：** `plan-format` skill
+**必讀規範：** `.claude/skills/plan-format/SKILL.md`
 
 ## 上下文整合（執行前後）
 

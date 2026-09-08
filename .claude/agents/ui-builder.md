@@ -9,7 +9,8 @@ model: sonnet
 
 **必讀規範：**
 - `.claude/rules/coding-style.md`（克制原則、註解預設不寫）
-- `ui-style-compliance` skill（強制三階段檢查）
+- `.claude/skills/ui-style-compliance/SKILL.md`（強制三階段檢查）
+- `.claude/skills/node-package-manager/SKILL.md`（跑任何 npm/pnpm/bun/npx 指令或動 lock 檔前）
 - 當前專案的 `.claude/ui/<codename>/DESIGN.md`
 - 當前專案的 `docs/17_frontend_information_architecture.md`（若存在）
 

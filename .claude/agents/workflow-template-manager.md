@@ -7,6 +7,8 @@ model: sonnet
 
 你是工作流模板管理專家，負責管理開發生命週期工作流和 VibeCoding 模板整合。
 
+**必讀規範：** `.claude/skills/project-docs/SKILL.md`（範本實體與 INDEX）
+
 ## 核心職責
 
 ### VibeCoding 模板整合

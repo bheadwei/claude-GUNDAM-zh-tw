@@ -77,9 +77,13 @@ if has 'auth|login|oauth|jwt|session|password|認證|授權|登入|密碼' \
 fi
 
 # --- migration / schema ---
+# 兩段式：窄關鍵字升級 critical；廣關鍵字（使用者沒說「migration」的情境）只提示載入 skill，
+# 不誤升 critical——「加欄位」也可能是前端表格欄位。
 if has 'migration|migrate|資料庫遷移|schema 變更|遷移'; then
     HIGH_SIGNAL=1
-    add "偵測到資料庫遷移 → 建議 **critical**；先 /plan，務必含回滾策略與資料備份。"
+    add "偵測到資料庫遷移 → 建議 **critical**；先 /plan，務必含回滾策略與資料備份。**先載入 \`database-migrations\` skill**（zero-downtime DDL、expand/contract、不停機建索引、分批 backfill）。"
+elif has 'alter table|create index|drop column|add column|backfill|加欄位|新增欄位|移除欄位|刪除欄位|重命名欄位|改資料型別|資料回填|改 schema'; then
+    add "偵測到 schema／欄位變更（未出現「migration」字樣）→ **先載入 \`database-migrations\` skill**，確認 zero-downtime 作法與回滾；若動的是線上資料，升級為 **critical**。"
 fi
 
 # 以下為一般訊號（low 模式略過）

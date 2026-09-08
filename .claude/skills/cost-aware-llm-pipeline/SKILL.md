@@ -1,6 +1,6 @@
 ---
 name: cost-aware-llm-pipeline
-description: LLM API 成本優化模式 — 依任務複雜度路由模型、預算追蹤、重試邏輯及 Prompt 快取。
+description: 多模型 LLM pipeline 的成本控制模式 — 依複雜度路由、不可變成本追蹤、窄範圍重試、prompt 快取。Use when 要對大量輸入跑 LLM、要把任務分派給不同大小的模型、要加預算上限或成本監控、或 API 費用超出預期要找降本方法。模型 ID、定價與參數限制不在本檔 — 那些載入 `claude-api` skill。
 origin: ECC
 ---
 
@@ -151,16 +151,16 @@ def process(text: str, config: Config, tracker: CostTracker) -> tuple[Result, Co
     return parse_result(response), tracker
 ```
 
-## 定價參考（2026-07，實際請以官方定價頁為準）
+## 定價與 model ID：不在這裡
 
-| 模型 | Model ID | 輸入 ($/1M tokens) | 輸出 ($/1M tokens) | 相對成本 |
-|------|----------|--------------------|--------------------|----------|
-| Haiku 4.5 | `claude-haiku-4-5` | $1.00 | $5.00 | 1x |
-| Sonnet 5 | `claude-sonnet-5` | $3.00 | $15.00 | ~3x |
-| Opus 4.8 | `claude-opus-4-8` | $5.00 | $25.00 | ~5x |
-| Fable 5 | `claude-fable-5` | $10.00 | $50.00 | ~10x |
+**這份 skill 刻意不放定價表與 model ID。** 曾經放過，然後爛掉——表上寫的
+`claude-opus-4-8`、`claude-fable-5` 都已不存在，而照著寫的路由程式碼會直接 400。
 
-> 注意：Claude 5 家族（Fable 5 / Sonnet 5 / Opus 4.8/4.7）已移除 `temperature`/`top_p`/`top_k` 與 `budget_tokens`（送出會 400）；thinking 一律用 `{"type": "adaptive"}`。路由程式碼若帶這些參數需分模型處理。
+要 model ID、定價、參數限制（哪些模型移除了 `temperature`/`top_p`/`budget_tokens`）→
+**一律載入 `claude-api` skill**，它是這些事實的唯一來源且有人維護。
+本檔範例中的 `MODEL_SONNET` / `MODEL_HAIKU` 常數只是佔位，動手前先去核對。
+
+本檔負責的是**不會過期的那一半**：路由決策、成本追蹤、重試、快取的組合方式。
 
 ## 最佳實踐
 

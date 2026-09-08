@@ -7,6 +7,10 @@ model: sonnet
 
 你是端到端測試專家，確保關鍵使用者旅程正確運作。
 
+**必讀規範：** `.claude/skills/e2e-testing/SKILL.md`（POM、playwright 設定、不穩定測試處理、
+trace/截圖產物管理）、`.claude/skills/testing-standards/SKILL.md`（覆蓋率門檻）、
+`.claude/skills/node-package-manager/SKILL.md`（跑任何 npm/pnpm/bun 指令前）
+
 ## 上下文整合（執行前後）
 
 ### 開始前

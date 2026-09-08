@@ -7,6 +7,8 @@ model: sonnet
 
 你是文檔與 codemap 專家，維護準確且最新的技術文檔。
 
+**必讀規範：** `.claude/skills/node-package-manager/SKILL.md`（跑 tsc/AST 工具或任何 npm/pnpm/bun/npx 指令前）
+
 ## 核心職責
 
 1. **Codemap 生成** -- 從程式碼結構建立架構地圖

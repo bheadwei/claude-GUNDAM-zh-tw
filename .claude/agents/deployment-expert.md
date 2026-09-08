@@ -7,6 +7,9 @@ model: sonnet
 
 你是部署運維工程師，專注於系統部署、基礎設施管理和維運自動化。
 
+**必讀規範：** `.claude/skills/database-migrations/SKILL.md`（發布含 schema 變更時，**先確認 expand/contract 順序**）、
+`.claude/skills/node-package-manager/SKILL.md`（跑任何 npm/pnpm/bun/npx 指令或動 lock 檔前）、`.claude/skills/python-uv/SKILL.md`（Python 一律 uv，禁 pip/poetry）
+
 ## 上下文整合（執行前後）
 
 ### 開始前

@@ -136,6 +136,46 @@ for f in .claude/agents/*.md; do
     fi
 done
 
+# agent → skill 接線：引用的路徑必須存在
+#
+# 為什麼這是真的相依而非註解：subagent **拿不到 `Skill` 工具**——把 "Skill" 寫進
+# 限縮的 `tools:` 會被靜默丟掉（實測過，不報錯）。agent 取得 skill 內容的唯一途徑
+# 是自己的定義給它一個可 Read 的路徑。路徑寫錯不會有任何訊號。
+for f in .claude/agents/*.md .claude/skills/*/SKILL.md; do
+    [ -f "$f" ] || continue
+    refs=$(grep -ohE '\.claude/skills/[a-z0-9-]+/SKILL\.md' "$f" 2>/dev/null | sort -u)
+    [ -n "$refs" ] || continue
+    while IFS= read -r ref; do
+        [ -n "$ref" ] || continue
+        CHECKED=$((CHECKED + 1))
+        if [ ! -f "$ref" ]; then
+            FAIL=$((FAIL + 1))
+            printf '  %s 引用了不存在的 skill 路徑：%s → %s\n' \
+                "$(red '✗')" "$(basename "$f")" "$ref"
+        fi
+    done <<< "$refs"
+done
+
+# 每個 skill 要嘛被 agent 引用，要嘛在「僅主模型使用」白名單裡
+#
+# 白名單不是豁免，是宣告：這些由主模型載入，agent 不該讀
+# （`using-taskmaster` 甚至帶 <SUBAGENT-STOP>）。新增 skill 時必須二選一，
+# 否則它會變成沒有任何召喚路徑的孤兒。
+MAIN_MODEL_ONLY="using-taskmaster subagent-execution worktree-orchestration writing-extensions spec-convergence deep-research plan-format mcp-builder cost-aware-llm-pipeline"
+for d in .claude/skills/*/; do
+    name=$(basename "$d")
+    CHECKED=$((CHECKED + 1))
+    grep -qE "skills/$name/SKILL\.md" .claude/agents/*.md 2>/dev/null && continue
+    case " $MAIN_MODEL_ONLY " in
+        *" $name "*) continue ;;
+    esac
+    FAIL=$((FAIL + 1))
+    printf '  %s skill 沒有召喚路徑：%s\n' "$(red '✗')" "$name"
+    printf '      沒有任何 agent 引用它，也不在 MAIN_MODEL_ONLY 白名單裡。\n'
+    printf '      修法：在相關 agent 加「必讀規範：.claude/skills/%s/SKILL.md」，\n' "$name"
+    printf '      或（若它本來就只給主模型用）把它加進本腳本的白名單。\n'
+done
+
 # 測試案例數（需由呼叫端提供實跑結果）
 if [ -n "$TESTS_ACTUAL" ]; then
     verify "WORKFLOW 測試案例數" "$TESTS_ACTUAL" "$W" '[0-9]+ 個案例，全綠'

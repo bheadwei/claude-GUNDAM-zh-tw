@@ -1,6 +1,6 @@
 ---
 name: database-migrations
-description: 資料庫 Migration 最佳實踐 — Schema 變更、資料遷移、Rollback 及 Zero-downtime 部署，涵蓋 PostgreSQL、MySQL 及常見 ORM（Prisma、Django、TypeORM 等）。
+description: 資料庫 schema 與資料變更的安全作法 — zero-downtime DDL、expand/contract 兩階段、不停機建索引、分批 backfill、rollback，涵蓋 PostgreSQL/MySQL 與 Prisma、Django、TypeORM。MUST BE USED before writing or editing any migration file, before running any migrate command (prisma migrate、alembic、manage.py migrate、typeorm、knex、rails db:migrate)，以及 before any ALTER TABLE / CREATE INDEX / 加欄位 / 移除欄位 / 重命名欄位 / 改資料型別 / 大表 backfill — 即使使用者沒說「migration」這個詞。
 origin: ECC
 ---
 
