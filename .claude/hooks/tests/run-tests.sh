@@ -652,6 +652,53 @@ reset
 expect_empty "空 command 不處理" "$(run post-bash.sh '{"tool_name":"Bash","tool_input":{}}')"
 
 # =========================================================================
+section "resolve-roots.sh — CLAUDE_PROJECT_DIR 未設時的 fallback"
+# =========================================================================
+#
+# 為什麼要這組：其餘 163 個案例的 run() 一律帶 CLAUDE_PROJECT_DIR="$SANDBOX"，
+# 所以 fallback 分支從來沒被測到。它曾經寫錯——在被 source 的檔案裡
+# ${BASH_SOURCE[0]} 指的是 lib/resolve-roots.sh 自己，`../..` 只回到 `.claude/`，
+# 讓所有狀態檔掉進 `.claude/.claude/taskmaster-data/`。
+# 平常有環境變數遮住，**CI 裡沒設**，所以那條路徑必須有測試釘住。
+
+reset
+# 直接 source 這支 lib，把 MAIN_ROOT 解出來比對
+RR_OUT=$(env -u CLAUDE_PROJECT_DIR bash -c '
+    source "'"$HOOK_DIR"'/lib/resolve-roots.sh" 2>/dev/null || exit 1
+    resolve_roots ""
+    printf "%s" "$MAIN_ROOT"
+' 2>/dev/null)
+RR_EXPECT=$(cd "$HOOK_DIR/../.." && pwd)
+if [ "$RR_OUT" = "$RR_EXPECT" ]; then ok "無 CLAUDE_PROJECT_DIR 時 MAIN_ROOT = repo root"
+else ng "無 CLAUDE_PROJECT_DIR 時 MAIN_ROOT = repo root" "$RR_EXPECT" "${RR_OUT:-（空）}"; fi
+
+# 反向驗證：不該解到 .claude/（那正是修掉的 bug）
+case "$RR_OUT" in
+    */.claude) ng "MAIN_ROOT 不該停在 .claude/" "repo root" "$RR_OUT" ;;
+    *) ok "MAIN_ROOT 不該停在 .claude/" ;;
+esac
+
+# 狀態檔落點：不能出現 .claude/.claude/
+RR_DATA=$(env -u CLAUDE_PROJECT_DIR bash -c '
+    source "'"$HOOK_DIR"'/lib/resolve-roots.sh" 2>/dev/null || exit 1
+    resolve_roots ""
+    printf "%s" "$WORK_CLAUDE/taskmaster-data"
+' 2>/dev/null)
+case "$RR_DATA" in
+    *.claude/.claude/*) ng "狀態檔落點不含 .claude/.claude/" "單層" "$RR_DATA" ;;
+    *) ok "狀態檔落點不含 .claude/.claude/" ;;
+esac
+
+# 帶 cwd（非 worktree）時行為不變
+RR_CWD=$(env -u CLAUDE_PROJECT_DIR bash -c '
+    source "'"$HOOK_DIR"'/lib/resolve-roots.sh" 2>/dev/null || exit 1
+    resolve_roots "{\"cwd\":\"'"$RR_EXPECT"'\"}"
+    printf "%s|%s" "$MAIN_ROOT" "$IN_WORKTREE"
+' 2>/dev/null)
+if [ "$RR_CWD" = "$RR_EXPECT|0" ]; then ok "無環境變數但有 cwd 時仍解到 repo root 且非 worktree"
+else ng "無環境變數但有 cwd 時仍解到 repo root 且非 worktree" "$RR_EXPECT|0" "${RR_CWD:-（空）}"; fi
+
+# =========================================================================
 section "全體 hooks — 語法與健壯性"
 # =========================================================================
 for h in "$HOOK_DIR"/*.sh; do

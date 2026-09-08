@@ -49,6 +49,9 @@ SYNC_ROOT_FILES=(.mcp.json.linux.example .mcp.json.windows.example CLAUDE_TEMPLA
 # 而 update-template 的備份只包 .claude/，根目錄檔案沒備份 —— 覆寫等於無備份的破壞。
 SEED_ROOT_FILES=(.worktreeinclude)
 MERGE_CLAUDE_DIRS=(context coordination)
+# rsync 不會幫你補執行位——來源的 mode 才是權威。所有 .sh 在 repo 裡都是 100755
+# （`git update-index --chmod=+x`），所以 clone/pull 下來就有執行位，
+# 目標端不需要 chmod。若目標端曾手動 chmod 過，rsync 會把 mode 一起同步回來。
 PRESERVE_NOTE=("settings.local.json" "taskmaster-data/" "sessions/" "logs/" "qa-history/" "worktrees/" "(root) .mcp.json / .env")
 
 # ---- 驗證 ----
@@ -101,7 +104,9 @@ copy_file() {  # $1=src $2=dst
   [ -f "$src" ] || return 0
   if [ "$DRY_RUN" -eq 1 ]; then echo "   [dry] $dst"; return 0; fi
   mkdir -p "$(dirname "$dst")"
-  cp -f "$src" "$dst"
+  # -p 才會帶 mode 過去。裸 `cp -f` 覆寫既有檔案時保留的是**目標端**的權限，
+  # 所以 statusline.sh 的執行位會傳不過去（sync_dir 走 rsync -a 沒這個問題）。
+  cp -pf "$src" "$dst"
 }
 
 # ---- 執行 ----

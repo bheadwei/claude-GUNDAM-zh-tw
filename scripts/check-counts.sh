@@ -135,6 +135,25 @@ for f in .claude/agents/*.md; do
     fi
 done
 
+# agent 的 tools: 不得出現 "Skill"
+#
+# 實測：限縮的 tools 白名單不認 `Skill`，未知項被**靜默丟掉**而非報錯。
+# 加了它會做出「看起來完全正確、實際一個字都不載入」的東西，且沒有任何訊號。
+# 完整紀錄：.claude/context/learned/2026-09-08-subagent-no-skill-tool.md
+#
+# 為什麼這條檢查必須在這裡而不是坑閘門：pre-tool-use.sh 對 `.claude/*` 直接放行
+# （避免自鎖），且只對程式碼副檔名生效——`.md` 不在其中。所以關於模板自身擴充的
+# 教訓，坑閘門一輩子貼不出來，只能靠這個腳本擋。
+for f in .claude/agents/*.md; do
+    CHECKED=$((CHECKED + 1))
+    if grep -qE '^tools:.*"Skill"' "$f" 2>/dev/null; then
+        FAIL=$((FAIL + 1))
+        printf '  %s agent 的 tools: 含 "Skill"：%s\n' "$(red '✗')" "$(basename "$f")"
+        printf '      subagent 拿不到 Skill 工具，寫進限縮清單會被靜默丟掉（不報錯）。\n'
+        printf '      改法：在該 agent 開頭寫「必讀規範：.claude/skills/<name>/SKILL.md」（完整路徑）。\n'
+    fi
+done
+
 # agent → skill 接線：引用的路徑必須存在
 #
 # 為什麼這是真的相依而非註解：subagent **拿不到 `Skill` 工具**——把 "Skill" 寫進
