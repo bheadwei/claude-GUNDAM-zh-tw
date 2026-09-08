@@ -52,43 +52,16 @@ description: 記錄技術決策（ADR）。把「為什麼選 A 不選 B」寫�
 
 ### 步驟 3：寫入
 
-編號規則：`ADR-{YYYY-MM-DD}-{當日序號}-{kebab-標題}.md`
-（掃 `context/decisions/` 現有檔案決定序號）
+**格式的唯一來源是**
+`.claude/skills/project-docs/templates/04_architecture_decision_record_template.md`
+—— 用它的 **A 節（簡易版）**，落點 `.claude/context/decisions/`。
+編號與檔名規則也在那份範本裡（`ADR-{YYYY-MM-DD}-{當日序號}-{kebab-標題}.md`，
+掃目錄現有檔案決定序號）。
 
-```markdown
-# ADR-2026-08-10-001: 用 Zustand 而非 Redux 管理前端狀態
+**不要在這裡憑記憶重打格式。** 這個 repo 曾經有三套 ADR 格式、三種編號規則，
+產出長什麼樣取決於當時剛好讀到哪一份。動手前先讀那份範本。
 
-**日期：** 2026-08-10
-**狀態：** 已接受
-**決策者：** 主 Agent + 使用者
-
-## 背景
-
-<什麼情況逼我們做這個選擇。含當時的限制：時程、團隊熟悉度、既有技術棧>
-
-## 決策
-
-<選了什麼。一句話講完>
-
-## 替代方案
-
-| 方案 | 優點 | 否決理由 |
-|---|---|---|
-| Redux Toolkit | 生態成熟、devtools 強 | 樣板碼多，本專案狀態量不足以攤平成本 |
-| Context + useReducer | 零依賴 | 跨元件更新會過度 re-render |
-
-## 後果
-
-**得到：** <好處>
-**犧牲：** <代價>
-**何時該重新考慮：** <觸發條件，例如「狀態複雜度超過 X」「需要 time-travel 除錯」>
-
-## 相關
-
-- WBS 任務：<id>（若有）
-- 計畫：`plans/<...>.md`（若有）
-- 取代：ADR-xxx（若推翻既有決策，**必須**填並說明理由）
-```
+重大／跨團隊決策改用 B 節（完整版）並落在 `docs/`，那條路線走 `architect` agent。
 
 ### 步驟 4：回報
 

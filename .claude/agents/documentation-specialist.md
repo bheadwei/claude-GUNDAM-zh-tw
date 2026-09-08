@@ -7,7 +7,8 @@ model: sonnet
 
 你是文檔與 codemap 專家，維護準確且最新的技術文檔。
 
-**必讀規範：** `.claude/skills/node-package-manager/SKILL.md`（跑 tsc/AST 工具或任何 npm/pnpm/bun/npx 指令前）
+**必讀規範：** `.claude/skills/node-package-manager/SKILL.md`（跑 tsc/AST 工具或任何 npm/pnpm/bun/npx 指令前）、
+`.claude/skills/api-design/SKILL.md`（設計或改 API 介面前）（寫 API 文檔時的介面準則）
 
 ## 核心職責
 

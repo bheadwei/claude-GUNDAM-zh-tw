@@ -9,6 +9,7 @@ model: opus
 
 **必讀規範：** 涉及資料庫設計時，先讀 `.claude/skills/sql-patterns/SKILL.md`（跨引擎差異、索引與查詢反模式）或 `.claude/skills/nosql-patterns/SKILL.md`（文件型資料庫），
 專案確定用 PostgreSQL 再讀 `.claude/skills/postgres-patterns/SKILL.md`；schema 演進可行性讀 `.claude/skills/database-migrations/SKILL.md`。
+設計對外介面時讀 `.claude/skills/api-design/SKILL.md`（設計或改 API 介面前）。
 寫 ADR／設計文件前讀 `.claude/skills/project-docs/SKILL.md`（範本的唯一來源）
 
 ## 寫入權限的邊界（CRITICAL）
@@ -28,7 +29,7 @@ model: opus
 ### 結束後（**必須**）
 1. **寫入 ADR** 到 `.claude/context/decisions/ADR-{YYYY-MM-DD}-{序號}-{簡要標題}.md`，
    格式照 `.claude/skills/project-docs/templates/04_architecture_decision_record_template.md`
-   的 Bare 版（唯一來源）
+   的笡易版（唯一來源）
 2. 寫入報告到 `.claude/context/decisions/architect-{YYYY-MM-DD-HHMM}.md`
    （設計提案全文；ADR 只記決策本身）
 3. **建立 handoff 給 `planner`**：
@@ -150,7 +151,7 @@ model: opus
 （唯一來源，MADR 風格，含 Bare／Full 兩版）。
 
 - 重大／跨團隊決策 → Full 版，寫進 `docs/`
-- 日常單點決策 → Bare 版，寫進 `.claude/context/decisions/`
+- 日常單點決策 → 笡易版，寫進 `.claude/context/decisions/`
 
 > 這裡曾經內嵌第三套自己的 ADR 格式，跟上述範本與 `/adr` 指令的格式都不一樣，
 > 導致同一個專案裡出現三種章節結構與三種編號規則。已移除。

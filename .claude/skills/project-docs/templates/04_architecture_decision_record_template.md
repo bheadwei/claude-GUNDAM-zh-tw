@@ -1,134 +1,159 @@
-# ADR-XXX: [簡短的決策標題]
+# ADR 範本（架構決策記錄）
 
-> **版本:** v5.0 | **更新:** 2026-07-24 | **狀態:** MADR 4.0 格式
+> **版本:** v5.6 | **更新:** 2026-09-08 | **格式:** MADR 4.0 精神，中文章節
 >
-> 本文件依 [MADR 4.0.0](https://adr.github.io/madr/) 格式撰寫。小決策用 **bare 版**（第 A 節），重大/跨團隊決策用 **full 版**（第 B 節）。一個 ADR 一個檔案，檔名 `ADR-XXX-kebab-title.md`。
+> **這是 ADR 格式的唯一來源。** `/adr` 指令與 `architect` agent 都指向本檔，
+> 不各自內嵌格式（以前有過三套，三種章節結構、三種編號規則）。
+
+## 用哪一版
+
+| | 簡易版（A 節） | 完整版（B 節） |
+|---|---|---|
+| 適用 | 日常單點決策（選套件、選寫法） | 重大／跨團隊／難回頭的決策 |
+| 落點 | `.claude/context/decisions/` | `docs/` |
+| 入口 | `/adr` 指令 | `architect` agent |
+
+## 檔名與編號（兩版通用）
+
+```
+ADR-{YYYY-MM-DD}-{當日序號}-{kebab-標題}.md
+例：ADR-2026-09-08-001-zustand-over-redux.md
+```
+
+序號掃目標目錄現有檔案決定。**一個 ADR 只記一個決策**；範圍變了就開新的，
+用「取代」欄位互相連結，不要塞進舊 ADR。
 
 ---
 
-## A. Bare 版（最簡骨架 — 日常小決策用這版）
+## A. 簡易版
 
 ```markdown
 ---
-status: proposed
-date: YYYY-MM-DD
-decision-makers: []
+status: 已接受          # 提議中 / 已接受 / 已否決 / 已棄用 / 已被取代
+date: YYYY-MM-DD       # 決策制定日期，非建檔日期
+decision-makers: []    # 有最終拍板權的人／角色
 ---
-# <決策標題>
 
-## Context and Problem Statement
+# ADR-2026-09-08-001: 用 Zustand 而非 Redux 管理前端狀態
 
-[2-3 句描述背景與待解問題，可用問句收尾]
+## 背景
 
-## Considered Options
+<什麼情況逼我們必須做這個選擇。含當時的限制：時程、團隊熟悉度、既有技術棧。
+2-3 句，可用問句收尾>
 
-* [選項 1]
-* [選項 2]
-* [選項 3]
+## 決策
 
-## Decision Outcome
+<選了什麼。一句話講完>
 
-Chosen option: "[選項 X]", because [理由 — 通常是唯一符合限制條件，或優劣權衡後最佳者]。
+## 替代方案
+
+| 方案 | 優點 | 否決理由 |
+|---|---|---|
+| Redux Toolkit | 生態成熟、devtools 強 | 樣板碼多，本專案狀態量不足以攤平成本 |
+| Context + useReducer | 零依賴 | 跨元件更新會過度 re-render |
+
+**至少要有 2 個選項**（「維持現狀」也算一個），否則無從比較。
+
+## 後果
+
+**得到：** <好處，盡量可衡量>
+**犧牲：** <代價、引入的技術債或風險>
+**何時該重新考慮：** <觸發條件，例如「狀態複雜度超過 X」「需要 time-travel 除錯」>
+
+## 相關
+
+- WBS 任務：<id>（若有）
+- 計畫：`plans/<...>.md`（若有）
+- 取代：ADR-xxx（若推翻既有決策，**必須**填並說明理由）
 ```
 
 ---
 
-## B. Full 版（完整骨架 — 重大/跨團隊決策用這版）
+## B. 完整版
 
 ```markdown
 ---
-status: proposed
+status: 已接受
 date: YYYY-MM-DD
 decision-makers: []
-consulted: []
-informed: []
+consulted: []          # 決策前被諮詢意見者（雙向溝通）
+informed: []           # 決策後需被告知者（單向通知）
 ---
-# <決策標題>
 
-## Context and Problem Statement
+# ADR-2026-09-08-001: <決策標題>
 
-[描述背景脈絡與問題，盡量量化嚴重性；可用 2-3 句 + 1 個問句]
+## 背景
 
-## Decision Drivers
+<描述背景脈絡與問題，盡量量化嚴重性。2-3 句 + 1 個問句>
 
-* [驅動因素 1，例如效能需求、團隊熟悉度、成本上限]
-* [驅動因素 2]
-* [約束 1，例如既有基礎設施、合規要求]
+## 決策驅動因素
 
-## Considered Options
+* <驅動因素，例如效能需求、團隊熟悉度、成本上限>
+* <約束，例如既有基礎設施、合規要求>
 
-* [選項 1]
-* [選項 2]
-* [選項 3]
+## 決策
 
-## Decision Outcome
+選擇 **<選項 X>**，因為 <理由摘要，說明相對其他選項的關鍵優勢>。
 
-Chosen option: "[選項 X]", because [理由摘要，說明相對其他選項的關鍵優勢]。
+## 替代方案
 
-### Consequences
+| 方案 | 優點 | 缺點 | 否決理由 |
+|---|---|---|---|
+| <選項 1> | | | |
+| <選項 2> | | | |
+| 維持現狀 | | | |
 
-* Good, because [正面後果，盡量可衡量]
-* Good, because [正面後果 2]
-* Bad, because [負面後果 / 引入的技術債或風險]
-* Neutral, because [中性影響，例如需要團隊學習新工具]
+需要更長論述的選項，在下方「各選項詳述」補充。
 
-### Confirmation
+## 後果
 
-[如何驗證此決策已被正確落實 — 例如：程式碼審查檢查清單項目 / 架構測試 (fitness function) / CI 檢查 / 特定 lint 規則]
+**得到：**
+* <正面後果，盡量可衡量>
 
-## Pros and Cons of the Options
+**犧牲：**
+* <負面後果／引入的技術債或風險>
 
-### [選項 1]
+**中性影響：**
+* <例如需要團隊學習新工具>
 
-[選項 1-2 句描述，附範例或連結]
+**何時該重新考慮：** <觸發條件>
 
-* Good, because [論點]
-* Good, because [論點]
-* Neutral, because [論點]
-* Bad, because [論點]
+## 確認方式
 
-### [選項 2]
+<如何驗證這個決策真的被落實。**優先寫可自動檢查的**：CI 檢查、lint 規則、
+架構測試（fitness function）；其次才是人工審查清單項目。
 
-[選項 1-2 句描述]
+沒有可驗證的落實方式，決策容易變成紙上文字——這是 MADR 4.0 特別加進來的欄位。>
 
-* Good, because [論點]
-* Bad, because [論點]
+## 各選項詳述（選填）
 
-### [選項 3]
+### <選項 1>
 
-[選項 1-2 句描述]
+<1-2 句描述，附範例或連結>
 
-* Good, because [論點]
-* Bad, because [論點]
+* 優點：<論點>
+* 缺點：<論點>
 
-## More Information
+## 相關
 
-[補充資訊：相關 RFC、討論串連結、後續追蹤事項、`adr_tags`、`related: ADR-YYY` 等]
+- 取代：ADR-xxx（若推翻既有決策，**必須**填並說明理由）
+- 相關 ADR、RFC、討論串連結、後續追蹤事項
 ```
 
 ---
 
-## Frontmatter 欄位說明
-
-| 欄位 | 必填 | 說明 |
-| :--- | :--- | :--- |
-| `status` | 是 | `proposed` / `accepted` / `rejected` / `deprecated` / `superseded` / `under-review` |
-| `date` | 是 | 決策制定日期（非建檔日期），YYYY-MM-DD |
-| `decision-makers` | 建議 | 對此決策有最終拍板權的人/角色 |
-| `consulted` | 選填 | 決策前被諮詢意見者（雙向溝通，RACI 之 C） |
-| `informed` | 選填 | 決策後需被告知者（單向通知，RACI 之 I） |
-
----
-
-## 撰寫指引
-
-- **一個 ADR 只記一個決策**。決策範圍變了 → 開新 ADR 並在 `More Information` 互相 `related` 連結，不要塞進舊 ADR。
-- **Considered Options 至少 2 個**（含「維持現狀」也算一個選項），否則無從比較。
-- **Confirmation 是 4.0 新增的關鍵欄位**：沒有可驗證的落實方式，決策容易變成紙上文字。優先寫「自動化可檢查」的方式（CI/lint/架構測試），其次才是人工審查。
-- **狀態變更時更新 frontmatter**，並在檔案結尾補一行變更記錄（見下方）。
-
-## 狀態變更記錄（選填，狀態變動時追加）
+## 狀態變更記錄（選填，狀態變動時追加在檔案結尾）
 
 | 日期 | 新狀態 | 異動人 | 備註 |
 | :--- | :--- | :--- | :--- |
-| YYYY-MM-DD | accepted | [姓名] | [原因或連結至討論] |
+| YYYY-MM-DD | 已接受 | <姓名> | <原因或連結至討論> |
+
+## 撰寫指引
+
+- **一個 ADR 只記一個決策**
+- **替代方案至少 2 個**，含「維持現狀」
+- **狀態變更時更新 frontmatter**，並追加上方變更記錄
+- 中文章節名對照 MADR 原文（查 MADR 文件時用得到）：
+  背景 = Context and Problem Statement、決策驅動因素 = Decision Drivers、
+  替代方案 = Considered Options、決策 = Decision Outcome、
+  後果 = Consequences、確認方式 = Confirmation

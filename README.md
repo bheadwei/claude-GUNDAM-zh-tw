@@ -89,7 +89,7 @@ claude_v2026/
     ├── rules/        ( 5 個)         # 自動載入規則（每次對話注入）
     ├── agents/       (14 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
-    ├── skills/       (19 個)         # 按需載入（不佔常駐 context）
+    ├── skills/       (27 個)         # 按需載入（不佔常駐 context）
     ├── hooks/                        # Hook 腳本 + lib/ + 137 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）
     ├── ui/           (69 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
@@ -242,7 +242,7 @@ claude_v2026/
 
 ---
 
-## Skills（19 個，按需載入）
+## Skills（27 個，按需載入）
 
 不佔常駐 context，由 `description` 的觸發條件決定何時載入。**唯一例外是第一個**。
 

@@ -9,6 +9,7 @@ model: opus
 
 **必讀規範：** `.claude/skills/plan-format/SKILL.md`、`.claude/skills/testing-standards/SKILL.md`、
 碰到資料庫時：`.claude/skills/database-migrations/SKILL.md`（寫 migration 檔前）、
+`.claude/skills/python-testing/SKILL.md`（pytest）、`.claude/skills/python-patterns/SKILL.md`（Python 專案）、
 關聯式用 `.claude/skills/sql-patterns/SKILL.md`（PG 專案再讀 `postgres-patterns`）、
 文件型用 `.claude/skills/nosql-patterns/SKILL.md`（MongoDB／Firestore）、
 `.claude/skills/node-package-manager/SKILL.md`（跑任何 npm/pnpm/bun/npx 指令或動 lock 檔前）、`.claude/skills/python-uv/SKILL.md`（Python 一律 uv，禁 pip/poetry）、`.claude/rules/task-mode.md`、

@@ -1,6 +1,6 @@
 # Skills 索引
 
-19 個 skill，**按需載入**（不佔常駐 context）。分兩類：從 rules 移出的專案約定、以及原有的領域知識包。
+27 個 skill，**按需載入**（不佔常駐 context）。分兩類：從 rules 移出的專案約定、以及原有的領域知識包。
 
 ## 常駐注入（唯一的例外）
 
@@ -52,6 +52,14 @@
 | **sql-patterns** | 關聯式通用原則 + **PG／MSSQL／SQLite 跨引擎差異對照** | 寫/調 SQL、選索引、**把作法從一個引擎搬到另一個** |
 | **postgres-patterns** | PostgreSQL 速查表（Index、型態、RLS）—— PG 專屬深入層 | 專案用 PG 且要寫 SQL、設計 Schema |
 | **nosql-patterns** | 文件型（MongoDB／Firestore）—— 存取模式先行、embed vs reference | 設計文件結構、Firestore 帳單變貴 |
+| **python-patterns** | Pythonic 寫法、型別註記、PEP 8、效能陷阱 | 寫或審查 Python 程式碼 |
+| **python-testing** | pytest：fixture、mock、parametrize、非同步測試 | 用 pytest 寫或修測試 |
+| **api-design** | REST 介面：資源命名、狀態碼、分頁、版本、速率限制 | 設計或改 API 端點 |
+| **backend-patterns** | **僅 Node／Express／Next.js** 的後端分層與 middleware | 專案後端是 Node（FastAPI 不適用） |
+| **deployment-patterns** | CI/CD、rollback、零停機發布、上線前檢查 | 要部署或設 CI/CD |
+| **docker-patterns** | 多階段建置、容器安全、volume、多服務編排 | 寫或改 Dockerfile／compose |
+| **security-review** | 認證／輸入／秘密／金流 的審查清單與模式 | 碰認證、秘密、金流前 |
+| **security-scan** | 掃 `.claude/` 設定本身的注入風險（**需 AgentShield**） | 稽核 hooks／MCP／settings |
 
 ## 為什麼 rule 要搬成 skill
 
@@ -78,7 +86,7 @@ UI 與 Node 兩類另有 `user-prompt-submit.sh` 的關鍵字提示當第二層�
 
 ### 做 Skill（有具體到值得記下來的操作模式）
 
-留著的九個領域包不是「主題重要」，是它們各自帶了**模型不會憑空產出的具體東西**：
+留著的十七個領域包不是「主題重要」，是它們各自帶了**模型不會憑空產出的具體東西**：
 
 | Skill | 帶的是什麼具體東西 |
 |---|---|
@@ -87,6 +95,10 @@ UI 與 Node 兩類另有 `user-prompt-submit.sh` 的關鍵字提示當第二層�
 | `postgres-patterns` | RLS 政策與索引選擇的實際語法，不是「該加索引」這種通則 |
 | `sql-patterns` | 同一件事在三個引擎的實際差別（加欄位在 PG 可能瞬間完成、SQLite 要重建整表） |
 | `nosql-patterns` | embed vs reference 的判準、Firestore 計費跟資料模型是同一件事 |
+| `python-patterns`／`python-testing` | 具體的 Pythonic 寫法對照與 pytest fixture／mock 組織方式 |
+| `api-design` | 分頁／過濾／錯誤回應的實際格式，不是「要一致」這種通則 |
+| `deployment-patterns`／`docker-patterns` | 多階段 Dockerfile、healthcheck、rollback 的實際寫法 |
+| `security-review` | OWASP 項目對應的實際檢查點與修法 |
 | `e2e-testing` | Page Object Model 的實際結構與 flaky 處理策略 |
 | `cost-aware-llm-pipeline` | 模型路由與預算追蹤的實作骨架 |
 | `mcp-builder` | FastMCP／MCP SDK 的 server 骨架 |

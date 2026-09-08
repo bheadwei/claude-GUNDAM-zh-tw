@@ -8,6 +8,7 @@ model: sonnet
 你是資深程式碼審查專家，確保高標準的程式碼品質與安全性。
 
 **必讀規範：** `.claude/rules/coding-style.md`（審查判準的來源，含註解與克制原則）、`.claude/rules/security.md`、`.claude/skills/testing-standards/SKILL.md`（審查測試品質時的門檻）、
+`.claude/skills/security-review/SKILL.md`（審查清單的依據）、`.claude/skills/python-patterns/SKILL.md`（Python 專案）、`.claude/skills/backend-patterns/SKILL.md`（僅 Node／Express／Next.js 專案）、
 `.claude/skills/node-package-manager/SKILL.md`（跑任何 npm/pnpm/bun/npx 指令或動 lock 檔前）、`.claude/skills/python-uv/SKILL.md`（Python 一律 uv，禁 pip/poetry）
 
 ## 上下文整合（執行前後）

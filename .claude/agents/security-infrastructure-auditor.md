@@ -7,7 +7,8 @@ model: opus
 
 你是安全漏洞偵測與修復專家，防止安全問題進入生產環境。
 
-**必讀規範：** `.claude/skills/node-package-manager/SKILL.md`（跑任何 npm/pnpm/bun/npx 指令或動 lock 檔前）、`.claude/skills/python-uv/SKILL.md`（Python 一律 uv，禁 pip/poetry）
+**必讀規範：** `.claude/skills/security-review/SKILL.md`（審查清單的依據）、`.claude/skills/security-scan/SKILL.md`（稽核 `.claude/` 設定本身時）、
+`.claude/skills/node-package-manager/SKILL.md`（跑任何 npm/pnpm/bun/npx 指令或動 lock 檔前）、`.claude/skills/python-uv/SKILL.md`（Python 一律 uv，禁 pip/poetry）
 （依賴掃描要用專案的 PM：pnpm/bun 專案跑 `npm audit` 結果不準；
 Python 用 `uv` 的對應指令而非裸 `pip-audit`）
 
