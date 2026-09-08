@@ -36,8 +36,13 @@ description: 選擇或切換專案的 UI 設計風格，支援單一風格與混
 |------|------|
 | **單一風格 (Recommended)** | 選一個品牌設計系統全面套用 |
 | **混搭** | 配色、字體、元件分別從不同風格抽取 |
+| **從現有程式碼反推** | 既有專案已經有風格 → 掃程式碼產出 `_project/DESIGN.md` |
 | **瀏覽目錄** | 先看 CATALOG.md 介紹，再回來選 |
-| **直接指定** | 輸入品牌 codename（如 apple、linear.app） |
+
+> **既有專案優先建議「反推」。** 挑一個品牌風格套到已經有自己風格的專案上，
+> 結果是新元件遵循一套 app 其他地方不用的規範，越寫越不一致。
+>
+> 直接輸入品牌 codename（如 `apple`、`linear.app`）也可以，不必先選模式。
 
 ### 步驟 2：依模式分流
 
@@ -110,6 +115,60 @@ description: 選擇或切換專案的 UI 設計風格，支援單一風格與混
 1. `AskUserQuestion` 問：「輸入品牌 codename」（直接輸入框，提示範例）
 2. 驗證 `.claude/ui/<codename>/DESIGN.md` 存在
 3. 不存在 → 提示可用清單 → 回步驟 1
+
+#### 路徑 E：從現有程式碼反推
+
+**委派 `skill-curator`**（`subagent_type: "skill-curator"`）—— 它有 `WebSearch`
+可對照當前作法，且它的職責就是維護 `.claude/` 底下的素材。
+
+產出：`.claude/ui/_project/DESIGN.md`。`_` 前綴表示「非品牌、由本專案反推」。
+
+**掃描來源**（依優先序，找到哪個用哪個）：
+
+| 來源 | 抽什麼 |
+|---|---|
+| `tailwind.config.{js,ts,mjs}` | theme.extend 的 colors／fontFamily／spacing／borderRadius／boxShadow |
+| CSS 檔的 `:root` / `@theme` 自訂屬性 | 已定義的 token 與其命名慣例 |
+| `components.json`（shadcn） | baseColor、cssVariables、radius |
+| styled-components／emotion 的 theme 檔 | 同上 |
+| MUI `createTheme()` | palette／typography／shape |
+| 元件檔（`Button`／`Card`／`Input`） | 實際存在的變體清單 |
+
+**沒有集中設定檔時**（純手寫 CSS／Tailwind 行內類名），改用統計：
+
+```bash
+# 出現頻率最高的色值 —— 高頻且用在背景/文字的是主色
+rg -o '#[0-9a-fA-F]{3,8}|rgb\([^)]+\)' --no-filename | sort | uniq -c | sort -rn | head -20
+# 實際用到的間距 → 反推尺度（是不是 4/8px 倍數）
+rg -o 'p[xytblr]?-\[?[0-9.]+(rem|px)?\]?|gap-[0-9]+|m[xytblr]?-[0-9]+' --no-filename | sort | uniq -c | sort -rn | head -20
+# 圓角與陰影的實際值域
+rg -o 'rounded-[a-z0-9]+|border-radius:[^;]+|shadow-[a-z0-9]+|box-shadow:[^;]+' --no-filename | sort | uniq -c | sort -rn | head -20
+# 字體
+rg -o 'font-family:[^;]+|font-[a-z]+' --no-filename | sort | uniq -c | sort -rn | head -15
+```
+
+**信心分級 —— 必須在產出的 DESIGN.md 裡標明**：
+
+| 信心 | 內容 | 怎麼得到 |
+|---|---|---|
+| 高 | 色票、字體、間距尺度、圓角、陰影、動畫時長 | 直接讀設定檔或統計 |
+| 中 | 色彩**角色**（誰是 primary／border／muted）、元件變體 | 靠出現頻率＋使用位置推斷，**要標「推斷」** |
+| 低 | 設計**意圖**與品牌個性 | **推不出來** |
+
+意圖那一段不要編。用 `AskUserQuestion` 問三題補上（一次一題）：
+
+1. 這個產品給誰用、在什麼情境下用？
+2. 要資訊密集（工具型儀表板）還是留白克制（內容型）？
+3. 有沒有想像中的參考品牌？（可從 CATALOG 挑，或直接打字）
+
+**順手產出的價值**：反推過程會抓到既有程式碼的**不一致** —— 三種不同圓角、
+五個相近但不同的灰、兩套按鈕實作。把這份清單寫進 DESIGN.md 末尾的
+「待收斂項目」，它本身就是可行動的技術債清單。
+
+**寫入設定檔**：`primary: "_project"`、`mode: "single"`，`notes` 記明「由現有程式碼反推」與掃描日期。
+
+> `_project` 不需要列進 `CATALOG.md`（那是品牌目錄）。`check-counts.sh` 對
+> `_` 前綴的目錄豁免 CATALOG 檢查。
 
 ### 步驟 3：確認
 

@@ -69,16 +69,16 @@ N_CMDS=$(find .claude/commands -maxdepth 1 -name '*.md' 2>/dev/null | wc -l | tr
 N_RULES=$(find .claude/rules -maxdepth 1 -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
 # hook 腳本：watch-agents.sh 是 /agent-log 的輔助工具，不是 hook，不計入
 N_HOOKS=$(find .claude/hooks -maxdepth 1 -name '*.sh' ! -name 'watch-agents.sh' 2>/dev/null | wc -l | tr -d ' ')
-N_BACKUP_SKILLS=$(find '.claude/custom-rule&skill/skills' -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
 # project-docs 的 VibeCoding 範本：INDEX.md 本身不算範本
 # （曾經有兩處寫 21，就是把 INDEX 算進去了）
 N_DOCTPL=$(find .claude/skills/project-docs/templates -maxdepth 1 -name '*.md' ! -name 'INDEX.md' 2>/dev/null | wc -l | tr -d ' ')
 
 echo ""
 echo "檔案系統實況"
-printf '  agents %-4s skills %-4s commands %-4s rules %-4s hooks %-4s 備份池 %-4s 文件範本 %s
+N_UI=$(find .claude/ui -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+printf '  agents %-4s skills %-4s commands %-4s rules %-4s hooks %-4s UI 風格 %-4s 文件範本 %s
 ' \
-    "$N_AGENTS" "$N_SKILLS" "$N_CMDS" "$N_RULES" "$N_HOOKS" "$N_BACKUP_SKILLS" "$N_DOCTPL"
+    "$N_AGENTS" "$N_SKILLS" "$N_CMDS" "$N_RULES" "$N_HOOKS" "$N_UI" "$N_DOCTPL"
 echo ""
 echo "比對文件"
 
@@ -95,7 +95,6 @@ for f in README.md .claude/README.md; do
 done
 
 verify "指令速查標題"        "$N_CMDS"   README.md '指令速查（[0-9]+ 個）'
-verify "備份池 skill 數"     "$N_BACKUP_SKILLS" README.md '更多 skill（[0-9]+ 個）'
 
 W=.claude/guides/WORKFLOW.md
 verify "五層表 Hooks"        "$N_HOOKS"  "$W" '\*\*Hooks\*\* \| [0-9]+ '
@@ -155,6 +154,29 @@ for f in .claude/agents/*.md .claude/skills/*/SKILL.md; do
         fi
     done <<< "$refs"
 done
+
+# UI 風格：每個 .claude/ui/<name>/ 都要有 DESIGN.md，且要被 CATALOG.md 列到
+#
+# 為什麼：`/ui-style` 只從 CATALOG.md 挑選。目錄建了卻沒進 CATALOG，
+# 那個風格就永遠選不到——跟孤兒 skill 一樣，不會報錯。
+if [ -d .claude/ui ]; then
+    for d in .claude/ui/*/; do
+        [ -d "$d" ] || continue
+        name=$(basename "$d")
+        CHECKED=$((CHECKED + 1))
+        if [ ! -f "$d/DESIGN.md" ]; then
+            FAIL=$((FAIL + 1))
+            printf '  %s UI 風格缺 DESIGN.md：%s\n' "$(red '✗')" "$name"
+        fi
+        # `_` 前綴＝非品牌（`_project` 是從現有程式碼反推出來的），不進品牌目錄
+        case "$name" in _*) continue ;; esac
+        CHECKED=$((CHECKED + 1))
+        if ! grep -qF "$name" .claude/ui/CATALOG.md 2>/dev/null; then
+            FAIL=$((FAIL + 1))
+            printf '  %s UI 風格未列入 CATALOG.md：%s（/ui-style 選不到它）\n' "$(red '✗')" "$name"
+        fi
+    done
+fi
 
 # 每個 skill 要嘛被 agent 引用，要嘛在「僅主模型使用」白名單裡
 #

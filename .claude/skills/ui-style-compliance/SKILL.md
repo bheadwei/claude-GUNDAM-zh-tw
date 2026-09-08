@@ -126,9 +126,74 @@ inline `<button>`；已有 `Card` 不要再寫自訂卡片。
 - 彈跳（bounce）、過度 spring 動畫；動畫一律 150-300ms ease
 - Cookie-cutter 版型：hero 大標 + 三欄 icon 卡片 + 置中 CTA 的罐頭結構
 - 擁擠間距（元素貼邊、區塊間無呼吸空間）
+- **發光球體／抽象 3D blob**、glassmorphism 卡片配霓虹光暈
+- **每張卡都加 1px 灰邊**（邊框要有理由，不是預設加上去的）
+- 沒人要求的深色模式（除非 DESIGN.md 指定，或使用者要求）
+- 「一群人看著筆電」的 stock hero 圖、過度平滑對稱的 AI 插畫
 
-✅ 正確做法：從選定的 DESIGN.md 取得明確的色彩/字體/版型個性；無 DESIGN.md 時遵循
-fallback 的克制中性色 + 單一強調色。
+### 2.6 反 AI slop 的「該做什麼」
+
+禁令只擋掉爛的，不會產出好的。以下是**主動要做**的：
+
+**① 字體當主角，不是配角**
+
+AI 讓版型與素材都變便宜了，字體是現在最能表達個性的東西。
+
+- 標題用 viewport 縮放（`clamp()`），敢放大到真的有存在感
+- 字重對比要強（400 vs 700 不夠，用 300 vs 800）
+- **用字體撐起 hero，而不是找一張圖來填**
+
+**② 文案的具體性 —— 這是槓桿最大的一項**
+
+版型再好，一句通用文案就露餡。AI 的預設是「Empower your workflow with
+AI-driven solutions」這種誰都能套的句子。
+
+| ❌ 通用 | ✅ 具體 |
+|---|---|
+| 「用 AI 驅動你的工作流」 | 「Financial infrastructure for the internet」（Stripe） |
+| 「打造更好的產品體驗」 | 「Plan and build products」（Linear） |
+
+判準：**把公司名遮掉，這句話還能不能認出是在講什麼產品？** 不能 → 重寫。
+
+**③ 動畫要有目的**
+
+> 動畫的職責是**解釋層級**或**回應互動**，不是讓所有元素同時飄。
+
+- 進場動畫一次只帶一個層級，不要整頁元素一起淡入
+- 裝飾性動畫**超過 5 秒必須可暫停**（WCAG 2.2）
+- **必須**處理 `prefers-reduced-motion: reduce`：自動播放改成靜態 poster
+
+**④ 用原生 CSS，不要動輒上動畫庫**
+
+過去要靠 GSAP／Framer Motion 的裝飾動畫，約 70% 現在純 CSS 就能做，
+且跑在 compositor thread 上（跟捲動一樣順）：
+
+- **Scroll-driven animations**（`animation-timeline: scroll()` / `view()`）——
+  Chrome/Edge 115+、Firefox 132+、Safari 18+
+- **View Transitions API** —— 同頁與跨頁轉場，Chrome/Edge/Safari 已支援，
+  Firefox 2026 初部分支援
+
+先問「這個效果原生 CSS 做不做得到」，做得到就不要加依賴。
+
+**⑤ 一次只做一個區塊**
+
+產出品質不來自一個完美的 prompt，來自**參考素材 + 模組拆解 + 驗證循環**。
+
+所以：先只做 hero，驗過再做下一區。一次生成整頁必然平庸 ——
+每個區塊都只拿到平均值的注意力。
+
+**⑥ 影片 hero（若 DESIGN.md 走 cinematic 方向）**
+
+```html
+<video autoplay muted loop playsinline poster="fallback.jpg"></video>
+```
+
+- `object-fit: cover`，中央**預留足夠負空間**讓標題疊上去
+- 標題疊圖用 `mix-blend-mode: exclusion` 之類的混合模式，不要一律蓋黑色遮罩
+- **一定要有 `poster`** —— `prefers-reduced-motion` 與載入失敗時就靠它
+
+✅ 色彩/字體/版型個性一律從選定的 DESIGN.md 取得；無 DESIGN.md 時遵循
+fallback 的克制中性色 + 單一強調色。**本節的規則跨風格通用**，不因選了哪個品牌而變。
 
 ---
 
@@ -145,8 +210,12 @@ fallback 的克制中性色 + 單一強調色。
 - [x] 陰影：符合規範
 - [x] 深色模式：CSS 變數已雙版本定義
 - [x] 元件一致性：同類元件無並存多風格
-- [x] 反 AI slop：無紫漸層/罐頭版型/彈跳動畫（見 2.5）
+- [x] 反 AI slop：無紫漸層/罐頭版型/彈跳動畫/發光球體/無理由的灰邊（見 2.5）
+- [x] 文案具體性：遮掉公司名後仍看得出在講什麼產品（見 2.6 ②）
+- [x] 動畫有目的：解釋層級或回應互動，非全頁一起飄；已處理 `prefers-reduced-motion`
+- [x] 動畫實作：能用原生 CSS（scroll-driven / View Transitions）就沒加動畫庫
 - [x] a11y：文字對比 ≥ 4.5:1、focus 狀態可見、觸控目標 ≥ 44px、圖片有 alt
+- [x] 斷點：390 / 768 / 1024 / 1440 px 都看過
 - [ ] 未達成項目說明：[如有]
 ```
 
