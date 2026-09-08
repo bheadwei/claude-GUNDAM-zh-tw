@@ -135,6 +135,22 @@ Ready for PR: [YES/NO]
 
 ### 標記與歸檔
 
+> **在 worktree 裡跑的話：跳過這一整節。**
+>
+> 判斷方式：`git rev-parse --git-dir` 的結果含 `worktrees/`，或當前路徑在
+> `.claude/worktrees/` 底下。
+>
+> 理由是實測出來的：`wbs.md`、`plans/INDEX.md` 這些追蹤檔如果被 N 個 worktree
+> 各改一次，合併時**必定**衝突——而且相鄰任務各自標 ✅ 的情況下，
+> `merge=union` 會靜默產出重複且狀態矛盾的列（試過，比報衝突更糟）。
+>
+> 所以 worktree 內的 `/verify` 只驗**程式碼**（步驟 1-6 ＋ plan 驗收標準比對），
+> 驗完就停，回報「本 worktree 驗證通過，可以合併」。
+> **WBS 與 plan 的歸檔統一在主 checkout、全部合併完成後做一次**——
+> 那是 `commands/worktree.md` 合併迴圈的最後一步。
+
+在**主 checkout** 執行時：
+
 1. 將 WBS 該任務狀態更新為 `✅ 完成`
 2. 清除 `.current-task`
 3. **Plan 歸檔**（若存在對應 plan 檔）：

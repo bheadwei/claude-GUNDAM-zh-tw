@@ -27,6 +27,8 @@
 .claude/taskmaster-data/.bash-fail-streak
 .claude/taskmaster-data/.learned-candidates
 .claude/taskmaster-data/.learned-notified
+.claude/taskmaster-data/.merge-pending
+.claude/taskmaster-data/.parallel-agent-warned
 .claude/taskmaster-data/.pitfall-seen
 .claude/taskmaster-data/.report-expectations.jsonl
 .claude/taskmaster-data/.session-start
