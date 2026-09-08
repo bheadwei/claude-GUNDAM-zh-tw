@@ -10,14 +10,13 @@
 
 | 路徑 | 注意 |
 |---|---|
-| `.claude/custom-rule&skill/` | **備份池，不參與執行。** 94 個 skill + 多份 rule 放在這裡供取材，執行路徑只有 `.claude/skills/`（14 個）與 `.claude/rules/`（6 個）。改錯地方等於沒改 |
 | `workshop/VibeCoding_Workshop.pptx` | **由使用者手動編輯。** 不要跑 `generate_pptx.py` 重生，會洗掉手改內容 |
 | `.claude/context/`、`.claude/coordination/` | 執行時產物，已排除複製。修改 agent 的報告/交接格式時記得對應更新 `_REPORT_TEMPLATE.md` 與 `_HANDOFF_TEMPLATE.md` |
 
 ## 改動時的連帶檢查
 
 - **要加或改 `.claude/` 底下任何東西** → **先讀 `writing-extensions` skill**（五層決策表）。這個模板踩過四次「選錯層」，都是把該用 hook 的事寫成文字規則
-- **改了注入內容**（`using-taskmaster`、關鍵字路由、rules）→ 跑一輪 `.claude/tests/skill-compliance/run-compliance.sh`。137 個 hook 測試證明不了「模型會不會照做」
+- **改了注入內容**（`using-taskmaster`、關鍵字路由、rules）→ 跑一輪 `.claude/tests/skill-compliance/run-compliance.sh`。163 個 hook 測試證明不了「模型會不會照做」
 - **新增 agent／skill／command／rule** → 跑 `bash scripts/check-counts.sh`，它會列出所有該同步卻沒同步的計數（CI 也會跑）
 - **改 `.claude/` 的目錄結構** → 同步 `scripts/copy-template.sh` 的 `EXCLUDES` **和** `scripts/copy-template.ps1` 的 `$excludeDirs` / `$excludeFiles`（兩份要一致，容易漏改 ps1）
 - **新增 skill** → 更新 `.claude/skills/INDEX.md`，否則沒人知道它存在

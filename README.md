@@ -87,10 +87,10 @@ claude_v2026/
     ├── statusline.sh                 # StatusLine 腳本
     │
     ├── rules/        ( 5 個)         # 自動載入規則（每次對話注入）
-    ├── agents/       (14 個)         # 專業 Agent 定義
+    ├── agents/       (15 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
     ├── skills/       (27 個)         # 按需載入（不佔常駐 context）
-    ├── hooks/                        # Hook 腳本 + lib/ + 137 案例回歸測試
+    ├── hooks/                        # Hook 腳本 + lib/ + 163 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）
     ├── ui/           (69 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │
@@ -111,7 +111,6 @@ claude_v2026/
     ├── qa-history/                   # 問答紀錄
     ├── logs/                         # Hook 執行 log
     ├── templates/                    # 初始化範本（僅 /task-init 讀）
-    └── custom-rule&skill/            # 備份池（94 skills、8 種語言 rules；不參與執行）
 ```
 
 ---
@@ -187,7 +186,7 @@ claude_v2026/
 
 ---
 
-## Agent（14 個）
+## Agent（15 個）
 
 | Agent | Model | 用途 |
 | :--- | :--- | :--- |
@@ -238,7 +237,7 @@ claude_v2026/
 
 > 從舊版更新的專案，若 `rules/` 還留著上表左欄的檔案，**請刪除**——它們會自動載入並跟新規則衝突。
 
-語言特定規則可從 `custom-rule&skill/rules/` 複製（typescript、python、golang 等 8 種）。
+語言/生態專屬的規範改用 skill（`python-uv`、`python-patterns`、`node-package-manager` 等），依需要載入。
 
 ---
 
@@ -278,8 +277,8 @@ claude_v2026/
 | **database-migrations** | DB Migration 安全模式（zero-downtime DDL） |
 | **postgres-patterns** | PostgreSQL 速查表（Index、型態、RLS） |
 
-更多 skill（94 個）可從 `custom-rule&skill/skills/` 按需複製；新增後記得更新
-`.claude/skills/INDEX.md`。
+要新增 skill 時委派 **`skill-curator`**——它會先查官方文檔、寫觸發式
+`description`、接線到相關 agent、同步 `INDEX.md`，最後跑 `check-counts.sh` 驗証。
 
 ---
 

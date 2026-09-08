@@ -34,7 +34,7 @@ $source     = (Resolve-Path (Join-Path $scriptRoot '..')).Path.TrimEnd('\')
 # --- SYNC：純模板資產，覆寫；加 -Prune 時連舊檔一起清 ---
 $syncClaudeDirs = @(
     'agents', 'commands', 'rules', 'skills', 'hooks', 'guides',
-    'output-styles', 'plugins', 'templates', 'ui', 'scripts', 'custom-rule&skill'
+    'output-styles', 'plugins', 'templates', 'ui', 'scripts'
 )
 $syncClaudeFiles = @(
     'statusline.sh', 'statusline-debug.sh',

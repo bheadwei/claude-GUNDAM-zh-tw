@@ -16,7 +16,7 @@
 │   ├── MCP_CONFIGS.md         # MCP Server 推薦清單
 │   ├── PAUSE_RESUME_GUIDE.md  # 暫停/恢復 SOP
 │   └── STATUSLINE_GUIDE.md    # StatusLine 客製化手冊
-├── agents/       (14 個)      # 專業 Agent 定義
+├── agents/       (15 個)      # 專業 Agent 定義
 ├── commands/     (29 個)      # Slash Command
 ├── rules/        ( 5 個)      # 自動載入規則
 ├── skills/       (27 個)      # 專案特定領域知識
@@ -31,7 +31,7 @@
     └── .current-task          # 當前進行中任務 ID
 ```
 
-## Agents（14 個）
+## Agents（15 個）
 
 | Agent | Model | 用途 |
 | :--- | :--- | :--- |
@@ -66,7 +66,6 @@
 | database-migrations | DB Migration 安全模式 |
 | postgres-patterns | PostgreSQL 速查表 |
 
-按需從 `custom-rule&skill/skills/` 複製語言特定 skill。
 
 ## Rules（5 個，自動載入）
 
@@ -134,6 +133,7 @@ bash .claude/scripts/context-gc.sh
 在 `rules/` 新增 `.md`（自動載入，無需 frontmatter）。
 
 ### 新增 Skill
-```bash
-cp -r .claude/custom-rule&skill/skills/[skill-name] .claude/skills/
-```
+
+委派 `skill-curator`（`subagent_type: "skill-curator"`）——它依
+`writing-extensions` 的五層決策表先確認該不該是 skill，然後寫觸發式
+`description`、接線到相關 agent、同步 `INDEX.md`、跑 `check-counts.sh`。

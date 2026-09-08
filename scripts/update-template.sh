@@ -40,7 +40,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # ---- 分類設定 ----
-SYNC_CLAUDE_DIRS=(agents commands rules skills hooks guides output-styles plugins templates ui scripts "custom-rule&skill")
+SYNC_CLAUDE_DIRS=(agents commands rules skills hooks guides output-styles plugins templates ui scripts)
 SYNC_CLAUDE_FILES=(statusline.sh statusline-debug.sh settings.json README.md)
 SYNC_ROOT_DIRS=(scripts)
 SYNC_ROOT_FILES=(.mcp.json.linux.example .mcp.json.windows.example CLAUDE_TEMPLATE.md .gitattributes)
