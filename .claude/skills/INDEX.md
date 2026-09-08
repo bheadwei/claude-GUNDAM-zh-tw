@@ -1,6 +1,6 @@
 # Skills 索引
 
-17 個 skill，**按需載入**（不佔常駐 context）。分兩類：從 rules 移出的專案約定、以及原有的領域知識包。
+19 個 skill，**按需載入**（不佔常駐 context）。分兩類：從 rules 移出的專案約定、以及原有的領域知識包。
 
 ## 常駐注入（唯一的例外）
 
@@ -49,7 +49,9 @@
 | **cost-aware-llm-pipeline** | LLM API 成本優化（模型路由 + 預算追蹤） | 開發 AI 應用 |
 | **mcp-builder** | MCP Server 開發指南（FastMCP / MCP SDK） | 串接外部 API 或服務 |
 | **database-migrations** | DB Migration 安全模式（zero-downtime DDL） | Schema 變更、資料遷移 |
-| **postgres-patterns** | PostgreSQL 速查表（Index、型態、RLS） | 寫 SQL、設計 Schema |
+| **sql-patterns** | 關聯式通用原則 + **PG／MSSQL／SQLite 跨引擎差異對照** | 寫/調 SQL、選索引、**把作法從一個引擎搬到另一個** |
+| **postgres-patterns** | PostgreSQL 速查表（Index、型態、RLS）—— PG 專屬深入層 | 專案用 PG 且要寫 SQL、設計 Schema |
+| **nosql-patterns** | 文件型（MongoDB／Firestore）—— 存取模式先行、embed vs reference | 設計文件結構、Firestore 帳單變貴 |
 
 ## 為什麼 rule 要搬成 skill
 
@@ -76,13 +78,15 @@ UI 與 Node 兩類另有 `user-prompt-submit.sh` 的關鍵字提示當第二層�
 
 ### 做 Skill（有具體到值得記下來的操作模式）
 
-留著的七個領域包不是「主題重要」，是它們各自帶了**模型不會憑空產出的具體東西**：
+留著的九個領域包不是「主題重要」，是它們各自帶了**模型不會憑空產出的具體東西**：
 
 | Skill | 帶的是什麼具體東西 |
 |---|---|
 | `project-docs` | 20 份 VibeCoding 範本的實際骨架與章節順序 |
 | `database-migrations` | zero-downtime DDL 的實際步驟順序（先加欄位再回填再切換） |
 | `postgres-patterns` | RLS 政策與索引選擇的實際語法，不是「該加索引」這種通則 |
+| `sql-patterns` | 同一件事在三個引擎的實際差別（加欄位在 PG 可能瞬間完成、SQLite 要重建整表） |
+| `nosql-patterns` | embed vs reference 的判準、Firestore 計費跟資料模型是同一件事 |
 | `e2e-testing` | Page Object Model 的實際結構與 flaky 處理策略 |
 | `cost-aware-llm-pipeline` | 模型路由與預算追蹤的實作骨架 |
 | `mcp-builder` | FastMCP／MCP SDK 的 server 骨架 |

@@ -1,10 +1,13 @@
 ---
 name: postgres-patterns
-description: PostgreSQL 資料庫模式 — 查詢優化、Schema 設計、索引策略及安全性（RLS）。基於 Supabase 最佳實踐。
+description: **PostgreSQL 專屬**的模式速查 — 索引型別（B-tree/GIN/GiST/BRIN）、型態選用（jsonb、text、timestamptz）、查詢反模式、RLS。Use when 專案用的是 PostgreSQL（含 Supabase、Neon、RDS for PostgreSQL）且要寫或調效能 SQL、選索引、設計 schema、或加 row-level security。語法多為 PG 獨有（`CONCURRENTLY`、`jsonb`、`::` 轉型），**MySQL/SQLite/NoSQL 專案不適用，別照搬**。
 origin: ECC
 ---
 
 # PostgreSQL 模式速查
+
+> **本檔只管 PostgreSQL。** 跨引擎的通用原則、以及同一件事在
+> SQL Server／SQLite 上的差別，見 `sql-patterns` skill。**別把下面的語法照搬到別的引擎。**
 
 PostgreSQL 最佳實踐速查表。
 
