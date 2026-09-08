@@ -17,17 +17,28 @@
 
 | 模型 | Agents |
 |---|---|
-| `sonnet`（9） | build-error-resolver、code-quality-specialist、deployment-expert、documentation-specialist、e2e-validation-specialist、refactor-cleaner、test-automation-engineer、ui-builder、workflow-template-manager |
-| `opus`（5） | planner、architect、security-infrastructure-auditor、debug-investigator、tdd-guide |
+| `sonnet`（5） | code-quality-specialist、documentation-specialist、e2e-validation-specialist、refactor-cleaner、workflow-template-manager |
+| `opus`（10） | planner、architect、security-infrastructure-auditor、debug-investigator、tdd-guide、skill-curator、build-error-resolver、deployment-expert、test-automation-engineer、ui-builder |
 
-`opus` 那五個的共同點是**錯了要人回頭抓、而且抓不到就會一路錯下去**：
+`opus` 的判準是**錯了要人回頭抓、而且抓不到就會一路錯下去**：
 規劃階段拆錯（planner）、架構決策寫錯（architect）、漏報安全問題
 （security-infrastructure-auditor）、根因判斷錯（debug-investigator）、
-測試設計不到位（tdd-guide）。其餘九個都有規格、測試或工具輸出當約束。
+測試設計不到位（tdd-guide）、擴充接線寫錯（skill-curator）。
+
+**2026-09-08 起，凡是會動到專案程式碼的 agent 一律 `opus`**（使用者決定）——
+`build-error-resolver`、`deployment-expert`、`test-automation-engineer`、`ui-builder`
+從 `sonnet` 升上來。理由是同一條：型別錯誤被 `any` 蓋掉、CI 設定寫得能跑但不對、
+測試斷言太鬆、前端硬編色票——這些都是「看起來對但其實錯」，要人回頭抓。
+
+留在 `sonnet` 的五個，共同點是**產出有外部約束在把關**：
+`code-quality-specialist` 與 `e2e-validation-specialist` 的結論會被下一棒驗證、
+`refactor-cleaner` 每批移除都跑測試（且跑在自己的 worktree 裡）、
+`documentation-specialist` 與 `workflow-template-manager` 產文件不動程式碼。
 
 **沒有任何 agent 預設用 `haiku`**（2026-09-07 起）。原本的三個（build-error-resolver、
-documentation-specialist、workflow-template-manager）都改為 `sonnet`——理由是它們的失敗模式
-不是「慢」而是「看起來對但其實錯」：型別錯誤被用 `any` 蓋掉、API 文檔寫出不存在的參數。
+documentation-specialist、workflow-template-manager）先改為 `sonnet`，其中
+`build-error-resolver` 又於 2026-09-08 升到 `opus`。理由一直是同一條：它們的失敗模式
+不是「慢」而是「看起來對但其實錯」——型別錯誤被用 `any` 蓋掉、API 文檔寫出不存在的參數。
 這類錯誤要人回頭抓，比省下的推理成本貴。
 
 `haiku` 仍在 dispatch 層使用：`subagent-execution` skill 派 implementer subagent 時，

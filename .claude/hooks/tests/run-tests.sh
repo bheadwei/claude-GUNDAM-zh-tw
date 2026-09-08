@@ -652,6 +652,103 @@ reset
 expect_empty "空 command 不處理" "$(run post-bash.sh '{"tool_name":"Bash","tool_input":{}}')"
 
 # =========================================================================
+section "合併閘門 — 合併未驗證前不得再合併"
+# =========================================================================
+#
+# 使用者的實際痛點：平行開發最後那段序列合併。痛在兩處——
+# ①各 worktree 自己 verify 過不代表合併結果對（它們看不到彼此）
+# ②一次疊好幾個之後測試紅了，得回頭二分找元凶。
+# 原本「一次一個 merge、每次都驗」只寫在 worktree-orchestration skill 裡（自律）。
+
+MP_FILE="$SANDBOX/.claude/taskmaster-data/.merge-pending"
+# bash <command> —— 模擬 Bash 工具的 PreToolUse
+bg() { run pre-tool-use.sh "$(printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"%s"}}' "$SANDBOX" "$1")"; }
+# pbash <command> [ENV=VAL] —— 模擬 Bash 工具的 PostToolUse（成功）
+pbash() { local c="$1"; shift; run post-bash.sh "$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"is_error":false}}' "$c")" "$@"; }
+
+# 偵測：合併成功要記進 .merge-pending 並提醒
+reset
+expect_contains "合併成功會提醒未驗證" "還沒驗證" "$(pbash 'git merge --no-ff worktree-search')"
+if grep -q 'git merge' "$MP_FILE" 2>/dev/null; then ok "合併記入 .merge-pending"
+else ng "合併記入 .merge-pending" "有紀錄" "$(cat "$MP_FILE" 2>/dev/null)"; fi
+
+# 失敗的合併不記
+reset
+run post-bash.sh "$(printf '{"tool_name":"Bash","tool_input":{"command":"git merge x"},"tool_response":{"is_error":true}}')" >/dev/null
+if [ ! -s "$MP_FILE" ]; then ok "失敗的合併不記入清單"
+else ng "失敗的合併不記入清單" "空" "$(cat "$MP_FILE" 2>/dev/null)"; fi
+
+# --abort / --continue 不算新合併
+reset
+run post-bash.sh "$(printf '{"tool_name":"Bash","tool_input":{"command":"git merge --abort"},"tool_response":{"is_error":false}}')" >/dev/null
+if [ ! -s "$MP_FILE" ]; then ok "git merge --abort 不記入清單"
+else ng "git merge --abort 不記入清單" "空" "$(cat "$MP_FILE" 2>/dev/null)"; fi
+
+# 閘門：清單非空時擋下下一次合併
+reset; mkdir -p "$(dirname "$MP_FILE")"; echo 'git merge --no-ff worktree-search' > "$MP_FILE"
+expect_decision "待驗證時擋下下一次 merge"       deny  "$(bg 'git merge --no-ff worktree-cart')"
+expect_decision "待驗證時擋下 cherry-pick"       deny  "$(bg 'git cherry-pick abc1234')"
+expect_decision "待驗證時擋下 rebase"            deny  "$(bg 'git rebase main')"
+expect_decision "merge --abort 放行（收拾現場）" allow "$(bg 'git merge --abort')"
+expect_decision "rebase --continue 放行"         allow "$(bg 'git rebase --continue')"
+expect_decision "無關指令放行"                   allow "$(bg 'git status')"
+expect_decision "MERGE_GATE=off 關閉閘門"        allow \
+    "$(run pre-tool-use.sh "$(printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"git merge x"}}' "$SANDBOX")" MERGE_GATE=off)"
+
+# 清單為空 → 放行（/verify 通過後的狀態）
+reset; mkdir -p "$(dirname "$MP_FILE")"; : > "$MP_FILE"
+expect_decision "清單為空時放行 merge" allow "$(bg 'git merge --no-ff worktree-cart')"
+
+# =========================================================================
+section "pre-agent-gate.sh — 擋同時派多個無隔離 agent"
+# =========================================================================
+#
+# 為什麼要這個閘門：沒帶 isolation 的 subagent 全部在同一個工作目錄動手，
+# 兩個改到同一檔案時後寫的直接覆蓋前面的——沒有衝突提示、沒有錯誤。
+# 原本的保護只有 rules/agent-orchestration.md 的一行文字（自律）。
+
+AG_LOG="$SANDBOX/.claude/logs/agent-activity.jsonl"
+ag_start()    { echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"event\":\"agent_start\",\"tool_use_id\":\"$1\"}" >> "$AG_LOG"; }
+ag_complete() { echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"event\":\"agent_complete\",\"tool_use_id\":\"$1\"}" >> "$AG_LOG"; }
+# ag <subagent_type> [isolation]
+ag() {
+    local iso=""
+    [ -n "${2:-}" ] && iso=",\"isolation\":\"$2\""
+    run pre-agent-gate.sh "$(printf '{"cwd":"%s","hook_event_name":"PreToolUse","tool_input":{"subagent_type":"%s"%s},"tool_use_id":"tX"}' "$SANDBOX" "$1" "$iso")"
+}
+
+reset; mkdir -p "$SANDBOX/.claude/logs"
+expect_decision "無 in-flight 時放行" allow "$(ag planner)"
+
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
+expect_decision "有 1 個 in-flight 且新的無隔離 → deny" deny "$(ag planner)"
+
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
+ag planner >/dev/null
+expect_decision "同一批只擋一次（deny-once）" allow "$(ag tdd-guide)"
+
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
+expect_decision "帶 isolation: worktree 直接放行" allow "$(ag refactor-cleaner worktree)"
+
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
+expect_decision "帶 isolation: remote 也放行" allow "$(ag planner remote)"
+
+# in-flight 歸零 → 標記清除，下一批重新受檢
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
+ag planner >/dev/null                       # 第一批擋一次
+ag_complete a1                              # 前一個完成
+ag planner >/dev/null                       # 歸零，標記應被清掉
+ag_start a2                                 # 新的一批
+expect_decision "下一批平行會重新被擋" deny "$(ag planner)"
+
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
+expect_decision "PARALLEL_AGENT_GATE=off 關閉閘門" allow \
+    "$(run pre-agent-gate.sh "$(printf '{"cwd":"%s","tool_input":{"subagent_type":"planner"}}' "$SANDBOX")" PARALLEL_AGENT_GATE=off)"
+
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1; echo off > "$SM_FILE"
+expect_decision "suggest-mode=off 也關閉閘門" allow "$(ag planner)"
+
+# =========================================================================
 section "resolve-roots.sh — CLAUDE_PROJECT_DIR 未設時的 fallback"
 # =========================================================================
 #

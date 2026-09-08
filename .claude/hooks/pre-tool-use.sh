@@ -101,6 +101,13 @@ if [ "$TOOL_NAME" = "Bash" ] && [ -n "$COMMAND" ]; then
 
 若確實要長駐該目錄（使用者明確要求），設 TASKMODE_GATE=off 後重試。"
     fi
+
+    # 合併閘門：上一次合併未經 /verify 前，不得再合併下一個。
+    # 拆成 lib 是照 CLAUDE.md 的提醒——本檔已是最複雜的一支。
+    source "$(dirname "${BASH_SOURCE[0]}")/lib/merge-gate.sh" 2>/dev/null || true
+    if declare -F merge_gate >/dev/null 2>&1; then
+        merge_gate "$COMMAND" "$DATA_DIR"
+    fi
 fi
 
 # 非 Write/Edit → 到此為止

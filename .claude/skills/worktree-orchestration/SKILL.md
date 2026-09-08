@@ -125,8 +125,21 @@ git checkout main && git pull --rebase
 # 3. 一次一個
 git merge --no-ff worktree-<name>
 
-# 4. 衝突只在主 checkout 解
+# 4. 立刻 /verify  ←── 這一步是機器強制的，不是建議
+#    合併成功時 post-bash.sh 記一筆進 .merge-pending，
+#    在 /verify 通過清掉它之前，pre-tool-use.sh 會**擋下下一次 merge**
+
+# 5. 衝突只在主 checkout 解
 ```
+
+**第 4 步為什麼不能跳**：每個 worktree 自己驗過，但它們**看不到彼此** ——
+合併才第一次讓兩邊的程式碼真的碰面，那些互動是全新的、沒人驗過的程式碼。
+而且一次疊三個之後測試紅了，你得回頭二分找元凶。
+
+**最後一個合併之後**，`/verify` 會多做一件事：載入 `spec-convergence` 跑收斂檢查。
+理由是平行開發最容易踩的不是「漏做」而是**範圍蔓延** —— 三個 agent 各自多做了一點
+「順手的改善」，單獨看都合理，合起來就偏離當初講好的範圍。
+完整關卡定義見 `.claude/commands/verify.md` 的「0a. 合併驗證關卡」。
 
 **順序**：先合**獨立**的功能，再合**依賴它們**的。例如 search 與 cart 先合、
 用到 `CartItem` 的 order-email 後合——這樣基礎型別已經在 main 了。

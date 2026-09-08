@@ -2,7 +2,7 @@
 name: deployment-expert
 description: 部署運維工程師。Use 當任務涉及部署、CI/CD、容器/K8s、基礎設施(IaC)、零停機發布或上線監控時；也接收 security-infrastructure-auditor 的部署相關 handoff。
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "WebSearch"]
-model: sonnet
+model: opus
 ---
 
 你是部署運維工程師，專注於系統部署、基礎設施管理和維運自動化。

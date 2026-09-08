@@ -37,6 +37,46 @@ fi
 CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
 [ -n "$CMD" ] || exit 0
 
+mkdir -p "$DATA_DIR" 2>/dev/null || true
+
+# ---------------------------------------------------------------- 合併待驗證
+#
+# 合併成功 → 記一筆待驗證。lib/merge-gate.sh 會在這筆被 /verify 清掉之前
+# 擋下下一次合併，`/verify` 通過時刪除本檔。
+#
+# 為什麼不是「合併完自己跑一次測試就好」：使用者要的不只是測試綠，是
+# **合併結果仍符合原本的 plan 與 WBS 目標**。那個比對在 `/verify` 裡
+# （plan 驗收標準 + spec-convergence），不是 hook 該做的事——hook 只負責
+# 「不准跳過那一步」。
+if [ "${MERGE_GATE:-on}" != "off" ]; then
+    case "$CMD" in
+        *"git merge"*|*"git cherry-pick"*|*"git rebase"*)
+            case "$CMD" in
+                *--abort*|*--continue*|*--skip*|*--quit*) ;;
+                *)
+                    # 失敗的合併不記（衝突中／被拒），只記真的合進去的
+                    if ! printf '%s' "$INPUT" | jq -e '
+                          (.tool_response.is_error == true)
+                       or ((.tool_response.exit_code // 0) != 0)
+                    ' >/dev/null 2>&1; then
+                        BR=$(printf '%s' "$CMD" | tr '\n' ' ' | cut -c1-100)
+                        MP="$DATA_DIR/.merge-pending"
+                        grep -qxF "$BR" "$MP" 2>/dev/null || echo "$BR" >> "$MP" 2>/dev/null || true
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] merge-pending: $BR" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
+                        jq -n '{
+                          hookSpecificOutput: {
+                            hookEventName: "PostToolUse",
+                            additionalContext: ("🔀 合併完成，**這一步還沒驗證**。\n\n各 worktree 自己 `/verify` 過，不代表合併結果是對的——它們看不到彼此，合併才第一次讓兩邊的程式碼真的碰面。\n\n**下一步跑 `/verify`。** 在它通過之前，`pre-tool-use.sh` 會擋下下一次 merge／cherry-pick／rebase（避免疊了好幾個才發現紅、還得回頭二分找元凶）。\n\n`/verify` 除了建置／型別／lint／測試，還會比對已合併任務的 plan 驗收標準；若這是平行開發的最後一個合併，它會再跑一次 `spec-convergence` 確認整體仍符合 WBS 與當初的規格。\n（關閉：MERGE_GATE=off）")
+                          }
+                        }' 2>/dev/null || true
+                        exit 0
+                    fi
+                    ;;
+            esac
+            ;;
+    esac
+fi
+
 # 失敗判定：PostToolUse 的 tool_response 在指令非零退出時帶錯誤資訊。
 # 不同版本的欄位名不一致，所以三個都看；都沒有就當成功。
 FAILED=0
@@ -48,7 +88,6 @@ if printf '%s' "$INPUT" | jq -e '
     FAILED=1
 fi
 
-mkdir -p "$DATA_DIR" 2>/dev/null || true
 STREAK="$DATA_DIR/.bash-fail-streak"
 CAND="$DATA_DIR/.learned-candidates"
 NOTIFIED="$DATA_DIR/.learned-notified"

@@ -71,7 +71,36 @@ Ready for PR: [YES/NO]
 
 若 `.claude/taskmaster-data/.current-task` 存在（表示有進行中的任務），且驗證結果為 PASS：
 
-### 0. 文件同步關卡（**先做，未處理不得標 ✅**）
+### 0a. 合併驗證關卡（**若有待驗證的合併，先做這個**）
+
+讀 `.claude/taskmaster-data/.merge-pending`。這份清單由 `post-bash.sh` 在偵測到
+`git merge`／`cherry-pick`／`rebase` **成功**時累積。清單非空表示：**有合併結果還沒被驗過**。
+
+清單非空時，除了上面的步驟 1-6，**額外做這三件事**：
+
+1. **比對每一個已合併任務的 plan 驗收標準** —— 不只當前 `.current-task`。
+   平行開發合了 N 個分支就有 N 份 plan，每一份的「驗收標準（整體）」都要過。
+   對應的 plan 從 WBS 找：狀態不是 ✅ 但分支已合進來的那些。
+
+2. **載入 `spec-convergence` skill 跑一次收斂檢查** —— 這是「合併後仍符合原本目標」
+   的唯一實際檢查。它比對 `docs/00_brief.md`／PRD 與 `wbs.md`，查三件事：
+   漏做、範圍蔓延、描述失真。**平行開發最容易踩的是第二項**：三個 agent 各自
+   多做了一點「順手的改善」，單獨看都合理，合起來就偏離了當初講好的範圍。
+
+3. **全部通過才刪除 `.merge-pending`**。刪掉之後 `pre-tool-use.sh` 的合併閘門才會
+   放行下一次合併。
+
+**任一項未過 → 不得刪除清單、不得標 WBS ✅。** 在主 checkout 修好再重驗；
+修不動就 `git merge --abort` 退回那個合併。
+
+> **為什麼要獨立一道關卡**：每個 worktree 自己 `/verify` 過了，但它們**看不到彼此** ——
+> 合併才第一次讓兩邊的程式碼真的碰面，那些互動是全新的、沒有任何人驗過的程式碼。
+> 而「一次一個 merge、每次都驗」原本只寫在 `worktree-orchestration` skill 裡，
+> 是自律；`.merge-pending` 讓它變成機器保證。
+>
+> 逃生門：`MERGE_GATE=off`（連偵測與閘門一起關）。
+
+### 0b. 文件同步關卡（**未處理不得標 ✅**）
 
 讀 `.claude/taskmaster-data/.doc-impact`。這份清單由 `post-write.sh` 自動累積——
 本任務改到過的「文件會描述的檔案」（API／路由／schema／對外介面／migration／CLI）。
