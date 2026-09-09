@@ -174,6 +174,41 @@ for f in .claude/agents/*.md .claude/skills/*/SKILL.md; do
     done <<< "$refs"
 done
 
+# 壓力測試的 code grader 不得殘留硬編碼的 agent 名單
+#
+# 為什麼：run-compliance.sh 的 grader 用 grep 比對「這一輪點名了哪些 agent」。
+# 那份名單寫死過一次就漂開過一次——v5.6 新增兩個 agent 時它沒跟著改，
+# grader 對它們一律印「（無）」，判讀會被誤導成「模型根本沒委派」。
+# 判準：同一行出現 ≥2 個 agent 名稱＝寫死的 alternation。
+RC=.claude/tests/skill-compliance/run-compliance.sh
+if [ -f "$RC" ]; then
+    CHECKED=$((CHECKED + 1))
+    if ! grep -q '\.claude/agents' "$RC"; then
+        FAIL=$((FAIL + 1))
+        printf '  %s 壓力測試 grader 沒有從 .claude/agents/ 取名單：%s\n' "$(red '✗')" "$RC"
+        printf '      改法：AGENT_RE 用 find .claude/agents 的 basename 動態產生，\n'
+        printf '      並在名單為空時 fallback 成不可能匹配的樣式。\n'
+    fi
+
+    CHECKED=$((CHECKED + 1))
+    HARDCODED=$(find .claude/agents -maxdepth 1 -name '*.md' 2>/dev/null \
+        | sed 's#.*/##; s#\.md$##' \
+        | awk 'NR==FNR { names[FNR]=$0; n=FNR; next }
+               { c = 0
+                 for (i = 1; i <= n; i++) if (index($0, names[i])) c++
+                 if (c >= 2) printf "%d: %s\n", FNR, $0 }' - "$RC")
+    if [ -n "$HARDCODED" ]; then
+        FAIL=$((FAIL + 1))
+        printf '  %s 壓力測試 grader 殘留硬編碼 agent 名單：%s\n' "$(red '✗')" "$RC"
+        while IFS= read -r hl; do
+            [ -n "$hl" ] || continue
+            printf '      %s\n' "$(dim "$hl")"
+        done <<< "$HARDCODED"
+        printf '      同一行有 ≥2 個 agent 名稱＝寫死的清單，下次新增 agent 必漂且無訊號。\n'
+        printf '      改法：改成從 .claude/agents/ 動態產生（見該檔的 AGENT_RE）。\n'
+    fi
+fi
+
 # UI 風格：每個 .claude/ui/<name>/ 都要有 DESIGN.md，且要被 CATALOG.md 列到
 #
 # 為什麼：`/ui-style` 只從 CATALOG.md 挑選。目錄建了卻沒進 CATALOG，

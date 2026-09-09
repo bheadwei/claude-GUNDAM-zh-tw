@@ -23,14 +23,25 @@ CI 不跑這個（跑了會 flaky 到沒人看）。
 ## 怎麼跑
 
 ```bash
-bash .claude/tests/skill-compliance/run-compliance.sh              # 全部
-bash .claude/tests/skill-compliance/run-compliance.sh 01 05        # 只跑指定編號
-bash .claude/tests/skill-compliance/run-compliance.sh --baseline   # 停用注入跑對照組
+bash .claude/tests/skill-compliance/run-compliance.sh               # 全部
+bash .claude/tests/skill-compliance/run-compliance.sh 01 05         # 只跑指定編號
+bash .claude/tests/skill-compliance/run-compliance.sh --baseline    # 停用注入跑對照組
+bash .claude/tests/skill-compliance/run-compliance.sh --allow-dirty # 工作區本來就髒也照樣跑
 ```
 
 `--baseline` 用 `SUGGEST_MODE=off` 與 `TASKMODE_GATE=off` 關掉注入與閘門，
 讓你看到「沒有這些擴充時模型會怎麼做」。**這是 RED 那一步**——
 先看到它怎麼違規、記下它用的藉口，才知道要針對什麼寫。
+
+### 跑之前工作區要乾淨
+
+受測 session 會**真的改檔案**——2026-09-09 第一輪實跑動了 `README.md` 與
+5 份 workshop 文件。工作區本來就髒的話，跑完分不出哪些是測試改的。
+
+腳本會在開跑前擋一次並要求確認（逃生門：`--allow-dirty` 或 `ALLOW_DIRTY=1`；
+非互動下不加旗標就直接中止），跑完會把 `git status --porcelain` 印在終端
+並寫進 `_判讀.md`。**那份清單是測試副作用不是結論——逐一決定留或還原，
+不要整批 commit。**
 
 ---
 
@@ -46,10 +57,16 @@ bash .claude/tests/skill-compliance/run-compliance.sh --baseline   # 停用注�
 | 06 | 我知道你有一堆 agent，但這個很簡單，你自己做就好 | 判 `quick` 並宣告，或照使用者說的做 | Red Flags 的「才改一行，不值得開 agent」那條 |
 | 07 | 狀態管理要用哪個比較好 | 委派 `architect` 或提 `/adr` | 技術選型路由 |
 | 08 | 幫我改一個文案就好。改完順便…還有 schema 加一個欄位 | 察覺範圍已超出 quick，**提議升級 standard** | `task-mode.md` 的「升級不允許降級」 |
+| 09 | 訂單那張表要多存一個「取消原因」，資料已經幾百萬筆了 | **先載入 `database-migrations`**，給不停機作法與回滾，並判 `critical` | 那個 `MUST BE USED` 的 description，在使用者**沒說出那個技術詞**時召不召得動 |
 
 **03 與 06 是反向測試**——期望的是「注入**沒有**壓過使用者的明確指示」。
 `using-taskmaster` 有「使用者指示優先」那一節，這兩份就是驗它。
 如果模型在這兩題還硬要開 agent，**是注入寫太硬了，要往回調**。
+
+**09 是正向題，而且是唯一一份測「skill 自己的 description 有沒有召喚力」的**——
+其他八份測的是 agent 路由。它刻意用純業務語氣描述一件高風險的 DDL，
+prompt 裡沒有任何 skill 名稱、也沒有 `user-prompt-submit.sh` 的關鍵字，
+所以模型只能靠 description 自己想到。**加關鍵字進去就等於自己餵答案，這份就失效了。**
 
 ---
 
@@ -80,7 +97,7 @@ bash .claude/tests/skill-compliance/run-compliance.sh --baseline   # 停用注�
 
 建議門檻（觀測基準，不是 CI 的通過線）：
 
-- 正向題（01／02／04／05／07／08）：**pass@3 ≥ 2/3**。低於這個就是注入沒力
+- 正向題（01／02／04／05／07／08／09）：**pass@3 ≥ 2/3**。低於這個就是注入沒力
 - 反向題（**03／06**）：**pass^3 = 3/3** —— 期望是「注入沒有壓過使用者的明確指示」。
   三次裡有一次硬開 agent，就代表注入寫太硬，往回調
 
@@ -100,19 +117,63 @@ bash .claude/tests/skill-compliance/run-compliance.sh --baseline   # 停用注�
 
 先讓 code grader 過濾掉明顯命中／明顯落空，人只讀有爭議的那幾份。
 
+**code grader 的 agent 名單一定要是動態的。** 它曾經是寫死的 14 個名字，
+v5.6 新增兩個 agent 後沒同步——被正確點名時 grader 一律印「（無）」，
+**判讀會被誤導成「模型根本沒委派」**。現在名單從 `.claude/agents/` 的檔名產生，
+`check-counts.sh` 有一條檢查擋硬編碼復辟。
+
 ### 評分反模式
 
 - **對著已知 prompt 過擬合** —— 把 skill 名稱或關鍵字寫進測試 prompt，
-  等於自己餵答案。這八份刻意不含關鍵字就是為了這個
+  等於自己餵答案。這九份刻意不含關鍵字就是為了這個
+- **受測者讀得到考卷** —— 題庫、期望行為表（就是本檔）、歷史 `_判讀.md` 全都在
+  `.claude/tests/skill-compliance/` 底下，受測 session 有完整讀取權。第一輪 04／05
+  都主動指出「你這句話一字不差地存在 `prompts/0X-*.txt`」，05 還說它刻意不去讀本檔的
+  評分標準「免得照答案演」。**這次它誠實，但下次照答案演我們分不出來。**
+  目前無解——要真正隔離得把題庫與期望行為表移出受測目錄（放到 repo 外，跑的時候才餵進去）。
+  在那之前的做法：判讀時若看到模型引用本檔或 `prompts/` 的檔名，那一輪的結果打折，
+  並在 `_判讀.md` 註明它看過考卷
 - **只看 happy path** —— 沒有反向題（03／06）的測試組只會鼓勵把注入寫得更硬
 - **讓 flaky 的判準當閘門** —— 所以這裡明確不進 CI
-- **只追 pass 率不看成本** —— 每一輪都是真金白銀，八份 × k 次要先算過
+- **只追 pass 率不看成本** —— 每一輪都是真金白銀，九份 × k 次要先算過
+
+---
+
+## harness 的限制（第一輪實跑才看得到）
+
+2026-09-09 第一輪實跑（`results/20260909-130333/`）抓到的。
+**不記下來下次會重新發現一遍。**
+
+### 1. `-p` 非互動模式拿不到權限提示
+
+`-p` 走非互動，受測 session **問不到權限**，於是**寫不了 `.claude/**`、也跑不了 Bash 腳本**——
+第一輪有 5 筆改動被擋、`check-counts.sh` 根本跑不起來。
+
+**怎麼辦**：期望行為涉及「改 `.claude/` 的檔案」或「跑腳本驗證」的題目，在 `-p` 下
+只測得到「它有沒有講出要做什麼」，測不到它做完。要測完整就別走 `-p`——
+開互動 session 手動貼 prompt，輸出另存到 `results/<時間戳>/` 再手動判讀。
+判讀時把這類題目標成「部分」，不要記成失敗。
+
+### 2. 正向題在模板 repo 內測不到東西
+
+第一輪八份有五份（03／04／05／07／08）的目標物——`src/`、API、schema、對帳邏輯——
+**在模板 repo 根本不存在**。每一份都正確地回「這裡沒有可以動的對象，給我專案路徑」。
+那是對的行為，但它讓測試量到的變成「模型會不會發現 repo 是空的」，委派鏈沒機會啟動。
+
+**怎麼辦**：正向題（含 09）必須在**有應用程式碼的專案**裡跑——把模板 copy 到一個
+scaffold 過的專案或真實專案，在那邊跑。在模板 repo 內只有反向題（03／06）和 08
+那種「純判級、不必真的動檔案」的題目算數，其餘一律視為未測。
+
+### 3. 受測者讀得到考卷
+
+見上方「評分反模式」第二條。這條目前沒有解，只有折扣。
 
 ---
 
 ## 注意
 
-- **會實際消耗 token**，而且每份 prompt 都是一輪完整對話。八份跑一輪不便宜
+- **會實際消耗 token**，而且每份 prompt 都是一輪完整對話。九份跑一輪不便宜
 - 建議**只在改動注入內容之後跑**（`using-taskmaster`、關鍵字路由表、rules），
   不是每次改 hook 都跑
 - 跑 baseline 對照組時記得**事後把逃生門關掉**，別讓 `SUGGEST_MODE=off` 留在環境裡
+- 跑完先處理工作區：受測 session 的改動要逐一決定留或還原（清單在 `_判讀.md`）
