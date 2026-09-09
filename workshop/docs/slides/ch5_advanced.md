@@ -114,7 +114,7 @@ Chapter 5: 進階技巧
 ```
 今天我們走過的路：
 
-  Ch1  認識模板     .claude 6 大觀念、14 個 Agent、編排劇本
+  Ch1  認識模板     .claude 6 大觀念、16 個 Agent、編排劇本
         │
   Ch2  /task-init   專案初始化、產出 CLAUDE.md + WBS
         │
@@ -164,12 +164,12 @@ Chapter 5: 進階技巧
 ```
 想深入的方向             去哪裡看
 ──────────────────────────────────
-Agent 機制              .claude/agents/ (14 個定義檔)
+Agent 機制              .claude/agents/ (16 個定義檔)
 Agent 編排              .claude/rules/agent-orchestration.md
-自訂規則                .claude/rules/ (15 條，可改可加)
+自訂規則                .claude/rules/ (5 條，可改可加)
 擴充技能                custom-rule&skill/skills/ (94+)
 LLM 成本優化            cost-aware-llm-pipeline skill
-完整文件流程            /docs-init --full + 16 個模板
+完整文件流程            /docs-init --full + 20 個模板
 建 MCP Server          mcp-builder skill
 ```
 

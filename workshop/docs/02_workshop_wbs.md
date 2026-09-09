@@ -56,7 +56,7 @@
 │   ├── 3.1.2 5 大機制對比圖
 │   └── 3.1.3 Agent 協作 / handoff 流程圖
 ├── 3.2 指令速查卡
-│   └── 3.2.1 25 個 slash command + 14 agent 單頁整理
+│   └── 3.2.1 29 個 slash command + 16 agent 單頁整理
 ├── 3.3 學員手冊
 │   ├── 3.3.1 環境安裝指南（含 uv + Gemini API Key）
 │   ├── 3.3.2 Step-by-step 跟做指引（SOP）

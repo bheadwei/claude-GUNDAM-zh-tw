@@ -1,6 +1,6 @@
 # VibeCoding 模板 — 指令速查卡
 
-> 隨堂參考用，25 個 slash command + 14 個 Agent 一覽
+> 隨堂參考用，29 個 slash command + 16 個 Agent 一覽
 > 示範專案：GeminiChat（FastAPI + Gemini 串流聊天機器人）
 
 ---
@@ -20,7 +20,7 @@
 
 ---
 
-## Slash Commands（25）
+## Slash Commands（29）
 
 ### 專案管理
 
@@ -74,38 +74,41 @@
 
 ---
 
-## 14 個 Agent
+## 16 個 Agent
 
 > 模型分層是設計取向；實際以各 agent 定義檔為準。
 
-### Opus（重量級推理）
+### Opus（重量級推理／寫程式碼）
 
 | Agent | 職責 |
 | :--- | :--- |
 | **planner** | 功能規劃、依賴分析、實作步驟拆解 |
 | **architect** | 系統架構設計、技術選型決策（唯讀產 ADR） |
 | **security-infrastructure-auditor** | OWASP 漏洞掃描、秘密偵測、合規檢查 |
+| **tdd-guide** | 強制 TDD 流程、依任務模式調整覆蓋率門檻 |
+| **test-automation-engineer** | 測試覆蓋率補強、測試基礎設施維護 |
+| **ui-builder** | 前端 UI 產出（嚴格遵循 DESIGN.md） |
+| **deployment-expert** | 部署策略、CI/CD、監控 |
+| **build-error-resolver** | 建置錯誤快速修復（最小差異） |
+| **debug-investigator** | 錯誤重現、根因調查、修復與坑紀錄 |
+| **conflict-resolver** | git 合併衝突解決（讀兩邊 plan 判意圖，設計決策交還使用者） |
+| **skill-curator** | `.claude/` skill 與 UI 素材庫維護、盤點與接線 |
 
-### Sonnet（一般開發）
+### Sonnet（一般開發／審查文件）
 
 | Agent | 職責 |
 | :--- | :--- |
 | **code-quality-specialist** | 程式碼審查、可維護性評估、技術債管理 |
-| **test-automation-engineer** | 測試覆蓋率補強、測試基礎設施維護 |
-| **tdd-guide** | 強制 TDD 流程、依任務模式調整覆蓋率門檻 |
 | **e2e-validation-specialist** | Playwright E2E 測試、跨瀏覽器驗證 |
 | **refactor-cleaner** | 死碼識別與安全移除 |
-| **deployment-expert** | 部署策略、CI/CD、監控 |
-| **ui-builder** | 前端 UI 產出（嚴格遵循 DESIGN.md） |
-| **general-purpose** | 通用任務處理（無專家適配時的後備） |
+| **documentation-specialist** | API 文檔、Codemap 生成 |
+| **workflow-template-manager** | VibeCoding 模板管理（PRD/ADR 模板） |
 
-### Haiku（輕量快速）
+### 後備
 
 | Agent | 職責 |
 | :--- | :--- |
-| **build-error-resolver** | 建置錯誤快速修復（最小差異） |
-| **documentation-specialist** | API 文檔、Codemap 生成 |
-| **workflow-template-manager** | VibeCoding 模板管理（PRD/ADR 模板） |
+| **general-purpose** | 通用任務處理（無專家適配時的後備，非本模板自訂） |
 
 ---
 
@@ -119,6 +122,7 @@
 | **修 bug** | **tdd-guide（先寫重現測試）** → code-quality |
 | **重構** | refactor-cleaner → code-quality → test-automation |
 | **建置錯誤** | **build-error-resolver**（單點，修完即止） |
+| **合併衝突** | **conflict-resolver**（讀兩邊 plan 判意圖；設計決策 `git merge --abort` 交還使用者） |
 | **前端 UI** | （/ui-style →）ui-builder →（關鍵流程才）e2e |
 | **PR 前** | code-quality → security → e2e |
 | **架構決策** | architect（產 ADR）→ planner（落地計畫） |

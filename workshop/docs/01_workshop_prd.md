@@ -79,7 +79,7 @@
 | **形式**   | 影片/文章，單向輸出 | 參考手冊     | 實作導向，邊做邊學                          |
 | **完整度** | 教單一功能          | 全面但無引導 | 從零跑完一個專案                            |
 | **流程感** | 片段式              | 無           | 完整 init → dev → verify                  |
-| **差異化** | —                  | —           | 用真實 AI 產品展示 14 Agent 協作 + 任務分級 |
+| **差異化** | —                  | —           | 用真實 AI 產品展示 16 Agent 協作 + 任務分級 |
 
 ---
 
@@ -277,7 +277,7 @@ GEMINI_MODEL=gemini-2.0-flash   # 求快用 flash 系列
 | .env 範例檔      | dotenv                        | 學員快速設定 Gemini Key          | 待準備              |
 | .mcp.json 範例檔 | JSON                          | 學員快速設定                     | 可從模板複製        |
 | 示範專案完成品   | Git repo                      | 學員課後參考                     | 待開發              |
-| 指令速查卡       | 單頁                          | 25 slash command + 14 agent 一覽 | 已更新              |
+| 指令速查卡       | 單頁                          | 29 slash command + 16 agent 一覽 | 已更新              |
 | 課後作業說明     | Markdown                      | 延伸練習                         | 已更新              |
 
 ---
@@ -308,7 +308,7 @@ GEMINI_MODEL=gemini-2.0-flash   # 求快用 flash 系列
 ```
 Workshop 完成
     │
-    ├── 想深入 Agent 機制 → 閱讀 .claude/agents/ 下的 14 個定義檔 + rules/agent-orchestration.md
+    ├── 想深入 Agent 機制 → 閱讀 .claude/agents/ 下的 16 個定義檔 + rules/agent-orchestration.md
     ├── 想客製化規則    → 閱讀 .claude/rules/ 並修改或新增
     ├── 想擴充 Skills   → 瀏覽 custom-rule&skill/skills/ 的 94+ 選項
     ├── 想優化 LLM 成本 → 使用 cost-aware-llm-pipeline skill

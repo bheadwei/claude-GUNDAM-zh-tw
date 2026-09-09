@@ -43,11 +43,11 @@ VibeCoding 模板實戰 Workshop
 ┌─────────────────────────────────────────────┐
 │          VibeCoding 模板                     │
 │                                             │
-│  📋 16 份文件模板    規範從需求到部署        │
-│  🤖 14 個 AI Agent   各司其職、自動協作      │
-│  ⚡ 25 個快捷指令    一行啟動完整流程        │
-│  📏 15 條自動規則    品質底線自動守護        │
-│  🔧  7 個領域技能    按需載入專業知識        │
+│  📋 20 份文件模板    規範從需求到部署        │
+│  🤖 16 個 AI Agent   各司其職、自動協作      │
+│  ⚡ 29 個快捷指令    一行啟動完整流程        │
+│  📏  5 條自動規則    品質底線自動守護        │
+│  🔧 27 個領域技能    按需載入專業知識        │
 │  🪝  系統 Hook       事件自動化              │
 │                                             │
 │  → 複製到任何新專案，立即可用                │
@@ -136,13 +136,12 @@ VibeCoding 模板實戰 Workshop
 │  位置：.claude/rules/*.md                    │
 │  類比：公司的員工守則                         │
 │                                             │
-│  範例（本模板有 15 條）：                    │
-│   • coding-style.md     編碼風格             │
-│   • testing.md          測試覆蓋率           │
-│   • security.md         安全規範             │
-│   • git-workflow.md     提交規範             │
-│   • task-mode.md        任務分級             │
-│   • interactive-qa.md   問答互動規則          │
+│  本模板現有 5 條：                          │
+│   • coding-style.md         編碼風格          │
+│   • security.md             安全規範          │
+│   • task-mode.md            任務分級          │
+│   • interactive-qa.md       問答互動規則       │
+│   • agent-orchestration.md  Agent 編排劇本     │
 │                                             │
 │  特點：粒度小、可組合、可關閉個別規則          │
 └─────────────────────────────────────────────┘
@@ -161,7 +160,7 @@ VibeCoding 模板實戰 Workshop
 │  位置：.claude/commands/*.md                 │
 │  類比：終端機的 alias                        │
 │                                             │
-│  本模板提供 25 個指令：                      │
+│  本模板提供 29 個指令：                      │
 │   /task-init     專案初始化                  │
 │   /task-next     取下一個任務                │
 │   /plan          規劃實作                    │
@@ -214,7 +213,7 @@ VibeCoding 模板實戰 Workshop
 │  位置：.claude/skills/<name>/SKILL.md         │
 │  類比：手冊櫃 — 需要時才翻                    │
 │                                             │
-│  本模板的 7 個 skill：                       │
+│  本模板 27 個 skill 中，以下 7 個為例：       │
 │   • postgres-patterns   寫 SQL 時自動載入     │
 │   • database-migrations Schema 變更時觸發    │
 │   • e2e-testing         寫 E2E 測試時觸發    │
@@ -275,34 +274,36 @@ hooks      系統事件       無 AI 介入  副作用 / 自動化
 
 ---
 
-## Slide 13: 14 個 Agent — 各司其職
+## Slide 13: 16 個 Agent — 各司其職
 
 ```
-┌─────────── Opus（重量級推理）───────────┐
-│  planner          功能規劃、步驟拆解     │
-│  architect        架構設計、技術選型     │
-│  security-auditor 安全漏洞掃描          │
-└─────────────────────────────────────────┘
+┌────────── Opus（重量級推理／寫程式碼）──────────┐
+│  planner            功能規劃、步驟拆解          │
+│  architect          架構設計、技術選型          │
+│  security-auditor   安全漏洞掃描               │
+│  tdd-guide          測試驅動開發               │
+│  test-engineer      測試補強                  │
+│  ui-builder         前端 UI 產出               │
+│  deployment         部署與 CI/CD              │
+│  build-resolver     建置錯誤秒修               │
+│  debug-investigator 錯誤重現、根因調查          │
+│  conflict-resolver  合併衝突解決               │
+│  skill-curator      skill／UI 素材庫維護        │
+└─────────────────────────────────────────────┘
 
-┌─────────── Sonnet（一般開發）───────────┐
-│  code-quality     程式碼審查            │
-│  tdd-guide        測試驅動開發          │
-│  e2e-specialist   端到端測試            │
-│  test-engineer    測試補強             │
-│  refactor-cleaner 死碼清理             │
-│  deployment       部署與 CI/CD         │
-│  ui-builder       前端 UI 產出          │
-│  general-purpose  通用任務             │
-└─────────────────────────────────────────┘
+┌────────── Sonnet（一般開發／審查文件）──────────┐
+│  code-quality       程式碼審查                 │
+│  e2e-specialist     端到端測試                 │
+│  refactor-cleaner   死碼清理                   │
+│  doc-specialist     文檔生成                   │
+│  template-mgr       模板管理                   │
+└─────────────────────────────────────────────┘
 
-┌─────────── Haiku（輕量快速）───────────┐
-│  build-resolver   建置錯誤秒修          │
-│  doc-specialist   文檔生成             │
-│  template-mgr     模板管理             │
-└─────────────────────────────────────────┘
+（+ general-purpose：Claude Code 內建後備，本模板不自訂它，不計入 16）
 ```
 
-**講師口述：** 不同難度任務用不同等級的 AI。重的用 Opus 想清楚，一般用 Sonnet，簡單修錯用 Haiku 快速解決。你不需要手動選，模板會自動分配。
+**講師口述：** 不同難度任務用不同等級的 AI。重的、要寫程式碼的用 Opus 想清楚，
+一般開發與審查文件用 Sonnet。你不需要手動選，模板會自動分配。
 
 ---
 
@@ -335,10 +336,10 @@ hooks      系統事件       無 AI 介入  副作用 / 自動化
 ```
 .claude/
 ├── CLAUDE.md            ← 專案說明書（根目錄）
-├── agents/              ← 14 個 Agent 定義
-├── commands/            ← 25 個快捷指令
-├── rules/               ← 15 條自動規則
-├── skills/              ←  7 個領域技能
+├── agents/              ← 16 個 Agent 定義
+├── commands/            ← 29 個快捷指令
+├── rules/               ←  5 條自動規則
+├── skills/              ← 27 個領域技能
 ├── hooks/               ← 系統事件腳本
 ├── ui/                  ← UI 風格目錄（lovable / nvidia / ...）
 ├── context/             ← Agent 報告共享
