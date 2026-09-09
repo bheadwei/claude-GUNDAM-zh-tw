@@ -46,6 +46,17 @@ fi
 ISOLATION=$(printf '%s' "$INPUT" | jq -r '.tool_input.isolation // ""' 2>/dev/null)
 SUBAGENT=$(printf '%s' "$INPUT" | jq -r '.tool_input.subagent_type // "general-purpose"' 2>/dev/null)
 
+# 本次呼叫自己的 tool_use_id。算 in-flight 時**必須排除它**，否則：
+# settings.json 的 PreToolUse 把 agent-monitor.sh 排在本檔前面，於是本次的
+# agent_start 已經寫進 agent-activity.jsonl，閘門會把「它正在把關的這一次」
+# 也算成 in-flight → 閒置超過 60 分鐘後的第一次委派**必被誤擋一次**
+# （deny-once 讓它看起來只是「擋一下就過」，所以放了很久沒被發現）。
+#
+# 用排除自己而不是調 hook 順序：這樣兩支 hook 誰先跑都正確，
+# 下次有人重排 settings.json 也不會把這個 bug 帶回來。
+# 也不能改成「in-flight ≥ 2 才擋」——那會讓真正的兩個並行漏掉第一次。
+SELF_ID=$(printf '%s' "$INPUT" | jq -r '.tool_use_id // ""' 2>/dev/null)
+
 # 帶了 isolation → 有自己的 checkout，改不到別人，直接放行
 case "$ISOLATION" in
     worktree|remote) exit 0 ;;
@@ -58,11 +69,13 @@ INFLIGHT=0
 if [ -f "$LOG_JSONL" ]; then
     CUTOFF=$(date -d '60 minutes ago' '+%Y-%m-%d %H:%M:%S' 2>/dev/null \
              || date -v-60M '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "")
-    INFLIGHT=$(jq -rs --arg cutoff "$CUTOFF" '
+    INFLIGHT=$(jq -rs --arg cutoff "$CUTOFF" --arg self "$SELF_ID" '
         [ .[] | select(($cutoff == "") or (.timestamp >= $cutoff)) ]
         | (map(select(.event == "agent_start"))     | map(.tool_use_id)) as $starts
         | (map(select(.event == "agent_complete"))  | map(.tool_use_id)) as $dones
-        | [ $starts[] | select(. as $s | ($dones | index($s)) == null) ]
+        | [ $starts[]
+            | select($self == "" or . != $self)
+            | select(. as $s | ($dones | index($s)) == null) ]
         | length
     ' "$LOG_JSONL" 2>/dev/null || echo 0)
 fi
