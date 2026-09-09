@@ -16,7 +16,7 @@
 ## 改動時的連帶檢查
 
 - **要加或改 `.claude/` 底下任何東西** → **先讀 `writing-extensions` skill**（五層決策表）。這個模板踩過四次「選錯層」，都是把該用 hook 的事寫成文字規則
-- **改了注入內容**（`using-taskmaster`、關鍵字路由、rules）→ 跑一輪 `.claude/tests/skill-compliance/run-compliance.sh`。190 個 hook 測試證明不了「模型會不會照做」
+- **改了注入內容**（`using-taskmaster`、關鍵字路由、rules）→ 跑一輪 `.claude/tests/skill-compliance/run-compliance.sh`。209 個 hook 測試證明不了「模型會不會照做」
 - **新增 agent／skill／command／rule** → 跑 `bash scripts/check-counts.sh`，它會列出所有該同步卻沒同步的計數（CI 也會跑）
 - **改 `.claude/` 的目錄結構** → 同步 `scripts/copy-template.sh` 的 `EXCLUDES` **和** `scripts/copy-template.ps1` 的 `$excludeDirs` / `$excludeFiles`（兩份要一致，容易漏改 ps1）
 - **新增 skill** → 更新 `.claude/skills/INDEX.md`，否則沒人知道它存在
@@ -32,7 +32,14 @@
 - **發佈仍是 pull 式**：`copy-template` / `update-template` 要手動跑。真正的自動更新要走 Claude Code plugin marketplace（改版號即更新），但 plugin **帶不了 `rules/`**，且指令會變 `/taskmaster:task-next`。`using-taskmaster` 已示範「rules 改寫成 SessionStart 注入的 skill」這條遷移路徑
 - **沒有 constitution**：`rules/` 是模板通用規範，缺「這個專案不可違反的原則」那一層
 - **workshop 第 5 章教的機制已不存在**：`workshop/docs/slides/ch5_advanced.md`（4 處）與 `01_workshop_prd.md`（2 處）還在教「從 `custom-rule&skill/` 複製 94 個技能包」，但備份池已於 v5.6 移除。新說法是「委派 `skill-curator`」（它查官方文檔、寫觸發式 description、接線、驗證）。**開課前務必修**。未動的原因：`.md` 與手改的 `.pptx` 關係未確認
-- **壓力測試從未實跑真實對話**：`run-compliance.sh` 的機制驗過（含新加的 `-n K`／pass@k），但沒跑過一輪真的對話。190 個 hook 測試證明閘門邏輯，證明不了「模型會不會照做」——**這仍是最大的驗證盲區**
+- **壓力測試已實跑一輪，但測不到正向題**（2026-09-09，結果與判讀在 `.claude/tests/skill-compliance/results/20260909-130333/_判讀.md`，該目錄不進版控）。三件事：
+  - 8 份有 5 份的目標物（`src/`、API、schema）**在模板 repo 不存在**，受測 session 只能正確地回「給我專案路徑」→ 正向題永遠半殘。**這批必須在有應用程式碼的專案裡跑**
+  - **受測者讀得到考卷**：prompt 04／05 都主動指出題目一字不差存在 `prompts/*.txt`。這次它選擇不看評分標準，但下次照答案演我們分不出來
+  - `-p` 非互動模式拿不到權限提示 → 受測 session 寫不了 `.claude/**`、跑不了 Bash 腳本
+  - 已驗出的結論：反向題 2/2 PASS（注入沒硬到壓過使用者指示）、任務分級與升級有效；**文件路由（01／02）兩次都沒走**，證實了 Red Flags 表「最常被漏掉的一棒」那句判斷
+- **平行開發已實跑一輪，但 `conflict-resolver` 仍未驗**（2026-09-09）。兩個隔離 agent、`files:` 判定無交集、依序合併全部通過，`baseRef`／隔離強制／合併閘門都驗到了——但**零衝突就代表 `conflict-resolver` 從頭到尾沒被叫起來**，它判意圖的準確度還是未知。要驗它得刻意製造衝突
+- **`pre-agent-gate.sh` 的 `.suggest-mode` 讀錯 root**：它讀 `WORK_CLAUDE`，但 `post-agent-report.sh` 與 `worktree-orchestration` 的隔離表都把它列為 `MAIN_CLAUDE` 的專案級設定。後果是主 checkout 設 `/suggest-mode off` 關不掉 worktree 裡的平行 agent 閘門。無測試覆蓋
+- **`post-bash.sh` 的 `.merge-pending` 記的是整條指令而非分支名**（第 68 行 `BR=$(... | cut -c1-100)`，按 byte 切，中文 commit message 會被切在 UTF-8 字元中間變亂碼）。閘門功能不受影響，但「最早一筆是 X」唯一的用途就是分辨哪個分支，現在做不到
 
 ### 已修的落差
 
