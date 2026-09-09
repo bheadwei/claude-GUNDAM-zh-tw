@@ -57,7 +57,11 @@ case "$AGENT_NAME" in
     ui-builder)                       AREA="quality" ;;
     deployment-expert)                AREA="deployment" ;;
     debug-investigator)               AREA="quality" ;;
+    skill-curator)                    AREA="decisions" ;;
 esac
+# conflict-resolver 刻意不列：它的 tools 沒有 Write，機制上寫不了報告檔
+# （只在回應裡回 STATUS 碼）。加進來會變成每次解衝突都發一次假警報。
+# 加新 agent 時的判準是「它的 tools 有 Write 且定義裡寫了報告落點」，不是「它重不重要」。
 
 # quick 模式下 tdd-guide 刻意不寫報告（小任務不值得這開銷）→ 不稽核，避免假警報
 if [ "$AGENT_NAME" = "tdd-guide" ]; then
@@ -115,6 +119,14 @@ fi
 # off → 完全不注入（連報告稽核也一併靜音，這是文件化的逃生門）
 [ "$SUGGEST_MODE" = "off" ] && exit 0
 
+# 已結案的交接先搬進 archive/YYYY-MM/，再往下掃 pending —— 順序反過來的話
+# 這次歸檔要等下一次 agent 結束才有效果。放在 off 判斷之後：.suggest-mode=off
+# 是「這個 hook 完全不動作」的總開關，歸檔也算動作。
+source "$(dirname "${BASH_SOURCE[0]}")/lib/handoff-archive.sh" 2>/dev/null || true
+if declare -F archive_handoffs >/dev/null 2>&1; then
+    archive_handoffs "$HANDOFF_DIR" || true
+fi
+
 NL=$'\n'
 LINES=""
 COUNT=0
@@ -149,7 +161,7 @@ done
 MSG=""
 
 if [ "$COUNT" -gt 0 ]; then
-    MSG="🔗 偵測到 ${COUNT} 個待處理 agent 交接（status: pending）。若符合當前目標，建議啟動對應的「to」agent 接手——各 agent 啟動時會自行讀取其 handoff 工作清單：${LINES}${NL}${NL}完成後請將對應 handoff 的 status 改為 completed（保留檔案作審計軌跡）。"
+    MSG="🔗 偵測到 ${COUNT} 個待處理 agent 交接（status: pending）。若符合當前目標，建議啟動對應的「to」agent 接手——各 agent 啟動時會自行讀取其 handoff 工作清單：${LINES}${NL}${NL}完成後請將對應 handoff 的 status 改為 completed —— 不用刪檔也不用搬檔，hook 會自動歸檔到 archive/YYYY-MM/，審計軌跡不會消失。"
 fi
 
 if [ -n "$REPORT_AUDIT_MSG" ]; then
