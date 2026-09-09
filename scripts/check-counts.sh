@@ -217,6 +217,28 @@ for d in .claude/skills/*/; do
     printf '      或（若它本來就只給主模型用）把它加進本腳本的白名單。\n'
 done
 
+# 短命旗標不該進版控
+#
+# 判準：`taskmaster-data/` 底下 `.` 開頭的檔案都是 hook 寫的
+# 「單一 session／單一 worktree 私有」旗標（`.current-task-mode`、`.ui-catalog-refreshed` …）。
+# 被 git 追蹤會有兩個後果：hook 每次寫入就讓工作區莫名變髒；而且它會被
+# copy-template 帶到新專案，讓「超過 N 天沒更新」這類判斷從模板作者的日期起算。
+# 實際發生過：`.ui-catalog-refreshed` 漏在 .gitignore 的清單外，被 commit 進版控。
+if git rev-parse --git-dir >/dev/null 2>&1; then
+    CHECKED=$((CHECKED + 1))
+    STRAY=$(git ls-files .claude/taskmaster-data/ 2>/dev/null | awk -F/ '$NF ~ /^\./ { print }')
+    if [ -n "$STRAY" ]; then
+        FAIL=$((FAIL + 1))
+        printf '  %s 短命旗標被 git 追蹤：\n' "$(red '✗')"
+        while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            printf '      %s\n' "$(dim "$f")"
+        done <<< "$STRAY"
+        printf '      修法：加進 .gitignore 的「執行時短命狀態」清單，\n'
+        printf '      再跑 git rm --cached <檔案>（只 --cached，不要刪本地檔）。\n'
+    fi
+fi
+
 # 測試案例數（需由呼叫端提供實跑結果）
 if [ -n "$TESTS_ACTUAL" ]; then
     verify "WORKFLOW 測試案例數" "$TESTS_ACTUAL" "$W" '[0-9]+ 個案例，全綠'

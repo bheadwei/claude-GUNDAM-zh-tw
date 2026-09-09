@@ -34,6 +34,7 @@
 .claude/taskmaster-data/.session-start
 .claude/taskmaster-data/.session-snapshot
 .claude/taskmaster-data/.suggest-mode
+.claude/taskmaster-data/.ui-catalog-refreshed
 .claude/taskmaster-data/timelog.jsonl
 .claude/taskmaster-data/wbs-history.log
 

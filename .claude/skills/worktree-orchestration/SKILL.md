@@ -62,12 +62,30 @@ description: Use when running work in parallel across git worktrees — creating
 claude --worktree feature-auth      # 或 claude -w feature-auth
 ```
 
-它會建在 `.claude/worktrees/feature-auth/`、分支 `worktree-feature-auth`、
-從 repo 預設分支（`origin/HEAD`）開出去，並套用 `.worktreeinclude`。
+它會建在 `.claude/worktrees/feature-auth/`、分支 `worktree-feature-auth`，
+並套用 `.worktreeinclude`。從哪裡開分支由 `settings.json` 的 `worktree.baseRef` 決定。
+
+### `baseRef`：本模板設 `"head"`，不是官方預設
+
+只有兩個合法值：
+
+| 值 | 從哪開 | 帶得到未 push 的 commit |
+|---|---|---|
+| `"fresh"`（官方預設） | **遠端**的預設分支（通常 `origin/main`）。24 小時內沒 fetch 過會去 fetch（上限 5 秒，失敗則用本地快取的 ref） | ❌ |
+| `"head"`（**本模板的設定**） | 當前本地 HEAD（在 worktree 內解析成該 worktree 自己的 HEAD） | ✅ |
+
+**為什麼本模板不用官方預設**：這裡的平行流程是 `/plan` 寫出 plan →
+`/task-next` 判定可平行 → 開 worktree 派 agent。那份 plan 剛寫好，**絕對還沒 push**。
+`"fresh"` 之下 worktree 從遠端開，plan 不在裡面 —— 隔離的 agent 讀不到自己要實作什麼，
+只會自己發明範圍。共用型別／schema 同理。設定寫在 `.claude/settings.json`
+的 `worktree.baseRef`（標準 JSON 不能寫註解，理由記在這裡）。
+
+帶 `isolation: "worktree"` 的 subagent worktree **同樣遵守** `worktree.baseRef`
+與 `.worktreeinclude`，不是另一套規則。
 
 | 需求 | 做法 |
 |---|---|
-| 從當前未 push 的工作開分支 | `settings.json` 設 `worktree.baseRef: "head"` |
+| 從遠端乾淨狀態開（放棄本地未 push 的工作） | `settings.json` 改回 `worktree.baseRef: "fresh"`（**會讓 plan 進不了 worktree**，改前先讀上面那段） |
 | 從某個 PR 開 | `claude --worktree "#1234"`（引號必要，`#` 會被 shell 當註解） |
 | 從既有分支開 | 原生不支援 → `git worktree add ../x existing-branch` |
 | session 中途進去 | 叫我「在 worktree 裡做」，我用 `EnterWorktree` |
@@ -90,9 +108,26 @@ claude --worktree feature-auth      # 或 claude -w feature-auth
 2. **一個 session 派多個隔離 subagent** —— `Agent` 工具帶 `isolation: "worktree"`。
    context 集中在你這邊，但你要自己協調
 
-**派工前務必做的一件事**：若這幾個任務用到共同的型別／介面／schema，
-**先 commit 到 main 再開 worktree**。各 worktree 看不到彼此，共用定義必須先存在，
-否則每個 agent 各自發明一份，合併時必衝突。
+### 派工前務必做的一件事
+
+若這幾個任務用到共同的型別／介面／schema，**共用定義必須在 worktree 開出去之前就存在**。
+各 worktree 看不到彼此，少了共用定義每個 agent 各自發明一份，合併時必衝突。
+
+**「存在」的門檻取決於 `baseRef`**：
+
+| `baseRef` | 前置動作 |
+|---|---|
+| `"head"`（**本模板的設定**） | `git commit` 就夠 —— worktree 從本地 HEAD 開，看得到未 push 的 commit |
+| `"fresh"` | **commit 不夠，必須 push**。worktree 從遠端開，只 commit 在本地的東西它拿不到 |
+
+改過 `baseRef` 的人特別注意這條：在 `"fresh"` 之下做了 commit 就以為安全，
+agent 會在一個沒有共用型別的 worktree 裡開工，而且不會有任何錯誤訊息。
+
+**plan 檔必須進版控，worktree 才拿得到。** worktree 是乾淨 checkout，
+只有 tracked 檔案；`taskmaster-data/plans/` 沒進版控的話，worktree 裡連 plan 都沒有。
+`.worktreeinclude` **不是替代方案** —— 它只複製「符合樣式**且本來就被 gitignore**」的檔案，
+而官方沒有說明 `.git/info/exclude` 裡的項目是否算等價的排除來源，不能依賴它。
+這也是為什麼 `.gitignore` 的「以下刻意進版控」清單裡有 `plans/`。
 
 跨 worktree 的依賴**先 mock**，等合併後再接真的。
 
@@ -108,6 +143,11 @@ worktree session（含它派出的所有 subagent）被四道檢查擋住：
 4. **指令形狀** —— 無法從指令文字確認 git 會留在 worktree 內時被擋（**這條關不掉**）
 
 比 rules 裡寫「不要互改同一批檔案」強得多——那是自律，這是機器。
+
+帶 `isolation: "worktree"` 的 subagent 走的是同一套：同樣遵守 `worktree.baseRef`
+與 `.worktreeinclude`，同樣被上面四道檢查擋。結束後的處置與互動 session 不同 ——
+**沒有變更時自動移除，有變更則留在磁碟上**等 `cleanupPeriodDays` 的定期掃描。
+分支命名規則官方未公開，要找它就用 `git worktree list`，不要照猜的名字去 `git branch`。
 
 ---
 
@@ -172,7 +212,9 @@ git merge --no-ff worktree-<name>
 | 互動 session 結束、worktree 乾淨、未命名 | 自動移除 worktree 與分支 |
 | 互動 session 結束、worktree 乾淨、已命名 | 先問你 |
 | worktree 內有未提交／未追蹤／未 push 的東西 | 先問你，保留或刪除 |
-| subagent／背景 session 的 worktree | 超過 `cleanupPeriodDays` 由定期掃描移除 |
+| subagent worktree、**結束時沒有變更** | 自動移除 |
+| subagent worktree、**結束時有變更** | 留在磁碟上，等超過 `cleanupPeriodDays` 由定期掃描移除 |
+| 背景 session 的 worktree | 超過 `cleanupPeriodDays` 由定期掃描移除 |
 | `-p` 非互動 session | **不清理**，且 lock 留著直到後續掃描釋放 |
 | **你自己 `git worktree add` 建的** | **永不自動刪** |
 
@@ -193,7 +235,7 @@ git worktree prune                                 # 清掉目錄已消失的紀
 ## 反模式
 
 - ❌ 手動 `git worktree add` 而不用 `claude -w`（少掉 `.worktreeinclude`、自動清理、隔離強制）
-- ❌ 沒把共用型別先 commit 到 main 就開三個 agent
+- ❌ 沒把共用型別先落地（`"head"` → commit；`"fresh"` → push）就開三個 agent
 - ❌ 一次 merge 全部 worktree
 - ❌ 在 worktree 裡跑 `git -C <主checkout>`（會被擋，而且意圖本身就錯）
 - ❌ 把 `.claude/worktrees/` 從 `.gitignore` 移出來（`.worktreeinclude` 帶進去的秘密會進版控）
