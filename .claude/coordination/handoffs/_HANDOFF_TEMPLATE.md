@@ -30,4 +30,11 @@ related_report: <context/<area>/<report>.md>
 ---
 
 > 命名規則：`<from>-to-<to>-<YYYY-MM-DD-HHMM>.md`
-> 完成後不刪除，作為審計軌跡。
+>
+> 完成後**只改 `status:` 為 `completed`**（或 `cancelled`）——不要刪檔，也不要自己搬。
+> `post-agent-report.sh` 會在下一次 subagent 結束時自動把它移到
+> `handoffs/archive/YYYY-MM/`（月份取自上面的 `date:`）。
+>
+> **審計軌跡沒有消失，只是換了位置**：舊檔一字不差地留在 `archive/` 裡，同名也只加
+> `-2` 後綴、絕不覆蓋。這樣 `handoffs/` 平坦層永遠只剩還沒結案的那幾份，
+> hook 的 pending 掃描與「找屬於自己的交接」都不必在一堆已完成的檔案裡撈。

@@ -182,6 +182,99 @@ reset; cp "$HOOK_DIR/../coordination/handoffs/_HANDOFF_TEMPLATE.md" "$HANDOFF_DI
 expect_empty   "範本檔不被當成交接"          "$(run post-agent-report.sh '{"tool_name":"Agent"}')"
 
 # =========================================================================
+section "handoff 自動歸檔 — completed/cancelled 移出掃描路徑"
+# =========================================================================
+#
+# 為什麼要這組：範本原本寫「完成後不刪除，作為審計軌跡」，於是 completed 的交接
+# 永遠留在平坦的 handoffs/ 裡——每次 subagent 結束都要 for-loop 掃全部檔案，
+# 才發現 0 個 pending。歸檔做成 hook（不是指令，指令要有人記得打），
+# 這裡釘住三件會靜默壞掉的事：搬錯月份、覆蓋掉舊軌跡、逃生門失效。
+
+ARCH="$HANDOFF_DIR/archive"
+
+mk_ho() { # <檔名> <status> <date>
+    cat > "$HANDOFF_DIR/$1" <<EOF
+---
+from: planner
+to: tdd-guide
+date: $3
+priority: high
+status: $2
+---
+
+# Handoff
+
+## 起因
+測試用交接。
+EOF
+}
+
+reset; mk_ho done.md completed 2026-03-04-1200
+run post-agent-report.sh '{"tool_name":"Agent"}' >/dev/null
+[ -f "$ARCH/2026-03/done.md" ] \
+    && ok "completed 被搬進 archive/YYYY-MM/（月份取 date:）" \
+    || ng "completed 被搬進 archive/YYYY-MM/（月份取 date:）" "archive/2026-03/done.md" \
+          "$(find "$HANDOFF_DIR" -name 'done.md' 2>/dev/null | sed "s|$SANDBOX||" | tr '\n' ' ')"
+[ -f "$HANDOFF_DIR/done.md" ] \
+    && ng "已歸檔的不留在平坦層" "平坦層無 done.md" "還在" \
+    || ok "已歸檔的不留在平坦層"
+
+reset; mk_ho cancel.md cancelled 2026-07-31-0900
+run post-agent-report.sh '{"tool_name":"Agent"}' >/dev/null
+[ -f "$ARCH/2026-07/cancel.md" ] \
+    && ok "cancelled 也被歸檔" \
+    || ng "cancelled 也被歸檔" "archive/2026-07/cancel.md" \
+          "$(find "$HANDOFF_DIR" -type f 2>/dev/null | sed "s|$SANDBOX||" | tr '\n' ' ')"
+
+reset; mk_ho keep.md pending 2026-03-04-1200
+run post-agent-report.sh '{"tool_name":"Agent"}' >/dev/null
+[ -f "$HANDOFF_DIR/keep.md" ] \
+    && ok "pending 留在平坦層" \
+    || ng "pending 留在平坦層" "handoffs/keep.md 還在" "被搬走了"
+
+# 範本的 frontmatter 字面就含 completed（`<pending|accepted|completed|cancelled>`）
+reset; cp "$HOOK_DIR/../coordination/handoffs/_HANDOFF_TEMPLATE.md" "$HANDOFF_DIR/" 2>/dev/null
+run post-agent-report.sh '{"tool_name":"Agent"}' >/dev/null
+[ -f "$HANDOFF_DIR/_HANDOFF_TEMPLATE.md" ] \
+    && ok "範本檔不被歸檔（frontmatter 字面含 completed）" \
+    || ng "範本檔不被歸檔（frontmatter 字面含 completed）" "範本原地不動" "被搬走了"
+
+# 審計軌跡不能被吃掉：同名一律加後綴
+reset; mk_ho dup.md completed 2026-03-04-1200
+run post-agent-report.sh '{"tool_name":"Agent"}' >/dev/null
+mk_ho dup.md completed 2026-03-04-1200
+echo "第二份的指紋" >> "$HANDOFF_DIR/dup.md"
+run post-agent-report.sh '{"tool_name":"Agent"}' >/dev/null
+if [ -f "$ARCH/2026-03/dup-2.md" ] \
+   && ! grep -q "第二份的指紋" "$ARCH/2026-03/dup.md" 2>/dev/null \
+   && grep -q "第二份的指紋" "$ARCH/2026-03/dup-2.md" 2>/dev/null; then
+    ok "同名不覆蓋：加 -2 後綴且原檔一字不動"
+else
+    ng "同名不覆蓋：加 -2 後綴且原檔一字不動" "dup.md 保持原樣＋dup-2.md 是新的" \
+       "$(ls "$ARCH/2026-03" 2>/dev/null | tr '\n' ' ')"
+fi
+
+reset; mk_ho done.md completed 2026-03-04-1200; echo off > "$SM_FILE"
+run post-agent-report.sh '{"tool_name":"Agent"}' >/dev/null
+[ -f "$HANDOFF_DIR/done.md" ] \
+    && ok "suggest-mode=off 不歸檔（逃生門連歸檔一起關）" \
+    || ng "suggest-mode=off 不歸檔（逃生門連歸檔一起關）" "檔案原地不動" "被搬走了"
+
+# archive/ 不能被 pending 掃描撈到，否則歸檔等於沒用（glob 不遞迴）
+reset; mkdir -p "$ARCH/2026-03"; mk_ho tmp.md pending 2026-03-04-1200
+mv "$HANDOFF_DIR/tmp.md" "$ARCH/2026-03/old-pending.md"
+expect_empty "archive/ 裡的 pending 不被掃描" "$(run post-agent-report.sh '{"tool_name":"Agent"}')"
+
+reset
+printf '%s\n' '---' 'from: x' 'to: y' 'status: completed' '---' > "$HANDOFF_DIR/nodate.md"
+touch -d '2025-11-15' "$HANDOFF_DIR/nodate.md" 2>/dev/null
+run post-agent-report.sh '{"tool_name":"Agent"}' >/dev/null
+[ -f "$ARCH/2025-11/nodate.md" ] \
+    && ok "無 date: 時退回 mtime 的月份" \
+    || ng "無 date: 時退回 mtime 的月份" "archive/2025-11/nodate.md" \
+          "$(find "$ARCH" -type f 2>/dev/null | sed "s|$SANDBOX||" | tr '\n' ' ')"
+
+# =========================================================================
 section "user-prompt-submit.sh — 意圖路由"
 # =========================================================================
 reset
@@ -476,6 +569,23 @@ run post-agent-report.sh "$(ag debug-investigator async)" >/dev/null
 if [ -s "$EXPECT_FILE" ]; then ok "debug-investigator 已納入稽核"
 else ng "debug-investigator 已納入稽核" "期望檔非空" "（空）"; fi
 
+# skill-curator 同一個坑：它寫報告到 context/decisions/，但 AREA 映射沒它，
+# 稽核永遠找不到那份報告（CLAUDE.md 的「連帶檢查」明文警告過這一條）
+reset; mkdir -p "$SANDBOX/.claude/context/decisions"
+run post-agent-report.sh "$(ag skill-curator async)" >/dev/null
+if [ -s "$EXPECT_FILE" ]; then ok "skill-curator 已納入稽核"
+else ng "skill-curator 已納入稽核" "期望檔非空" "（空）"; fi
+if grep -q '"area":"decisions"' "$EXPECT_FILE" 2>/dev/null; then ok "skill-curator 的 area 是 decisions"
+else ng "skill-curator 的 area 是 decisions" '"area":"decisions"' "$(cat "$EXPECT_FILE" 2>/dev/null)"; fi
+
+# conflict-resolver 是刻意不列的那一個：它的 tools 沒有 Write，機制上寫不了報告檔。
+# 加進映射會變成每次解衝突都發一次假警報 —— 這個「刻意」需要測試釘住，
+# 否則下次有人「補齊漏掉的 agent」時會順手加回去
+reset
+run post-agent-report.sh "$(ag conflict-resolver async)" >/dev/null
+if [ ! -s "$EXPECT_FILE" ]; then ok "conflict-resolver 刻意不稽核（tools 無 Write）"
+else ng "conflict-resolver 刻意不稽核（tools 無 Write）" "期望檔為空" "$(cat "$EXPECT_FILE")"; fi
+
 # 稽核訊息會被注入（不只寫 log）—— 這是原本「沒有牙齒」的核心問題
 reset; mkdir -p "$SANDBOX/.claude/context/quality"
 run post-agent-report.sh "$(ag code-quality-specialist async)" >/dev/null
@@ -729,6 +839,20 @@ ag() {
 reset; mkdir -p "$SANDBOX/.claude/logs"
 expect_decision "無 in-flight 時放行" allow "$(ag planner)"
 
+# 誤報回歸：settings.json 把 agent-monitor.sh 排在本閘門**前面**，所以本次委派的
+# agent_start 早就寫進 agent-activity.jsonl 了。閘門若把「自己正在把關的這一次」
+# 也算成 in-flight，閒置超過 60 分鐘後的第一次委派**必被誤擋一次**。
+# deny-once 讓它看起來只是「擋一下就過」，所以放了很久沒被發現。
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start tX
+expect_decision "只派一個 agent 時不擋（不把自己算成 in-flight）" allow "$(ag planner)"
+[ -f "$SANDBOX/.claude/taskmaster-data/.parallel-agent-warned" ] \
+    && ng "誤擋不該吃掉 deny-once 額度" "無 warned 標記" "有標記" \
+    || ok "誤擋不該吃掉 deny-once 額度"
+
+# 排除自己不等於閘門失效：自己一筆＋別人一筆時仍然要擋
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1; ag_start tX
+expect_decision "自己＋別人各一筆 start → 仍擋" deny "$(ag planner)"
+
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
 expect_decision "有 1 個 in-flight 且新的無隔離 → deny" deny "$(ag planner)"
 
@@ -809,6 +933,12 @@ section "全體 hooks — 語法與健壯性"
 # =========================================================================
 for h in "$HOOK_DIR"/*.sh; do
     n=$(basename "$h")
+    bash -n "$h" 2>/dev/null && ok "$n 語法正確" || ng "$n 語法正確" "可解析" "語法錯誤"
+done
+
+# lib/ 底下的被 source 進來，語法錯會讓呼叫端整支軟失效（`source ... || true` 吞掉錯誤）
+for h in "$HOOK_DIR"/lib/*.sh; do
+    n="lib/$(basename "$h")"
     bash -n "$h" 2>/dev/null && ok "$n 語法正確" || ng "$n 語法正確" "可解析" "語法錯誤"
 done
 
