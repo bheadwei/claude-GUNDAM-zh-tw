@@ -3,8 +3,9 @@ wbs_task: "none"
 slug: "grader-agent-drift"
 created: "2026-09-09"
 updated: "2026-09-09"
-status: "⏳ 未開始"
-current_phase: 1
+archived: "2026-09-09"
+status: "✅ 完成"
+current_phase: 5
 files:
   - ".claude/tests/skill-compliance/run-compliance.sh"
   - ".claude/tests/skill-compliance/README.md"
