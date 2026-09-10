@@ -779,8 +779,10 @@ pbash() { local c="$1"; shift; run post-bash.sh "$(printf '{"tool_name":"Bash","
 # 偵測：合併成功要記進 .merge-pending 並提醒
 reset
 expect_contains "合併成功會提醒未驗證" "還沒驗證" "$(pbash 'git merge --no-ff worktree-search')"
-if grep -q 'git merge' "$MP_FILE" 2>/dev/null; then ok "合併記入 .merge-pending"
-else ng "合併記入 .merge-pending" "有紀錄" "$(cat "$MP_FILE" 2>/dev/null)"; fi
+# 清單記的是「[操作類型] 目標 ref」而不是整條指令 —— /verify 靠它分辨
+# 哪些分支合進來了、該比對哪幾份 plan 的驗收標準。
+if grep -qx '\[merge\] worktree-search' "$MP_FILE" 2>/dev/null; then ok "合併記入 .merge-pending（帶類型與 ref）"
+else ng "合併記入 .merge-pending（帶類型與 ref）" "[merge] worktree-search" "$(cat "$MP_FILE" 2>/dev/null)"; fi
 
 # 衝突的合併**也要**記 —— 曾經只記成功的，那是個洞：
 # 衝突退出碼非零 → 不記 → conflict-resolver 解完 commit 後清單是空的
@@ -788,8 +790,8 @@ else ng "合併記入 .merge-pending" "有紀錄" "$(cat "$MP_FILE" 2>/dev/null)
 reset
 expect_contains "衝突的合併會導向 conflict-resolver" "conflict-resolver" \
     "$(run post-bash.sh "$(printf '{"tool_name":"Bash","tool_input":{"command":"git merge x"},"tool_response":{"is_error":true}}')")"
-if grep -q 'git merge' "$MP_FILE" 2>/dev/null; then ok "衝突的合併也記入 .merge-pending"
-else ng "衝突的合併也記入 .merge-pending" "有紀錄" "$(cat "$MP_FILE" 2>/dev/null)"; fi
+if grep -qx '\[merge\] x' "$MP_FILE" 2>/dev/null; then ok "衝突的合併也記入 .merge-pending"
+else ng "衝突的合併也記入 .merge-pending" "[merge] x" "$(cat "$MP_FILE" 2>/dev/null)"; fi
 
 # --abort 要清掉待驗證紀錄（放棄了就沒有東西待驗證）
 reset; mkdir -p "$(dirname "$MP_FILE")"; echo 'git merge x' > "$MP_FILE"

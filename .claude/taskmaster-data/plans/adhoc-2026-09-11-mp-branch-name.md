@@ -7,6 +7,7 @@ status: "⏳ 未開始"
 current_phase: 1
 files:
   - ".claude/hooks/post-bash.sh"
+  - ".claude/hooks/tests/run-tests.sh"
 ---
 
 # 實作計畫：`.merge-pending` 記分支名，而不是整條指令
