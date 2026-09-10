@@ -8,7 +8,7 @@ description: Use when starting any conversation in a TaskMaster project — esta
 </SUBAGENT-STOP>
 
 <EXTREMELY-IMPORTANT>
-本專案有 14 個專業 subagent。**只要有 1% 的可能性某個 agent 比你更適合這件事，你就必須派它。**
+本專案有 16 個專業 subagent。**只要有 1% 的可能性某個 agent 比你更適合這件事，你就必須派它。**
 
 有適配的 agent 時，你**沒有選擇權**。這不是建議，不能商量，**你不能靠講道理繞過它**。
 
@@ -19,7 +19,12 @@ description: Use when starting any conversation in a TaskMaster project — esta
 
 **在做任何事之前先判斷該派誰**——包含在你釐清需求、探索程式碼、讀檔之前。派錯了不要緊，事後換人就好；**沒判斷就自己動手才是錯的**。
 
-判定後宣告一句話：「委派 **<agent>**：<為什麼是它、預期產出>」，讓使用者能當場否決。然後用 `Agent` 工具，帶 `subagent_type: "<agent 名稱>"`。
+判定後**必須宣告一句**——派或不派都要，讓使用者能當場否決：
+
+- 派：「委派 **<agent>**：<為什麼是它、預期產出>」，然後用 `Agent` 工具帶 `subagent_type: "<agent 名稱>"`
+- 不派：「不派 **<agent>**：<它的產出在這個情境下為什麼沒用>」。例：「不派 `architect`：它的產出是 ADR，但這個 repo 沒有前端專案，派它只會為不存在的專案寫一份 ADR」
+
+**沒有這句話就直接開工，本身就是違規**，即使結果是對的。拒派理由必須指向**那個 agent 的產出**；「這很簡單」「我自己做比較快」不算理由（見 Red Flags）。
 
 `quick` 模式只派下表**粗體**那一棒；`standard`/`critical` 走完整鏈。
 
@@ -33,7 +38,8 @@ description: Use when starting any conversation in a TaskMaster project — esta
 | 合併出現衝突（merge／cherry-pick／rebase 停在衝突） | **conflict-resolver**（讀兩邊 plan 與報告判意圖；設計決策會 abort 並回報） |
 | 重構、清死碼、整併 | refactor-cleaner → code-quality-specialist → test-automation-engineer |
 | 前端頁面／元件／設計稿 | 先載入 `ui-style-compliance` skill → **ui-builder** →（關鍵流程）e2e-validation-specialist |
-| **整理／更新／同步文件、codemap、API 文檔、README** | **documentation-specialist** |
+| **整理／更新／同步文件**，描述的對象是**程式碼**：codemap、API 文檔、技術 README | **documentation-specialist** |
+| **整理／更新／同步文件**，描述的對象是 **`.claude/` 本身**：skill／rule／agent 定義／hook／模板自己的 README 與計數 | **skill-curator** |
 | PRD／ADR／設計文檔等流程模板 | **workflow-template-manager** |
 | 開 PR 前把關 | code-quality-specialist → security-infrastructure-auditor → e2e-validation-specialist |
 | 部署、CI/CD、容器、IaC | security-infrastructure-auditor → deployment-expert |

@@ -9,12 +9,13 @@
    （本模板不自訂它：同名會 shadow 掉內建版，換來的是更小的工具集）
 2. **委派要看任務模式** — `quick` 原則上不拉 planner/tdd-guide；`standard`/`critical` 才走完整鏈
 3. **交棒靠 handoff，不靠記憶** — 後續工作以 `coordination/handoffs/` 傳遞；`post-agent-report.sh` 會把 pending 交接注入對話，**看到提示就接手對應的「to」agent**
-4. **委派前先宣告** — 一句話說明「為什麼是這個 agent、預期產出」，讓使用者可當場否決
+4. **判定後先宣告** — 派或不派都要一句話，讓使用者可當場否決。
+   格式與拒派理由的判準見 `using-taskmaster` skill 的「規則」節（**唯一來源**）
 
 ## 該派誰
 
 **路由表的唯一來源是 `using-taskmaster` skill**（`session-start.sh` 每個 session 全文注入，
-所以它一定在你的 context 裡）。本檔不重述那張表——重複的表會漂開，而它有牙齒、這裡沒有。
+所以它一定在你的 context 裡）。本檔不重述那張表——重複的表會漂開，而那張表由 hook 每個 session 注入、這一份沒有。
 
 本檔負責的是**表以外**的編排知識：鏈怎麼推進、哪些 agent 會建交接、反模式、安全平行。
 
@@ -31,14 +32,18 @@
 
 ### 哪些 agent 實作了接力
 
-**會寫報告 + 建 handoff（11）**：planner、architect、tdd-guide、code-quality-specialist、
+**會寫報告 + 建 handoff（12）**：planner、architect、tdd-guide、code-quality-specialist、
 test-automation-engineer、security-infrastructure-auditor、e2e-validation-specialist、
-deployment-expert、refactor-cleaner、ui-builder、debug-investigator
+deployment-expert、refactor-cleaner、ui-builder、debug-investigator、skill-curator
 
 **終端節點，不建 handoff（3）**：build-error-resolver（單點修完即止）、
 documentation-specialist、workflow-template-manager
 
 `quick` 模式例外——tdd-guide 在 quick 下不寫報告也不建 handoff。
+
+12＋3＝15，第 16 個 `conflict-resolver` **刻意不在名單裡**：它的 tools 沒有 Write，
+機制上寫不了報告檔（只在回應裡回 STATUS 碼），列進去會讓稽核每次解衝突都發假警報
+（見 `post-agent-report.sh` 的註解）。**不要把它「補」回來。**
 
 ## 反模式（避免）
 
