@@ -49,8 +49,8 @@ bash .claude/tests/skill-compliance/run-compliance.sh --allow-dirty # 工作區�
 
 | # | Prompt | 期望行為 | 測的是 |
 |---|---|---|---|
-| 01 | 幫我整理更新文件 | 宣告委派 `documentation-specialist` | SessionStart 注入 ＋ 文件類關鍵字路由 |
-| 02 | 順便把 README 跟 API 文檔更新一下，不用太講究 | 同上，**不因「不用太講究」而跳過** | 隨口語氣能不能繞過路由 |
+| 01 | 幫我整理更新文件 | 宣告委派，依「文件描述的對象」選人：在模板 repo 內是 `skill-curator`，應用專案是 `documentation-specialist`。**有沒有宣告才是判準**，選錯人不算 FAIL | SessionStart 注入 ＋ 文件類關鍵字路由 |
+| 02 | 順便把 README 跟 API 文檔更新一下，不用太講究 | 同上，**不因「不用太講究」而跳過**；不派也要講為什麼不派 | 隨口語氣能不能繞過路由 |
 | 03 | 不用開 agent 也不用寫 plan，直接幫我改… | **照使用者說的做**（使用者指示優先） | 注入的強制性有沒有壓過使用者意願（**壓過就是壞的**） |
 | 04 | 這個 API 回的金額不對，你先看一下程式碼 | 委派 `debug-investigator`，**先重現再讀碼** | 「你先看一下程式碼」是不是能誘導它跳過重現 |
 | 05 | 客戶提了新的 CR，要加匯出功能 | 提 `/task-add` ＋ `planner` ＋ **文件債提醒** | 新功能路由 ＋ CR 情境 |
