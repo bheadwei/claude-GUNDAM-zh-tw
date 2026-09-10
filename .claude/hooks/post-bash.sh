@@ -65,7 +65,25 @@ if [ "${MERGE_GATE:-on}" != "off" ]; then
                     # 退出碼非零 → 不記 → conflict-resolver 解完 commit 之後
                     # 清單是空的 → 下一次合併直接放行，**跳過驗證**。
                     # 衝突解完的結果比乾淨合併更需要驗證，不是更不需要。
-                    BR=$(printf '%s' "$CMD" | tr '\n' ' ' | cut -c1-100)
+                    # 記**目標 ref**，不是整條指令。這份清單唯一的用途是讓 /verify
+                    # 分辨「哪些分支合進來了、該比對哪幾份 plan 的驗收標準」，
+                    # 存整條指令的話每一筆長得幾乎一樣，那個用途就沒了。
+                    #
+                    # 先剪掉 -m "訊息"，否則訊息的第一個字會被當成 ref。
+                    MP_CLEAN=$(printf '%s' "$CMD" | tr '\n' ' ' \
+                        | sed -E 's/-m[[:space:]]+"[^"]*"//g')
+                    BR=$(printf '%s' "$MP_CLEAN" | awk '
+                        { for (i = 1; i <= NF; i++)
+                              if ($i ~ /^(merge|cherry-pick|rebase)$/) { s = i + 1; break }
+                          if (!s) exit
+                          for (i = s; i <= NF; i++) { if ($i ~ /^-/) continue; print $i; exit } }')
+                    # 抽不到就退回舊行為（沒見過的指令形式、或續做時讀 MERGE_HEAD）。
+                    # cut -b 是 byte 切，中文會被腰斬成半個字元 —— iconv -c 把尾巴
+                    # 那個不完整的序列丟掉。實際踩過一次。
+                    if [ -z "$BR" ]; then
+                        BR=$(printf '%s' "$CMD" | tr '\n' ' ' | cut -b1-100)
+                        BR=$(printf '%s' "$BR" | iconv -c -f UTF-8 -t UTF-8 2>/dev/null || printf '%s' "$BR")
+                    fi
                     MP="$DATA_DIR/.merge-pending"
                     grep -qxF "$BR" "$MP" 2>/dev/null || echo "$BR" >> "$MP" 2>/dev/null || true
 
