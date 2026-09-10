@@ -8,7 +8,9 @@
 #   2. TTL 過期自動清除 —— 解掉「/verify 沒清 → 判級永久不觸發」的互鎖
 #   3. 坑閘門 —— 要寫的檔案在 context/learned/ 有紀錄時擋一次，把教訓貼給模型
 #   4. 裸 cd 偵測（Bash）—— 取代已移除的 rules/bash-cwd.md，改由機器強制
-#   5. 輕量 log
+#   5. Bash 的兩道 lib 閘門：merge-gate（上一個合併未驗證前不得再合併）、
+#      git-backup-gate（destructive 操作前 HEAD 必須有 backup/* tag 指著）
+#   6. 輕量 log
 #
 # 逃生門（任一成立即完全不攔）：
 #   - .suggest-mode 內容為 off
@@ -16,8 +18,10 @@
 #   - jq 不可用（無法解析輸入，寧可放行也不誤擋）
 #
 # 可調參數：
-#   TASKMODE_TTL_HOURS  模式檔多久算過期（預設 8，即一個工作 session）
-#   PITFALL_GATE=off    只關坑閘門，保留任務模式閘門
+#   TASKMODE_TTL_HOURS   模式檔多久算過期（預設 8，即一個工作 session）
+#   PITFALL_GATE=off     只關坑閘門，保留任務模式閘門
+#   MERGE_GATE=off       只關合併閘門
+#   GIT_BACKUP_GATE=off  只關 backup tag 閘門
 
 set -u
 
@@ -107,6 +111,15 @@ if [ "$TOOL_NAME" = "Bash" ] && [ -n "$COMMAND" ]; then
     source "$(dirname "${BASH_SOURCE[0]}")/lib/merge-gate.sh" 2>/dev/null || true
     if declare -F merge_gate >/dev/null 2>&1; then
         merge_gate "$COMMAND" "$DATA_DIR"
+    fi
+
+    # backup tag 閘門：destructive 操作前 HEAD 必須有 backup/* tag 指著。
+    # 排在 merge-gate **之後**——待驗證的合併還沒處理完的話，該先講那件事；
+    # 而 `git rebase` 兩道閘門都攔，先收到「上一個合併沒驗」比先收到
+    # 「去打 tag」更接近使用者當下該做的事。
+    source "$(dirname "${BASH_SOURCE[0]}")/lib/git-backup-gate.sh" 2>/dev/null || true
+    if declare -F git_backup_gate >/dev/null 2>&1; then
+        git_backup_gate "$COMMAND" "$WORK_ROOT"
     fi
 fi
 

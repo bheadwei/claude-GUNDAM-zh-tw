@@ -819,6 +819,96 @@ reset; mkdir -p "$(dirname "$MP_FILE")"; : > "$MP_FILE"
 expect_decision "清單為空時放行 merge" allow "$(bg 'git merge --no-ff worktree-cart')"
 
 # =========================================================================
+section "git backup 閘門 — destructive 操作前必須有安全快照"
+# =========================================================================
+#
+# 這四種指令（reset --hard／push --force／branch -D／rebase）會讓一段 commit
+# 失去所有 ref，撿回來只剩 reflog——而 reflog 是「通常還在」不是「保證還在」。
+# 原本這條只寫在 rules/git-workflow.md 裡（自律），現在由 lib/git-backup-gate.sh 強制。
+#
+# 這組測試需要**真的 git repo**：閘門的判準是「HEAD 有沒有 backup/* tag 指著」，
+# 只有真的打 tag、真的往前 commit 才驗得到「tag 指向舊 commit 時仍要擋」。
+# 直接把沙箱本身 git init（CLAUDE_PROJECT_DIR 已指向它 → WORK_ROOT 就是它）。
+# 本區塊之後的案例不碰 git，所以多一個 .git 目錄不影響它們。
+
+git -c init.defaultBranch=main init -q "$SANDBOX" >/dev/null 2>&1
+
+gitq() { git -C "$SANDBOX" -c user.email=t@example.com -c user.name=t "$@" >/dev/null 2>&1; }
+# 清掉殘留的 backup tag —— reset() 只清 .claude/，tag 會跨案例活著
+gbg_untag() {
+    local t
+    while IFS= read -r t; do
+        [ -n "$t" ] || continue
+        git -C "$SANDBOX" tag -d "$t" >/dev/null 2>&1
+    done <<< "$(git -C "$SANDBOX" tag -l 'backup/*' 2>/dev/null)"
+}
+gbp() { jq -nc --arg cwd "$SANDBOX" --arg c "$1" '{cwd:$cwd,tool_name:"Bash",tool_input:{command:$c}}'; }
+gb()  { local c="$1"; shift; run pre-tool-use.sh "$(gbp "$c")" "$@"; }
+# gbo <command> <root> —— 換一個 root（run() 已帶 CLAUDE_PROJECT_DIR，後面的覆寫前面的）
+gbo() {
+    run pre-tool-use.sh \
+        "$(jq -nc --arg cwd "$2" --arg c "$1" '{cwd:$cwd,tool_name:"Bash",tool_input:{command:$c}}')" \
+        CLAUDE_PROJECT_DIR="$2"
+}
+
+reset; gitq commit --allow-empty -m c1; gbg_untag
+
+# 沒有快照 → 四種 destructive 指令都要擋
+expect_decision "reset --hard 沒快照時被擋"      deny "$(gb 'git reset --hard HEAD')"
+expect_decision "push --force 沒快照時被擋"      deny "$(gb 'git push --force origin main')"
+expect_decision "push -f 沒快照時被擋"           deny "$(gb 'git push -f origin main')"
+# --force-with-lease 防的是覆蓋**別人**的 push，不是防自己弄丟本地工作 → 不特例放行
+expect_decision "push --force-with-lease 不特例放行" deny "$(gb 'git push --force-with-lease origin main')"
+expect_decision "branch -D 沒快照時被擋"         deny "$(gb 'git branch -D feat/x')"
+expect_decision "rebase 沒快照時被擋"            deny "$(gb 'git rebase main')"
+# 真實用法常是鏈式的，指令段不是整條指令的開頭
+expect_decision "鏈式 cd x && git reset --hard 也擋" deny "$(gb 'cd /tmp && git reset --hard HEAD')"
+
+# deny 訊息要能直接複製，不能只說「請先打 tag」
+expect_contains "deny 訊息給出可複製的 tag 指令" "git tag backup/" \
+    "$(gb 'git reset --hard HEAD' | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+
+# 有快照 → 放行；但快照必須指向**當前** HEAD
+reset; gbg_untag; gitq tag "backup/main-test"
+expect_decision "backup tag 指向 HEAD 時放行"    allow "$(gb 'git reset --hard HEAD')"
+
+gitq commit --allow-empty -m c2      # HEAD 前進，tag 留在舊 commit
+expect_decision "tag 指向舊 commit 時仍擋"       deny  "$(gb 'git reset --hard HEAD')"
+gbg_untag
+
+# --continue / --abort / --skip 是收拾當前狀態，不是新的 destructive 操作
+expect_decision "rebase --continue 放行"         allow "$(gb 'git rebase --continue')"
+expect_decision "rebase --abort 放行"            allow "$(gb 'git rebase --abort')"
+expect_decision "rebase --skip 放行"             allow "$(gb 'git rebase --skip')"
+
+# 不該擋的
+expect_decision "無害的 git 指令放行"            allow "$(gb 'git status')"
+expect_decision "reset 沒帶 --hard 放行"         allow "$(gb 'git reset HEAD~1')"
+expect_decision "branch -d（小寫）放行"          allow "$(gb 'git branch -d feat/x')"
+expect_decision "不含 git 的指令放行"            allow "$(gb 'npm run reset -- --hard')"
+# 誤擋回歸：子字串比對會讓「寫文件時提到這些指令」也被擋。本閘門幾乎每個 session
+# 都處於「沒有 backup tag」的狀態，所以這個誤擋會天天發生——實際踩過一次。
+expect_decision "只是提到指令（heredoc 內文）不擋" allow \
+    "$(gb 'cat > d.md <<EOF
+先打 tag 再 git reset --hard
+EOF')"
+
+# 逃生門
+expect_decision "GIT_BACKUP_GATE=off 關閉閘門"   allow "$(gb 'git reset --hard HEAD' GIT_BACKUP_GATE=off)"
+reset; echo off > "$SM_FILE"
+expect_decision "suggest-mode=off 也關閉閘門"    allow "$(gb 'git reset --hard HEAD')"
+
+# 判斷不了就放行（缺依賴／狀態不明時寧可放行也不誤擋）
+reset
+GBG_EMPTY="$SANDBOX/emptyrepo"; mkdir -p "$GBG_EMPTY"
+git -c init.defaultBranch=main init -q "$GBG_EMPTY" >/dev/null 2>&1
+expect_decision "空 repo（unborn HEAD）放行"     allow "$(gbo 'git reset --hard HEAD' "$GBG_EMPTY")"
+
+GBG_NOREPO=$(mktemp -d)
+expect_decision "不在 git repo 裡放行"           allow "$(gbo 'git reset --hard HEAD' "$GBG_NOREPO")"
+rm -rf "$GBG_NOREPO"
+
+# =========================================================================
 section "pre-agent-gate.sh — 擋同時派多個無隔離 agent"
 # =========================================================================
 #

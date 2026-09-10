@@ -4,8 +4,10 @@
 bash .claude/hooks/tests/run-tests.sh
 ```
 
-209 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。
-**Windows Git Bash 上約需 1.5 分鐘**——大量 `bash` + `jq` 子行程，process spawn 是主要成本。
+232 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。
+**Windows Git Bash 上約需 5 分鐘**（2026-09-09 實測）——大量 `bash` + `jq` 子行程，
+process spawn 是主要成本。**看起來像掛住其實只是慢**：用背景執行並把輸出重導到檔案，
+不要 `| tail`（管線會把輸出憋到最後，中途看不到進度，也就看不出它到底跑到哪）。
 
 ## 為什麼這套測試存在
 
@@ -29,7 +31,11 @@ bash .claude/hooks/tests/run-tests.sh
 | 裸 `cd` 偵測 | 6 | 裸 cd 擋；`&&`、`;`、subshell、非 cd 指令放行 |
 | handoff 注入 | 9 | pending 注入含 from/to/優先級/起因；completed 不注入；suggest-mode 分級過濾；範本檔不誤判 |
 | 意圖路由 | 8 | auth→critical、UI/npm/測試→提示載入對應 skill、斜線指令不路由 |
+| git backup 閘門 | 22 | 四種 destructive 指令都擋、`--force-with-lease` 不例外、tag 指向 HEAD 才放行、`--continue/--abort/--skip` 放行、**只是提到指令不擋**、兩個逃生門、非 repo/空 repo 放行 |
 | 全體 hooks | 12 | 語法可解析、空 payload 不爆炸 |
+
+> 這張表**不是全部**（缺合併閘門、平行 agent 閘門、resolve-roots 等區塊），
+> 各列的數字也只對得上自己那一區。要看完整清單請直接讀 `run-tests.sh` 的 `section` 標題。
 
 ## 隔離保證
 

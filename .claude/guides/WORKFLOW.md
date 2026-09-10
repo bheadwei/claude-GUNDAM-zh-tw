@@ -5,7 +5,7 @@
 | 層 | 數量 | 何時生效 | 可否略過 |
 |---|---|---|---|
 | **Hooks** | 9 | 事件觸發，機器執行 | 只有明確逃生門 |
-| **Rules** | 5 | 每個 session 全量載入 | 否（但靠模型遵守） |
+| **Rules** | 6 | 每個 session 全量載入 | 否（但靠模型遵守） |
 | **Skills** | 27 | 情境觸發，按需載入 | 是（需被想起來） |
 | **Commands** | 29 | 使用者主動叫 | — |
 | **Agents** | 16 | 委派時啟動 | — |
@@ -438,11 +438,11 @@ worktree 裡連 plan 都沒有，agent 不知道要實作什麼。
 ## 改動 hook 之後
 
 ```bash
-bash .claude/hooks/tests/run-tests.sh        # 137 案例
-bash scripts/check-counts.sh --tests 137   # 文件計數一致性
+bash .claude/hooks/tests/run-tests.sh        # 232 案例
+bash scripts/check-counts.sh --tests 232   # 文件計數一致性
 ```
 
 CI（`.github/workflows/template-ci.yml`）會在 push 與 PR 時自動跑這兩項，
 加上 Windows/Git Bash 的回歸測試、shell 與 PowerShell 語法、copy/update-template 沙箱實跑。
 
-209 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
+232 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。

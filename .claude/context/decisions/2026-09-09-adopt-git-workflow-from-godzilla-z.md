@@ -15,7 +15,57 @@
 commit 格式在 `coding-style.md`、PR 流程在 `commands/pr.md`（唯一來源）。
 `ch1_introduction.md` 曾引用的 `rules/git-workflow.md` 早已不存在。
 
-## 決定採納（四條鐵律，新開 `.claude/rules/git-workflow.md`）
+## ⚠️ 修正（同日）：四條變三條 —— 這個檔名曾經被刻意刪除
+
+**使用者指出「我記得之前有 git-workflow 這個 rule，後來因為重複打架被刪掉」。查證後他是對的，
+而本 ADR 的初版漏了這件事。**
+
+`.claude/rules/git-workflow.md` 從 init 就存在，在 **commit `7596b1d`**
+（2026-09-07，「refactor: 消除跨層重複，常駐 context 524 → 496 行」）被刪除。舊檔只有兩節：
+
+| 舊內容 | 處置 |
+|---|---|
+| `## Commit Message 格式` | 併進 `rules/coding-style.md`（8 行，並在檔內寫下「為什麼刻意留在常駐」） |
+| `## Pull Request 流程`（5 步） | **刪除** —— `commands/pr.md` 取代且更好 |
+
+刪除理由原文：
+
+> **PR 那半已被 `/pr.md` 取代，而且 `/pr.md` 更好**。rule 只寫「使用 `git diff [base]...HEAD`」，
+> pr.md 連「務必用三個點，兩個點會把 base 分支的新 commit 也算進來」都解釋了。
+> 而 pr.md 第 7 行還寫著「git-workflow.md 早就定義了 PR 流程，本指令是它的執行入口」
+> —— **方向是反的**
+
+### 對本決策的影響
+
+三條是真的新的（舊檔完全沒有）：**先開分支**、**多 session ref 驗證**、**backup tag**。
+
+**第 4 條「commit → push → PR 為單一連貫操作」撤回** —— 它正是當初被刪掉的那個類別，
+而且不只是重複，是**三方直接矛盾**：
+
+| 來源 | 說什麼 |
+|---|---|
+| `commands/pr.md` 步驟 2、3 | 刻意用 `AskUserQuestion` 問**兩次**（要不要先跑把關、草稿確認） |
+| `rules/interactive-qa.md:5` | 所有決策點**必須**用 `AskUserQuestion`，一次一題 |
+| Godzilla-z 第 4 條 | **禁止**在中間插入「要不要 push？」 |
+
+Godzilla-z 能有那條，是因為**它沒有 `interactive-qa.md` 這一層**。它的哲學是
+「使用者說做完了就一氣呵成」，我們的是「一次一題問清楚」。單獨把那條搬過來，
+會讓 `rules/` 出現一條禁止其他兩份文件所要求的行為。
+
+### 教訓（比這個決策本身更值得記）
+
+**採納外部模板的單一條文之前，要先查這個檔名／這個主題在本 repo 的歷史。**
+`git log --all --diff-filter=D -- <path>` 一行就能查到。本 ADR 初版評估了
+Godzilla-z 的內容、也比對了我們**當前**的檔案，但沒查**刪除紀錄**——
+而「曾經有、後來刻意移除」正是最需要知道的那種資訊。
+
+新的 `rules/git-workflow.md` 檔頭要寫下這段歷史，讓下一個想補 PR 內容進來的人先看到警告。
+
+---
+
+## 原始決定（四條鐵律，新開 `.claude/rules/git-workflow.md`）
+
+> 第 4 條已依上方修正撤回，保留原文供對照。
 
 1. **先開分支** —— 收到開發任務的第一步跑 `git branch --show-current` + `git status`；
    在 main 上、工作區 dirty、或使用者沒指定分支就要改 code → 停止並詢問

@@ -86,11 +86,11 @@ claude_v2026/
     ├── settings.json                 # 主設定（權限、StatusLine、Hooks）
     ├── statusline.sh                 # StatusLine 腳本
     │
-    ├── rules/        ( 5 個)         # 自動載入規則（每次對話注入）
+    ├── rules/        ( 6 個)         # 自動載入規則（每次對話注入）
     ├── agents/       (16 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
     ├── skills/       (27 個)         # 按需載入（不佔常駐 context）
-    ├── hooks/                        # Hook 腳本 + lib/ + 209 案例回歸測試
+    ├── hooks/                        # Hook 腳本 + lib/ + 232 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）
     ├── ui/           (69 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │
@@ -212,14 +212,17 @@ claude_v2026/
 
 ---
 
-## Rules（5 個，自動載入）
+## Rules（6 個，自動載入）
 
-每次對話自動注入。從 15 條瘦身至 5 條（v5.3 砍到 6、v5.5 再把 `git-workflow` 拆掉）——常駐規則的成本是**注意力稀釋**，
+每次對話自動注入。從 15 條瘦身至 5 條（v5.3 砍到 6、v5.5 把重複 `pr.md` 與
+`coding-style.md` 的 `git-workflow` 整檔拆掉），2026-09-09 以「只留與模型預設行為不同的
+約束」重寫 `git-workflow` 補回一條——常駐規則的成本是**注意力稀釋**，
 「只在特定情境才該生效」的規則被淹沒後反而失效，因此改搬成按需載入的 skill。
 
 | 規則 | 強制內容 |
 | :--- | :--- |
 | **task-mode** | 任務分級 quick / standard / critical，由 `pre-tool-use.sh` 硬性強制 |
+| **git-workflow** | 先開分支再寫程式、多 session ref 驗證、destructive 前打 backup tag（由 `lib/git-backup-gate.sh` 強制） |
 | **agent-orchestration** | 何時委派哪個 agent、標準鏈、handoff 接力、安全平行 |
 | **coding-style** | 克制原則、**註解預設不寫**、不可變性、檔案 < 800 行、函式 < 50 行 |
 | **interactive-qa** | `AskUserQuestion` 一次一題、問答歷史落檔 |

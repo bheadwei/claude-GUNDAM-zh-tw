@@ -18,7 +18,7 @@
 │   └── STATUSLINE_GUIDE.md    # StatusLine 客製化手冊
 ├── agents/       (16 個)      # 專業 Agent 定義
 ├── commands/     (29 個)      # Slash Command
-├── rules/        ( 5 個)      # 自動載入規則
+├── rules/        ( 6 個)      # 自動載入規則
 ├── skills/       (27 個)      # 專案特定領域知識
 ├── hooks/                     # Hook 腳本庫
 ├── context/                   # 跨 Agent 上下文共享
@@ -67,15 +67,16 @@
 | postgres-patterns | PostgreSQL 速查表 |
 
 
-## Rules（5 個，自動載入）
+## Rules（6 個，自動載入）
 
-每次對話自動注入 context，無需手動觸發。**只保留「任何任務都適用」的規則**——
-領域專屬知識改由 skill 按需載入，可強制的約束交給 hook。
+每次對話自動注入 context，無需手動觸發。**只保留「任何任務都適用、而且與模型預設
+行為不同」的規則**——領域專屬知識改由 skill 按需載入，可強制的約束交給 hook。
 
 | 規則 | 內容 |
 | :--- | :--- |
 | coding-style | 克制原則、不可變性、檔案大小、錯誤處理、CWD、Context 管理 |
 | task-mode | quick/standard/critical 三檔分級（由 `pre-tool-use.sh` 強制判級） |
+| git-workflow | 先開分支、多 session ref 驗證、destructive 前打 backup tag（由 `lib/git-backup-gate.sh` 強制） |
 | agent-orchestration | 各任務類型的 agent 鏈、handoff 接力、安全平行 |
 | security | commit 前安全檢查 |
 | interactive-qa | AskUserQuestion 一次一題 |
