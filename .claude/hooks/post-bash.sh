@@ -65,7 +65,17 @@ if [ "${MERGE_GATE:-on}" != "off" ]; then
                     # 退出碼非零 → 不記 → conflict-resolver 解完 commit 之後
                     # 清單是空的 → 下一次合併直接放行，**跳過驗證**。
                     # 衝突解完的結果比乾淨合併更需要驗證，不是更不需要。
-                    BR=$(printf '%s' "$CMD" | tr '\n' ' ' | cut -c1-100)
+                    # 標記是哪一種操作。三者被同一個 case 收進同一份清單，但合併後
+                    # 要驗的東西不同：merge 驗兩邊 plan 的驗收標準都還成立；
+                    # cherry-pick 驗被挑過來的 commit 在新脈絡下仍成立（它的前後文
+                    # 沒跟過來）；rebase 整段歷史都被重寫，每個 commit 都是新的。
+                    # /verify 現在對三者一視同仁，就是因為清單上分不出來。
+                    MP_OP=merge
+                    case "$CMD" in
+                        *"git cherry-pick"*) MP_OP=cherry-pick ;;
+                        *"git rebase"*)      MP_OP=rebase ;;
+                    esac
+                    BR="[$MP_OP] $(printf '%s' "$CMD" | tr '\n' ' ' | cut -c1-100)"
                     MP="$DATA_DIR/.merge-pending"
                     grep -qxF "$BR" "$MP" 2>/dev/null || echo "$BR" >> "$MP" 2>/dev/null || true
 
