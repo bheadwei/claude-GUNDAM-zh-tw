@@ -37,9 +37,9 @@
   - **受測者讀得到考卷**：prompt 04／05 都主動指出題目一字不差存在 `prompts/*.txt`。這次它選擇不看評分標準，但下次照答案演我們分不出來
   - `-p` 非互動模式拿不到權限提示 → 受測 session 寫不了 `.claude/**`、跑不了 Bash 腳本
   - 已驗出的結論：反向題 2/2 PASS（注入沒硬到壓過使用者指示）、任務分級與升級有效；**文件路由（01／02）兩次都沒走**，證實了 Red Flags 表「最常被漏掉的一棒」那句判斷
-- **平行開發已實跑一輪，但 `conflict-resolver` 仍未驗**（2026-09-09）。兩個隔離 agent、`files:` 判定無交集、依序合併全部通過，`baseRef`／隔離強制／合併閘門都驗到了——但**零衝突就代表 `conflict-resolver` 從頭到尾沒被叫起來**，它判意圖的準確度還是未知。要驗它得刻意製造衝突
 - **`pre-agent-gate.sh` 的 `.suggest-mode` 讀錯 root**：它讀 `WORK_CLAUDE`，但 `post-agent-report.sh` 與 `worktree-orchestration` 的隔離表都把它列為 `MAIN_CLAUDE` 的專案級設定。後果是主 checkout 設 `/suggest-mode off` 關不掉 worktree 裡的平行 agent 閘門。無測試覆蓋
-- **`post-bash.sh` 的 `.merge-pending` 記的是整條指令而非分支名**（第 68 行 `BR=$(... | cut -c1-100)`，按 byte 切，中文 commit message 會被切在 UTF-8 字元中間變亂碼）。閘門功能不受影響，但「最早一筆是 X」唯一的用途就是分辨哪個分支，現在做不到
+- **閘門用子字串比對指令名，寫到那個指令的文件會被當成真的執行過**（2026-09-11 實測，一天被誤擋四次，**包括擋下修好它自己的那次編輯**）。`post-bash.sh` 的 `case "$CMD" in *"<指令名>"*)` 只要內文命中就記一筆待驗證。`git-backup-gate.sh` **已經修過同一類問題**（測試案例「只是提到指令（heredoc 內文）不擋」），但合併偵測沒跟著補。`.claude/` 底下所有用同樣寫法判斷的地方都該一起檢查。細節見 `context/learned/2026-09-11-gate-blocks-its-own-fix.md`
+- **衝突檔本身是 live hook 時，「委派 `conflict-resolver`」的注入靜默失效**（2026-09-11 實測）。衝突標記讓 hook 語法壞掉 → PostToolUse 只噴語法錯誤，該出現的提示沒出現。這推翻了「hook 一定會提醒你委派」這個隱含假設，而本模板最常做的事就是改 hook。沒有簡單解；務實做法是**衝突檔含 `.claude/hooks/**` 時不要等提示，自己看 `git status`**
 
 ### 已修的落差
 
