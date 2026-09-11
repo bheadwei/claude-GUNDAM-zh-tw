@@ -1038,6 +1038,56 @@ expect_decision "PARALLEL_AGENT_GATE=off 關閉閘門" allow \
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1; echo off > "$SM_FILE"
 expect_decision "suggest-mode=off 也關閉閘門" allow "$(ag planner)"
 
+# 攔截訊息要先給一個推薦，不是把三個選項丟回去讓使用者自己判斷。
+# 推薦只依兩件閘門算得出來的事：工作區乾不乾淨（**WORK_ROOT 下**的 git status）、
+# plans/ 有沒有帶 `files:` 的 plan（排除 archive/）。後者為「零」時壓過前者。
+#
+# 算不出來就不推薦——上面所有案例的沙箱都不是 git repo，它們的攔截訊息因此一律
+# 沒有推薦行，順便釘住了「沒有 git／非 repo 時安靜退回中立三選項」。
+# 這三條**不能用共用的 $SANDBOX 當 repo**：前面區塊在它底下留了巢狀 git repo
+# （git-backup 那組的 emptyrepo 等），`git add -A` 清不乾淨，「乾淨」那條會假失敗。
+# 自己開一個獨立 root，順便不必在結束時把 $SANDBOX 的 .git 清掉。
+#
+# pg_setup <root> <clean|dirty> <plan|noplan>
+pg_setup() {
+    rm -rf "$1"
+    mkdir -p "$1/.claude/logs" "$1/.claude/taskmaster-data/plans"
+    git -c init.defaultBranch=main init -q "$1" >/dev/null 2>&1
+    # 短命旗標與 log 在真實專案是 gitignore 的，否則閘門自己寫的檔會讓工作區變髒
+    printf '.claude/logs/\n.claude/taskmaster-data/.*\n' > "$1/.gitignore"
+    if [ "$3" = plan ]; then
+        printf -- '---\nfiles:\n  - "src/a.ts"\n---\n' > "$1/.claude/taskmaster-data/plans/p1.md"
+    else
+        printf -- '---\ntitle: 沒有 files 欄\n---\n' > "$1/.claude/taskmaster-data/plans/p0.md"
+    fi
+    if [ "$2" = clean ]; then
+        git -C "$1" add -A >/dev/null 2>&1
+        git -C "$1" -c user.email=t@t -c user.name=t commit -qm base >/dev/null 2>&1
+    fi
+    echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"event\":\"agent_start\",\"agent_id\":\"a1\"}" \
+        >> "$1/.claude/logs/agent-activity.jsonl"
+}
+# pg_gate <root> —— 用該 root 當 CLAUDE_PROJECT_DIR 與 cwd 跑閘門，取回攔截理由
+pg_gate() {
+    printf '{"cwd":"%s","hook_event_name":"PreToolUse","tool_input":{"subagent_type":"planner"},"tool_use_id":"tX"}' "$1" \
+        | env CLAUDE_PROJECT_DIR="$1" bash "$HOOK_DIR/pre-agent-gate.sh" 2>/dev/null \
+        | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null
+}
+
+PG_RECO="$SANDBOX/pg-reco"
+pg_setup "$PG_RECO" dirty plan
+expect_contains "工作區不乾淨 → 推薦序列化" "推薦：序列化" "$(pg_gate "$PG_RECO")"
+
+pg_setup "$PG_RECO" clean plan
+expect_contains "工作區乾淨 → 推薦帶隔離" "推薦：帶隔離" "$(pg_gate "$PG_RECO")"
+
+# plans/ 存在但沒有任何帶 `files:` 的檔案 → 壓成序列化（工作區乾淨也一樣），
+# 且要說出是為什麼
+pg_setup "$PG_RECO" clean noplan
+expect_contains "沒有帶 files: 的 plan → 序列化並點出原因" \
+    '序列化（選項 1）** —— `taskmaster-data/plans/` 裡**沒有任何帶' "$(pg_gate "$PG_RECO")"
+rm -rf "$PG_RECO"
+
 # =========================================================================
 section "agent-monitor.sh × pre-agent-gate.sh — 非同步派工的完成時機"
 # =========================================================================

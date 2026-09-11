@@ -107,11 +107,69 @@ fi
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] parallel-agent-gate: deny (inflight=$INFLIGHT, next=$SUBAGENT)" \
     >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
 
-jq -n --arg n "$INFLIGHT" --arg next "$SUBAGENT" '{
+# ------------------------------------------------------------------ 推薦哪一個
+#
+# 只列三個選項等於把判斷丟回給使用者。閘門算得出來的部分就該先講。
+#
+# **這整段只在攔截路徑跑**（上面所有 exit 0 都已經返回了）。放行時不會多跑一次
+# `git status`——它在大 repo 上不便宜，而放行是絕對多數的情況。
+#
+# **算不出來就不推薦。** 任何一項失敗（沒有 git、不是 repo、status 失敗、
+# plans/ 不存在）都讓 RECO 留空，訊息安靜退回原本的中立三選項。
+# 攔截比推薦重要：推薦錯了會誤導，攔截漏了會靜默覆蓋別人的工作。
+
+# 檢查一：工作區乾不乾淨。**必須在 WORK_ROOT 下跑**——worktree session 裡
+# 主 checkout 的狀態跟這次派工無關。
+GIT_DIRTY=unknown
+DIRTY_N=0
+if command -v git >/dev/null 2>&1 && [ -n "${WORK_ROOT:-}" ] && [ -d "${WORK_ROOT:-}" ]; then
+    if PORCELAIN=$(git -C "$WORK_ROOT" status --porcelain 2>/dev/null); then
+        # **不要在這裡接 `|| echo`**：`grep -c` 數到 0 時會印出 "0" 並**回傳 1**，
+        # fallback 於是把第二行也塞進來（"0\nx"），乾淨的工作區會被判成數不出來。
+        # 計數本身一律會印出來，command substitution 的結束碼在這裡無所謂。
+        DIRTY_N=$(printf '%s\n' "$PORCELAIN" | grep -c '[^[:space:]]' 2>/dev/null)
+        # 數不出來就留 unknown。**不要退回 "no"**——那會變成宣稱「工作區乾淨」
+        # 並推薦 worktree，是唯一一種會主動誤導的失敗方式。
+        case "$DIRTY_N" in
+            ''|*[!0-9]*) GIT_DIRTY=unknown ;;
+            0)           GIT_DIRTY=no ;;
+            *)           GIT_DIRTY=yes ;;
+        esac
+    fi
+fi
+
+# 檢查二：有沒有任何帶 `files:` 的 plan（排除 archive/，那是做完的）。
+# **只有「零」這個答案敢講**：零就是真的沒有平行的依據。非零時不聲稱任何事——
+# 從這次派工反查不到對應的 plan，講「你有 plan」等於暗示範圍已確認過。
+#
+# `plans/` 整個不存在時留 unknown 而不是 "no"：那種專案根本沒在用 plan，
+# 說「你沒有任何帶 files: 的 plan」是用模板的慣例去指責它。兩個檢查各自獨立，
+# 這種情況下推薦仍可能由檢查一給出（它的理由不涉及 plan）。
+HAS_FILES_PLAN=unknown
+PLANS_DIR="$WORK_CLAUDE/taskmaster-data/plans"
+if [ -d "$PLANS_DIR" ]; then
+    if grep -rlE '^files:' --include='*.md' --exclude-dir=archive "$PLANS_DIR" >/dev/null 2>&1; then
+        HAS_FILES_PLAN=yes
+    else
+        HAS_FILES_PLAN=no
+    fi
+fi
+
+# 檢查二壓過檢查一：沒有 plan 就沒有平行的依據，工作區再乾淨也一樣
+RECO=""
+if [ "$HAS_FILES_PLAN" = "no" ]; then
+    RECO="👉 **推薦：序列化（選項 1）** —— \`taskmaster-data/plans/\` 裡**沒有任何帶 \`files:\` 的 plan**，所以無法確認這幾個 agent 的檔案範圍不重疊。沒有依據就不要平行。"
+elif [ "$GIT_DIRTY" = "yes" ]; then
+    RECO="👉 **推薦：序列化（選項 1）** —— 工作區有 ${DIRTY_N} 個未 commit 的變更。worktree 從 HEAD 開一份乾淨 checkout，**看不到這些改動**；agent 進去會發現缺東西，然後自己重建一份——而且沒有任何錯誤訊息，你要到對帳時才發現。要走選項 2 就先 commit。"
+elif [ "$GIT_DIRTY" = "no" ]; then
+    RECO="👉 **推薦：帶隔離（選項 2）** —— 工作區乾淨，worktree 拿得到完整 baseline。合併時**依相依順序、一次合一個**，每合完立刻 \`/verify\`。"
+fi
+
+jq -n --arg n "$INFLIGHT" --arg next "$SUBAGENT" --arg reco "$RECO" '{
   hookSpecificOutput: {
     hookEventName: "PreToolUse",
     permissionDecision: "deny",
-    permissionDecisionReason: ("⚠️ 已經有 " + $n + " 個沒有隔離的 agent 在跑，你正要再派一個 `" + $next + "`。\n\n沒帶 `isolation` 的 subagent 全部在**同一個工作目錄**動手。兩個 agent 改到同一個檔案時，後寫的會**直接覆蓋前面的**——沒有衝突提示、沒有錯誤訊息。你會拿到「看起來完成了」但其中一份工作被靜默吃掉的結果，而且通常要到很後面才發現。\n\n**三個選擇，挑一個：**\n\n1. **序列化** —— 等前一個回來再派下一個。任務有依賴、或會動到同一批檔案時就選這個\n2. **帶隔離** —— `Agent` 工具加 `isolation: \"worktree\"`。各自一份 checkout 與分支，衝突變成看得見的 git 衝突。適合檔案範圍無交集且每個任務 ≥30 分鐘（開 worktree 有固定成本，短任務是淨虧損）\n3. **確認範圍無交集後重試** —— 若你已確認這幾個 agent 的檔案範圍不重疊（例如各寫不同的報告檔），**用一句話說出各自要寫哪些檔案**，然後重試同一次呼叫即可通過\n\n（本批只擋這一次；前一批跑完會自動重新受檢。關閉：PARALLEL_AGENT_GATE=off）")
+    permissionDecisionReason: (($reco | if . == "" then "" else . + "\n\n" end) + "⚠️ 已經有 " + $n + " 個沒有隔離的 agent 在跑，你正要再派一個 `" + $next + "`。\n\n沒帶 `isolation` 的 subagent 全部在**同一個工作目錄**動手。兩個 agent 改到同一個檔案時，後寫的會**直接覆蓋前面的**——沒有衝突提示、沒有錯誤訊息。你會拿到「看起來完成了」但其中一份工作被靜默吃掉的結果，而且通常要到很後面才發現。\n\n**三個選擇，挑一個：**\n\n1. **序列化** —— 等前一個回來再派下一個。任務有依賴、或會動到同一批檔案時就選這個\n2. **帶隔離** —— `Agent` 工具加 `isolation: \"worktree\"`。各自一份 checkout 與分支，衝突變成看得見的 git 衝突。適合檔案範圍無交集且每個任務 ≥30 分鐘（開 worktree 有固定成本，短任務是淨虧損）\n3. **確認範圍無交集後重試** —— 若你已確認這幾個 agent 的檔案範圍不重疊（例如各寫不同的報告檔），**用一句話說出各自要寫哪些檔案**，然後重試同一次呼叫即可通過\n\n**閘門沒判斷的三件事**：這幾個 agent 實際會碰哪些檔案、每個任務會跑多久（這決定選項 2 值不值得）、以及 prompt 寫了「不要改程式碼」並**不保證** agent 不改。這三件只有你知道。\n\n（本批只擋這一次；前一批跑完會自動重新受檢。關閉：PARALLEL_AGENT_GATE=off）")
   }
 }' 2>/dev/null || true
 
