@@ -21,6 +21,8 @@
 - **改 `.claude/` 的目錄結構** → 同步 `scripts/copy-template.sh` 的 `EXCLUDES` **和** `scripts/copy-template.ps1` 的 `$excludeDirs` / `$excludeFiles`（兩份要一致，容易漏改 ps1）
 - **新增 skill** → 更新 `.claude/skills/INDEX.md`，否則沒人知道它存在
 - **改 hook** → `.claude/hooks/tests/run-tests.sh` 有測試。語法壞掉會由 `post-write.sh` 在寫入當下印出 `bash -n` 的錯誤（只出聲不擋；`post-write.sh` 自己壞掉時無人可報，那無解）
+- **寫「那件事做完了沒」的閘門** → **`PostToolUse` 只代表工具呼叫返回了**。`Agent` 是非同步的（tool response 帶 `async_launched`），拿它當完成訊號會讓計數恆為 0 而且完全無聲——`pre-agent-gate.sh` 這樣壞了一整段時間。真正的結束事件是 `SubagentStop`。先用一筆真實資料對時間差再寫測試（見 `context/learned/2026-09-11-async-dispatch-breaks-posttooluse-gates.md`）
+- **新增 hook 事件接線** → 同步 `.claude/settings.json` **和** `.claude/hooks/README.md`（檔案結構樹 + 各 hook 功能表）。hook 腳本數沒變時 `check-counts.sh` 不會提醒你
 - **改 agent 的報告落點或 handoff 行為** → `post-agent-report.sh` 的 `AREA` 對應表要同步，**否則稽核永遠找不到報告**
 - **新增 `context/` 的 area 子目錄** → 同步 `copy-template.sh` 的 `for d in ...` **和** `copy-template.ps1` 的 `$contextAreas`（四份腳本的骨架規則要一致：`copy-template.{sh,ps1}` 建目錄、`update-template.{sh,ps1}` 只補 `README.md`／`_*.md`／`.gitkeep`）
 - **改 hook 讀寫的狀態檔** → 先想清楚它屬「短命旗標」還是「共享產物」，照 `worktree-orchestration` skill 的邊界表選 `WORK_CLAUDE` 或 `MAIN_CLAUDE`。用錯的話平行開發會靜默壞掉

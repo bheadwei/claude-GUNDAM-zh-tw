@@ -13,6 +13,24 @@
 
 ### 已修（2026-09-11）
 
+- ~~`pre-agent-gate.sh` 從裝上去那天就沒攔截過任何一次~~ → 閘門邏輯一直是對的，
+  錯的是它讀的那本帳：`agent_complete` 由 `PostToolUse(Agent)` 寫，而 **Agent 工具是
+  非同步的**——呼叫立刻返回 `{"isAsync":true,"status":"async_launched"}`，所以那筆
+  complete 記的是「派工動作返回了」。實測 start→complete 間隔 **2 秒**，該 agent 實際
+  跑了 **44 分鐘** → 每筆 start 都被自己的 complete 在 2 秒內沖銷，**in-flight 恆等於 0**。
+  修法：`agent_complete` 改由 **`SubagentStop`** 寫（實測對非同步／背景 subagent 也觸發），
+  `agent_start` 一併從 `PreToolUse` 移到 `PostToolUse`（`agentId` 只存在於 tool response），
+  對應鍵 `tool_use_id` → `agent_id`。連帶把 2026-09-09 那段「排除自己那一筆」的
+  `SELF_ID` 邏輯**整段刪除**——閘門跑在 PreToolUse，必然早於自己那次 PostToolUse，
+  帳上不會有自己，誤報的成因消失（該份 learned 已加註取代說明）。
+  容忍兩個實測邊界：`agent_type` 空字串的 `SubagentStop` 照樣沖銷（漏一筆就讓 in-flight
+  永不歸零、從此誤擋每一次委派）、沒見過的 `agent_id` 安靜忽略且計數不轉負。
+  **245 個 hook 測試一個都沒抓到**，因為它們造假 JSONL 只驗「閘門怎麼讀帳」；
+  新增的 13 條一律走真的 `agent-monitor.sh`，驗「帳記得對不對」。243 → 256 全綠。
+  `post-agent-report.sh` 也接在 `PostToolUse(Agent)` 但**刻意沒動**：它已經是 async-aware
+  （偵測 `async_launched` 就只記期望，由 `lib/check-report-expectations.sh` 在後續對話
+  邊界重查），職責是報告落點稽核，與 in-flight 計數無關。
+  坑已記入 `context/learned/2026-09-11-async-dispatch-breaks-posttooluse-gates.md`
 - ~~把 hook 改壞的當下沒有任何人告訴你~~ → `post-write.sh` 在寫入／編輯
   `.claude/hooks/**/*.sh` 之後跑 `bash -n`，不過就把錯誤訊息印出來。
   實測確認過三件事：壞檔 `bash -n` 抓得到、餵 `post-write.sh` 對應 payload

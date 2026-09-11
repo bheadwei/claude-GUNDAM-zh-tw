@@ -4,7 +4,7 @@
 bash .claude/hooks/tests/run-tests.sh
 ```
 
-232 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。
+256 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。
 **Windows Git Bash 上約需 5 分鐘**（2026-09-09 實測）——大量 `bash` + `jq` 子行程，
 process spawn 是主要成本。**看起來像掛住其實只是慢**：用背景執行並把輸出重導到檔案，
 不要 `| tail`（管線會把輸出憋到最後，中途看不到進度，也就看不出它到底跑到哪）。
@@ -32,9 +32,16 @@ process spawn 是主要成本。**看起來像掛住其實只是慢**：用背�
 | handoff 注入 | 9 | pending 注入含 from/to/優先級/起因；completed 不注入；suggest-mode 分級過濾；範本檔不誤判 |
 | 意圖路由 | 8 | auth→critical、UI/npm/測試→提示載入對應 skill、斜線指令不路由 |
 | git backup 閘門 | 22 | 四種 destructive 指令都擋、`--force-with-lease` 不例外、tag 指向 HEAD 才放行、`--continue/--abort/--skip` 放行、**只是提到指令不擋**、兩個逃生門、非 repo/空 repo 放行 |
+| 平行 agent 閘門 | 11 | 有 in-flight 就擋、deny-once、`isolation: worktree\|remote` 放行、in-flight 歸零後下一批重新受檢、舊格式紀錄（無 `agent_id`）忽略、兩個逃生門 |
+| **非同步派工的完成時機** | 13 | 走真的 `agent-monitor.sh`（不造假 JSONL）：`PreToolUse` 不記帳、派工返回只記 `agent_start`、**只有 `SubagentStop` 才沖銷 in-flight**、`agent_type` 空字串仍沖銷、沒見過的 `agent_id` 不轉負、同步完成的 agent 淨變化 0 |
 | 全體 hooks | 12 | 語法可解析、空 payload 不爆炸 |
 
-> 這張表**不是全部**（缺合併閘門、平行 agent 閘門、resolve-roots 等區塊），
+> 上面兩區分工刻意不同：「平行 agent 閘門」測**閘門怎麼讀帳**，
+> 「非同步派工的完成時機」測**帳記得對不對**。2026-09-11 那個 bug 在後者——
+> 閘門邏輯一直是對的，是 `agent_complete` 記在 `PostToolUse` 而 Agent 工具是非同步的，
+> 導致 in-flight 恆為 0。造假 JSONL 的測試永遠抓不到這種錯。
+
+> 這張表**不是全部**（缺合併閘門、resolve-roots 等區塊），
 > 各列的數字也只對得上自己那一區。要看完整清單請直接讀 `run-tests.sh` 的 `section` 標題。
 
 ## 隔離保證

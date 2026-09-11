@@ -11,11 +11,23 @@
 #   ❌ 同時平行啟動會互改同一批檔案的 agent（序列化或用 worktree 隔離）
 # 那是自律。這支是機器。
 #
-# 判斷方式：從 agent-activity.jsonl 算「已 start 但還沒 complete」的 agent 數。
+# 判斷方式：從 agent-activity.jsonl 算「已 start 但還沒 complete」的 agent 數，
+# 對應鍵是 **agent_id**（不是 tool_use_id）。
 # 帶了 isolation 的直接放行——它有自己的 checkout 與分支，改不到別人。
+#
+# 這個計數曾經永遠是 0，等於閘門從裝上去那天就沒攔過任何一次（2026-09-11 查出）：
+# 當時 agent_complete 由 PostToolUse(Agent) 寫，而 Agent 工具是**非同步**的，
+# PostToolUse 記的是「派工動作返回了」而非「agent 做完了」。修法見
+# agent-monitor.sh 檔頭——完成改由 SubagentStop 寫。本檔只需知道：
+# **agent_complete 現在代表 agent 真的結束了。**
 #
 # deny-once：擋第一次、把理由貼出來，重試就通過（跟任務模式閘門同一個模式）。
 # 每一「批」平行只擋一次：in-flight 歸零時自動清除標記，下一批會再擋一次。
+#
+# 同一則訊息連派多個時擋在第幾個：實測（另一個專案的 3 個 agent 批次）
+# 第 1 個的 PostToolUse 早於第 2 個的 PreToolUse 5 秒，所以**第 2 個會被擋**；
+# 但第 3 個的 PreToolUse 早於第 2 個的 PostToolUse，可見這條鏈不是嚴格交錯的。
+# 不影響本閘門的設計——deny-once 本來就是一批只擋一次。
 #
 # 逃生門：PARALLEL_AGENT_GATE=off、或 .suggest-mode 為 off
 
@@ -46,36 +58,35 @@ fi
 ISOLATION=$(printf '%s' "$INPUT" | jq -r '.tool_input.isolation // ""' 2>/dev/null)
 SUBAGENT=$(printf '%s' "$INPUT" | jq -r '.tool_input.subagent_type // "general-purpose"' 2>/dev/null)
 
-# 本次呼叫自己的 tool_use_id。算 in-flight 時**必須排除它**，否則：
-# settings.json 的 PreToolUse 把 agent-monitor.sh 排在本檔前面，於是本次的
-# agent_start 已經寫進 agent-activity.jsonl，閘門會把「它正在把關的這一次」
-# 也算成 in-flight → 閒置超過 60 分鐘後的第一次委派**必被誤擋一次**
-# （deny-once 讓它看起來只是「擋一下就過」，所以放了很久沒被發現）。
-#
-# 用排除自己而不是調 hook 順序：這樣兩支 hook 誰先跑都正確，
-# 下次有人重排 settings.json 也不會把這個 bug 帶回來。
-# 也不能改成「in-flight ≥ 2 才擋」——那會讓真正的兩個並行漏掉第一次。
-SELF_ID=$(printf '%s' "$INPUT" | jq -r '.tool_use_id // ""' 2>/dev/null)
+# 這裡以前有一段「排除本次呼叫自己的 tool_use_id」的邏輯，**已不再需要**：
+# agent_start 現在由 PostToolUse(Agent) 寫，而本檔跑在 PreToolUse，
+# 也就是**必然早於自己那次 PostToolUse**。帳上根本還沒有自己這一筆，
+# 無從誤算。原本那個誤擋（閒置超過 60 分鐘後的第一次委派必被擋一次）
+# 一併消失，因為它的成因就是「monitor 在 PreToolUse 先寫了 start」。
 
 # 帶了 isolation → 有自己的 checkout，改不到別人，直接放行
 case "$ISOLATION" in
     worktree|remote) exit 0 ;;
 esac
 
-# 算 in-flight：start 過但沒有對應 complete 的 tool_use_id。
+# 算 in-flight：start 過但沒有對應 complete 的 agent_id。
 # 只看最近 60 分鐘——這個 session 見過跑 37 分鐘的 agent，窗開太小會漏算；
 # 開太大則會被當機殘留的 phantom start 污染，60 分鐘是折衷。
+#
+# 沒有 agent_id 的紀錄一律忽略（`select(. != "")`）：那是本 hook 升級前寫的舊格式，
+# 全部歸在同一個 null 鍵下會互相沖銷，算出來的數字沒有意義。
+# starts 取 unique，避免同一個 agent_id 重複寫入時被算成多個。
 INFLIGHT=0
 if [ -f "$LOG_JSONL" ]; then
     CUTOFF=$(date -d '60 minutes ago' '+%Y-%m-%d %H:%M:%S' 2>/dev/null \
              || date -v-60M '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "")
-    INFLIGHT=$(jq -rs --arg cutoff "$CUTOFF" --arg self "$SELF_ID" '
+    INFLIGHT=$(jq -rs --arg cutoff "$CUTOFF" '
         [ .[] | select(($cutoff == "") or (.timestamp >= $cutoff)) ]
-        | (map(select(.event == "agent_start"))     | map(.tool_use_id)) as $starts
-        | (map(select(.event == "agent_complete"))  | map(.tool_use_id)) as $dones
-        | [ $starts[]
-            | select($self == "" or . != $self)
-            | select(. as $s | ($dones | index($s)) == null) ]
+        | (map(select(.event == "agent_start"))
+            | map(.agent_id // "") | map(select(. != "")) | unique) as $starts
+        | (map(select(.event == "agent_complete"))
+            | map(.agent_id // "")) as $dones
+        | [ $starts[] | select(. as $s | ($dones | index($s)) == null) ]
         | length
     ' "$LOG_JSONL" 2>/dev/null || echo 0)
 fi

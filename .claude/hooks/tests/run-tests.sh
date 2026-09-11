@@ -982,8 +982,11 @@ section "pre-agent-gate.sh — 擋同時派多個無隔離 agent"
 # 原本的保護只有 rules/agent-orchestration.md 的一行文字（自律）。
 
 AG_LOG="$SANDBOX/.claude/logs/agent-activity.jsonl"
-ag_start()    { echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"event\":\"agent_start\",\"tool_use_id\":\"$1\"}" >> "$AG_LOG"; }
-ag_complete() { echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"event\":\"agent_complete\",\"tool_use_id\":\"$1\"}" >> "$AG_LOG"; }
+WARNED_FILE="$SANDBOX/.claude/taskmaster-data/.parallel-agent-warned"
+# 對應鍵是 agent_id（不是 tool_use_id）——tool_use_id 屬於「派工這次呼叫」，
+# 跨不到 SubagentStop；agent_id 才是同一個 agent 從頭到尾的身分。
+ag_start()    { echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"event\":\"agent_start\",\"agent_id\":\"$1\"}" >> "$AG_LOG"; }
+ag_complete() { echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"event\":\"agent_complete\",\"agent_id\":\"$1\"}" >> "$AG_LOG"; }
 # ag <subagent_type> [isolation]
 ag() {
     local iso=""
@@ -994,19 +997,18 @@ ag() {
 reset; mkdir -p "$SANDBOX/.claude/logs"
 expect_decision "無 in-flight 時放行" allow "$(ag planner)"
 
-# 誤報回歸：settings.json 把 agent-monitor.sh 排在本閘門**前面**，所以本次委派的
-# agent_start 早就寫進 agent-activity.jsonl 了。閘門若把「自己正在把關的這一次」
-# 也算成 in-flight，閒置超過 60 分鐘後的第一次委派**必被誤擋一次**。
-# deny-once 讓它看起來只是「擋一下就過」，所以放了很久沒被發現。
-reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start tX
-expect_decision "只派一個 agent 時不擋（不把自己算成 in-flight）" allow "$(ag planner)"
-[ -f "$SANDBOX/.claude/taskmaster-data/.parallel-agent-warned" ] \
-    && ng "誤擋不該吃掉 deny-once 額度" "無 warned 標記" "有標記" \
-    || ok "誤擋不該吃掉 deny-once 額度"
+# 兩個不同 agent 都在跑 → 照擋（確認 unique 去重沒把正常情況也吃掉）
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1; ag_start a2
+expect_decision "兩筆不同 agent_id 的 start → 仍擋" deny "$(ag planner)"
 
-# 排除自己不等於閘門失效：自己一筆＋別人一筆時仍然要擋
-reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1; ag_start tX
-expect_decision "自己＋別人各一筆 start → 仍擋" deny "$(ag planner)"
+# 同一個 agent_id 重複寫入不該被算成兩個
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1; ag_start a1; ag_complete a1
+expect_decision "重複的 start 由 unique 去重（complete 後歸零）" allow "$(ag planner)"
+
+# 舊格式（只有 tool_use_id、沒有 agent_id）一律忽略，不該讓閘門誤擋
+reset; mkdir -p "$SANDBOX/.claude/logs"
+echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"event\":\"agent_start\",\"tool_use_id\":\"old1\"}" >> "$AG_LOG"
+expect_decision "升級前的舊紀錄（無 agent_id）被忽略" allow "$(ag planner)"
 
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
 expect_decision "有 1 個 in-flight 且新的無隔離 → deny" deny "$(ag planner)"
@@ -1035,6 +1037,94 @@ expect_decision "PARALLEL_AGENT_GATE=off 關閉閘門" allow \
 
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1; echo off > "$SM_FILE"
 expect_decision "suggest-mode=off 也關閉閘門" allow "$(ag planner)"
+
+# =========================================================================
+section "agent-monitor.sh × pre-agent-gate.sh — 非同步派工的完成時機"
+# =========================================================================
+#
+# 為什麼要這組：閘門本身邏輯一直是對的，錯的是它讀的那本帳。
+# agent_complete 曾由 PostToolUse(Agent) 寫，而 Agent 工具是**非同步**的——
+# 呼叫立刻返回 {"isAsync":true,"status":"async_launched"}。實測 start→complete
+# 間隔 2 秒，那個 agent 實際跑了 44 分鐘。於是 in-flight 永遠是 0，
+# **閘門從裝上去那天就沒攔截過任何一次**，而它只在攔截時才寫 log，所以無聲無息。
+#
+# 這組不造假 JSONL，一律走真的 agent-monitor.sh，payload 用實測的欄位形狀。
+# 上面那組只測「閘門怎麼讀帳」，這組測「帳記得對不對」——bug 在後者。
+
+am_pre() {
+    run agent-monitor.sh "$(jq -nc --arg t "$1" '{
+        hook_event_name:"PreToolUse", tool_name:"Agent", session_id:"s1",
+        tool_use_id:"tu-pre", tool_input:{subagent_type:$t,description:"d",prompt:"p"}}')"
+}
+# am_post_async <subagent_type> <agent_id> —— 派工返回（agent 才剛開始跑）
+am_post_async() {
+    run agent-monitor.sh "$(jq -nc --arg t "$1" --arg a "$2" '{
+        hook_event_name:"PostToolUse", tool_name:"Agent", session_id:"s1",
+        tool_use_id:("tu-"+$a), tool_input:{subagent_type:$t,description:"d",prompt:"p"},
+        tool_response:{isAsync:true,status:"async_launched",agentId:$a}}')"
+}
+# am_post_sync <subagent_type> <tool_use_id> —— 同步完成（tool_response 沒有 agentId）
+am_post_sync() {
+    run agent-monitor.sh "$(jq -nc --arg t "$1" --arg u "$2" '{
+        hook_event_name:"PostToolUse", tool_name:"Agent", session_id:"s1",
+        tool_use_id:$u, tool_input:{subagent_type:$t,description:"d"},
+        tool_response:{response:"{\"status\":\"completed\"}"}}')"
+}
+# am_stop <agent_id> [agent_type] —— agent 真正結束
+am_stop() {
+    run agent-monitor.sh "$(jq -nc --arg a "$1" --arg t "${2-}" '{
+        hook_event_name:"SubagentStop", session_id:"s1", agent_id:$a, agent_type:$t,
+        last_assistant_message:"done"}')"
+}
+ag_events() { jq -rs '[.[]|.event]|join(",")' "$AG_LOG" 2>/dev/null; }
+
+# PreToolUse 不寫帳：agentId 只在 PostToolUse 拿得到，寫在 PreToolUse 就配不到
+# SubagentStop。這也是為什麼閘門不再需要「排除自己那一筆」——它跑在 PreToolUse，
+# 帳上不可能有自己。
+reset; mkdir -p "$SANDBOX/.claude/logs"; am_pre planner >/dev/null
+[ -s "$AG_LOG" ] \
+    && ng "PreToolUse 不寫 JSONL agent_start" "空的 jsonl" "$(ag_events)" \
+    || ok "PreToolUse 不寫 JSONL agent_start"
+expect_decision "只派一個 agent 時不擋（自己不算 in-flight）" allow "$(ag planner)"
+[ -f "$WARNED_FILE" ] \
+    && ng "誤擋不該吃掉 deny-once 額度" "無 warned 標記" "有標記" \
+    || ok "誤擋不該吃掉 deny-once 額度"
+
+# 這是本 bug 的核心案例：agent 還在跑（有 PostToolUse、沒有 SubagentStop）
+reset; mkdir -p "$SANDBOX/.claude/logs"; am_post_async planner ag001 >/dev/null
+expect_contains "派工返回只記 agent_start" "agent_start" "$(ag_events)"
+expect_decision "真的 in-flight（未收到 SubagentStop）→ 再派一個要擋" deny "$(ag tdd-guide)"
+
+reset; mkdir -p "$SANDBOX/.claude/logs"
+am_post_async planner ag001 >/dev/null; am_stop ag001 planner >/dev/null
+expect_decision "收到 SubagentStop 後 → 再派一個放行" allow "$(ag tdd-guide)"
+
+# 實測會收到 agent_type 為空字串的 SubagentStop。不能因此跳過寫入——
+# 漏一筆 complete 就讓那個 agent 的 in-flight 永遠不歸零，閘門會從此誤擋每一次委派。
+reset; mkdir -p "$SANDBOX/.claude/logs"
+am_post_async planner ag002 >/dev/null; am_stop ag002 "" >/dev/null
+expect_decision "agent_type 空字串的 SubagentStop 仍能沖銷 in-flight" allow "$(ag tdd-guide)"
+
+# 實測也會收到這個 session 從沒派過的 agent_id
+reset; mkdir -p "$SANDBOX/.claude/logs"; am_stop never-dispatched Explore >/dev/null
+expect_decision "沒見過的 agent_id 的 SubagentStop → 不爆炸、計數不轉負" allow "$(ag planner)"
+reset; mkdir -p "$SANDBOX/.claude/logs"
+am_post_async planner ag003 >/dev/null; am_stop never-dispatched Explore >/dev/null
+expect_decision "多餘的 complete 不會沖掉別人的 in-flight" deny "$(ag tdd-guide)"
+
+# 同步完成的 agent：PostToolUse 觸發時它已經結束，start/complete 一起寫，淨變化 0
+reset; mkdir -p "$SANDBOX/.claude/logs"; am_post_sync Explore tu9 >/dev/null
+expect_contains "同步完成同時記 start 與 complete" "agent_start,agent_complete" "$(ag_events)"
+expect_decision "同步完成的 agent 不算 in-flight" allow "$(ag planner)"
+
+# 既有行為不能壞：帶隔離的一律放行（有自己的 checkout 與分支）
+reset; mkdir -p "$SANDBOX/.claude/logs"; am_post_async planner ag004 >/dev/null
+expect_decision "真 in-flight 下帶 isolation: worktree 仍放行" allow "$(ag refactor-cleaner worktree)"
+
+# 不是 Agent 工具的 PostToolUse 不該進這本帳
+reset; mkdir -p "$SANDBOX/.claude/logs"
+run agent-monitor.sh '{"hook_event_name":"PostToolUse","tool_name":"Write","tool_input":{"file_path":"/p/a.ts"}}' >/dev/null
+expect_empty "非 Agent 工具不寫 agent 帳" "$(ag_events)"
 
 # =========================================================================
 section "resolve-roots.sh — CLAUDE_PROJECT_DIR 未設時的 fallback"

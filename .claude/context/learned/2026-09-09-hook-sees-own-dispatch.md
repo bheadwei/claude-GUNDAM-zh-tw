@@ -7,9 +7,16 @@ files:
   - ".claude/settings.json"
 symptom: 閒置超過 60 分鐘後的第一次委派**必被** pre-agent-gate 擋一次，理由寫「已經有 1 個沒有隔離的 agent 在跑」——但當下根本沒有其他 agent
 root-cause: settings.json 的 PreToolUse 把 agent-monitor.sh 排在 pre-agent-gate.sh 前面。monitor 先把這一次的 agent_start 寫進 agent-activity.jsonl，閘門接著從同一份 log 算 in-flight，於是把「它自己正在把關的這一次」也算進去
-guard: 任何從共享狀態檔（log／jsonl／旗標）反推「現在有幾個 X 在進行中」的 hook，都必須排除自己這一次。用 INPUT 的 tool_use_id 比對，不要靠調整 settings.json 的 hook 順序——順序是隱性契約，下一個重排的人不會知道
+guard: 任何從共享狀態檔（log／jsonl／旗標）反推「現在有幾個 X 在進行中」的 hook，都必須確認自己這一次沒被算進去。不要靠調整 settings.json 的 hook 順序——順序是隱性契約，下一個重排的人不會知道
 severity: medium
 ---
+
+> 📌 **2026-09-11 更新：教訓仍然成立，但當時的修法已被取代。**
+> 那次的 `SELF_ID` 排除邏輯**已整段移除**——`agent_start` 改在 `PostToolUse` 寫之後，
+> 閘門（`PreToolUse`）必然早於自己那次 `PostToolUse`，帳上根本不會有自己，
+> 誤報的成因消失了。**不要照下面「修法的選擇」那節把 `tool_use_id` 比對加回去**，
+> 對應鍵已經換成 `agent_id`。原因見
+> `2026-09-11-async-dispatch-breaks-posttooluse-gates.md`。
 
 > ⚠️ **這份紀錄的 `files:` 正確，但坑閘門不會貼出來。** `pre-tool-use.sh:146` 對
 > `.claude/*` 直接放行（避免自鎖），所以關於模板自身擴充的教訓一律不會被攔下來提示。
