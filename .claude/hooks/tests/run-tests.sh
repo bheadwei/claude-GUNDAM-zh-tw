@@ -805,6 +805,54 @@ run post-bash.sh "$(printf '{"tool_name":"Bash","tool_input":{"command":"git mer
 if grep -q 'git merge x' "$MP_FILE" 2>/dev/null; then ok "git merge --continue 保留待驗證紀錄"
 else ng "git merge --continue 保留待驗證紀錄" "仍有紀錄" "$(cat "$MP_FILE" 2>/dev/null)"; fi
 
+# ---- 誤判回歸：偵測必須是「真的執行了合併」，不是「字串裡有那幾個字」 ----
+#
+# post-bash.sh 原本用 `case "$CMD" in *"git merge"*)` 子字串比對，於是
+# `git merge-base --is-ancestor`（純唯讀祖先查詢）與任何提到指令名的
+# heredoc／echo／grep 都被記成一次合併，merge-gate.sh 再拿那些幽靈紀錄擋下
+# **下一次真正的合併**。2026-09-11 累計誤擋五次，其中一次擋下了
+# 「修好它自己」的那次編輯（context/learned/2026-09-11-gate-blocks-its-own-fix.md）。
+# 現在改用 lib/cmd-segments.sh 切段（與 git-backup-gate.sh 同一份實作）。
+
+# pbashj <command> —— 同 pbash，但用 jq 組 payload（指令含引號／換行時要用這個）
+pbashj() { run post-bash.sh "$(jq -nc --arg c "$1" '{tool_name:"Bash",tool_input:{command:$c},tool_response:{is_error:false}}')"; }
+mp_empty() {
+    if [ ! -s "$MP_FILE" ]; then ok "$1"
+    else ng "$1" "（不記錄）" "$(cat "$MP_FILE" 2>/dev/null)"; fi
+}
+mp_has() {
+    if grep -qxF "$2" "$MP_FILE" 2>/dev/null; then ok "$1"
+    else ng "$1" "$2" "$(cat "$MP_FILE" 2>/dev/null)"; fi
+}
+
+# merge-base 不是 merge —— 這是 2026-09-11 實際復現的那一條
+reset
+expect_empty "merge-base（唯讀查詢）不觸發合併提醒" \
+    "$(pbashj 'git merge-base --is-ancestor 6d8d48c main')"
+mp_empty "merge-base（唯讀查詢）不記入 .merge-pending"
+
+reset; pbashj 'git log --oneline -1 6d8d48c && git merge-base --is-ancestor 6d8d48c main' >/dev/null
+mp_empty "鏈式唯讀查詢（含 merge-base）不記入 .merge-pending"
+
+reset; pbashj 'cat > d.md <<EOF
+合併用 git merge --no-ff，衝突時 git rebase --abort 退回
+EOF' >/dev/null
+mp_empty "heredoc 內文提到指令不記入 .merge-pending"
+
+reset; pbashj 'grep -rn "git cherry-pick" .claude/' >/dev/null
+mp_empty "grep 樣式提到指令不記入 .merge-pending"
+
+# 正向：真的執行的仍然要記，且類型與 ref 不能跑掉
+reset; pbashj 'git merge feature/x' >/dev/null
+mp_has "真正的 merge 仍記錄（ref 正確抽出）" '[merge] feature/x'
+
+reset; pbashj 'cd /some/path && git cherry-pick abc123' >/dev/null
+mp_has "鏈式 cd && cherry-pick 仍記錄（類型正確）" '[cherry-pick] abc123'
+
+reset; mkdir -p "$(dirname "$MP_FILE")"; echo '[merge] x' > "$MP_FILE"
+pbashj 'git rebase --abort' >/dev/null
+mp_empty "git rebase --abort 仍清掉待驗證紀錄"
+
 # 閘門：清單非空時擋下下一次合併
 reset; mkdir -p "$(dirname "$MP_FILE")"; echo 'git merge --no-ff worktree-search' > "$MP_FILE"
 expect_decision "待驗證時擋下下一次 merge"       deny  "$(bg 'git merge --no-ff worktree-cart')"

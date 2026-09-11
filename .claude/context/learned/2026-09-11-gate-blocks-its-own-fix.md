@@ -44,6 +44,26 @@ severity: high
 
 `.claude/` 底下所有用 `case "$CMD" in *"<指令名>"*)` 判斷的地方都該一起檢查。
 
+### 已修（2026-09-11，同日）
+
+後來又復現第五次：`git merge-base --is-ancestor 6d8d48c main`（**純唯讀祖先查詢**）
+被記成一筆 merge——這個不是「文件提到指令名」，是前綴撞名，子字串比對連唯讀查詢都分不出來。
+
+修法：把 `_gbg_segments`／`_gbg_m` 抽成 `hooks/lib/cmd-segments.sh`
+（`cmd_segments`／`cmd_match`），`git-backup-gate.sh` 與 `post-bash.sh` **共用同一份**。
+比對條件變成「段落以 `git ` 開頭」**且**「子指令前後有空白錨定」——`merge-base` 因此
+不再是 `merge`。新增 8 條回歸測試。
+
+全 `.claude/` 掃過的結果，同類寫法只剩三處，都**刻意保留**：
+
+| 位置 | 判斷對象 | 為什麼不改 |
+|---|---|---|
+| `lib/merge-gate.sh:33,38` | 指令 | 只在 `.merge-pending` 非空這個罕見狀態下才進入比對，誤判成本低 |
+| `lib/handoff-archive.sh:40` | handoff 的 `status` 欄 | 比對的不是指令字串 |
+| `post-agent-report.sh:140`、`post-write.sh:110` | status／檔案路徑 | 同上 |
+
+**新的閘門要判斷「執行了什麼指令」時，一律 source `lib/cmd-segments.sh`。**
+
 ### 附帶發現：衝突檔本身是 live hook 時，通知會靜默失效
 
 同一次實驗的第二個發現。`post-bash.sh` 偵測到合併衝突時會注入

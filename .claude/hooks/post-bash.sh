@@ -16,6 +16,7 @@
 INPUT=$(cat)
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/resolve-roots.sh" 2>/dev/null || true
+source "$(dirname "${BASH_SOURCE[0]}")/lib/cmd-segments.sh" 2>/dev/null || true
 if declare -F resolve_roots >/dev/null 2>&1; then
     resolve_roots "$INPUT"
 else
@@ -48,10 +49,35 @@ mkdir -p "$DATA_DIR" 2>/dev/null || true
 # **合併結果仍符合原本的 plan 與 WBS 目標**。那個比對在 `/verify` 裡
 # （plan 驗收標準 + spec-convergence），不是 hook 該做的事——hook 只負責
 # 「不准跳過那一步」。
+#
+# 偵測用「以 git 開頭的指令段 + 前後空白錨定的子指令」，**不是**子字串比對。
+# 子字串比對（`case "$CMD" in *"git merge"*`）會把這些都記成一次合併：
+#   - `git merge-base --is-ancestor A B` —— 純唯讀祖先查詢，前綴剛好相同
+#   - heredoc／echo／grep 內文提到指令名 —— 寫文件、寫測試、寫 plan 都會中
+# 然後 merge-gate.sh 拿這些幽靈紀錄擋下**下一次真正的合併**。
+# 2026-09-11 累計誤擋五次，其中一次擋下了「修好它自己」的那次編輯，
+# 細節見 context/learned/2026-09-11-gate-blocks-its-own-fix.md。
+#
+# 切段邏輯與 git-backup-gate.sh 共用 lib/cmd-segments.sh（同一個坑不修第二遍）。
+# lib/merge-gate.sh 刻意**不**跟進：它只在 .merge-pending 非空這個罕見狀態下才
+# 進入比對，誤判成本低，改它是沒必要的風險。
+MP_OP=""; MP_SEG=""
+if [ "${MERGE_GATE:-on}" != "off" ] && declare -F cmd_segments >/dev/null 2>&1; then
+    while IFS= read -r _seg; do
+        [ -n "$_seg" ] || continue
+        if   cmd_match "$_seg" '[[:space:]]merge([[:space:]]|$)';       then MP_OP=merge
+        elif cmd_match "$_seg" '[[:space:]]cherry-pick([[:space:]]|$)'; then MP_OP=cherry-pick
+        elif cmd_match "$_seg" '[[:space:]]rebase([[:space:]]|$)';      then MP_OP=rebase
+        else continue
+        fi
+        MP_SEG="$_seg"; break
+    done <<< "$(cmd_segments "$CMD")"
+fi
+
 if [ "${MERGE_GATE:-on}" != "off" ]; then
-    case "$CMD" in
-        *"git merge"*|*"git cherry-pick"*|*"git rebase"*)
-            case "$CMD" in
+    case "$MP_OP" in
+        merge|cherry-pick|rebase)
+            case "$MP_SEG" in
                 # --abort 是放棄這次合併 → 清掉它的待驗證紀錄
                 *--abort*|*--quit*)
                     rm -f "$DATA_DIR/.merge-pending" 2>/dev/null || true
@@ -69,11 +95,8 @@ if [ "${MERGE_GATE:-on}" != "off" ]; then
                     # 要驗的東西不同：merge 驗兩邊 plan 的驗收標準都還成立；
                     # cherry-pick 驗被挑過來的 commit 在新脈絡下仍成立（它的前後文
                     # 沒跟過來）；rebase 整段歷史都被重寫，每個 commit 都是新的。
-                    MP_OP=merge
-                    case "$CMD" in
-                        *"git cherry-pick"*) MP_OP=cherry-pick ;;
-                        *"git rebase"*)      MP_OP=rebase ;;
-                    esac
+                    # （MP_OP 已由上面的切段偵測決定。）
+                    #
                     # 記**目標 ref**，不是整條指令。這份清單唯一的用途是讓 /verify
                     # 分辨「哪些分支合進來了、該比對哪幾份 plan 的驗收標準」，
                     # 存整條指令的話每一筆長得幾乎一樣，那個用途就沒了。

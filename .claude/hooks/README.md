@@ -10,8 +10,13 @@
 ├── session-start.sh         # SessionStart：模板偵測、時間歸檔、log 輪替
 ├── user-prompt-submit.sh    # UserPromptSubmit：/task-init 偵測 + 意圖路由注入
 ├── pre-tool-use.sh          # PreToolUse(Write|Edit|Bash)：任務模式閘門 + 坑閘門 + TTL + 裸 cd 攔截
-├── lib/
-│   └── check-report-expectations.sh  # 延後式報告稽核（被 post-agent-report 與 user-prompt-submit 共用）
+├── lib/                     # 共用函式庫（被多支 hook source，不自己掛事件）
+│   ├── check-report-expectations.sh  # 延後式報告稽核（post-agent-report + user-prompt-submit 共用）
+│   ├── cmd-segments.sh      # 指令切段／樣式比對（git-backup-gate + post-bash 共用，見下方註）
+│   ├── git-backup-gate.sh   # destructive git 操作前必須有 backup tag（pre-tool-use 用）
+│   ├── handoff-archive.sh   # 已完成交接的歸檔
+│   ├── merge-gate.sh        # 合併未驗證前不得再合併（pre-tool-use 用）
+│   └── resolve-roots.sh     # MAIN_ROOT / WORK_ROOT 解析（worktree 狀態隔離）
 ├── post-write.sh            # PostToolUse(Write|Edit)：WBS 歷史 + 文件影響偵測            # PostToolUse(Write)：WBS/檔案寫入記錄
 ├── post-bash.sh              # PostToolUse(Bash)：連續失敗後成功 → 踩坑候選累積
 ├── agent-monitor.sh         # Pre/PostToolUse(Agent)：subagent 活動記錄
@@ -21,6 +26,12 @@
 ```
 
 > 已移除 `hook-utils.sh`（舊 TaskMaster `taskmaster.js` 時代的共用庫，無任何 hook 引用）。
+>
+> **判斷「這條指令做了什麼」一律走 `lib/cmd-segments.sh`，不要用 `case "$CMD" in *"<指令名>"*)`。**
+> 子字串比對會把唯讀查詢（`git merge-base`）與文件內文（heredoc、echo、grep 樣式）
+> 當成真的執行過——2026-09-11 實測一天誤擋四次，其中一次擋下了「修好它自己」的那次編輯。
+> 例外只有 `lib/merge-gate.sh`：它只在 `.merge-pending` 非空這個罕見狀態下才進入比對，
+> 誤判成本低，**刻意保留**子字串寫法。
 
 ## 🎯 各 Hook 功能
 

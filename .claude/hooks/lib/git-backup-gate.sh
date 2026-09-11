@@ -26,35 +26,21 @@
 #   source "$(dirname "${BASH_SOURCE[0]}")/lib/git-backup-gate.sh"
 #   git_backup_gate "$COMMAND" "$WORK_ROOT"   # 命中時自行輸出 deny JSON 並 exit 0
 
-# _gbg_m <字串> <ERE> —— 樣式比對（不用 [[ =~ ]]，避免依賴 \b 的實作差異）
-_gbg_m() {
-    printf '%s' " $1 " | grep -qE "$2"
-}
-
-# _gbg_segments <整條指令> —— 取出「以 git 開頭的指令段」
-#
-# 為什麼不用 merge-gate 那種子字串比對：merge-gate 只在 .merge-pending 非空時才
-# 進入比對（罕見狀態），本閘門則幾乎每個 session 都處於「HEAD 沒有 backup tag」，
-# 所以子字串比對會讓**任何提到這些指令的 Bash 呼叫**都被擋——heredoc 寫文件、
-# echo、grep 樣式都算。寫本閘門的測試檔時第一時間就被自己擋掉，這不是假想的風險。
-#
-# 取捨（有意留下的漏網）：`sudo git reset --hard`、`env X=1 git rebase`、
-# 以及**整行只有指令本身**的文件程式碼區塊，仍會分別漏抓／誤抓。
-# 判準是「真的要執行時，那一段幾乎一定以 git 開頭」。
-_gbg_segments() {
-    printf '%s\n' "$1" \
-        | sed -e 's/&&/\n/g' -e 's/||/\n/g' -e 's/[;|]/\n/g' \
-        | sed -e 's/^[[:space:]]*[({][[:space:]]*//' -e 's/^[[:space:]]*//' \
-        | grep -E '^git[[:space:]]'
-}
+# 指令切段與樣式比對是 `lib/cmd-segments.sh`（cmd_segments／cmd_match）——
+# 為什麼不用 merge-gate 那種子字串比對，以及有意留下的漏網取捨，都寫在那支檔案裡。
+# post-bash.sh 的合併偵測用的是**同一份**：同一個坑修過兩次，就是因為當初兩邊各寫各的。
+source "$(dirname "${BASH_SOURCE[0]}")/cmd-segments.sh" 2>/dev/null || true
 
 git_backup_gate() {
     local cmd="$1" root="$2"
     [ "${GIT_BACKUP_GATE:-on}" = "off" ] && return 0
     [ -n "$cmd" ] || return 0
 
+    # 缺共用切段函式就放行 —— 與本閘門其他「判斷不了就放行」的分支一致
+    declare -F cmd_segments >/dev/null 2>&1 || return 0
+
     local segs
-    segs=$(_gbg_segments "$cmd")
+    segs=$(cmd_segments "$cmd")
     [ -n "$segs" ] || return 0
 
     local kind="" seg
@@ -63,18 +49,18 @@ git_backup_gate() {
 
         # --continue / --abort / --skip / --quit / --edit-todo 是在收拾**當前**狀態，
         # 不是新的 destructive 操作。照 merge-gate.sh 既有的做法排除。
-        _gbg_m "$seg" '[[:space:]]--(continue|abort|skip|quit|edit-todo)([[:space:]]|$)' && continue
+        cmd_match "$seg" '[[:space:]]--(continue|abort|skip|quit|edit-todo)([[:space:]]|$)' && continue
 
-        if _gbg_m "$seg" '[[:space:]]reset([[:space:]]|$)' \
-           && _gbg_m "$seg" '[[:space:]]--hard([[:space:]]|$)'; then
+        if cmd_match "$seg" '[[:space:]]reset([[:space:]]|$)' \
+           && cmd_match "$seg" '[[:space:]]--hard([[:space:]]|$)'; then
             kind="git reset --hard"; break
-        elif _gbg_m "$seg" '[[:space:]]push([[:space:]]|$)' \
-           && _gbg_m "$seg" '[[:space:]](-f|--force|--force-with-lease|--force-if-includes)([[:space:]=]|$)'; then
+        elif cmd_match "$seg" '[[:space:]]push([[:space:]]|$)' \
+           && cmd_match "$seg" '[[:space:]](-f|--force|--force-with-lease|--force-if-includes)([[:space:]=]|$)'; then
             kind="git push --force"; break
-        elif _gbg_m "$seg" '[[:space:]]branch([[:space:]]|$)' \
-           && _gbg_m "$seg" '[[:space:]](-[a-zA-Z]*D|--delete[[:space:]]+--force|--force[[:space:]]+--delete)([[:space:]]|$)'; then
+        elif cmd_match "$seg" '[[:space:]]branch([[:space:]]|$)' \
+           && cmd_match "$seg" '[[:space:]](-[a-zA-Z]*D|--delete[[:space:]]+--force|--force[[:space:]]+--delete)([[:space:]]|$)'; then
             kind="git branch -D"; break
-        elif _gbg_m "$seg" '[[:space:]]rebase([[:space:]]|$)'; then
+        elif cmd_match "$seg" '[[:space:]]rebase([[:space:]]|$)'; then
             kind="git rebase"; break
         fi
     done <<< "$segs"
