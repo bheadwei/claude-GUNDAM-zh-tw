@@ -45,6 +45,36 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] post-write: $FILE_PATH" >> "$CLAUDE_DIR/log
 [ -z "$FILE_PATH" ] && exit 0
 command -v jq >/dev/null 2>&1 || exit 0
 
+# ---------------------------------------------------------------- hook 語法檢查
+#
+# 把 hook 改壞的當下**沒有任何人告訴你**，要等下一條指令噴 syntax error 才發現——
+# 而「改 hook」在這個 repo 是日常。只出聲，**不擋、不修、不還原、不備份**：
+# 壞掉的 hook 本來就得再被編輯才能修好，擋住等於重演「閘門擋下修好它自己的那次編輯」。
+#
+# 放在 .suggest-mode 之前、擴充提醒之前：這不是建議密度的問題（檔案是真的壞的），
+# 而且擴充提醒命中 .claude/hooks/* 之後會 exit，放後面就永遠輪不到。
+# 沒壞時完全不出聲，所以常態成本是零。
+#
+# post-write.sh 自己被改壞時這段不會跑。那無解，**刻意不做自舉保護**。
+#
+# 逃生門：HOOK_SYNTAX_CHECK=off
+if [ "${HOOK_SYNTAX_CHECK:-on}" != "off" ]; then
+    case "$(printf '%s' "$FILE_PATH" | tr '\\' '/')" in
+        */.claude/hooks/*.sh)
+            if [ -f "$FILE_PATH" ] && ! SYN_ERR=$(bash -n "$FILE_PATH" 2>&1); then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] hook syntax error: $FILE_PATH" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
+                jq -n --arg f "$FILE_PATH" --arg e "$SYN_ERR" '{
+                  hookSpecificOutput: {
+                    hookEventName: "PostToolUse",
+                    additionalContext: ("🚨 `" + $f + "` 語法錯誤，這支 hook 現在是壞的：\n\n```\n" + $e + "\n```\n\n**先修好再繼續。** 壞掉的 hook 不會報錯，只會安靜地不執行——它負責的注入、閘門、紀錄從這一刻起全部消失，而你要等下一條指令噴錯才會發現。\n（關閉：HOOK_SYNTAX_CHECK=off）")
+                  }
+                }' 2>/dev/null || true
+                exit 0
+            fi
+            ;;
+    esac
+fi
+
 if [ -f "$DATA_DIR/.suggest-mode" ]; then
     sm=$(tr -d '[:space:]' < "$DATA_DIR/.suggest-mode" 2>/dev/null)
     [ "$sm" = "off" ] && exit 0

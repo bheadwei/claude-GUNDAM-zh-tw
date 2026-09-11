@@ -476,6 +476,21 @@ run post-write.sh "$(w "$SANDBOX/.claude/taskmaster-data/wbs.md")" >/dev/null
 if [ -f "$SANDBOX/.claude/taskmaster-data/wbs-history.log" ]; then ok "WBS 寫入仍記歷史"
 else ng "WBS 寫入仍記歷史" "有 wbs-history.log" "（無）"; fi
 
+# ---- hook 語法檢查 ----
+#
+# 把 hook 改壞的當下沒有任何人告訴你（PostToolUse 不會抱怨），要等下一條指令
+# 噴 syntax error 才發現——而改 hook 在這個 repo 是日常。只出聲不擋。
+reset; mkdir -p "$SANDBOX/.claude/hooks"
+printf 'if true; then\n  echo hi\n' > "$SANDBOX/.claude/hooks/broken.sh"   # 少一個 fi
+expect_contains "改壞 hook 會當場報語法錯誤" "語法錯誤" "$(pw ".claude/hooks/broken.sh")"
+
+# 沒壞就完全不出聲，否則每次改 hook 都被洗版
+# （關掉擴充提醒以隔離受測對象——它本來就會對 .claude/hooks/* 出聲）
+reset; mkdir -p "$SANDBOX/.claude/hooks"
+printf 'if true; then\n  echo hi\nfi\n' > "$SANDBOX/.claude/hooks/ok.sh"
+expect_empty "語法正常的 hook 不出聲" \
+    "$(run post-write.sh "$(w "$SANDBOX/.claude/hooks/ok.sh")" SKILL_CURATOR_GATE=off)"
+
 # =========================================================================
 section "user-prompt-submit.sh — planner / architect 路由"
 # =========================================================================
