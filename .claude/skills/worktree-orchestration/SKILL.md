@@ -19,6 +19,7 @@ description: Use when running work in parallel across git worktrees — creating
 | **同一個功能拆成很多小步驟** | ❌ 步驟間有依賴，隔離只會讓你一直在合併 |
 | 任務會頻繁改到同一批共用檔 | ❌ 衝突成本大於平行收益 |
 | 沒有 plan／plan 沒寫 `files:` | ❌ 範圍未知 → 保守視為不可平行 |
+| **baseline 還沒 commit**（測試基礎設施、前置修復還在工作區） | ❌ worktree 是乾淨 checkout，agent 會在一個**缺那些東西**的環境裡開工，等於要它從零重建——而且**沒有任何錯誤訊息**。先 commit 再開，見「派工前務必做的一件事」 |
 
 **並行數 2-4 個。** 再多你自己看不過來，磁碟與 context 成本也會超過收益。
 
@@ -110,8 +111,14 @@ claude --worktree feature-auth      # 或 claude -w feature-auth
 
 ### 派工前務必做的一件事
 
+**先 commit，再開 worktree。** 對象不只共用定義——凡是 agent 進去就得用到的東西
+（測試基礎設施、fixture、前置修復）留在工作區，worktree 裡就沒有。
+
 若這幾個任務用到共同的型別／介面／schema，**共用定義必須在 worktree 開出去之前就存在**。
 各 worktree 看不到彼此，少了共用定義每個 agent 各自發明一份，合併時必衝突。
+
+兩者漏掉的後果不同，所以要分開檢查：**共用定義漏了，會在合併時變成看得見的衝突；
+baseline 漏了，agent 只會安靜地重建一份**（它甚至會做得很像，你要到對帳時才發現）。
 
 **「存在」的門檻取決於 `baseRef`**：
 
