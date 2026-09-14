@@ -1224,6 +1224,67 @@ if [ "$RR_CWD" = "$RR_EXPECT|0" ]; then ok "無環境變數但有 cwd 時仍解�
 else ng "無環境變數但有 cwd 時仍解到 repo root 且非 worktree" "$RR_EXPECT|0" "${RR_CWD:-（空）}"; fi
 
 # =========================================================================
+section "/suggest-mode 是專案級設定 — worktree 內也要吃主 checkout 的值"
+
+# 隔離表一直把 .suggest-mode 列為 MAIN_CLAUDE 的專案級設定，但這三支曾經只讀
+# WORK_CLAUDE，於是主 checkout 打了 /suggest-mode off 也關不掉 worktree 裡的閘門與注入
+# （你會以為自己關了）。pre-tool-use.sh 早就是「MAIN 優先、WORK 當 fallback」，
+# 這三支改成同一個寫法。每組都配一條對照：沒設 off 時要照樣出聲，否則測的是別的東西。
+#
+# worktree 只開一次共用——每條各開一個要跑 7 次 git init + worktree add，在 Windows 上
+# 是整套測試最慢的一段。代價是必須自己把跨案例的狀態清乾淨，而那正好堵掉三個假通過：
+#   .parallel-agent-warned  deny-once：第 1 條擋下後留的旗標會讓第 2 條放行（不是因為修對了）
+#   .doc-impact             post-write 每任務只提醒一次：最後一條可能只是被對照那條吃掉
+#   .merge-pending          同理
+# 原本每條重建 worktree 剛好掩蓋了這三件事。
+
+wt_agent() { jq -nc --arg c "$1" '{tool_name:"Agent", cwd:$c, tool_input:{subagent_type:"planner"}}'; }
+wt_bash()  { jq -nc --arg c "$1" '{tool_name:"Bash",  cwd:$c, tool_input:{command:"git merge feature/x"}}'; }
+wt_write() { jq -nc --arg c "$1" --arg f "$2" '{tool_name:"Write", cwd:$c, tool_input:{file_path:$f}}'; }
+
+# 清掉會跨案例污染的狀態，但保留 worktree 本身
+wt_clear() {
+    rm -f "$SM_FILE" \
+          "$WT/.claude/taskmaster-data/.suggest-mode" \
+          "$WT/.claude/taskmaster-data/.parallel-agent-warned" \
+          "$WT/.claude/taskmaster-data/.merge-pending" \
+          "$WT/.claude/taskmaster-data/.doc-impact" 2>/dev/null || true
+    : > "$AG_LOG" 2>/dev/null || true
+}
+
+setup_worktree
+
+wt_clear; ag_start a1
+expect_decision "（對照）worktree 沒設 off 時平行閘門仍擋" deny \
+    "$(run pre-agent-gate.sh "$(wt_agent "$WT")")"
+
+wt_clear; ag_start a1; echo off > "$SM_FILE"
+expect_decision "主 checkout 的 off 關得掉 worktree 的平行閘門" allow \
+    "$(run pre-agent-gate.sh "$(wt_agent "$WT")")"
+
+wt_clear; ag_start a1; echo off > "$WT/.claude/taskmaster-data/.suggest-mode"
+expect_decision "worktree 自己的 off 仍有效（fallback 沒壞）" allow \
+    "$(run pre-agent-gate.sh "$(wt_agent "$WT")")"
+
+wt_clear
+out=$(run post-bash.sh "$(wt_bash "$WT")")
+[ -n "$out" ] && ok "（對照）worktree 沒設 off 時 post-bash 仍出聲" \
+              || ng "（對照）worktree 沒設 off 時 post-bash 仍出聲" "有輸出" "空的"
+
+wt_clear; echo off > "$SM_FILE"
+expect_empty "主 checkout 的 off 關得掉 worktree 的合併偵測" \
+    "$(run post-bash.sh "$(wt_bash "$WT")")"
+
+wt_clear
+out=$(run post-write.sh "$(wt_write "$WT" "$WT/src/api/x.ts")")
+[ -n "$out" ] && ok "（對照）worktree 沒設 off 時 post-write 仍出聲" \
+              || ng "（對照）worktree 沒設 off 時 post-write 仍出聲" "有輸出" "空的"
+
+wt_clear; echo off > "$SM_FILE"
+expect_empty "主 checkout 的 off 關得掉 worktree 的文件債偵測" \
+    "$(run post-write.sh "$(wt_write "$WT" "$WT/src/api/x.ts")")"
+
+# =========================================================================
 section "全體 hooks — 語法與健壯性"
 # =========================================================================
 for h in "$HOOK_DIR"/*.sh; do

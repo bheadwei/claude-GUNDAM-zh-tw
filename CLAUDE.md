@@ -39,7 +39,6 @@
   - **受測者讀得到考卷**：prompt 04／05 都主動指出題目一字不差存在 `prompts/*.txt`。這次它選擇不看評分標準，但下次照答案演我們分不出來
   - `-p` 非互動模式拿不到權限提示 → 受測 session 寫不了 `.claude/**`、跑不了 Bash 腳本
   - 已驗出的結論：反向題 2/2 PASS（注入沒硬到壓過使用者指示）、任務分級與升級有效；**文件路由（01／02）兩次都沒走**，證實了 Red Flags 表「最常被漏掉的一棒」那句判斷
-- **`pre-agent-gate.sh` 的 `.suggest-mode` 讀錯 root**：它讀 `WORK_CLAUDE`，但 `post-agent-report.sh` 與 `worktree-orchestration` 的隔離表都把它列為 `MAIN_CLAUDE` 的專案級設定。後果是主 checkout 設 `/suggest-mode off` 關不掉 worktree 裡的平行 agent 閘門。無測試覆蓋
 - **衝突檔本身是 live hook 時，「委派 `conflict-resolver`」的注入靜默失效**（2026-09-11 實測）。衝突標記讓 hook 語法壞掉 → PostToolUse 只噴語法錯誤，該出現的提示沒出現。這推翻了「hook 一定會提醒你委派」這個隱含假設，而本模板最常做的事就是改 hook。沒有簡單解；務實做法是**衝突檔含 `.claude/hooks/**` 時不要等提示，自己看 `git status`**
 
 ### 已修的落差

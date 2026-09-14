@@ -75,10 +75,16 @@ if [ "${HOOK_SYNTAX_CHECK:-on}" != "off" ]; then
     esac
 fi
 
-if [ -f "$DATA_DIR/.suggest-mode" ]; then
-    sm=$(tr -d '[:space:]' < "$DATA_DIR/.suggest-mode" 2>/dev/null)
-    [ "$sm" = "off" ] && exit 0
-fi
+# 讀主 checkout 優先：/suggest-mode 是專案級設定，不該每個 worktree 各設一次。
+# 曾經只讀 WORK_CLAUDE，於是主 checkout 設了 off 關不掉 worktree 裡的這道閘門
+# （而隔離表一直把它列為 MAIN_CLAUDE 的專案級設定）。寫法與 pre-tool-use.sh 一致。
+for smf in "$MAIN_CLAUDE/taskmaster-data/.suggest-mode" "$DATA_DIR/.suggest-mode"; do
+    if [ -f "$smf" ]; then
+        sm=$(tr -d '[:space:]' < "$smf" 2>/dev/null)
+        [ "$sm" = "off" ] && exit 0
+        break
+    fi
+done
 
 NORM=$(printf '%s' "$FILE_PATH" | tr '\\' '/')
 ROOT_NORM=$(printf '%s' "$PROJECT_ROOT" | tr '\\' '/')

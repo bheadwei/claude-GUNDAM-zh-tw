@@ -13,6 +13,19 @@
 
 ### 已修（2026-09-11）
 
+- ~~`.suggest-mode` 讀錯 root（原記載為 `pre-agent-gate.sh` 一支）~~ → **實際是三支**：
+  `pre-agent-gate.sh`、`post-bash.sh`、`post-write.sh` 都只讀 `WORK_CLAUDE`。
+  `/suggest-mode` 是**專案級**設定（隔離表一直這樣列），所以主 checkout 打了 `off`
+  關不掉 worktree 裡的平行 agent 閘門、合併偵測與文件債偵測——而且沒有任何徵兆，
+  你只會覺得「我明明關了」。
+  修法：抄 `pre-tool-use.sh` 早就在用的寫法，四支統一成
+  `for smf in "$MAIN_CLAUDE/.../.suggest-mode" "$DATA_DIR/.suggest-mode"` ——
+  主 checkout 優先、worktree 當 fallback（worktree 自己設 `off` 仍然有效）。
+  **原本「無測試覆蓋」也一併補上**：7 條回歸（三支各一組主測＋對照，加一條 fallback），
+  共用一個 worktree 以免 7 次 `git init`。共用之後必須自己清
+  `.parallel-agent-warned`（deny-once 會讓下一條假通過）、`.doc-impact`
+  （post-write 每任務只提醒一次）、`.merge-pending`——每條重建 worktree 剛好掩蓋了這三件事。
+
 - ~~`pre-agent-gate.sh` 從裝上去那天就沒攔截過任何一次~~ → 閘門邏輯一直是對的，
   錯的是它讀的那本帳：`agent_complete` 由 `PostToolUse(Agent)` 寫，而 **Agent 工具是
   非同步的**——呼叫立刻返回 `{"isAsync":true,"status":"async_launched"}`，所以那筆

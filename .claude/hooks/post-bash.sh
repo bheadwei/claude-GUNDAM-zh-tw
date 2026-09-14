@@ -30,10 +30,16 @@ DATA_DIR="$WORK_CLAUDE/taskmaster-data"    # 失敗計數：每個 worktree 各�
 [ "${LEARN_CAPTURE:-on}" = "off" ] && exit 0
 command -v jq >/dev/null 2>&1 || exit 0
 
-if [ -f "$DATA_DIR/.suggest-mode" ]; then
-    sm=$(tr -d '[:space:]' < "$DATA_DIR/.suggest-mode" 2>/dev/null)
-    [ "$sm" = "off" ] && exit 0
-fi
+# 讀主 checkout 優先：/suggest-mode 是專案級設定，不該每個 worktree 各設一次。
+# 曾經只讀 WORK_CLAUDE，於是主 checkout 設了 off 關不掉 worktree 裡的這道閘門
+# （而隔離表一直把它列為 MAIN_CLAUDE 的專案級設定）。寫法與 pre-tool-use.sh 一致。
+for smf in "$MAIN_CLAUDE/taskmaster-data/.suggest-mode" "$DATA_DIR/.suggest-mode"; do
+    if [ -f "$smf" ]; then
+        sm=$(tr -d '[:space:]' < "$smf" 2>/dev/null)
+        [ "$sm" = "off" ] && exit 0
+        break
+    fi
+done
 
 CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // ""' 2>/dev/null)
 [ -n "$CMD" ] || exit 0
