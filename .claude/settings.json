@@ -41,16 +41,16 @@
       "Write(*)",
       "Edit(*)",
       "Glob(*)",
-      "Grep(*)"
+      "Grep(*)",
+      "Bash(bash:*)",
+      "Bash(sh:*)",
+      "Bash(chmod:*)"
     ],
     "deny": [
       "Bash(sudo:*)"
     ],
     "ask": [
-      "Bash(rm:*)",
-      "Bash(bash:*)",
-      "Bash(sh:*)",
-      "Bash(chmod:*)"
+      "Bash(rm:*)"
     ]
   },
   "statusLine": {
