@@ -61,13 +61,7 @@
   "model": "opus",
   "worktree": {
     "baseRef": "head",
-    "symlinkDirectories": [
-      "node_modules",
-      ".venv",
-      ".next",
-      "dist",
-      "build"
-    ],
+    "symlinkDirectories": [],
     "cleanupPeriodDays": 14
   },
   "hooks": {

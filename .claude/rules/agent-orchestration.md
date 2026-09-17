@@ -48,7 +48,7 @@ documentation-specialist、workflow-template-manager
 ## 反模式（避免）
 
 - ❌ `quick` 小修改卻啟動 planner + tdd-guide 全套
-- ❌ 有專業 agent 卻全用 general-purpose
+- ❌ 有專業 agent 卻全用 general-purpose（但它有正當用途——哪些情境見路由表）
 - ❌ agent 留下 pending handoff 卻無人接手
 - ❌ 同時平行啟動會互改同一批檔案的 agent（序列化或用 worktree 隔離）
 - ❌ 一次委派一長串 agent 卻不在每棒後檢視產出
@@ -58,7 +58,18 @@ documentation-specialist、workflow-template-manager
 平行不是反模式，**「會互改同一批檔案」才是**。
 
 - **判斷依據**：各任務 plan 檔的 `files:` frontmatter（見 `plan-format` skill）。
-  無交集 → 可平行；沒 plan／沒 `files:` → 保守視為不可平行
+  沒 plan／沒 `files:` → 保守視為不可平行
+- **但寫入集無交集只是必要條件，不是充分條件。** 它只看「寫撞寫」，
+  漏掉「讀撞寫」：`security-infrastructure-auditor`、`code-quality-specialist`、
+  `test-automation-engineer`、`e2e-validation-specialist`、`refactor-cleaner`
+  **讀或執行整個 repo**，寫入集卻幾乎是空的——所以「範圍不重疊」對它們永遠成立，
+  而它們必然讀到併行寫入者留下的半成品。這幾個要平行**只能靠 worktree 隔離**，
+  不能靠範圍判斷
+- **而 worktree 的隔離只到檔案層**：`symlinkDirectories` 若含環境目錄或建置產物，
+  agent 會靜默**執行到**另一條線的程式碼。判準見 `worktree-orchestration` skill
+  的 `symlinkDirectories` 節（唯一來源）
+- **強制者是 `.claude/hooks/pre-agent-gate.sh`**（唯一來源，理由與事故都在它的訊息裡，
+  勿在此重述）。上面這條它驗得出來，而且在這個情境下不採 deny-once
 - **完整程序**：見 `worktree-orchestration` skill（**唯一來源**）——狀態隔離邊界、
   原生 `claude -w`、依相依順序合併、清理判準
 - **入口**：`/task-next` 的平行選項（WBS 驅動）、`/worktree`（臨時隔離）

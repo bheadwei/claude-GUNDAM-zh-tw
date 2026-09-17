@@ -34,6 +34,8 @@ description: Use when starting any conversation in a TaskMaster project — esta
 |---|---|
 | 新功能、要做一個 X | planner → **tdd-guide** → code-quality-specialist → test-automation-engineer →（critical）security-infrastructure-auditor |
 | 跑起來行為不對、壞了、沒反應、資料錯 | **debug-investigator** →（critical）tdd-guide → code-quality-specialist |
+| 根因**已確認**（已重現＋已定位），只差實作與驗證 | `general-purpose` 當實作者（見 `subagent-execution`）→ standard/critical 再接 code-quality-specialist |
+| 根因**未確認**（不知道為什麼壞、只有推測） | **debug-investigator**，不可跳過 |
 | 建置失敗、`tsc`／型別／import 錯誤 | **build-error-resolver**（終端節點，修完即止） |
 | 合併出現衝突（merge／cherry-pick／rebase 停在衝突） | **conflict-resolver**（讀兩邊 plan 與報告判意圖；設計決策會 abort 並回報） |
 | 重構、清死碼、整併 | refactor-cleaner → code-quality-specialist → test-automation-engineer |
@@ -47,6 +49,8 @@ description: Use when starting any conversation in a TaskMaster project — esta
 | 補測試、提升覆蓋率 | test-automation-engineer |
 | E2E、關鍵使用者流程驗證 | e2e-validation-specialist |
 | 安全稽核、秘密洩漏、OWASP | security-infrastructure-auditor |
+
+> **「明確根因」＝ 你能說出「在 X 檔案 Y 行，當 Z 條件成立時會發生 W」。** 說不出這句話就是未確認，派 `debug-investigator`——判準不夠硬就會被「我覺得根因很明確」這種恆為真的句子通過（見 `context/learned/2026-09-16-concurrent-read-write-not-file-overlap.md`）。`quick` 原則上不派 agent，這兩列用在 standard/critical。
 
 都不適配才退回 Claude Code 內建的 `general-purpose`。**「我自己做比較快」不是退回的理由。**
 
