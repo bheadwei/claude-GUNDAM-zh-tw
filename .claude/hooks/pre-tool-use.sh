@@ -8,7 +8,9 @@
 #   2. TTL 過期自動清除 —— 解掉「/verify 沒清 → 判級永久不觸發」的互鎖
 #   3. 坑閘門 —— 要寫的檔案在 context/learned/ 有紀錄時擋一次，把教訓貼給模型
 #   4. 裸 cd 偵測（Bash）—— 取代已移除的 rules/bash-cwd.md，改由機器強制
-#   5. Bash 的兩道 lib 閘門：merge-gate（上一個合併未驗證前不得再合併）、
+#   5. Bash 的四道 lib 閘門：merge-gate（上一個合併未驗證前不得再合併）、
+#      branch-switch-gate（站在 topic 分支上不得直接開新分支）、
+#      merge-noff-gate（合併本地 topic 分支必須帶 --no-ff）、
 #      git-backup-gate（destructive 操作前 HEAD 必須有 backup/* tag 指著）
 #   6. 輕量 log
 #
@@ -21,7 +23,9 @@
 #   TASKMODE_TTL_HOURS   模式檔多久算過期（預設 8，即一個工作 session）
 #   PITFALL_GATE=off     只關坑閘門，保留任務模式閘門
 #   MERGE_GATE=off       只關合併閘門
+#   MERGE_NOFF_GATE=off  只關 --no-ff 閘門
 #   GIT_BACKUP_GATE=off  只關 backup tag 閘門
+#   BRANCH_SWITCH_GATE=off  只關分支切換閘門
 
 set -u
 
@@ -111,6 +115,31 @@ if [ "$TOOL_NAME" = "Bash" ] && [ -n "$COMMAND" ]; then
     source "$(dirname "${BASH_SOURCE[0]}")/lib/merge-gate.sh" 2>/dev/null || true
     if declare -F merge_gate >/dev/null 2>&1; then
         merge_gate "$COMMAND" "$DATA_DIR"
+    fi
+
+    # 分支切換閘門：站在 topic 分支上不得直接 `git checkout -b`／`git switch -c`。
+    # 排在 merge-gate **之後**——「上一個合併還沒驗證」是整批工作卡在半空中，那件事
+    # 該先講完。
+    # 排在另外兩道 git 閘門**之前**：它們管的是 merge／reset／push／rebase，跟
+    # checkout／switch 不會是同一段指令，所以純看命中的話順序無所謂。真正會撞在
+    # 一起的是 `git checkout -b x && git reset --hard HEAD~1` 這種串接——那時該先
+    # 講「這條分支根本不該在這裡開」，先收到「去打 backup tag」等於在指導一個
+    # 不該發生的操作怎麼做得更安全。
+    source "$(dirname "${BASH_SOURCE[0]}")/lib/branch-switch-gate.sh" 2>/dev/null || true
+    if declare -F branch_switch_gate >/dev/null 2>&1; then
+        branch_switch_gate "$COMMAND" "$WORK_ROOT" "$MAIN_CLAUDE" "$DATA_DIR"
+    fi
+
+    # --no-ff 閘門：合併本地 topic 分支必須留下 merge commit。
+    # 排在 merge-gate **之後**——「上一個合併還沒驗證」是**狀態**問題，那一批
+    # 工作正卡在半空中，該先講；`--no-ff` 只是這一條指令的形狀，補上旗標重打
+    # 同一條就過，晚一步講不會損失任何東西。
+    # 排在 git-backup-gate **之前**——`git merge` 不是 backup 閘門管的四種
+    # destructive 指令，兩者實際上不會撞在同一條指令上，但把「同類的合併語意」
+    # 放在一起讀比較清楚。
+    source "$(dirname "${BASH_SOURCE[0]}")/lib/merge-noff-gate.sh" 2>/dev/null || true
+    if declare -F merge_noff_gate >/dev/null 2>&1; then
+        merge_noff_gate "$COMMAND" "$WORK_ROOT"
     fi
 
     # backup tag 閘門：destructive 操作前 HEAD 必須有 backup/* tag 指著。

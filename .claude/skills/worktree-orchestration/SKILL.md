@@ -19,6 +19,7 @@ description: Use when running work in parallel across git worktrees — creating
 | **同一個功能拆成很多小步驟** | ❌ 步驟間有依賴，隔離只會讓你一直在合併 |
 | 任務會頻繁改到同一批共用檔 | ❌ 衝突成本大於平行收益 |
 | 沒有 plan／plan 沒寫 `files:` | ❌ 範圍未知 → 保守視為不可平行 |
+| 其中一方是**讀／跑整個 repo** 的掃描／驗證類 agent | ✅ **隔離是唯一選項**——它的寫入集是空的，`files:` 無交集對它永遠成立卻擋不住「讀撞到寫」。名單與理由見 `rules/agent-orchestration.md`「安全平行」 |
 | **baseline 還沒 commit**（測試基礎設施、前置修復還在工作區） | ❌ worktree 是乾淨 checkout，agent 會在一個**缺那些東西**的環境裡開工，等於要它從零重建——而且**沒有任何錯誤訊息**。先 commit 再開，見「派工前務必做的一件事」 |
 
 **並行數 2-4 個。** 再多你自己看不過來，磁碟與 context 成本也會超過收益。
@@ -66,6 +67,11 @@ claude --worktree feature-auth      # 或 claude -w feature-auth
 它會建在 `.claude/worktrees/feature-auth/`、分支 `worktree-feature-auth`，
 並套用 `.worktreeinclude`。從哪裡開分支由 `settings.json` 的 `worktree.baseRef` 決定。
 
+> **「優先用原生」的前提是你站在預設分支上。** 本模板設 `"head"`，所以在 topic
+> 分支上跑 `claude -w`，開出來的 worktree **以那條 topic 分支為基底**——前一個
+> 任務的 commit 會整批混進新任務（實際踩過）。這時改用下表「從預設分支開」那一列。
+> （`git checkout -b` 也有同一個坑，已由 `lib/branch-switch-gate.sh` 擋。）
+
 ### `baseRef`：本模板設 `"head"`，不是官方預設
 
 只有兩個合法值：
@@ -81,6 +87,13 @@ claude --worktree feature-auth      # 或 claude -w feature-auth
 只會自己發明範圍。共用型別／schema 同理。設定寫在 `.claude/settings.json`
 的 `worktree.baseRef`（標準 JSON 不能寫註解，理由記在這裡）。
 
+**`"head"` 的代價（知道再選，不要當它不存在）**：基底是「你現在站在哪」，
+所以站在 topic 分支上開 worktree，前一個任務的 commit 會混進新任務。
+繞法在下面那張表。**沒有第三個值可以兩全**——`baseRef` 不吃分支名字串
+（2026-09-17 查證：合法值就是 `fresh` / `head` 兩個，「指定基底分支」還是
+[開著的 feature request](https://github.com/anthropics/claude-code/issues/35730)），
+所以這是二選一，本模板選「plan 進得去」而不是「基底永遠乾淨」。
+
 帶 `isolation: "worktree"` 的 subagent worktree **同樣遵守** `worktree.baseRef`
 與 `.worktreeinclude`，不是另一套規則。
 
@@ -88,15 +101,50 @@ claude --worktree feature-auth      # 或 claude -w feature-auth
 |---|---|
 | 從遠端乾淨狀態開（放棄本地未 push 的工作） | `settings.json` 改回 `worktree.baseRef: "fresh"`（**會讓 plan 進不了 worktree**，改前先讀上面那段） |
 | 從某個 PR 開 | `claude --worktree "#1234"`（引號必要，`#` 會被 shell 當註解） |
+| 從預設分支開（人在 topic 分支上時） | 原生會用當前 HEAD → `git worktree add -b <新分支> .claude/worktrees/<名字> main` |
 | 從既有分支開 | 原生不支援 → `git worktree add ../x existing-branch` |
 | session 中途進去 | 叫我「在 worktree 裡做」，我用 `EnterWorktree` |
 | 讓某個 agent 永遠隔離 | 該 agent frontmatter 加 `isolation: worktree` |
 | 單次派工隔離 | `Agent` 工具帶 `isolation: "worktree"` |
 
 **環境準備**：worktree 是乾淨 checkout，只有 tracked 檔案。`.worktreeinclude`
-負責帶 `.env`／`.mcp.json` 這類 gitignored 設定；**依賴要自己裝**
-（`settings.json` 的 `worktree.symlinkDirectories` 可讓 `node_modules` 走 symlink 省磁碟，
-但用前確認你的工具鏈吃得下 symlink）。
+負責帶 `.env`／`.mcp.json` 這類 gitignored 設定；**依賴要自己裝**。
+
+### `symlinkDirectories`：本模板預設**空的**，開之前先讀判準
+
+`settings.json` 的 `worktree.symlinkDirectories` 會把列出的目錄做成**指回主 checkout**
+的 symlink，原意是省磁碟（一份 `node_modules` 動輒 300–500MB）。**本模板預設 `[]`**，
+原本的 `["node_modules", ".venv", ".next", "dist", "build"]` 已全部移除。
+
+**為什麼**：worktree 的隔離是**檔案層**的。symlink 一個會影響「執行到哪份程式碼」的
+目錄，等於在執行層把隔離拆掉——而且**完全沒有錯誤訊息**。2026-09-17 實測：
+`.venv` 走 symlink 時，worktree 裡的 `router.__file__` 指向**主 checkout**，
+worktree 的 agent 跑測試測到的是另一條線的程式碼（對方正在做突變測試）。
+
+**判準（要開哪些自己照這條判）：**
+
+| 可以 symlink | 不能 symlink |
+|---|---|
+| **純快取／純下載產物**——內容只由 lockfile 決定，跟你在哪個 checkout 無關 | **任何會記錄來源路徑的東西**：editable install 的 `.pth`／`__editable__*.pth`、workspace 的 package 連結（`node_modules/<pkg>` 指回 repo source）、從 schema 產生的 client（`node_modules/.prisma`） |
+| | **建置產物**（`.next`／`dist`／`build`）——它是**這份 source 的輸出**，共用等於 B 服務／測試 A 的產出 |
+
+`node_modules` 也不是無條件安全：**扁平、非 workspace 的專案可以開**；
+npm／pnpm workspaces 或 monorepo 就落在右欄（`node_modules/<pkg>` 是指回 source 的 symlink）。
+`.venv` 在本模板一律不建議——`python-uv` 的 workspace 成員預設就是 editable install。
+
+**已經中招了怎麼修**（順序不能換）：
+
+```bash
+test -L backend/.venv && unlink backend/.venv     # 確認是 symlink 才動
+uv sync --all-packages                            # 重建，不要只 uv sync
+```
+
+- **`unlink` 不是 `rm -rf`**：`rm -rf backend/.venv/` 帶斜線會沿著 symlink 進去
+  **刪掉主 checkout 的那一份**。`test -L` 先確認、`unlink` 只斷連結。
+- **`--all-packages` 不能省**：只跑 `uv sync` 會把 workspace 成員修剪掉。
+- 驗收條件是**不帶 `PYTHONPATH`** 也載得到 worktree 自己的檔案
+  （`python -c "import <pkg>; print(<pkg>.__file__)"` 要指向 worktree）。
+  成本：一份新 venv 約 484MB（實測）。
 
 ---
 
@@ -242,6 +290,7 @@ git worktree prune                                 # 清掉目錄已消失的紀
 ## 反模式
 
 - ❌ 手動 `git worktree add` 而不用 `claude -w`（少掉 `.worktreeinclude`、自動清理、隔離強制）
+- ❌ 把 `.venv` 或建置產物列進 `symlinkDirectories`（隔離在**執行層**失效，而且無聲）
 - ❌ 沒把共用型別先落地（`"head"` → commit；`"fresh"` → push）就開三個 agent
 - ❌ 一次 merge 全部 worktree
 - ❌ 在 worktree 裡跑 `git -C <主checkout>`（會被擋，而且意圖本身就錯）

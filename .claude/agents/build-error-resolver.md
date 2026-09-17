@@ -1,7 +1,7 @@
 ---
 name: build-error-resolver
 description: 編譯/建置/型別錯誤快速修復專家。MUST BE USED whenever 建置失敗或出現 tsc/編譯/import/依賴錯誤。以最小差異讓建置恢復綠燈，不重構、不改架構、不加功能。
-tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
+tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "mcp__context7__resolve-library-id", "mcp__context7__query-docs"]
 model: opus
 ---
 
@@ -10,6 +10,10 @@ model: opus
 **必讀規範：** `.claude/rules/coding-style.md`（克制原則、註解預設不寫 -- 修好就好，不要順手加說明註解）、
 `.claude/skills/node-package-manager/SKILL.md`（跑任何 npm/pnpm/bun/npx 指令或動 lock 檔前）、
 `.claude/skills/python-uv/SKILL.md`（Python 專案一律 uv，禁 pip/poetry）
+
+你有 `context7` MCP（`resolve-library-id` + `query-docs`）：型別與 import 錯誤常來自套件改版後的
+breaking change，**憑記憶猜 API 會改出另一個錯**——查當前版本的官方文檔再改。
+專案沒裝 context7 時工具不會出現，照既有資訊修即可。
 
 ## 核心職責
 

@@ -4,8 +4,9 @@
 bash .claude/hooks/tests/run-tests.sh
 ```
 
-266 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。
-**Windows Git Bash 上約需 5 分鐘**（2026-09-09 實測）——大量 `bash` + `jq` 子行程，
+356 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。
+**Windows Git Bash 上約需 12 分鐘**（2026-09-17 實測 356 案例；2026-09-09 的 320 案例
+是 5 分鐘，案例增加時這個數字會繼續往上）——大量 `bash` + `jq` 子行程，
 process spawn 是主要成本。**看起來像掛住其實只是慢**：用背景執行並把輸出重導到檔案，
 不要 `| tail`（管線會把輸出憋到最後，中途看不到進度，也就看不出它到底跑到哪）。
 
@@ -32,6 +33,7 @@ process spawn 是主要成本。**看起來像掛住其實只是慢**：用背�
 | handoff 注入 | 9 | pending 注入含 from/to/優先級/起因；completed 不注入；suggest-mode 分級過濾；範本檔不誤判 |
 | 意圖路由 | 8 | auth→critical、UI/npm/測試→提示載入對應 skill、斜線指令不路由 |
 | git backup 閘門 | 22 | 四種 destructive 指令都擋、`--force-with-lease` 不例外、tag 指向 HEAD 才放行、`--continue/--abort/--skip` 放行、**只是提到指令不擋**、兩個逃生門、非 repo/空 repo 放行 |
+| **分支切換閘門** | 34 | 站在預設分支放行（即使有 agent 在跑）、站在 topic 分支擋一次、有 in-flight agent 時**持續擋**、標記記分支名（換分支重新受檢）、回預設分支清標記、帶 start-point 放行但有 agent 時仍擋、`git checkout <既有分支>`／`git switch <既有分支>`／`git checkout -- <file>` 不誤擋、detached HEAD 與非 repo 放行、兩個逃生門、**與 `pre-agent-gate` 共用同一份 in-flight 計數** |
 | 平行 agent 閘門 | 14 | 有 in-flight 就擋、deny-once、`isolation: worktree\|remote` 放行、in-flight 歸零後下一批重新受檢、舊格式紀錄（無 `agent_id`）忽略、兩個逃生門、**攔截訊息的推薦**（不乾淨／沒有帶 `files:` 的 plan → 序列化；乾淨 → worktree） |
 | **非同步派工的完成時機** | 13 | 走真的 `agent-monitor.sh`（不造假 JSONL）：`PreToolUse` 不記帳、派工返回只記 `agent_start`、**只有 `SubagentStop` 才沖銷 in-flight**、`agent_type` 空字串仍沖銷、沒見過的 `agent_id` 不轉負、同步完成的 agent 淨變化 0 |
 | 全體 hooks | 12 | 語法可解析、空 payload 不爆炸 |

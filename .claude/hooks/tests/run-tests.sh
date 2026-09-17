@@ -876,8 +876,10 @@ expect_decision "待驗證時擋下 rebase"            deny  "$(bg 'git rebase m
 expect_decision "merge --abort 放行（收拾現場）" allow "$(bg 'git merge --abort')"
 expect_decision "rebase --continue 放行"         allow "$(bg 'git rebase --continue')"
 expect_decision "無關指令放行"                   allow "$(bg 'git status')"
+# 指令帶 --no-ff：關掉 MERGE_GATE 之後**下一道** lib 閘門（merge-noff-gate）
+# 仍然在線，裸的 `git merge x` 會被它擋下，那不是本案例要測的事。
 expect_decision "MERGE_GATE=off 關閉閘門"        allow \
-    "$(run pre-tool-use.sh "$(printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"git merge x"}}' "$SANDBOX")" MERGE_GATE=off)"
+    "$(run pre-tool-use.sh "$(printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"git merge --no-ff x"}}' "$SANDBOX")" MERGE_GATE=off)"
 
 # 清單為空 → 放行（/verify 通過後的狀態）
 reset; mkdir -p "$(dirname "$MP_FILE")"; : > "$MP_FILE"
@@ -972,6 +974,242 @@ expect_decision "空 repo（unborn HEAD）放行"     allow "$(gbo 'git reset --
 GBG_NOREPO=$(mktemp -d)
 expect_decision "不在 git repo 裡放行"           allow "$(gbo 'git reset --hard HEAD' "$GBG_NOREPO")"
 rm -rf "$GBG_NOREPO"
+
+# =========================================================================
+section "merge --no-ff 閘門 — 合併本地 topic 分支必須留下 merge commit"
+# =========================================================================
+#
+# 為什麼要這組：2026-09-16 一個在獨立 worktree 做完的任務（WBS 11.26）合併回
+# main 時漏了 `--no-ff`，主線零分歧 → fast-forward → **任務邊界在歷史上消失**，
+# `git log --first-parent` 看不出那是一個任務、`git revert -m 1` 也無從整批回退。
+# 這件事當時**已經寫在兩份文件裡**（commands/worktree.md、worktree-orchestration
+# skill）還是漏了，所以改由 lib/merge-noff-gate.sh 強制。
+#
+# 這組沿用上一區塊 git init 過的 $SANDBOX（本閘門要查 `git remote` 才分得出
+# `fork/main` 是遠端 ref 而 `feat/x` 是本地分支）。merge --no-ff 不屬於
+# git-backup-gate 管的四種 destructive 指令，兩者不會互相干擾。
+
+gitq remote add fork https://example.invalid/fork.git
+gbg_untag
+reset
+# mn <command> [ENV=VAL] —— 用 jq 組 payload（指令含引號／換行時必須這樣）
+mn() {
+    local c="$1"; shift
+    run pre-tool-use.sh \
+        "$(jq -nc --arg cwd "$SANDBOX" --arg c "$c" '{cwd:$cwd,tool_name:"Bash",tool_input:{command:$c}}')" \
+        "$@"
+}
+
+# 事故原型：worktree 分支合回 main，沒帶旗標
+expect_decision "合併本地分支沒帶 --no-ff → 擋" deny "$(mn 'git merge worktree-agent-a4c461cf622a61062')"
+expect_decision "帶 --no-ff → 放行"             allow "$(mn 'git merge --no-ff worktree-agent-a4c461cf622a61062')"
+
+# 意圖已明確表達的另外兩種
+expect_decision "--squash 放行（明確不要 merge 節點）" allow "$(mn 'git merge --squash feat/x')"
+expect_decision "--ff-only 放行（明確就是要 ff）"     allow "$(mn 'git merge --ff-only feat/x')"
+
+# 純同步合併不該被逼出一個空的 merge 節點
+expect_decision "git merge origin/main 放行"    allow "$(mn 'git merge origin/main')"
+expect_decision "git merge upstream/main 放行"  allow "$(mn 'git merge upstream/main')"
+expect_decision "任意 <remote>/… 放行（fork/main）" allow "$(mn 'git merge fork/main')"
+expect_decision "FETCH_HEAD 放行"               allow "$(mn 'git merge FETCH_HEAD')"
+expect_decision "@{u} 放行"                     allow "$(mn 'git merge @{u}')"
+# 有斜線不代表是遠端——`feat/x` 是本地 topic 分支，正是最該擋的那一類。
+# 判準是「第一段是不是真的 remote 名稱」，不是「有沒有斜線」。
+expect_decision "feat/x（有斜線的本地分支）仍擋" deny "$(mn 'git merge feat/x')"
+
+# 誤判回歸：merge-base 是唯讀查詢，不是合併（cmd-segments.sh 存在的理由）
+expect_decision "git merge-base 不被誤擋"       allow "$(mn 'git merge-base --is-ancestor 6d8d48c main')"
+expect_decision "鏈式唯讀查詢（含 merge-base）放行" allow \
+    "$(mn 'git log --oneline -1 6d8d48c && git merge-base --is-ancestor 6d8d48c main')"
+expect_decision "heredoc 內文提到指令不擋"      allow "$(mn 'cat > d.md <<EOF
+合併任務分支時用 git merge task-branch
+EOF')"
+
+# 收拾當前狀態，不是新合併
+expect_decision "merge --abort 放行"            allow "$(mn 'git merge --abort')"
+expect_decision "merge --continue 放行"         allow "$(mn 'git merge --continue')"
+
+# `-m` 會吃掉下一個 token。引號內文若直接刪掉，`mybr` 會被 `-m` 誤吃，
+# 然後「沒有 ref 參數」讓閘門靜默放行——所以引號字串換成佔位 token 而不是刪除。
+expect_decision "-m \"…\" 之後的分支不會被吃掉" deny "$(mn 'git merge -m "merge: 11.26 搜尋結果分頁" mybr')"
+expect_decision "--no-ff 搭配 -m 放行"          allow "$(mn 'git merge --no-ff -m "merge: 11.26 搜尋結果分頁" mybr')"
+# 引號內文提到旗標不算數（它是訊息，不是旗標）
+expect_decision "-m 內文提到 --no-ff 不算帶旗標" deny "$(mn 'git merge -m "這次改用 --no-ff" mybr')"
+
+# 其他形狀
+expect_decision "鏈式 cd x && git merge 也擋"   deny  "$(mn 'cd /tmp && git merge mybr')"
+expect_decision "沒有 ref 參數時放行"           allow "$(mn 'git merge')"
+expect_decision "git pull 不是 merge，放行"     allow "$(mn 'git pull origin main')"
+expect_decision "不含 git 的指令放行"           allow "$(mn 'npm run merge -- mybr')"
+expect_decision "-X ours 的值不會被當成 ref"    deny  "$(mn 'git merge --strategy-option ours mybr')"
+# 反向：**值是選配的**選項不吃下一個 token（`--log[=<n>]` 必須寫成 `--log=5`）。
+# 把它誤列進「吃下一個 token」那串的代價是靜默放行——分支名被當成 --log 的值。
+expect_decision "--log 不會吃掉後面的分支名"    deny  "$(mn 'git merge --log mybr')"
+expect_decision "--log=5 附著值一樣擋"          deny  "$(mn 'git merge --log=5 mybr')"
+
+# deny 訊息要能直接複製，而且要誠實
+MN_MSG=$(mn 'git merge mybr' | jq -r '.hookSpecificOutput.permissionDecisionReason')
+expect_contains "deny 訊息給出補好旗標的完整指令" "git merge --no-ff mybr" "$MN_MSG"
+expect_contains "deny 訊息講 --first-parent 的具體效益" "first-parent"      "$MN_MSG"
+expect_contains "deny 訊息講 revert -m 1 可整批回退"    "revert -m 1"       "$MN_MSG"
+expect_contains "deny 訊息誠實說明它不是平行的證據"    "不是平行做過的證據" "$MN_MSG"
+expect_contains "deny 訊息給永久解（含 pull.rebase 配套）" "pull.rebase true" "$MN_MSG"
+
+# **刻意沒有 deny-once**：這是「指令形狀」閘門，補上旗標重打同一條就過，
+# 天然自清。記旗標反而會讓「第二次真的漏掉」時靜默放行。
+mn 'git merge mybr' >/dev/null
+expect_decision "沒有 deny-once：第二次仍擋"    deny  "$(mn 'git merge mybr')"
+
+# 逃生門
+expect_decision "MERGE_NOFF_GATE=off 關閉閘門"  allow "$(mn 'git merge mybr' MERGE_NOFF_GATE=off)"
+reset; echo off > "$SM_FILE"
+expect_decision "suggest-mode=off 也關閉閘門"   allow "$(mn 'git merge mybr')"
+reset
+
+# 上一道閘門優先：待驗證的合併是**狀態**問題，該先講；--no-ff 只是這條指令的
+# 形狀，補上旗標重打就好。接線順序（merge_gate → merge_noff_gate）釘在這裡。
+mkdir -p "$(dirname "$MP_FILE")"; echo '[merge] worktree-search' > "$MP_FILE"
+expect_contains "merge-gate 排在 --no-ff 閘門之前" "上一次合併還沒驗證過" \
+    "$(mn 'git merge mybr' | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+reset
+
+# =========================================================================
+section "分支切換閘門 — 站在 topic 分支上不得直接開新分支"
+# =========================================================================
+#
+# 事故（2026-09-17）：主 checkout 站在 `fix/stream-token-ledger` 上、一個 subagent
+# 正在那條分支上工作，此時要開第二個任務。模型講得出「`git checkout -b` 會把它
+# 腳下的分支抽掉」這個危險——但是在被使用者推了之後。沒有任何機制在它真的要打
+# 那條指令時攔下來。第二個情境沒有 agent 也成立：切到 topic 分支之後開新分支，
+# 基底會混進前一個任務的 commit。現在由 lib/branch-switch-gate.sh 強制。
+#
+# 這組沿用上面 git init 過的 $SANDBOX（閘門要問「當前分支」與「預設分支」，
+# 只有真的切分支才驗得到）。**結束時務必切回 main**——後面的 worktree 那組
+# 從這個 repo 開 worktree。
+
+bs() {
+    local c="$1"; shift
+    run pre-tool-use.sh \
+        "$(jq -nc --arg cwd "$SANDBOX" --arg c "$c" '{cwd:$cwd,tool_name:"Bash",tool_input:{command:$c}}')" \
+        "$@"
+}
+BS_LOG="$SANDBOX/.claude/logs/agent-activity.jsonl"
+# in-flight 的判準與 pre-agent-gate 共用 lib/agent-inflight.sh：agent_id 配對、
+# 60 分鐘窗、缺 agent_type 印 `-`。這裡帶 agent_type 是因為攔截訊息要印出名單。
+bs_start() {
+    mkdir -p "$(dirname "$BS_LOG")"
+    echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"event\":\"agent_start\",\"agent_id\":\"$1\",\"agent_type\":\"$2\"}" >> "$BS_LOG"
+}
+bs_msg() { bs "$1" | jq -r '.hookSpecificOutput.permissionDecisionReason'; }
+
+gbg_untag
+# 沙箱的初始分支名取決於跑測試那台機器的 `init.defaultBranch`（可能是 master）。
+# 本閘門的判斷正是「當前分支 == 預設分支嗎」，所以名字必須是確定的——先釘成 main。
+# 其他區塊都不依賴分支名（它們只是把 `main` 當字串寫進指令），改名不影響。
+gitq branch -M main
+gitq checkout main
+reset
+
+# ---- 第一格：站在預設分支上 → 放行（這正是 git-workflow.md 第 1 條要的流程）
+expect_decision "在 main 上開新分支放行"          allow "$(bs 'git checkout -b feat/x')"
+expect_decision "在 main 上 git switch -c 放行"   allow "$(bs 'git switch -c feat/x')"
+# 有 agent 在跑也照放：它們也站在 main 上，但「從 main 開分支」是本模板的主流程，
+# 擋它等於擋掉正常開發。這一格的取捨寫在 branch-switch-gate.sh 檔頭。
+reset; bs_start a1 planner
+expect_decision "在 main 上即使有 agent 在跑也放行" allow "$(bs 'git checkout -b feat/x')"
+
+# ---- 不該誤擋的形狀（不帶 -b/-c 的 checkout/switch 都只是換分支或還原檔案）
+reset
+expect_decision "git checkout <既有分支> 不擋"    allow "$(bs 'git checkout main')"
+expect_decision "git switch <既有分支> 不擋"      allow "$(bs 'git switch main')"
+expect_decision "git checkout -- <file> 不擋"     allow "$(bs 'git checkout -- src/a.ts')"
+expect_decision "git checkout . 不擋"             allow "$(bs 'git checkout .')"
+expect_decision "git status 不擋"                 allow "$(bs 'git status')"
+expect_decision "不含 git 的指令不擋"             allow "$(bs 'npm run checkout -- -b x')"
+expect_decision "heredoc 內文提到指令不擋"        allow "$(bs 'cat > d.md <<EOF
+開新任務前先 git checkout -b feat/x
+EOF')"
+
+# ---- 第三格：站在 topic 分支、沒有 in-flight agent → 擋一次
+gitq checkout -b feat/a
+reset
+expect_decision "站在 topic 分支上開新分支 → 擋"  deny  "$(bs 'git checkout -b feat/x')"
+
+reset
+BS_MSG=$(bs_msg 'git checkout -b feat/x')
+expect_contains "訊息講出「一個 checkout 只能站一個分支」" "一個 checkout 同時只能站一個分支" "$BS_MSG"
+expect_contains "訊息給出可複製的明確基底指令" "git checkout -b feat/x main" "$BS_MSG"
+expect_contains "訊息給出 worktree 的開法"     "claude --worktree feat/x"    "$BS_MSG"
+expect_contains "訊息點名當前分支"             "feat/a"                     "$BS_MSG"
+
+# deny-once：同一條分支只講一次
+reset
+bs 'git checkout -b feat/x' >/dev/null
+expect_decision "同一條 topic 分支只擋一次"       allow "$(bs 'git checkout -b feat/y')"
+
+# 標記記的是分支名 —— 換一條 topic 分支是新的現場，該再擋一次
+gitq checkout -b feat/b
+expect_decision "換一條 topic 分支重新受檢"       deny  "$(bs 'git checkout -b feat/y')"
+
+# 回到預設分支會清掉標記，下次站上 topic 分支重新受檢
+gitq checkout main
+expect_decision "回到 main 放行（順手清標記）"    allow "$(bs 'git checkout -b feat/y')"
+gitq checkout feat/b
+expect_decision "清掉標記後再站上 topic 分支又擋" deny  "$(bs 'git checkout -b feat/y')"
+
+# 明確帶 start-point → 基底已表達清楚，那本來就是本閘門推薦的繞法，不能反過來擋它
+reset
+expect_decision "git checkout -b x main（帶基底）放行" allow "$(bs 'git checkout -b feat/x main')"
+expect_decision "git switch -c x main（帶基底）放行"   allow "$(bs 'git switch -c feat/x main')"
+
+# ---- 第二格：站在 topic 分支且有 in-flight agent → 持續擋（不採 deny-once）
+reset; bs_start a1 planner
+expect_decision "有 agent 在跑時擋"               deny  "$(bs 'git checkout -b feat/x')"
+bs 'git checkout -b feat/x' >/dev/null
+expect_decision "有 agent 在跑時不採 deny-once"   deny  "$(bs 'git checkout -b feat/x')"
+# start-point 解決「基底錯了」，解決不了「HEAD 被搬走，站在上面的 agent 跟著被搬」
+expect_decision "有 agent 在跑時帶基底也擋"       deny  "$(bs 'git checkout -b feat/x main')"
+
+reset; bs_start a1 planner; bs_start a2 tdd-guide
+BS_MSG=$(bs_msg 'git checkout -b feat/x')
+expect_contains "訊息說出有幾個 agent 在跑"    "2 個 subagent 還在跑" "$BS_MSG"
+expect_contains "訊息點名是哪幾個 agent"       "tdd-guide"            "$BS_MSG"
+expect_contains "訊息誠實說明計數可能含自己"   "你自己就是那個 subagent" "$BS_MSG"
+
+# in-flight 的判準與 pre-agent-gate 共用同一份 lib（agent-inflight.sh）。
+# 抽成共用函式之後兩邊必須看到**同一個數字**——各寫各的就是同一個坑修兩次。
+expect_decision "同一份 log 下 pre-agent-gate 也擋" deny \
+    "$(run pre-agent-gate.sh "$(printf '{"cwd":"%s","hook_event_name":"PreToolUse","tool_input":{"subagent_type":"planner"},"tool_use_id":"tX"}' "$SANDBOX")")"
+# agent 完成後歸零 → 兩邊都放行（共用實作的 agent_id 配對沒被抽壞）
+echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"event\":\"agent_complete\",\"agent_id\":\"a1\"}" >> "$BS_LOG"
+echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"event\":\"agent_complete\",\"agent_id\":\"a2\"}" >> "$BS_LOG"
+expect_decision "agent 全部完成後 pre-agent-gate 放行" allow \
+    "$(run pre-agent-gate.sh "$(printf '{"cwd":"%s","hook_event_name":"PreToolUse","tool_input":{"subagent_type":"planner"},"tool_use_id":"tX"}' "$SANDBOX")")"
+expect_decision "agent 全部完成後回到擋一次那一格" deny "$(bs 'git checkout -b feat/x')"
+
+# ---- 逃生門
+reset
+expect_decision "BRANCH_SWITCH_GATE=off 關閉閘門" allow "$(bs 'git checkout -b feat/x' BRANCH_SWITCH_GATE=off)"
+reset; echo off > "$SM_FILE"
+expect_decision "suggest-mode=off 也關閉閘門"     allow "$(bs 'git checkout -b feat/x')"
+
+# ---- 判斷不了就放行
+reset
+gitq checkout --detach
+expect_decision "detached HEAD 放行（從那裡開分支通常是在救東西）" allow "$(bs 'git checkout -b feat/x')"
+gitq checkout feat/b
+
+BS_NOREPO=$(mktemp -d)
+expect_decision "不在 git repo 裡放行" allow \
+    "$(run pre-tool-use.sh \
+        "$(jq -nc --arg cwd "$BS_NOREPO" --arg c 'git checkout -b feat/x' '{cwd:$cwd,tool_name:"Bash",tool_input:{command:$c}}')" \
+        CLAUDE_PROJECT_DIR="$BS_NOREPO")"
+rm -rf "$BS_NOREPO"
+
+# 後面的 worktree 那組從這個 repo 開 worktree，一定要還原成 main
+gitq checkout main
+reset
 
 # =========================================================================
 section "pre-agent-gate.sh — 擋同時派多個無隔離 agent"
@@ -1087,6 +1325,72 @@ pg_setup "$PG_RECO" clean noplan
 expect_contains "沒有帶 files: 的 plan → 序列化並點出原因" \
     '序列化（選項 1）** —— `taskmaster-data/plans/` 裡**沒有任何帶' "$(pg_gate "$PG_RECO")"
 rm -rf "$PG_RECO"
+
+# ---- 讀寫衝突盲區（2026-09-16）----
+#
+# 原本的選項 3 寫「確認**檔案範圍不重疊**後重試即可通過」。掃描／驗證類 agent
+# 的**寫入集是空的**，所以那個條件對它永遠成立——閘門親手把模型引導到錯誤結論，
+# 再加上 deny-once 就放行了。兩起真實事故：auditor 讀到改到一半的產品碼回報
+# 假 failed；審查類 agent 把 debug-investigator 留的 RED 測試檔刪了。
+#
+# 修法要釘住三件事：推薦改成序列化且理由講讀寫衝突、**收掉選項 3**、
+# **不套用 deny-once**（持續擋到 in-flight 歸零或帶 isolation）。
+# 一般情境的 deny-once 行為必須**完全不變**。
+
+# ag_start_t <agent_id> <agent_type> —— 帶 agent_type 的 in-flight 紀錄
+ag_start_t() {
+    echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"event\":\"agent_start\",\"agent_id\":\"$1\",\"agent_type\":\"$2\"}" >> "$AG_LOG"
+}
+ag_reason() { echo "$1" | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null; }
+
+# in-flight 是掃描類（這次派的是普通 agent）
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 code-quality-specialist
+expect_decision "in-flight 有掃描類 → 擋" deny "$(ag planner)"
+SCAN_MSG=$(ag_reason "$(ag planner)")
+expect_contains "掃描類推薦序列化"             "推薦：序列化"   "$SCAN_MSG"
+expect_contains "理由講的是讀寫衝突"           "讀撞到寫"       "$SCAN_MSG"
+expect_contains "附上假 failed 那起事故"       "假 failed"      "$SCAN_MSG"
+expect_contains "附上 RED 測試被刪那起事故"    "刻意留紅"       "$SCAN_MSG"
+expect_contains "收掉選項 3"                   "這個情境沒有第三條路" "$SCAN_MSG"
+case "$SCAN_MSG" in
+    *"確認範圍無交集後重試"*) ng "掃描類不得出現選項 3 的原文" "（不出現）" "出現了" ;;
+    *) ok "掃描類不得出現選項 3 的原文" ;;
+esac
+expect_contains "掃描類註明不採 deny-once"     "不採 deny-once" "$SCAN_MSG"
+
+# 不套用 deny-once：連續三次都要擋（一般情境第二次就放行）
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 security-infrastructure-auditor
+ag planner >/dev/null
+ag planner >/dev/null
+expect_decision "掃描類不套用 deny-once（第三次仍擋）" deny "$(ag planner)"
+
+# 這次要派的是掃描類（in-flight 是普通 agent）
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 planner
+expect_decision "要派的是掃描類 → 擋" deny "$(ag test-automation-engineer)"
+ag test-automation-engineer >/dev/null
+expect_decision "要派的是掃描類 → 不套用 deny-once" deny "$(ag e2e-validation-specialist)"
+expect_contains "訊息點名這次要派的掃描類 agent" "e2e-validation-specialist" \
+    "$(ag_reason "$(ag e2e-validation-specialist)")"
+
+# 兩個出口：帶 isolation、或 in-flight 歸零。少了任何一個這個閘門會鎖死。
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 refactor-cleaner
+expect_decision "掃描類帶 isolation 仍直接放行" allow "$(ag code-quality-specialist worktree)"
+ag_complete a1
+expect_decision "in-flight 歸零後放行"          allow "$(ag code-quality-specialist)"
+
+# 一般情境**完全不變**：三個選項都在、deny-once 照舊
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 planner
+NORM_MSG=$(ag_reason "$(ag tdd-guide)")
+expect_contains "一般情境仍是三個選擇"         "三個選擇"               "$NORM_MSG"
+expect_contains "一般情境保留選項 3"           "確認範圍無交集後重試"   "$NORM_MSG"
+expect_contains "一般情境仍是 deny-once"       "本批只擋這一次"         "$NORM_MSG"
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 planner
+ag tdd-guide >/dev/null
+expect_decision "一般情境 deny-once 不變（第二次放行）" allow "$(ag architect)"
+
+# 舊格式（無 agent_type）不能讓 in-flight 計數消失——jq 把它印成 "-" 而不是空行
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
+expect_contains "無 agent_type 的 in-flight 仍算 1 個" "已經有 1 個" "$(ag_reason "$(ag planner)")"
 
 # =========================================================================
 section "agent-monitor.sh × pre-agent-gate.sh — 非同步派工的完成時機"

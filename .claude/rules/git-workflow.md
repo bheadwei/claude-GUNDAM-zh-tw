@@ -32,8 +32,9 @@ Pull Request 流程（已被 `commands/pr.md` 取代，而且 pr.md 寫得更好
 git branch --show-current && git status --short
 ```
 
-三種情況**停下來問使用者**，不要自己決定：在 `main`／`master` 上、
-工作區不乾淨、使用者沒指定分支。分支命名 `<type>/<short-description>`，
+四種情況**停下來問使用者**，不要自己決定：在 `main`／`master` 上、
+工作區不乾淨、使用者沒指定分支、**已經站在別人正在用的 topic 分支上**（**由
+`.claude/hooks/lib/branch-switch-gate.sh` 強制**）。分支命名 `<type>/<short-description>`，
 type 用 commit 那組（`feat` `fix` `refactor` …）。
 
 **為什麼檢查點在這裡**：`/pr` 也會擋「在 main 上開 PR」，但那是**程式碼已經寫完
@@ -74,5 +75,6 @@ destructive 指令，並把算好的 tag 指令貼給你；打完 tag 重試同�
 
 - `.claude/commands/pr.md` — PR 流程唯一來源（前置檢查、PR 內容骨架、署名）
 - `.claude/rules/coding-style.md` — commit message 格式
+- `.claude/hooks/lib/branch-switch-gate.sh` — 第 1 條第四種情況的閘門實作
 - `.claude/hooks/lib/git-backup-gate.sh` — 第 3 條的閘門實作
 - `worktree-orchestration` skill — 平行開發的狀態隔離邊界與合併順序

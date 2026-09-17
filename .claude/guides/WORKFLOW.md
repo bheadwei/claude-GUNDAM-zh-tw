@@ -349,19 +349,12 @@ worktree 裡連 plan 都沒有，agent 不知道要實作什麼。
 
 ### Agent 鏈（依任務類型）
 
-| 任務類型 | 鏈 |
-|---|---|
-| 新功能 | planner → **tdd-guide** → code-quality-specialist → test-automation-engineer →（critical）security-infrastructure-auditor |
-| 修 bug（跑起來行為不對） | **debug-investigator（先重現再定根因）** →（critical）tdd-guide → code-quality-specialist |
-| 修 bug（建置/型別錯誤） | **build-error-resolver**（直接最小差異修，不需調查） |
-| 重構/清理 | refactor-cleaner → code-quality-specialist → test-automation-engineer |
-| 建置/型別錯誤 | **build-error-resolver**（單點） |
-| 前端 UI | （/ui-style →）ui-builder →（關鍵流程）e2e-validation-specialist |
-| PR 前把關 | code-quality-specialist → security-infrastructure-auditor → e2e-validation-specialist |
-| 部署 | security-infrastructure-auditor → deployment-expert |
-| 架構決策 | architect → planner |
+**路由表的唯一來源是 `using-taskmaster` skill（勿在此重述）。** 它由 `session-start.sh`
+每個 session 全文注入，所以一定在主模型的 context 裡；本檔沒有這個待遇，抄一份只會漂開
+——這裡原本那份就漂到「修 bug（建置/型別錯誤）」與「建置/型別錯誤」變成兩列同一件事。
+`quick` 只派粗體那一棒、拒派要先宣告理由、Red Flags 反合理化表，也都在該 skill 裡。
 
-`quick` 模式只做粗體那一棒。
+鏈怎麼推進、哪些 agent 會建 handoff、安全平行的判準見 `.claude/rules/agent-orchestration.md`。
 
 ---
 
@@ -438,11 +431,11 @@ worktree 裡連 plan 都沒有，agent 不知道要實作什麼。
 ## 改動 hook 之後
 
 ```bash
-bash .claude/hooks/tests/run-tests.sh        # 266 案例
-bash scripts/check-counts.sh --tests 232   # 文件計數一致性
+bash .claude/hooks/tests/run-tests.sh        # 356 案例
+bash scripts/check-counts.sh --tests 356   # 文件計數一致性
 ```
 
 CI（`.github/workflows/template-ci.yml`）會在 push 與 PR 時自動跑這兩項，
 加上 Windows/Git Bash 的回歸測試、shell 與 PowerShell 語法、copy/update-template 沙箱實跑。
 
-266 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
+356 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
