@@ -4,17 +4,20 @@
 
 ## 三檔任務模式
 
-| 模式 | 適用條件 | 流程 | 覆蓋率 |
-|---|---|---|---|
-| `quick` | < 30min ・ 單檔 ・ 文案/樣式/小 bug ・ 設定調整 | 直接寫 → `/verify quick` | 不檢查 |
-| `standard` | 1-4h ・ 跨檔 ・ 新增功能 ・ 重構 | `/plan` → `/tdd` → `/verify` | 80% |
-| `critical` | 金流 ・ 認證 ・ 安全 ・ migration ・ 核心商業邏輯 | `/plan`（必要）→ `/tdd` → `/code-review` → `/verify pre-pr` | 100% |
+| 模式 | 適用條件 | 流程 |
+|---|---|---|
+| `quick` | ≤ 2 個檔，且**沒有**動到對外介面（API／路由／CLI）或資料結構（schema／migration） | 直接寫 → `/verify quick` |
+| `standard` | 超過 2 個檔 ・ 動到對外介面 ・ 新增功能 ・ 重構 | `/plan` → `/tdd` → `/verify` |
+| `critical` | 金流 ・ 認證／授權邏輯 ・ 安全 ・ migration ・ 核心商業邏輯 | `/plan`（必要）→ `/tdd` → `/code-review` → `/verify pre-pr` |
+
+覆蓋率門檻見 `testing-standards` skill（唯一來源，本檔不寫數字）。
 
 ## 自動分級啟發式
 
-- 單檔 **且** < 30min **且** 屬「文案/樣式/設定/小 bug」 → **quick**
-- 觸及「auth/認證/payment/金流/billing/security/安全/migration/遷移/核心商業邏輯」 → **critical**
-- 其他（跨檔、新功能、重構） → **standard**
+- 觸及認證或授權**邏輯本身**、金流、安全、migration、核心商業邏輯 → **critical**
+  （只是改登入頁的文案或樣式、session 逾時的提示文字，不算——要動到驗證、授權、token、密碼處理的程式）
+- ≤ 2 個檔 **且** 沒動對外介面（API／路由／CLI）**且** 沒動資料結構（schema／migration） → **quick**
+- 其他（超過 2 個檔、動到對外介面、新功能、重構） → **standard**
 
 判不準時往上一級靠。**預設不是 standard —— 是「先判定、後宣告」。**
 
@@ -27,7 +30,7 @@
 
 宣告格式（一句話，讓使用者能當場否決）：
 
-> 判定 **quick**（單檔、<30min、樣式調整）→ 直接實作 + 1 個 happy-path 驗證，跳過 plan/TDD。
+> 判定 **quick**（2 個檔、沒動 API 或 schema）→ 直接實作 + 1 個 happy-path 驗證，跳過 plan/TDD。
 
 寫入：`echo standard > .claude/taskmaster-data/.current-task-mode`
 
@@ -62,7 +65,7 @@
 
 執行中發現複雜度超過初始評估時：
 
-- quick → standard：發現要動多檔，主動提示「升級到 standard，要先 `/plan` 嗎？」
+- quick → standard：發現要動第 3 個檔、或碰到對外介面／資料結構，主動提示「升級到 standard，要先 `/plan` 嗎？」
 - standard → critical：發現觸碰金流/認證，停止並提示升級
 
 **降級不允許**（避免規避測試）。

@@ -7,7 +7,7 @@
 1. **有專業 agent 就優先委派** — 強制性與 Red Flags 反合理化表見 `using-taskmaster` skill。
    都不適配時才退回 Claude Code 內建的 `general-purpose`
    （本模板不自訂它：同名會 shadow 掉內建版，換來的是更小的工具集）
-2. **委派要看任務模式** — `quick` 原則上不拉 planner/tdd-guide；`standard`/`critical` 才走完整鏈
+2. **委派要看任務模式** — `quick` 原則上不拉 planner、不走完整 TDD；`standard`/`critical` 才走完整鏈
 3. **交棒靠 handoff，不靠記憶** — 後續工作以 `coordination/handoffs/` 傳遞；`post-agent-report.sh` 會把 pending 交接注入對話，**看到提示就接手對應的「to」agent**
 4. **判定後先宣告** — 派或不派都要一句話，讓使用者可當場否決。
    格式與拒派理由的判準見 `using-taskmaster` skill 的「規則」節（**唯一來源**）
@@ -32,22 +32,24 @@
 
 ### 哪些 agent 實作了接力
 
-**會寫報告 + 建 handoff（12）**：planner、architect、tdd-guide、code-quality-specialist、
+**會寫報告 + 建 handoff（10）**：architect、code-quality-specialist、
 test-automation-engineer、security-infrastructure-auditor、e2e-validation-specialist、
 deployment-expert、refactor-cleaner、ui-builder、debug-investigator、skill-curator
+
+**寫報告、下一棒由主模型接（1）**：planner——計畫寫好後由主模型跑 `/tdd`。
+實作者不是專屬 agent（主模型自己照 `tdd-workflow` skill 做，或派 `general-purpose`
+implementer，見 `subagent-execution`），所以沒有 handoff 對象
 
 **終端節點，不建 handoff（3）**：build-error-resolver（單點修完即止）、
 documentation-specialist、workflow-template-manager
 
-`quick` 模式例外——tdd-guide 在 quick 下不寫報告也不建 handoff。
-
-12＋3＝15，第 16 個 `conflict-resolver` **刻意不在名單裡**：它的 tools 沒有 Write，
+10＋1＋3＝14，第 15 個 `conflict-resolver` **刻意不在名單裡**：它的 tools 沒有 Write，
 機制上寫不了報告檔（只在回應裡回 STATUS 碼），列進去會讓稽核每次解衝突都發假警報
 （見 `post-agent-report.sh` 的註解）。**不要把它「補」回來。**
 
 ## 反模式（避免）
 
-- ❌ `quick` 小修改卻啟動 planner + tdd-guide 全套
+- ❌ `quick` 小修改卻啟動 planner + 完整 TDD 全套
 - ❌ 有專業 agent 卻全用 general-purpose（但它有正當用途——哪些情境見路由表）
 - ❌ agent 留下 pending handoff 卻無人接手
 - ❌ 同時平行啟動會互改同一批檔案的 agent（序列化或用 worktree 隔離）

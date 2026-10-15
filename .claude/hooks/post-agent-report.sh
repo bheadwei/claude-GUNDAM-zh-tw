@@ -52,7 +52,6 @@ case "$AGENT_NAME" in
     e2e-validation-specialist)        AREA="e2e" ;;
     planner)                          AREA="planning" ;;
     architect)                        AREA="decisions" ;;
-    tdd-guide)                        AREA="testing" ;;
     refactor-cleaner)                 AREA="quality" ;;
     ui-builder)                       AREA="quality" ;;
     deployment-expert)                AREA="deployment" ;;
@@ -62,14 +61,6 @@ esac
 # conflict-resolver 刻意不列：它的 tools 沒有 Write，機制上寫不了報告檔
 # （只在回應裡回 STATUS 碼）。加進來會變成每次解衝突都發一次假警報。
 # 加新 agent 時的判準是「它的 tools 有 Write 且定義裡寫了報告落點」，不是「它重不重要」。
-
-# quick 模式下 tdd-guide 刻意不寫報告（小任務不值得這開銷）→ 不稽核，避免假警報
-if [ "$AGENT_NAME" = "tdd-guide" ]; then
-    TM_FILE="$WORK_DATA/.current-task-mode"
-    if [ -f "$TM_FILE" ] && [ "$(tr -d '[:space:]' < "$TM_FILE" 2>/dev/null)" = "quick" ]; then
-        AREA=""
-    fi
-fi
 
 if [ -n "$AREA" ]; then
     CONTEXT_DIR="$CLAUDE_DIR/context/$AREA"

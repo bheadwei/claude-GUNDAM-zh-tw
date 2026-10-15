@@ -109,7 +109,7 @@ rm -rf node_modules <當前 PM 的 lock 檔> && <pm> install
 - 程式碼需要重構 -> 使用 `refactor-cleaner`
 - 需要架構變更 -> 使用 `architect`
 - 需要新功能 -> 使用 `planner`
-- 測試失敗 -> 使用 `tdd-guide`
+- 測試失敗 -> 根因不明用 `debug-investigator`；根因已知交回主模型照 `tdd-workflow` 修
 - 安全問題 -> 使用 `security-infrastructure-auditor`
 
 ---

@@ -6,9 +6,9 @@
 |---|---|---|---|
 | **Hooks** | 9 | 事件觸發，機器執行 | 只有明確逃生門 |
 | **Rules** | 6 | 每個 session 全量載入 | 否（但靠模型遵守） |
-| **Skills** | 27 | 情境觸發，按需載入 | 是（需被想起來） |
+| **Skills** | 28 | 情境觸發，按需載入 | 是（需被想起來） |
 | **Commands** | 29 | 使用者主動叫 | — |
-| **Agents** | 16 | 委派時啟動 | — |
+| **Agents** | 15 | 委派時啟動 | — |
 
 **設計原則**：能交給機器的交給 hook；任何任務都適用的才常駐 rule；
 領域專屬知識放 skill 按需載入。
@@ -45,8 +45,8 @@
    ▼
 ┌──────────── 依模式分流 ────────────┐
 │ quick     直接寫 → /verify quick    │  跳過 plan 與 TDD
-│ standard  /plan → /tdd → /verify    │  覆蓋率 80%
-│ critical  /plan（必要）→ /tdd        │  覆蓋率 100%
+│ standard  /plan → /tdd → /verify    │  門檻見 testing-standards
+│ critical  /plan（必要）→ /tdd        │  （只算改到的檔）
 │           → /code-review            │
 │           → /verify pre-pr          │
 └─────────────────────────────────────┘
@@ -62,7 +62,7 @@
 [Recommended] 逐階段派 implementer subagent
     每階段一個全新 subagent + 階段審查 + 有界修復迴圈，過程記進帳本
 我直接照 plan 實作
-    委派 tdd-guide 走標準 RED-GREEN-REFACTOR
+    主模型照 tdd-workflow skill 逐階段做 RED → GREEN → 重整
 ```
 
 選第一個走 `subagent-execution` skill：
@@ -440,4 +440,4 @@ bash scripts/check-counts.sh --tests 356   # 文件計數一致性
 CI（`.github/workflows/template-ci.yml`）會在 push 與 PR 時自動跑這兩項，
 加上 Windows/Git Bash 的回歸測試、shell 與 PowerShell 語法、copy/update-template 沙箱實跑。
 
-364 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
+375 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。

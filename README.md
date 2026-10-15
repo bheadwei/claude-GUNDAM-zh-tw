@@ -87,10 +87,10 @@ claude_v2026/
     ├── statusline.sh                 # StatusLine 腳本
     │
     ├── rules/        ( 6 個)         # 自動載入規則（每次對話注入）
-    ├── agents/       (16 個)         # 專業 Agent 定義
+    ├── agents/       (15 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
-    ├── skills/       (27 個)         # 按需載入（不佔常駐 context）
-    ├── hooks/                        # Hook 腳本 + lib/ + 364 案例回歸測試
+    ├── skills/       (28 個)         # 按需載入（不佔常駐 context）
+    ├── hooks/                        # Hook 腳本 + lib/ + 375 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）
     ├── ui/           (69 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │
@@ -186,7 +186,7 @@ claude_v2026/
 
 ---
 
-## Agent（16 個）
+## Agent（15 個）
 
 | Agent | Model | 用途 |
 | :--- | :--- | :--- |
@@ -194,7 +194,6 @@ claude_v2026/
 | architect | opus | 架構設計、技術選型 → **自動產 ADR** |
 | security-infrastructure-auditor | opus | OWASP Top 10、秘密偵測、依賴與基礎設施安全 |
 | debug-investigator | opus | 執行期 bug 根因調查（先重現再定因） |
-| tdd-guide | opus | 實作前 TDD 門禁（RED→GREEN→REFACTOR） |
 | code-quality-specialist | sonnet | 程式碼品質與安全審查 |
 | test-automation-engineer | opus | 實作後測試補強 |
 | e2e-validation-specialist | sonnet | Playwright 端到端驗證 |
@@ -246,7 +245,7 @@ claude_v2026/
 
 ---
 
-## Skills（27 個，按需載入）
+## Skills（28 個，按需載入）
 
 不佔常駐 context，由 `description` 的觸發條件決定何時載入。**唯一例外是第一個**。
 
@@ -257,7 +256,7 @@ claude_v2026/
 | **using-taskmaster** | 強制委派專業 agent 的命令 + Red Flags 反合理化表 + 路由表 + 動工前先讀坑 | **每個 session 由 `session-start.sh` 全文注入** |
 
 為什麼要反其道而行：Claude Code 內建的立場是「非必要不開 Agent」，
-而 slash command 算 skill、能滿足它的例外條件——所以 `/tdd` 派得動 `tdd-guide`，
+而 slash command 算 skill、能滿足它的例外條件——所以 `/refactor-clean` 派得動 `refactor-cleaner`，
 但自然語言（「整理更新文件」）派不動任何人。這個 skill 就是補上那張授權。
 
 ### 專案約定（原為常駐 rule）

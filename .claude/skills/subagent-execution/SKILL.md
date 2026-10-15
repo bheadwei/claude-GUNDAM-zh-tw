@@ -26,7 +26,7 @@ description: Use when executing a multi-phase plan under standard/critical task 
 | 單一階段、單檔小改 | ❌ 開 subagent 的開銷大於收益 |
 | 探索性工作（還不知道要做什麼） | ❌ 先 `debug-investigator` 或 `architect` |
 
-**這是選項不是強制。** 用 `AskUserQuestion` 問一題讓使用者決定：
+**這是選項不是強制。** 由主模型用 `AskUserQuestion` 問一題讓使用者決定（implementer 沒有這個工具，不要叫它問）：
 逐階段派 implementer（context 乾淨、可平行審查、較慢較貴）vs 主模型直接照 plan 實作
 （快、省，但長任務容易偏離 plan）。使用者沒表示過就問，問過就記在帳本裡別再問。
 
@@ -103,7 +103,9 @@ Ruling: <你決定了什麼> — <為什麼> — <如果錯了代價是什麼>
 ## 派工
 
 用 `Agent` 工具，`subagent_type: "general-purpose"`（implementer 是通用實作角色，
-不是本模板 14 個專業 agent 中的任何一個），prompt 照 `implementer-prompt.md` 組裝。
+不是本模板任何一個專業 agent；本模板**沒有**專屬的實作 agent），prompt 照 `implementer-prompt.md` 組裝。
+派工單會要求它讀 `tdd-workflow` 與 `testing-standards`——**這兩行不要刪**，
+它們決定了 implementer 每輪跑多少測試、把多少輸出讀進 context。
 
 **每次派工都要明確指定 `model`。** 讓它繼承你的模型是在燒錢——多數實作任務在 plan
 寫清楚的前提下是機械性的。
@@ -222,7 +224,7 @@ implementer（照原 prompt 做完，不加禁令）
 |---|---|
 | **坑閘門**（`pre-tool-use.sh`） | implementer 會被擋一次並看到坑。這是預期行為，不要教它繞過。派工前你自己也先讀 `context/learned/` 相關紀錄，寫進 prompt |
 | **任務模式閘門** | 派工前確認 `.current-task-mode` 已存在，否則 implementer 第一次寫檔就被擋，浪費一個回合 |
-| **覆蓋率門檻** | 由 `testing-standards` skill 決定（standard 80%／critical 100%）。寫進 implementer 的驗收條件 |
+| **覆蓋率門檻** | 由 `testing-standards` skill 決定（唯一來源）。派工單只寫任務模式，不要抄百分比 |
 | **plan 階段狀態** | 只有**你**改 plan 檔（`/tdd` 的權限）。不要讓 implementer 去改 plan——它會跟你搶 |
 | **`files:` frontmatter** | 就是 implementer 的檔案授權範圍。它想動範圍外的檔案 → 那是 `BLOCKED`，由你裁決要不要擴大範圍並更新 plan |
 | **handoff** | 階段審查產生的 handoff 照原機制走，`post-agent-report.sh` 會注入 |
@@ -247,6 +249,7 @@ implementer（照原 prompt 做完，不加禁令）
 - `implementer-prompt.md` — 派工 prompt 骨架
 - `reviewer-prompt.md` — 階段審查 prompt 骨架
 - `plan-format` skill — plan 檔格式、`files:` 欄、狀態同步權限
-- `testing-standards` skill — 覆蓋率門檻
+- `tdd-workflow` skill — implementer 照它做 RED → GREEN → 重整
+- `testing-standards` skill — 覆蓋率門檻、測試怎麼跑
 - `.claude/rules/task-mode.md` — quick / standard / critical
 - `.claude/context/learned/` — 派工前必讀的坑

@@ -107,14 +107,46 @@ if [ "${MERGE_GATE:-on}" != "off" ]; then
                     # 分辨「哪些分支合進來了、該比對哪幾份 plan 的驗收標準」，
                     # 存整條指令的話每一筆長得幾乎一樣，那個用途就沒了。
                     #
-                    # 先剪掉 -m "訊息"，否則訊息的第一個字會被當成 ref。
-                    MP_CLEAN=$(printf '%s' "$CMD" | tr '\n' ' ' \
-                        | sed -E 's/-m[[:space:]]+"[^"]*"//g')
-                    MP_REF=$(printf '%s' "$MP_CLEAN" | awk '
-                        { for (i = 1; i <= NF; i++)
-                              if ($i ~ /^(merge|cherry-pick|rebase)$/) { s = i + 1; break }
-                          if (!s) exit
-                          for (i = s; i <= NF; i++) { if ($i ~ /^-/) continue; print $i; exit } }')
+                    # 抽 ref 要先懂 shell 的引號。曾經只用 sed 剪掉 `-m "訊息"`，
+                    # 遇到 `-m "$(cat "$M/msg.txt")"`（引號裡再套引號）或 `-F <檔>`
+                    # 就把 shell 片段當成 ref，記成 `[merge] $M/merge-msg.txt")"`。
+                    # 現在逐字元切 token：雙引號、單引號、$( ) 內的空白不算分隔；
+                    # 帶值的選項（-m／-F／-s／-X 與長名）連同它的值一起跳過；
+                    # 碰到 && || ; | 就停（那已經是下一條指令）。
+                    MP_REF=$(printf '%s' "$CMD" | tr '\n' ' ' | awk -v op="$MP_OP" -v q="'" '
+                        function flush() { if (tok != "") { t[++n] = tok; tok = "" } }
+                        {
+                            line = $0; st = ""; tok = ""; n = 0
+                            for (i = 1; i <= length(line); i++) {
+                                c = substr(line, i, 1); top = substr(st, length(st), 1)
+                                if (top == q) {
+                                    if (c == q) st = substr(st, 1, length(st) - 1)
+                                } else if (top == "\"") {
+                                    if (c == "\\") { tok = tok c; i++; c = substr(line, i, 1) }
+                                    else if (c == "\"") st = substr(st, 1, length(st) - 1)
+                                    else if (c == "$" && substr(line, i + 1, 1) == "(") { st = st "("; tok = tok c; i++; c = "(" }
+                                } else if (top == "(") {
+                                    if (c == "(") st = st "("
+                                    else if (c == ")") st = substr(st, 1, length(st) - 1)
+                                    else if (c == "\"" || c == q) st = st c
+                                } else {
+                                    if (c == " " || c == "\t") { flush(); continue }
+                                    if (c == "\"" || c == q) st = st c
+                                    else if (c == "$" && substr(line, i + 1, 1) == "(") { st = st "("; tok = tok c; i++; c = "(" }
+                                }
+                                tok = tok c
+                            }
+                            flush()
+                            for (i = 1; i <= n; i++) if (t[i] == op) { s = i + 1; break }
+                            if (!s) exit
+                            for (i = s; i <= n; i++) {
+                                if (t[i] ~ /^(&&|\|\||;|\|)$/) exit
+                                if (t[i] ~ /^(-m|-F|-s|-X|--file|--message|--strategy|--strategy-option)$/) { i++; continue }
+                                if (t[i] ~ /^-/) continue
+                                if (index(t[i], "\"") || index(t[i], q) || index(t[i], "$") || index(t[i], "(") || index(t[i], "`")) continue
+                                sub(/;+$/, "", t[i]); print t[i]; exit
+                            }
+                        }')
                     # 抽不到就退回記整條指令（沒見過的指令形式、或續做時讀 MERGE_HEAD）。
                     #
                     # 截斷務必用 bash 的 ${var:0:n} —— 它算的是**字元**。

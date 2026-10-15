@@ -45,7 +45,7 @@ description: Use when adding or changing anything under .claude/ — deciding wh
 Claude Code 內建規則寫的是
 *"Do not use the Agent tool unless the user, a CLAUDE.md file, **or a skill** asks for it"*。
 **slash command 在 Claude Code 裡算 skill**，所以 command 內文提到 agent 就取得了授權；
-自然語言沒有。這是為什麼 `/tdd` 派得動 `tdd-guide` 而「整理更新文件」派不動任何人。
+自然語言沒有。這是為什麼 `/refactor-clean` 派得動 `refactor-cleaner` 而「整理更新文件」派不動任何人。
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: code-quality-specialist
-description: 程式碼品質與安全審查專家。Use PROACTIVELY 在完成一個功能/模組後、或 git commit 前，審查 security/quality/技術債問題（信心 >80% 才報）。發現弱點會自動建立 handoff 給 test-automation-engineer 或 security-infrastructure-auditor。小型單行修改不需要。
+description: 程式碼品質與安全審查專家。Use PROACTIVELY 在完成一個功能/模組後、或 git commit 前，審查 security/quality/技術債問題（信心 >80% 才報）。發現有風險的行為路徑完全沒有測試、或安全敏感問題時，才建立 handoff 給 test-automation-engineer 或 security-infrastructure-auditor。小型單行修改不需要。
 tools: ["Read", "Write", "Grep", "Glob", "Bash"]
 model: sonnet
 ---
@@ -21,8 +21,12 @@ model: sonnet
 ### 結束後（必須）
 1. 寫入報告到 `.claude/context/quality/code-quality-specialist-{YYYY-MM-DD-HHMM}.md`
 2. 格式遵循 `.claude/context/_REPORT_TEMPLATE.md`
-3. 若發現需測試補強的弱點，建立 handoff 到 `test-automation-engineer`：
+3. **只在**發現「有風險的行為路徑**完全沒有**測試」時，建立 handoff 到 `test-automation-engineer`：
    `.claude/coordination/handoffs/code-quality-specialist-to-test-automation-engineer-{YYYY-MM-DD-HHMM}.md`
+   - 有風險＝錯了會算錯錢、放錯權限、寫壞資料、吞掉錯誤；或是 plan 驗收條件列了卻沒有任何測試的行為
+   - 每一項寫到 `file:line` ＋「哪個行為沒被測到、錯了會怎樣」
+   - **不要**因為覆蓋率百分比偏低、或「測試可以再多一點」就建 handoff。
+     實作者剛照 `tdd-workflow` 寫過測試，這種 handoff 只會讓同一批程式被測兩次
 4. 若發現安全敏感問題，建立 handoff 到 `security-infrastructure-auditor`
 
 ## 審查流程
@@ -62,8 +66,14 @@ model: sonnet
 - 缺少錯誤處理 -- 未處理的 promise rejection、空 catch
 - Mutation 模式 -- 優先使用不可變操作（spread、map、filter）
 - console.log 殘留 -- 合併前移除除錯日誌
-- 缺少測試 -- 新程式碼路徑沒有測試覆蓋
 - 死碼 -- 被註解的程式碼、未使用的 import
+
+### 測試缺口（依風險分級，不是自動 HIGH）
+
+- 有風險的行為路徑（金額、權限、資料寫入、錯誤處理）**完全沒有**測試 -- HIGH，並建 handoff
+- plan 驗收條件列了、卻找不到對應測試的行為 -- HIGH，並建 handoff
+- 其他路徑測得比較薄、覆蓋率略低於門檻 -- MEDIUM，寫在報告裡，**不建 handoff**
+- 樣板、設定、無分支的轉接函式沒有測試 -- 不報
 
 ### 效能 (MEDIUM)
 

@@ -16,11 +16,12 @@
 │   ├── MCP_CONFIGS.md         # MCP Server 推薦清單
 │   ├── PAUSE_RESUME_GUIDE.md  # 暫停/恢復 SOP
 │   └── STATUSLINE_GUIDE.md    # StatusLine 客製化手冊
-├── agents/       (16 個)      # 專業 Agent 定義
+├── agents/       (15 個)      # 專業 Agent 定義
 ├── commands/     (29 個)      # Slash Command
 ├── rules/        ( 6 個)      # 自動載入規則
-├── skills/       (27 個)      # 專案特定領域知識
+├── skills/       (28 個)      # 專案特定領域知識
 ├── hooks/                     # Hook 腳本庫
+├── output-styles/             # 回覆風格（settings.json 的 outputStyle 指向 plain-language：先白話講結論再列細節）
 ├── context/                   # 跨 Agent 上下文共享
 ├── coordination/              # Agent 協調配置
 └── taskmaster-data/           # WBS、時間日誌、plans/（計畫持久化）
@@ -31,7 +32,7 @@
     └── .current-task          # 當前進行中任務 ID
 ```
 
-## Agents（16 個）
+## Agents（15 個）
 
 | Agent | Model | 用途 |
 | :--- | :--- | :--- |
@@ -39,20 +40,24 @@
 | architect | opus | 架構設計 |
 | security-infrastructure-auditor | opus | 安全稽核 |
 | debug-investigator | opus | 執行期 bug 根因調查 |
-| tdd-guide | opus | TDD 引導 |
+| build-error-resolver | opus | 建置/型別錯誤修復 |
+| deployment-expert | opus | 部署運維 |
+| test-automation-engineer | opus | 實作後補測試缺口（有具體缺口才派） |
+| ui-builder | opus | 前端 UI 產出（嚴格遵循 DESIGN.md） |
+| conflict-resolver | opus | 合併衝突處理 |
+| skill-curator | opus | `.claude/` 擴充維護 |
 | code-quality-specialist | sonnet | 程式碼審查 |
-| test-automation-engineer | sonnet | 測試自動化 |
 | e2e-validation-specialist | sonnet | E2E 測試 |
 | refactor-cleaner | sonnet | 死碼清理 |
-| deployment-expert | sonnet | 部署運維 |
-| ui-builder | sonnet | 前端 UI 產出（嚴格遵循 DESIGN.md） |
-| build-error-resolver | sonnet | 建置/型別錯誤修復 |
 | documentation-specialist | sonnet | 文檔生成 |
 | workflow-template-manager | sonnet | 模板管理 |
 
+實作（含 TDD）沒有專屬 agent：`/tdd` 由主模型照 `tdd-workflow` skill 做，
+多階段計畫逐階段派 `general-purpose` implementer（`subagent-execution` skill）。
+
 模型分派原則見 `guides/MODELS.md`（含派工時覆寫的時機）。
 
-## Skills（27 個，按需載入）
+## Skills（28 個，按需載入）
 
 僅保留模型不知道的專案特定知識。
 
