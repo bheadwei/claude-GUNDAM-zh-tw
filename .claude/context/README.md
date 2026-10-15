@@ -27,7 +27,7 @@ context/
 ├── decisions/     # 主 Agent + architect 的技術決策記錄（ADR）
 ├── planning/      # planner 報告
 ├── quality/       # code-quality-specialist 報告
-├── testing/       # tdd-guide + test-automation-engineer 報告
+├── testing/       # test-automation-engineer 報告
 ├── e2e/          # e2e-validation-specialist 報告
 ├── security/      # security-infrastructure-auditor 報告
 ├── deployment/    # deployment-expert 報告
@@ -44,8 +44,8 @@ context/
 格式: `{agent-name}-{YYYY-MM-DD-HHMM}.md`
 範例: `code-quality-specialist-2026-08-10-1530.md`
 
-> 同一領域可有多個 agent 寫入（例如 `testing/` 由 tdd-guide 與 test-automation-engineer
-> 共用），靠檔名的 agent 前綴區分，彼此互讀。
+> 同一領域可有多個 agent 寫入（例如 `quality/` 由 code-quality-specialist、debug-investigator、
+> refactor-cleaner、ui-builder 共用），靠檔名的 agent 前綴區分，彼此互讀。
 
 ## 各目錄職責
 

@@ -1,6 +1,6 @@
 # Skills 索引
 
-27 個 skill，**按需載入**（不佔常駐 context）。分兩類：從 rules 移出的專案約定、以及原有的領域知識包。
+28 個 skill，**按需載入**（不佔常駐 context）。分兩類：從 rules 移出的專案約定、以及原有的領域知識包。
 
 ## 常駐注入（唯一的例外）
 
@@ -12,7 +12,7 @@
 忽略」：`rules/agent-orchestration.md` 寫「有專業 agent 就優先委派」，對撞 Claude Code
 內建的「非必要不開 Agent」預設會輸。SessionStart 的 `additionalContext` 注入不會。
 
-> 實證：`/tdd` 這類 slash command 能成功派 agent（command 本身算 skill，等於取得授權），
+> 實證：`/tdd` 這類 slash command 能成功派 agent（command 本身算 skill，等於取得授權；當時測的是 `/tdd` 派 `tdd-guide`，該 agent 已於 2026-10-15 退役），
 > 但自然語言輸入（「整理更新文件」）不會。這個 skill 就是補上那張授權。
 
 ## 擴充這個模板時
@@ -30,7 +30,8 @@
 
 | Skill | 用途 | 啟動時機 |
 | :--- | :--- | :--- |
-| **testing-standards** | 覆蓋率門檻（依任務模式分級）、TDD 流程、測試反模式 | 寫/修測試、跑 `/tdd`、決定覆蓋率目標 |
+| **testing-standards** | 覆蓋率門檻（依任務模式、只算改到的檔）、**執行測試**（只跑相關檔、輸出只回摘要）、該測哪些邊界 | 寫/修/跑測試、決定覆蓋率目標、測試失敗 |
+| **tdd-workflow** | 依程式性質決定多嚴格（邏輯先寫測試／接線後補／UI 截圖／試做先不寫）、從 plan 驗收條件推 RED、GREEN 過不了修實作不改測試 | `/tdd`、執行 plan 階段、implementer subagent、修根因已知的 bug |
 | **plan-format** | plan 檔格式、命名、`files:` 欄、與 WBS 的職責分工 | `/plan`、`/tdd`、`/verify`、`/task-next`，或動 `plans/` 下的檔案 |
 | **spec-convergence** | codebase／WBS 還符合當初規格嗎：漏做、範圍蔓延、描述失真三查，報告不自動改 PRD | 里程碑完成、`/verify pre-pr`、CR 累積、使用者問「還符合需求嗎」 |
 | **worktree-orchestration** | worktree 的狀態隔離邊界、原生 `claude -w`、依序合併、清理判準 | `/task-next` 的平行開發、`/worktree`、派 `isolation: worktree` 的 agent 前 |
@@ -53,7 +54,7 @@
 | **postgres-patterns** | PostgreSQL 速查表（Index、型態、RLS）—— PG 專屬深入層 | 專案用 PG 且要寫 SQL、設計 Schema |
 | **nosql-patterns** | 文件型（MongoDB／Firestore）—— 存取模式先行、embed vs reference | 設計文件結構、Firestore 帳單變貴 |
 | **python-patterns** | Pythonic 寫法、型別註記、PEP 8、效能陷阱 | 寫或審查 Python 程式碼 |
-| **python-testing** | pytest：fixture、mock、parametrize、非同步測試 | 用 pytest 寫或修測試 |
+| **python-testing** | pytest 的**專案約定**：uv、目錄與 conftest、pyproject 設定、async、FastAPI 依賴覆寫、DB 隔離、patch 位置 | 用 pytest 寫、跑或修測試 |
 | **api-design** | REST 介面：資源命名、狀態碼、分頁、版本、速率限制 | 設計或改 API 端點 |
 | **backend-patterns** | **僅 Node／Express／Next.js** 的後端分層與 middleware | 專案後端是 Node（FastAPI 不適用） |
 | **deployment-patterns** | CI/CD、rollback、零停機發布、上線前檢查 | 要部署或設 CI/CD |
@@ -95,7 +96,7 @@ UI 與 Node 兩類另有 `user-prompt-submit.sh` 的關鍵字提示當第二層�
 | `postgres-patterns` | RLS 政策與索引選擇的實際語法，不是「該加索引」這種通則 |
 | `sql-patterns` | 同一件事在三個引擎的實際差別（加欄位在 PG 可能瞬間完成、SQLite 要重建整表） |
 | `nosql-patterns` | embed vs reference 的判準、Firestore 計費跟資料模型是同一件事 |
-| `python-patterns`／`python-testing` | 具體的 Pythonic 寫法對照與 pytest fixture／mock 組織方式 |
+| `python-patterns`／`python-testing` | 具體的 Pythonic 寫法對照；pytest 在這個模板專案裡的約定（uv、FastAPI `dependency_overrides` 要清、patch 被使用的地方） |
 | `api-design` | 分頁／過濾／錯誤回應的實際格式，不是「要一致」這種通則 |
 | `deployment-patterns`／`docker-patterns` | 多階段 Dockerfile、healthcheck、rollback 的實際寫法 |
 | `security-review` | OWASP 項目對應的實際檢查點與修法 |

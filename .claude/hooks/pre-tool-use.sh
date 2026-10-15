@@ -335,9 +335,9 @@ deny "尚未判定任務模式，不能開始寫程式碼（rules/task-mode.md �
 
 請依啟發式判定並用一句話宣告理由，然後寫入模式檔再重試本次編輯：
 
-  quick     單檔 + <30min + 文案/樣式/設定/小 bug
-  standard  跨檔 / 新功能 / 重構
-  critical  auth / 金流 / 安全 / migration / 核心商業邏輯
+  quick     ≤ 2 個檔，且沒動對外介面（API／路由／CLI）或資料結構（schema／migration）
+  standard  超過 2 個檔 / 動到對外介面 / 新功能 / 重構
+  critical  認證或授權邏輯本身 / 金流 / 安全 / migration / 核心商業邏輯
 
 寫入方式（擇一）：
   echo standard > \"\$CLAUDE_PROJECT_DIR/.claude/taskmaster-data/.current-task-mode\"

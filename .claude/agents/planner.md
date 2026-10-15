@@ -21,20 +21,9 @@ model: opus
 1. 寫入報告到 `.claude/context/planning/planner-{YYYY-MM-DD-HHMM}.md`，
    格式遵循 `.claude/context/_REPORT_TEMPLATE.md`。內容為**給下游 agent 的摘要**
    （計畫本體在 `plans/`，不要整份複製）：階段數、每階段驗收條件、`files:` 範圍、識別的風險
-2. **建立 handoff 給 `tdd-guide`**：
-   `.claude/coordination/handoffs/planner-to-tdd-guide-{YYYY-MM-DD-HHMM}.md`
-
-   ```yaml
-   from: planner
-   to: tdd-guide
-   date: <YYYY-MM-DD-HHMM>
-   priority: <critical 任務用 high，其餘 medium>
-   status: pending
-   related_report: context/planning/planner-<YYYY-MM-DD-HHMM>.md
-   ```
-
-   「必須處理的項目」逐階段列出，每項寫明**該階段的驗收條件**（那是 tdd-guide 推導 RED 的依據）
-   與**要動的檔案路徑**。「已知限制」寫明技術依賴（外部服務、套件、既有模式）。
+2. **不建立實作的 handoff。** 實作者不是專屬 agent——由主模型跑 `/tdd`
+   （自己照 `tdd-workflow` 做，或逐階段派 `general-purpose` implementer）。
+   在回報的「交接」欄寫「無；下一步 `/tdd <id>`」，讓主模型接手
 3. 若處理了 `to: planner` 的交接，將該檔 `status` 改為 `completed` 並填「完成回報」
 4. **若規劃過程做了非顯而易見的技術選型**（選了某個函式庫/模式，且有評估過替代方案）
    → 提議使用者跑 `/adr` 記錄決策與被否決的方案。判準：三個月後有人問
@@ -59,7 +48,7 @@ model: opus
 - 若收到 `--adhoc` → 直接進入問答
 - 若無參數 → 讀 `.claude/taskmaster-data/.current-task`，空值則請使用者指定
 - 完整理解功能需求
-- 必要時提出澄清問題
+- 需要使用者澄清的事 → 寫進回報（`NEEDS_CONTEXT`，列出問題與你建議的預設答案），由主模型去問
 - 識別成功標準
 - 列出假設和限制
 
@@ -83,6 +72,13 @@ model: opus
 - 最小化上下文切換
 - 啟用增量測試
 
+## 驗收條件怎麼寫（最容易寫壞的一欄）
+
+每個階段的「驗收」會被實作者**直接翻成測試**（`tdd-workflow` skill）：寫幾條就測幾條。
+所以每一條都要寫成「在什麼情況下 → 會得到什麼結果」，寫得出具體值就寫具體值。
+「功能正常」「錯誤處理完善」「覆蓋率達標」變不成測試，不要寫。
+完整寫法與對照表見 `plan-format` skill 的「驗收欄怎麼寫」。
+
 ## 計畫檔格式
 
 **完整格式見** `plan-format` skill。核心結構：
@@ -105,7 +101,8 @@ current_phase: 0
 ### 階段 1: 介面與型別 ⏳
 - [ ] 具體步驟（含檔案路徑）
 - **預估**：30min
-- **驗收**：可獨立驗證的條件
+- **驗收**：
+  - 在什麼情況下 → 會得到什麼結果（一條一個行為，能直接變成測試）
 
 ### 階段 2-4: 核心 / 整合 / 打磨
 
@@ -126,7 +123,9 @@ current_phase: 0
 Write .claude/taskmaster-data/plans/<filename>.md
 ```
 
-若目錄不存在先建立。若檔案已存在，**必須**先詢問使用者「覆寫 / 合併 / 取消」。
+若目錄不存在先建立。若檔案已存在，**不要覆寫**——回報 `NEEDS_CONTEXT`，
+說明既有 plan 的狀態（階段幾、進度），由主模型用 `AskUserQuestion` 問使用者「覆寫 / 合併 / 取消」。
+你沒有 `AskUserQuestion` 這個工具，不要嘗試自己問。
 
 ### 3. 更新 INDEX.md
 

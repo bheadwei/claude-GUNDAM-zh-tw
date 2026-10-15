@@ -22,7 +22,7 @@
 - 根目錄：<絕對路徑>
 - 語言／框架：<例：TypeScript + Next.js 15 + Prisma>
 - 套件管理：<讀 .claude/taskmaster-data/package-manager.json，例：pnpm>
-- 測試指令：<例：pnpm test>
+- 測試指令：<例：pnpm vitest run>（只跑指定檔的寫法見下方「必讀」）
 - 型別檢查：<例：pnpm tsc --noEmit>
 
 ## 你要做的階段
@@ -33,9 +33,9 @@
 步驟（照 plan 原文，不要自行改寫）：
 <把 plan 該階段的 checklist 原文貼進來>
 
-**驗收條件**（沒全達到就不算 DONE）：
+**驗收條件**（沒全達到就不算 DONE；每一條都要有對應的測試）：
 <把 plan 該階段的「驗收」欄貼進來>
-- 測試覆蓋率須達 <80% / 100%>（當前任務模式：<standard / critical>）
+- 當前任務模式：<standard / critical>。覆蓋率門檻依此模式，見 `testing-standards`（只算你這次改到的檔）
 
 ## 你可以動的檔案
 
@@ -51,17 +51,26 @@
 注意：`pre-tool-use.sh` 有坑閘門，你寫到有紀錄的檔案時會被擋一次並看到教訓。
 讀完重試同一次編輯即可通過。**不要試圖繞過它。**
 
+## 開工前必讀（用 Read 讀，路徑是完整的）
+
+- `<根目錄>/.claude/skills/tdd-workflow/SKILL.md` — 依程式性質決定要不要先寫測試、
+  從上面的驗收條件推出測試、GREEN 過不了修實作不改測試
+- `<根目錄>/.claude/skills/testing-standards/SKILL.md` 的「執行測試」與「覆蓋率門檻」——
+  **每輪只跑相關的測試檔，階段結束跑一次 coverage，回報只寫摘要，不要跑整套**
+
 ## 必須遵守
 
 - `.claude/rules/coding-style.md`：克制原則（只做被要求的事）、**註解預設不寫**、不可變性
-- 測試先行：先寫會失敗的測試（RED），再寫最小實作讓它通過（GREEN），最後重整
+- 照 `tdd-workflow` 做 RED → GREEN → 重整。真的要改測試讓它通過，必須在回報的「疑慮」寫出理由
 - 每個邏輯單元完成就 commit，訊息用 `<type>: <描述>`（type: feat/fix/refactor/test/chore）
-- **不要**修改 plan 檔、WBS、或 `.claude/taskmaster-data/` 下任何檔案
+- **不要**修改 plan 檔、WBS、或 `.claude/taskmaster-data/` 下任何檔案——階段狀態由主模型更新
+- 你沒有 `AskUserQuestion`。需要使用者決定的事寫進回報，不要停下來等人回答
 
 ## 遇到問題怎麼辦
 
 - 規格模糊到有兩種合理解讀 → 選你判斷較合理的那個做完，在回報的「疑慮」寫下你選了哪個與為什麼
 - 缺你拿不到的東西（憑證、外部決策、使用者意圖）→ 回報 `NEEDS_CONTEXT`，明確說缺什麼
+- 某條驗收條件模糊到變不成測試 → 回報 `NEEDS_CONTEXT`，寫出是哪一條、建議怎麼改寫
 - 卡住且補資訊也解不了 → 回報 `BLOCKED`，寫清楚卡在哪、試過什麼
 - 發現 plan 本身有錯 → 不要自己改 plan。回報 `BLOCKED` 並說明錯在哪、建議怎麼改
 
@@ -70,7 +79,7 @@
 STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 產出：<新增/修改的檔案路徑清單>
 commit：<你建立的 commit SHA，多個就都列>
-測試：<跑了什麼、結果、覆蓋率>
+測試：<通過 N／失敗 M；失敗只列測試名＋一行錯誤；改到的檔的覆蓋率>
 摘要：<3 行內>
 疑慮：<DONE_WITH_CONCERNS 才填；沒有就寫「無」>
 ```
@@ -84,6 +93,7 @@ commit：<你建立的 commit SHA，多個就都列>
 | 「延續我們剛才討論的做法…」 | subagent 沒有你的 context，這句是空的 |
 | 只給 plan 路徑，叫它自己讀該讀哪段 | 它會讀整份然後可能做到別的階段去 |
 | 不給測試指令與套件管理器 | 它會猜，然後用 npm 汙染 pnpm 專案 |
+| 不叫它讀 `tdd-workflow`／`testing-standards` | 它會每輪跑整套測試加 coverage，把輸出全讀進 context |
 | 不貼驗收條件 | 它會自己定義「做完」 |
 | 不給 `files:` 授權範圍 | 它會順手改到別的任務正在動的檔案 |
 | 不貼相關的坑 | 同一個坑第二次踩，而且是你派它去踩的 |

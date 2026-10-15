@@ -144,7 +144,7 @@ mk_handoff() { # <檔名> <status> <priority>
     cat > "$HANDOFF_DIR/$1" <<EOF
 ---
 from: planner
-to: tdd-guide
+to: ui-builder
 date: 2026-01-01-0000
 priority: $3
 status: $2
@@ -159,7 +159,7 @@ EOF
 
 reset; mk_handoff "a.md" pending high
 out=$(run post-agent-report.sh '{"tool_name":"Agent"}')
-expect_contains "pending 會注入"             "planner → tdd-guide" "$out"
+expect_contains "pending 會注入"             "planner → ui-builder" "$out"
 expect_contains "注入含優先級"               "[high]"              "$out"
 expect_contains "注入含起因"                 "測試用交接"           "$out"
 
@@ -176,7 +176,7 @@ reset; mk_handoff "a.md" pending medium; echo low > "$SM_FILE"
 expect_empty   "low 模式濾掉 medium"         "$(run post-agent-report.sh '{"tool_name":"Agent"}')"
 
 reset; mk_handoff "a.md" pending high; echo low > "$SM_FILE"
-expect_contains "low 模式保留 high"          "planner → tdd-guide" "$(run post-agent-report.sh '{"tool_name":"Agent"}')"
+expect_contains "low 模式保留 high"          "planner → ui-builder" "$(run post-agent-report.sh '{"tool_name":"Agent"}')"
 
 reset; cp "$HOOK_DIR/../coordination/handoffs/_HANDOFF_TEMPLATE.md" "$HANDOFF_DIR/" 2>/dev/null
 expect_empty   "範本檔不被當成交接"          "$(run post-agent-report.sh '{"tool_name":"Agent"}')"
@@ -196,7 +196,7 @@ mk_ho() { # <檔名> <status> <date>
     cat > "$HANDOFF_DIR/$1" <<EOF
 ---
 from: planner
-to: tdd-guide
+to: ui-builder
 date: $3
 priority: high
 status: $2
@@ -312,6 +312,41 @@ expect_contains "路由用命令式而非建議式"      'subagent_type' \
 
 reset; echo off > "$SM_FILE"
 expect_empty   "suggest-mode=off 不注入"     "$(run user-prompt-submit.sh "$(p '實作登入認證')")"
+
+# critical 關鍵字分兩級：login／session 單獨出現（UI、文案）不建議 critical，
+# 要碰到認證或授權邏輯本身才算。舊規則把「改登入頁的按鈕顏色」也推成 critical
+# （必須 /plan＋最嚴的覆蓋率門檻）。
+expect_not_contains() { # <說明> <不該出現的字串> <實際輸出>
+    case "$3" in
+        *"$2"*) ng "$1" "（不含）$2" "$3" ;;
+        *) ok "$1" ;;
+    esac
+}
+reset
+expect_not_contains "login 頁的 UI 改動不建議 critical" "critical" \
+    "$(run user-prompt-submit.sh "$(p '改 login 頁的按鈕顏色')")"
+expect_not_contains "session 逾時提示文字不建議 critical" "critical" \
+    "$(run user-prompt-submit.sh "$(p '把 session 逾時的提示文字改短一點')")"
+expect_contains "login 的密碼驗證邏輯 → critical" "critical" \
+    "$(run user-prompt-submit.sh "$(p '改 login 的密碼驗證邏輯')")"
+expect_contains "session＋token 過期處理 → critical" "critical" \
+    "$(run user-prompt-submit.sh "$(p 'session 過期時要自動 refresh token')")"
+expect_contains "認證訊息不再重述覆蓋率百分比" "testing-standards" \
+    "$(run user-prompt-submit.sh "$(p '實作登入認證')")"
+
+# subagent 交回的報告不是使用者提問。實測（2026-09-17 transcript）harness 把報告
+# 當成一則 user 訊息送進來、UserPromptSubmit 照樣觸發，報告內文的關鍵字於是
+# 注入一串無關建議。開頭三行有 hand-back 標記就跳過路由。
+HANDBACK=$(printf '%s\n%s\n%s\n%s' 'Another Claude session sent a message:' \
+    '<agent-message from="a0cf8e0e9898705e7">' \
+    '[Subagent hand-back] The text below is the final report of a subagent this session delegated to.' \
+    '  改了認證邏輯、部署設定與測試覆蓋率，請 code review')
+reset
+expect_empty "subagent hand-back 不做意圖路由" "$(run user-prompt-submit.sh "$(p "$HANDBACK")")"
+expect_empty "背景工作完成通知不做意圖路由" \
+    "$(run user-prompt-submit.sh "$(p "$(printf '<task-notification>\n<task-id>x</task-id>\n<summary>認證 部署 測試</summary>')")")"
+expect_contains "使用者原話中途引用 [Subagent hand-back] 仍照常路由" "critical" \
+    "$(run user-prompt-submit.sh "$(p "$(printf '幫我改認證邏輯\n第二行\n第三行\n剛才看到 [Subagent hand-back] 的字樣')")")"
 
 # =========================================================================
 section "pre-tool-use.sh — 坑閘門（context/learned/）"
@@ -903,6 +938,15 @@ mp_has "真正的 merge 仍記錄（ref 正確抽出）" '[merge] feature/x'
 reset; pbashj 'cd /some/path && git cherry-pick abc123' >/dev/null
 mp_has "鏈式 cd && cherry-pick 仍記錄（類型正確）" '[cherry-pick] abc123'
 
+# 合併訊息改用 -F <檔> 或 -m "$(cat ...)" 傳入時，ref 曾被記成 shell 片段
+# （實例：`[merge] $M/merge-msg.txt")"`）。抽 ref 要懂引號與 $( )，並跳過帶值的選項。
+reset; pbashj 'git merge --no-ff -F "$M/merge-msg.txt" feature/a' >/dev/null
+mp_has "merge -F <檔> 抽出正確的 ref" '[merge] feature/a'
+reset; pbashj 'git merge --no-ff -m "$(cat "$M/merge-msg.txt")" feature/b' >/dev/null
+mp_has "merge -m \"\$(cat ...)\" 抽出正確的 ref" '[merge] feature/b'
+reset; pbashj 'git merge --no-ff -m "merge: 加入匯出功能; 修正分頁" feature/c' >/dev/null
+mp_has "merge --no-ff -m \"含空白與分號的訊息\" 抽出正確的 ref" '[merge] feature/c'
+
 reset; mkdir -p "$(dirname "$MP_FILE")"; echo '[merge] x' > "$MP_FILE"
 pbashj 'git rebase --abort' >/dev/null
 mp_empty "git rebase --abort 仍清掉待驗證紀錄"
@@ -1210,10 +1254,10 @@ expect_decision "有 agent 在跑時不採 deny-once"   deny  "$(bs 'git checkou
 # start-point 解決「基底錯了」，解決不了「HEAD 被搬走，站在上面的 agent 跟著被搬」
 expect_decision "有 agent 在跑時帶基底也擋"       deny  "$(bs 'git checkout -b feat/x main')"
 
-reset; bs_start a1 planner; bs_start a2 tdd-guide
+reset; bs_start a1 planner; bs_start a2 ui-builder
 BS_MSG=$(bs_msg 'git checkout -b feat/x')
 expect_contains "訊息說出有幾個 agent 在跑"    "2 個 subagent 還在跑" "$BS_MSG"
-expect_contains "訊息點名是哪幾個 agent"       "tdd-guide"            "$BS_MSG"
+expect_contains "訊息點名是哪幾個 agent"       "ui-builder"            "$BS_MSG"
 expect_contains "訊息誠實說明計數可能含自己"   "你自己就是那個 subagent" "$BS_MSG"
 
 # in-flight 的判準與 pre-agent-gate 共用同一份 lib（agent-inflight.sh）。
@@ -1292,7 +1336,7 @@ expect_decision "有 1 個 in-flight 且新的無隔離 → deny" deny "$(ag pla
 
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
 ag planner >/dev/null
-expect_decision "同一批只擋一次（deny-once）" allow "$(ag tdd-guide)"
+expect_decision "同一批只擋一次（deny-once）" allow "$(ag ui-builder)"
 
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
 expect_decision "帶 isolation: worktree 直接放行" allow "$(ag refactor-cleaner worktree)"
@@ -1419,12 +1463,12 @@ expect_decision "in-flight 歸零後放行"          allow "$(ag code-quality-sp
 
 # 一般情境**完全不變**：三個選項都在、deny-once 照舊
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 planner
-NORM_MSG=$(ag_reason "$(ag tdd-guide)")
+NORM_MSG=$(ag_reason "$(ag ui-builder)")
 expect_contains "一般情境仍是三個選擇"         "三個選擇"               "$NORM_MSG"
 expect_contains "一般情境保留選項 3"           "確認範圍無交集後重試"   "$NORM_MSG"
 expect_contains "一般情境仍是 deny-once"       "本批只擋這一次"         "$NORM_MSG"
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 planner
-ag tdd-guide >/dev/null
+ag ui-builder >/dev/null
 expect_decision "一般情境 deny-once 不變（第二次放行）" allow "$(ag architect)"
 
 # 舊格式（無 agent_type）不能讓 in-flight 計數消失——jq 把它印成 "-" 而不是空行
@@ -1486,24 +1530,24 @@ expect_decision "只派一個 agent 時不擋（自己不算 in-flight）" allow
 # 這是本 bug 的核心案例：agent 還在跑（有 PostToolUse、沒有 SubagentStop）
 reset; mkdir -p "$SANDBOX/.claude/logs"; am_post_async planner ag001 >/dev/null
 expect_contains "派工返回只記 agent_start" "agent_start" "$(ag_events)"
-expect_decision "真的 in-flight（未收到 SubagentStop）→ 再派一個要擋" deny "$(ag tdd-guide)"
+expect_decision "真的 in-flight（未收到 SubagentStop）→ 再派一個要擋" deny "$(ag ui-builder)"
 
 reset; mkdir -p "$SANDBOX/.claude/logs"
 am_post_async planner ag001 >/dev/null; am_stop ag001 planner >/dev/null
-expect_decision "收到 SubagentStop 後 → 再派一個放行" allow "$(ag tdd-guide)"
+expect_decision "收到 SubagentStop 後 → 再派一個放行" allow "$(ag ui-builder)"
 
 # 實測會收到 agent_type 為空字串的 SubagentStop。不能因此跳過寫入——
 # 漏一筆 complete 就讓那個 agent 的 in-flight 永遠不歸零，閘門會從此誤擋每一次委派。
 reset; mkdir -p "$SANDBOX/.claude/logs"
 am_post_async planner ag002 >/dev/null; am_stop ag002 "" >/dev/null
-expect_decision "agent_type 空字串的 SubagentStop 仍能沖銷 in-flight" allow "$(ag tdd-guide)"
+expect_decision "agent_type 空字串的 SubagentStop 仍能沖銷 in-flight" allow "$(ag ui-builder)"
 
 # 實測也會收到這個 session 從沒派過的 agent_id
 reset; mkdir -p "$SANDBOX/.claude/logs"; am_stop never-dispatched Explore >/dev/null
 expect_decision "沒見過的 agent_id 的 SubagentStop → 不爆炸、計數不轉負" allow "$(ag planner)"
 reset; mkdir -p "$SANDBOX/.claude/logs"
 am_post_async planner ag003 >/dev/null; am_stop never-dispatched Explore >/dev/null
-expect_decision "多餘的 complete 不會沖掉別人的 in-flight" deny "$(ag tdd-guide)"
+expect_decision "多餘的 complete 不會沖掉別人的 in-flight" deny "$(ag ui-builder)"
 
 # 同步完成的 agent：PostToolUse 觸發時它已經結束，start/complete 一起寫，淨變化 0
 reset; mkdir -p "$SANDBOX/.claude/logs"; am_post_sync Explore tu9 >/dev/null

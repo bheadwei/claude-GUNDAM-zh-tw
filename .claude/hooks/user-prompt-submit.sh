@@ -60,6 +60,28 @@ case "$USER_INPUT" in
         ;;
 esac
 
+# subagent 交回的報告不是使用者提問，不做意圖路由
+#
+# 非同步 subagent 結束時，harness 把它的報告當成一則 user 訊息送進來，
+# UserPromptSubmit 照樣觸發。報告裡滿是「認證」「部署」「測試」這類字，
+# 於是每次 agent 交回都被注入一串跟使用者意圖無關的建議（實測：skill-curator
+# 的回報 → 「偵測到認證/金流 → critical」）。
+#
+# 實測的訊息開頭（2026-09-17 transcript，hook 的 attachment 緊接在這則訊息之後）：
+#   Another Claude session sent a message:
+#   <agent-message from="a0cf...">
+#   [Subagent hand-back] The text below is the final report of a subagent ...
+# 背景工作完成通知則是 <task-notification> 開頭。
+# 只看開頭三行：報告「內文」引用到這些字，不該讓真正的使用者提問被略過。
+# 報告稽核照樣送達——agent 剛交回時正是最該知道報告缺了沒的時候。
+HEAD_LINES=$(printf '%s\n' "$USER_INPUT" | head -n 3)
+case "$HEAD_LINES" in
+    *'<agent-message from='*|*'[Subagent hand-back]'*|'<task-notification>'*)
+        [ -n "$REPORT_AUDIT_MSG" ] && echo "$REPORT_AUDIT_MSG"
+        exit 0
+        ;;
+esac
+
 # 小工具：關鍵字命中判斷（大小寫不敏感；中文以位元組比對）
 has() { echo "$USER_INPUT" | grep -iqE "$1"; }
 
@@ -70,10 +92,20 @@ add() { HINTS="${HINTS}
 HIGH_SIGNAL=0  # 安全/金流等高訊號，low 模式也會顯示
 
 # --- 高訊號：安全 / 金流 / 認證 ---
-if has 'auth|login|oauth|jwt|session|password|認證|授權|登入|密碼' \
+#
+# 認證分兩級。`login`／`session`／`登入` 這類字常出現在純 UI 或文案的需求裡
+# （「改 login 頁的按鈕顏色」「session 逾時的提示文字」），單獨出現就建議 critical
+# 會把一堆小改動推成「覆蓋率門檻最嚴＋必須 /plan」。所以：
+#   強訊號（單獨成立）：認證／授權邏輯本身才會出現的字
+#   弱訊號：要再搭配「邏輯」類的字才成立
+AUTH_STRONG='oauth|jwt|password|passwd|credential|rbac|permission|authoriz|authenticat|認證|授權|密碼|權限|憑證'
+AUTH_WEAK='login|logout|signin|sign-in|session|auth|登入|登出|會員'
+AUTH_LOGIC='驗證|邏輯|檢查|判斷|token|cookie|hash|加密|過期|expire|refresh|middleware|guard|verify|validat'
+if has "$AUTH_STRONG" \
+   || { has "$AUTH_WEAK" && has "$AUTH_LOGIC"; } \
    || has 'payment|billing|stripe|checkout|金流|支付|付款|帳務'; then
     HIGH_SIGNAL=1
-    add "偵測到認證/金流關鍵字 → 建議任務模式 **critical**；critical 一律需要 /plan（見 plan-format skill），實作後啟動 security-infrastructure-auditor，覆蓋率目標 100%。"
+    add "偵測到認證/授權邏輯或金流 → 建議任務模式 **critical**；critical 一律需要 /plan（見 plan-format skill），實作後啟動 security-infrastructure-auditor，覆蓋率門檻見 testing-standards skill。"
 fi
 
 # --- migration / schema ---
@@ -122,7 +154,7 @@ if [ "$SUGGEST_MODE" != "low" ]; then
         add "偵測到 Python 環境操作 → **先載入 \`python-uv\` skill**（一律 uv，禁 pip/poetry）。"
     fi
     if has 'test|測試|coverage|覆蓋率|pytest|jest|vitest'; then
-        add "偵測到測試相關 → **先載入 \`testing-standards\` skill** 確認當前任務模式的覆蓋率門檻（quick 免檢）。"
+        add "偵測到測試相關 → **先載入 \`testing-standards\` skill** 當前任務模式的覆蓋率門檻（quick 免檢）、只跑相關的測試檔、輸出只回摘要。"
     fi
     # 新增功能 → 提醒先補 WBS 那一行，否則 plan 會被迫兼差當 backlog
     #

@@ -117,9 +117,9 @@ description: 從 WBS 取得下一個任務建議，分析優先級和依賴關�
 
 依該規則的「自動分級啟發式」算出**預設值**並標 `(Recommended)`：
 
-- `quick` — 直接寫，跳過 plan/TDD，僅 `/verify quick`（適合 < 30min 單檔修改）
+- `quick` — 直接寫，跳過 plan/TDD，僅 `/verify quick`（適合 ≤ 2 個檔、沒動 API／schema 的修改；判準見 `rules/task-mode.md`）
 - `standard` — 走 plan → tdd → verify 完整流程（適合 1-4h 新功能/重構）
-- `critical` — standard + 100% 覆蓋 + review-code（金流/認證/安全）
+- `critical` — standard + 關鍵模組最嚴的覆蓋門檻（見 `testing-standards`）+ review-code（金流/認證授權邏輯/安全）
 
 使用者選定後，將模式字串寫入 `.claude/taskmaster-data/.current-task-mode`。
 

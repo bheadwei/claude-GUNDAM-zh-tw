@@ -143,7 +143,7 @@ UI 層級的操作驗證交給 E2E 測試框架的 step definition 實作細節�
 
 ## 7. Gherkin 作為 AI 協作的結構化需求輸入
 
-> 撰寫指引：本節說明為何本模板要求比傳統 BDD 更嚴格的 Focused/Essential——因為 `.feature` 檔會被直接餵給 AI 代理（如 tdd-guide agent）作為程式化需求來源。
+> 撰寫指引：本節說明為何本模板要求比傳統 BDD 更嚴格的 Focused/Essential——因為 `.feature` 檔會被直接餵給 AI 代理（如實作 subagent）作為程式化需求來源。
 
 - **結構化輸入**：`Rule:`/`Example:` 分組讓 AI 能將一條業務規則對應到一組測試案例，減少「AI 自行腦補範圍」的風險
 - **語意明確 > 語法正確**：AI 會逐字解析 Given/When/Then，模糊或帶 UI 細節的描述會讓 AI 產出錯誤的實作假設

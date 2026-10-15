@@ -27,7 +27,7 @@ description: 調整 Agent 建議的頻率和密度，控制人機協作模式。
 ### high
 - 每完成一個函式 → 建議 code-quality-specialist
 - 每次 git commit 前 → 建議 security-infrastructure-auditor
-- 每個新功能 → 建議 tdd-guide
+- 每個新功能 → 建議先 `/plan` 再 `/tdd`
 
 ### medium（預設）
 - 完成整個功能後 → 建議 code-quality-specialist

@@ -58,8 +58,9 @@
 | 元件 | 角色 | 介入時機 |
 |---|---|---|
 | `/tdd` command | 入口 | 開始寫新功能 |
-| `tdd-guide` agent | 前置門禁：強制 test-first | 寫新程式碼之前 |
-| `test-automation-engineer` agent | 後置補強：讀 quality/e2e 報告補覆蓋率 | 程式碼完成後 |
+| `tdd-workflow` skill | 流程：依程式性質決定多嚴格、從驗收條件推測試（主模型或 implementer 照做） | 寫新程式碼之前 |
+| `testing-standards` skill | 門檻與執行方式：覆蓋率只算改到的檔、只跑相關測試檔 | 跑測試時 |
+| `test-automation-engineer` agent | 後置補強：只補 quality/e2e 點名的缺口 | 有風險的路徑完全沒測試時 |
 
 ### 程式碼審查
 
@@ -94,5 +95,5 @@
 |---|---|---|
 | Command | 動詞或動賓 | `/plan`、`/check-quality`（避開內建指令名） |
 | Skill | 名詞 + workflow/patterns | `deep-research`、`e2e-testing` |
-| Agent | 角色名 + specialist/expert/guide | `code-quality-specialist`、`tdd-guide` |
+| Agent | 角色名 + specialist/expert/investigator | `code-quality-specialist`、`debug-investigator` |
 | Hook | 事件 + 動作 | `post-write.sh`、`session-start.sh` |

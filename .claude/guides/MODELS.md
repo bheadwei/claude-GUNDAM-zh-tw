@@ -18,12 +18,12 @@
 | 模型 | Agents |
 |---|---|
 | `sonnet`（5） | code-quality-specialist、documentation-specialist、e2e-validation-specialist、refactor-cleaner、workflow-template-manager |
-| `opus`（11） | planner、architect、security-infrastructure-auditor、debug-investigator、tdd-guide、skill-curator、build-error-resolver、deployment-expert、test-automation-engineer、ui-builder、conflict-resolver |
+| `opus`（10） | planner、architect、security-infrastructure-auditor、debug-investigator、skill-curator、build-error-resolver、deployment-expert、test-automation-engineer、ui-builder、conflict-resolver |
 
 `opus` 的判準是**錯了要人回頭抓、而且抓不到就會一路錯下去**：
 規劃階段拆錯（planner）、架構決策寫錯（architect）、漏報安全問題
 （security-infrastructure-auditor）、根因判斷錯（debug-investigator）、
-測試設計不到位（tdd-guide）、擴充接線寫錯（skill-curator）。
+擴充接線寫錯（skill-curator）。
 
 **2026-09-08 起，凡是會動到專案程式碼的 agent 一律 `opus`**（使用者決定）——
 `build-error-resolver`、`deployment-expert`、`test-automation-engineer`、`ui-builder`
@@ -54,12 +54,12 @@ documentation-specialist、workflow-template-manager）先改為 `sonnet`，其�
 | 情境 | 建議覆寫 |
 |---|---|
 | `critical` 模式派 `code-quality-specialist` | `model: "opus"` |
-| `standard` 模式派 `tdd-guide` 且階段極機械（純樣板、單檔） | `model: "sonnet"` 降級省成本 |
+| 派 `general-purpose` implementer 且階段極機械（純樣板、單檔） | `model: "haiku"` 或 `"sonnet"`（判準見 `subagent-execution` skill） |
 | 修復迴圈第 4-5 輪 | 至少比前一輪高一級（見 `subagent-execution` skill） |
 
-> `tdd-guide` 的預設已是 `opus`（2026-09-07）。它是標準迴圈裡頻率最高的寫手——
-> 每個任務的每個階段都會叫它一次——所以這是本模板成本結構最重的一個選擇。
-> 若某個 `standard` 任務的階段確實只是機械填空，派工時降級成 `sonnet` 是合理的。
+> 標準迴圈裡頻率最高的寫手是實作者。2026-10-15 起它不再是專屬 agent（`tdd-guide` 退役），
+> 而是主模型自己或 `general-purpose` implementer——後者每次派工都**明確指定** `model`，
+> 不讓機械任務繼承 opus。
 
 主 session 模型由 `.claude/settings.json` 的 `model` 欄位決定（目前 `opus`），
 或由使用者以 `/model` 切換。

@@ -11,7 +11,7 @@ description: 協調 Agent 委派執行任務，分析任務特性並建議最適
 ## 流程
 
 1. **任務分析** -- 解析任務複雜度、所需技能、風險等級
-2. **Agent 匹配** -- 從下表 14 個專業 Agent 中選擇最適合的（無人適配才退回內建 `general-purpose`）
+2. **Agent 匹配** -- 從下表 15 個專業 Agent 中選擇最適合的（無人適配才退回內建 `general-purpose`）
 3. **人類確認** -- 呈現建議，等待你的決定
 4. **執行追蹤** -- Agent 執行完畢後回報結果
 
@@ -61,8 +61,7 @@ Agent 建議:
 | architect | 架構設計（opus） |
 | code-quality-specialist | 程式碼審查 |
 | security-infrastructure-auditor | 安全稽核 |
-| test-automation-engineer | 測試自動化 |
-| tdd-guide | TDD 引導 |
+| test-automation-engineer | 實作後補測試缺口 |
 | e2e-validation-specialist | E2E 測試 |
 | build-error-resolver | 建置/型別錯誤修復 |
 | debug-investigator | 執行期 bug 根因調查 |
@@ -71,6 +70,8 @@ Agent 建議:
 | deployment-expert | 部署運維 |
 | workflow-template-manager | 模板管理 |
 | ui-builder | 前端 UI 產出 |
+| conflict-resolver | 合併衝突處理 |
+| skill-curator | `.claude/` 擴充維護 |
 
-> 表列 14 個為本模板的專業 agent。都不適配時才用 Claude Code 內建的
+> 表列 15 個為本模板的專業 agent。實作（含 TDD）沒有專屬 agent——走 `/tdd`。都不適配時才用 Claude Code 內建的
 > `general-purpose`（本模板不自訂它——內建版工具集更完整）。

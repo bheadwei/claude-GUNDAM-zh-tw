@@ -21,9 +21,9 @@ description: 對當前程式碼庫狀態執行全面驗證檢查。
 - 報告警告和錯誤
 
 ### 4. 測試套件
-- 執行所有測試
-- 報告通過/失敗數量
-- 報告覆蓋率百分比
+- 執行所有測試（`quick` profile 例外：只跑這次改到的測試檔，見「參數」）
+- 報告通過/失敗數量，失敗只附摘要——不要把整份輸出讀進來（格式見 `testing-standards` skill 的「執行測試」）
+- 報告覆蓋率：只對照**這次改到的檔**（門檻見 `testing-standards` skill）
 
 ### 5. Console.log 稽核
 - 搜尋原始碼中的 console.log
@@ -220,7 +220,7 @@ Ready for PR: [YES/NO]
 ## 參數
 
 $ARGUMENTS 可以是：
-- `quick` - 僅建置 + 型別
+- `quick` - 建置 + 型別 + **只跑這次改到的測試檔**（`git diff --name-only` 裡的測試檔，以及和被改檔案對應的測試檔）。quick 要求寫的那 1 個 happy-path 測試就是在這裡被執行；一個都找不到就在報告寫 `Tests: none` 並提醒補上（純文案／樣式改動除外）
 - `full` - 所有檢查（預設）
 - `pre-commit` - 與 commit 相關的檢查
 - `pre-pr` - 完整檢查加安全掃描，**再跑規格收斂的 A+B**（載入 `spec-convergence` skill；跳過檢查 C，太慢）
@@ -232,8 +232,9 @@ $ARGUMENTS 可以是：
 | 任務模式 | 自動 profile |
 |---|---|
 | `quick` | `quick` |
-| `standard`（或檔案不存在） | `full` |
+| `standard` | `full` |
 | `critical` | `pre-pr` |
+| 檔案不存在 | `full`——只是取保守的檢查組合，**不等於**把任務判成 standard（判級見 `task-mode.md`） |
 
 使用者明確帶入 `$ARGUMENTS` 時優先採用使用者選擇。
 

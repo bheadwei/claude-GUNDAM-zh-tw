@@ -8,7 +8,7 @@ description: Use when starting any conversation in a TaskMaster project — esta
 </SUBAGENT-STOP>
 
 <EXTREMELY-IMPORTANT>
-本專案有 16 個專業 subagent。**只要有 1% 的可能性某個 agent 比你更適合這件事，你就必須派它。**
+本專案有 15 個專業 subagent。**只要有 1% 的可能性某個 agent 比你更適合這件事，你就必須派它。**
 
 有適配的 agent 時，你**沒有選擇權**。這不是建議，不能商量，**你不能靠講道理繞過它**。
 
@@ -26,19 +26,19 @@ description: Use when starting any conversation in a TaskMaster project — esta
 
 **沒有這句話就直接開工，本身就是違規**，即使結果是對的。拒派理由必須指向**那個 agent 的產出**；「這很簡單」「我自己做比較快」不算理由（見 Red Flags）。
 
-`quick` 模式只派下表**粗體**那一棒；`standard`/`critical` 走完整鏈。
+`quick` 模式只派下表**粗體**那一棒（沒有粗體的列，quick 下自己做）；`standard`/`critical` 走完整鏈。
 
 ## 路由表
 
 | 使用者在講什麼 | 派誰 |
 |---|---|
-| 新功能、要做一個 X | planner → **tdd-guide** → code-quality-specialist → test-automation-engineer →（critical）security-infrastructure-auditor |
-| 跑起來行為不對、壞了、沒反應、資料錯 | **debug-investigator** →（critical）tdd-guide → code-quality-specialist |
+| 新功能、要做一個 X | planner → 實作（`/tdd`：主模型照 `tdd-workflow`，多階段派 `general-purpose` implementer）→ code-quality-specialist →（它回報**某條有風險的路徑完全沒測試**時）test-automation-engineer →（critical）security-infrastructure-auditor |
+| 跑起來行為不對、壞了、沒反應、資料錯 | **debug-investigator** →（critical）主模型照 `tdd-workflow` 修 → code-quality-specialist |
 | 根因**已確認**（已重現＋已定位），只差實作與驗證 | `general-purpose` 當實作者（見 `subagent-execution`）→ standard/critical 再接 code-quality-specialist |
 | 根因**未確認**（不知道為什麼壞、只有推測） | **debug-investigator**，不可跳過 |
 | 建置失敗、`tsc`／型別／import 錯誤 | **build-error-resolver**（終端節點，修完即止） |
 | 合併出現衝突（merge／cherry-pick／rebase 停在衝突） | **conflict-resolver**（讀兩邊 plan 與報告判意圖；設計決策會 abort 並回報） |
-| 重構、清死碼、整併 | refactor-cleaner → code-quality-specialist → test-automation-engineer |
+| 重構、清死碼、整併 | refactor-cleaner → code-quality-specialist →（它回報**某條有風險的路徑完全沒測試**時）test-automation-engineer |
 | 前端頁面／元件／設計稿 | 先載入 `ui-style-compliance` skill → **ui-builder** →（關鍵流程）e2e-validation-specialist |
 | **整理／更新／同步文件**，描述的對象是**程式碼**：codemap、API 文檔、技術 README | **documentation-specialist** |
 | **整理／更新／同步文件**，描述的對象是 **`.claude/` 本身**：skill／rule／agent 定義／hook／模板自己的 README 與計數 | **skill-curator** |

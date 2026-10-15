@@ -1,6 +1,6 @@
 ---
 name: plan-format
-description: 實作計畫（plan）的檔案格式、命名、儲存位置、與 WBS 的職責分工、狀態同步規則，以及 files: frontmatter（平行開發衝突判斷的依據）。Use when running /plan, /tdd, /verify, or /task-next; when creating or updating any file under taskmaster-data/plans/; or when deciding whether a task needs a plan at all.
+description: 實作計畫（plan）的檔案格式（含「驗收」欄要寫成能直接變成測試的句子）、命名、儲存位置、與 WBS 的職責分工、狀態同步規則，以及 files: frontmatter（平行開發衝突判斷的依據）。Use when running /plan, /tdd, /verify, or /task-next; when creating or updating any file under taskmaster-data/plans/; or when deciding whether a task needs a plan at all.
 ---
 
 # 計畫持久化規則（Plan Persistence）
@@ -106,7 +106,9 @@ Plan 獨有的技術層面依賴，非 WBS 的任務依賴：
 - [ ] 定義 `TokenPayload` schema（Zod）
 - [ ] 撰寫介面層測試（空實作即可）
 - **預估**：30min
-- **驗收**：`tsc --noEmit` 通過，測試 RED
+- **驗收**：
+  - `TokenPayload` 解析缺少 `sub` 欄位的物件時丟出驗證錯誤
+  - `tsc --noEmit` 通過
 
 ### 階段 2: JWT 驗證核心 🔄
 
@@ -114,7 +116,11 @@ Plan 獨有的技術層面依賴，非 WBS 的任務依賴：
 - [ ] 處理過期、簽章錯誤、格式錯誤
 - [ ] 整合測試（mock Redis）
 - **預估**：1.5h
-- **驗收**：所有測試 GREEN，覆蓋率達當前任務模式門檻
+- **驗收**：
+  - 簽章正確且未過期的 token → `verifyToken()` 回傳 payload
+  - 過期的 token → 回 401，錯誤碼 `TOKEN_EXPIRED`
+  - 簽章被竄改的 token → 回 401，錯誤碼 `TOKEN_INVALID`
+  - Redis 連不上時 → 回 503，不是 500
 
 ### 階段 3-4: 整合 / 打磨
 
@@ -135,6 +141,23 @@ Plan 獨有的技術層面依賴，非 WBS 的任務依賴：
 - [ ] 已更新 WBS 任務為 ✅
 ```
 
+### 「驗收」欄怎麼寫（RED 測試的來源）
+
+驗收條件會**直接變成測試**（見 `tdd-workflow` skill）：寫幾條就至少測幾條。
+所以每一條都要能讓人照著寫出一個會失敗、再變綠的測試。
+
+| ❌ 變不成測試 | ✅ 能直接變成測試 |
+|---|---|
+| 功能正常運作 | 數量為 0 時 `addToCart()` 丟出 `InvalidQuantity` |
+| 錯誤處理完善 | 付款服務逾時 → 訂單狀態維持 `pending`，回 503 |
+| 測試全綠、覆蓋率達標 | （這是每個階段的共同門檻，不是這個階段的驗收——不用寫） |
+| 介面友善 | 表單送出失敗時，錯誤訊息顯示在對應欄位下方（截圖驗收） |
+
+- 一條寫一個行為：**在什麼情況下 → 會得到什麼結果**
+- 寫得出具體值就寫具體值（狀態碼、錯誤碼、回傳值）
+- UI 的驗收寫成「截圖上看得到什麼」，不寫成單元測試
+- 純接線、設定的階段，驗收寫「接起來之後哪個請求會得到什麼回應」——那是整合測試的來源
+
 ### `files:` 欄位（平行開發的依據）
 
 列出本任務會新增/修改的檔案或 glob。`/task-next` 用它來判斷哪些「依賴已滿足」的任務
@@ -153,11 +176,12 @@ Plan 獨有的技術層面依賴，非 WBS 的任務依賴：
 | 指令 | 權限 | 時機 |
 |---|---|---|
 | `/plan` | 建立、覆寫整份 | 初次規劃或使用者要求重寫 |
-| `/tdd` | 只改階段狀態、current_phase、updated | 每完成一階段 |
+| `/tdd`（主模型） | 只改階段狀態、current_phase、updated | 每完成一階段 |
 | `/verify` | 只標記整體 status=✅ 並歸檔（**帳本一起歸檔**） | 所有階段完成且驗證通過 |
 | 使用者手動 | 任何時候 | 但會被 `/tdd` 下次讀取時覆寫階段狀態 |
 
-**implementer subagent 沒有寫入權。** 執行型委派時，plan 檔只有主模型能改——
+**subagent 一律沒有寫入權——只有主模型能改 plan 檔**（`/plan` 時的 `planner` 是唯一例外，
+它負責建立整份）。implementer、審查者、任何被派出去的 agent 都只讀。
 派工 prompt 必須明講「plan 檔只讀」，否則 subagent 會跟主模型搶著改階段狀態。
 帳本（`*.progress.md`）同理，只有主模型寫。
 
@@ -207,7 +231,7 @@ WBS 版面與連結欄的完整規則見 `.claude/templates/wbs.template.md`（�
 
 - 單檔案、< 30 分鐘的修改 — 直接做，不需要計畫
 - 已在 WBS 且極簡單的任務（例：更新一個常數）
-- 探索性實驗、還不確定方向 — 先用 `AskUserQuestion` 討論
+- 探索性實驗、還不確定方向 — 主模型先用 `AskUserQuestion` 討論
 
 **`/plan` 門檻**：跨 ≥ 2 檔案、預估 ≥ 1h、或有非 trivial 風險。
 `critical` 模式一律需要 plan（見 `rules/task-mode.md`）。
