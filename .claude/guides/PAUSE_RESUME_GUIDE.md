@@ -51,11 +51,13 @@ git diff > .claude/sessions/diff-$(date +%Y-%m-%d).patch
 看 Claude 顯示的當前任務。如果做到一半就告訴 Claude：
 
 ```
-把任務 2.3「使用者註冊」狀態改為「進行中 50%」，
-備註「validation 寫完，token 生成未開始」
+任務 2.3「使用者註冊」維持進行中，
+validation 寫完、token 生成未開始
 ```
 
-Claude 會更新 `.claude/taskmaster-data/wbs.md`。
+Claude 會把 `.claude/taskmaster-data/wbs.md` 的狀態標成 `🔄 進行中`，
+「做到哪」那句則記進該任務的 plan 檔或 Step 5 的斷點筆記——**不寫進 WBS 的格子**
+（WBS 每格一行，長內容的去處見 `.claude/templates/wbs.template.md` 第 4 節）。
 
 ### Step 4：擷取重要學習（如果有）
 今天有發現坑、解法、設計決策：
@@ -152,7 +154,7 @@ git stash push -u -m "WIP: register.ts token 生成未完成"
 
 # 4. 更新 WBS（在 Claude 對話中）
 /task-status
-# 然後告訴 Claude：「2.3 改為進行中，備註 token 未完成」
+# 然後告訴 Claude：「2.3 維持進行中，token 生成還沒做」（進度記進 plan，不進 WBS 格子）
 
 # 5. 寫斷點筆記
 /save-session

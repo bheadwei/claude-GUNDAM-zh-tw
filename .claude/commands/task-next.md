@@ -31,7 +31,7 @@ description: 從 WBS 取得下一個任務建議，分析優先級和依賴關�
 
 > 這是「原本計劃做完了但還想加東西」的主要入口——不要讓使用者卡在空 backlog。
 
-若有 `🚫 阻塞` 任務但無可執行任務，改為列出阻塞原因並詢問要不要解除阻塞。
+若有 `🚫 阻塞` 任務但無可執行任務，改為列出阻塞原因（從連結欄的風險 ID 查 WBS「風險與阻塞」表）並詢問要不要解除阻塞。
 
 ## 分析內容
 
@@ -107,7 +107,7 @@ description: 從 WBS 取得下一個任務建議，分析優先級和依賴關�
    **先把它們 commit 到 main 再開 worktree**。這是降低合併衝突最有效的一步——
    各 worktree 看不到彼此，共用定義必須先存在。
 3. **載入 `worktree-orchestration` skill**，照它的流程建立 worktree、派工、合併、清理。
-4. **更新 WBS**：每個合併完成的任務標 `✅ 完成`。
+4. **更新 WBS**：每個合併完成的任務標 `✅ MM-DD`，並重算「現況」區（規則見 `.claude/templates/wbs.template.md`）。
 
 > **並行數建議 2-4 個。** 再多的話你自己看不過來，而且磁碟與 context 成本會超過收益。
 
@@ -163,13 +163,13 @@ description: 從 WBS 取得下一個任務建議，分析優先級和依賴關�
 當使用者選擇開始任務時：
 1. 讀取 `.claude/taskmaster-data/wbs.md`
 2. 將選中的任務狀態更新為 `🔄 進行中`
-3. 更新「最後更新」日期
+3. 重算「現況」區與總進度（規則見 `.claude/templates/wbs.template.md` 第 3 節），更新「最後更新」日期
 4. 寫回檔案
 5. **時間追蹤**：將任務編號寫入 `.claude/taskmaster-data/.current-task`（例如 `2.1`）
 6. **任務模式**：將選定的模式（`quick`/`standard`/`critical`）寫入 `.claude/taskmaster-data/.current-task-mode`
 
 當任務完成（透過 `/verify` 或使用者確認）時：
-1. 將任務狀態更新為 `✅ 完成`
+1. 將任務狀態更新為 `✅ MM-DD`（完成日），重算「現況」區
 2. 寫回檔案
 3. **時間追蹤**：清除 `.claude/taskmaster-data/.current-task`
 4. **自動推薦下一個任務**：用 `AskUserQuestion` 詢問使用者：

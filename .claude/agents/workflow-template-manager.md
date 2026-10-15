@@ -59,7 +59,7 @@ model: sonnet
 
 ### Stage 6: 維護與管理 (15-16)
 - `15_documentation_and_maintenance_guide.md` -- 技術文檔策略
-- `16_wbs_development_plan_template.md` -- 工作分解結構與追蹤
+- `16_wbs_development_plan_template.md` -- 規劃脈絡（Pitch/Appetite、高階模組、里程碑交付物）；任務追蹤在 `wbs.md`（版面：`.claude/templates/wbs.template.md`）
 
 ### Stage 7: AI 功能 (21)
 - `21_ai_llm_integration_spec.md` ⓒ -- AI/LLM 整合規範（專案含 LLM/AI 功能）

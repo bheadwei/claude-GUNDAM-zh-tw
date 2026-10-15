@@ -37,7 +37,7 @@ description: 依據 VibeCoding 工作流範本撰寫專案文件。涵蓋 PRD、
 | | 14 | `deployment_and_operations_guide.md` | 部署與運維指南（PRR、runbook、incident） | 完整 |
 | | 19 | `observability_and_slo_spec.md` | 可觀測性與 SLO（SLI/SLO、error budget、告警） | 完整 |
 | **管理** | 15 | `documentation_and_maintenance_guide.md` | 文檔維護指南（docs-as-code、Diátaxis） | 完整 |
-| | 16 | `wbs_development_plan_template.md` | WBS 開發計畫 | 完整+MVP |
+| | 16 | `wbs_development_plan_template.md` | WBS 開發計畫（Pitch/Appetite、高階模組、里程碑交付物；任務表在 `wbs.md`，版面見 `.claude/templates/wbs.template.md`） | 完整+MVP |
 | **AI 功能** | 21 | `ai_llm_integration_spec.md` | AI/LLM 整合規範（prompt 版控、eval、成本護欄） | 完整（有 AI 功能才產） |
 
 ### 模式選擇邏輯（三檔）

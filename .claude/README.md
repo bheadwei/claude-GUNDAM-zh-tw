@@ -24,7 +24,7 @@
 ├── context/                   # 跨 Agent 上下文共享
 ├── coordination/              # Agent 協調配置
 └── taskmaster-data/           # WBS、時間日誌、plans/（計畫持久化）
-    ├── wbs.md                 # WBS 任務清單（What）
+    ├── wbs.md                 # WBS 任務清單（What；版面見 templates/wbs.template.md）
     ├── plans/                 # 計畫檔（How，/plan 寫入）
     │   ├── INDEX.md
     │   └── archive/           # /verify 完成後歸檔

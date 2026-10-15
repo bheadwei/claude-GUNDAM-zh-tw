@@ -138,13 +138,15 @@ Write .claude/taskmaster-data/plans/<filename>.md
 
 ### 4. 更新 WBS（若綁 WBS 任務）
 
-讀 `.claude/taskmaster-data/wbs.md`，在該任務的「備註」欄加入：
+讀 `.claude/taskmaster-data/wbs.md`，在該任務的「連結」欄加入：
 
 ```markdown
 [計畫](plans/2.1-auth-middleware.md)
 ```
 
-若已有連結則略過。
+欄內是 `—` 就取代；已有其他連結就用 ` ・ ` 接在後面；已有同一個計畫連結則略過。
+**只動這一格**——規劃過程中的分析、風險、選型理由寫進 plan 檔，不要寫進 WBS 的任何格子
+（WBS 版面規則：`.claude/templates/wbs.template.md`）。
 
 ### 5. 最終輸出
 

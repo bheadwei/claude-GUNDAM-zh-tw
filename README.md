@@ -67,8 +67,8 @@ bash scripts/update-template.sh /path/to/project             # 實跑（自動�
 可選參數：`--prune`（清掉目標多出來的模板舊檔）、`--claude-only`（只更新 `.claude/`）、
 `--no-backup`。PowerShell 版本為 `scripts\update-template.ps1 -Destination <path> -DryRun`。
 
-> **更新後記得跑一次 `/task-status`**——若該專案的 `wbs.md` 還沒有 `Plan` 欄，
-> 它會提議把既有 plan 回填成連結（一次性遷移）。
+> **更新後記得跑一次 `/task-status`**——若該專案的 `wbs.md` 還是舊版面（沒有「現況」區），
+> 它會提議轉換成新版面，長內容搬到該去的檔案（一次性遷移，不丟資料）。
 
 ---
 
@@ -90,7 +90,7 @@ claude_v2026/
     ├── agents/       (16 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
     ├── skills/       (27 個)         # 按需載入（不佔常駐 context）
-    ├── hooks/                        # Hook 腳本 + lib/ + 356 案例回歸測試
+    ├── hooks/                        # Hook 腳本 + lib/ + 364 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）
     ├── ui/           (69 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │
@@ -110,7 +110,7 @@ claude_v2026/
     ├── sessions/                     # /save-session 儲存
     ├── qa-history/                   # 問答紀錄
     ├── logs/                         # Hook 執行 log
-    ├── templates/                    # 初始化範本（僅 /task-init 讀）
+    ├── templates/                    # 初始化與 WBS 版面範本（/task-init、WBS 相關指令讀）
 ```
 
 ---

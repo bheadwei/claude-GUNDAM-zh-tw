@@ -171,7 +171,9 @@ description: 依開發情境產出規格文件（demo / mvp / full）。demo 產
   → 08 結構 → 09 設計與依賴 → 11 審查 → (12/17 前端) → 13 安全 → (20 威脅模型) → 14 部署 → (19 SLO) → 15 文檔 → (21 AI/LLM)
 ```
 
-WBS（16）由本指令後續產出，不在 docs-init 階段產。
+WBS 任務表不在 docs-init 階段產：由 `/task-init` 寫進 `.claude/taskmaster-data/wbs.md`
+（版面唯一來源 `.claude/templates/wbs.template.md`）。16 號範本是**選用**的規劃脈絡文件
+（Pitch／Appetite、高階模組、里程碑交付物），**不含任務表**，需要時才另外產。
 
 **條件式範本（括號者）**：進入 full 流程前，用一次 `AskUserQuestion`（multiSelect）確認專案特性，決定要納入哪些：
 

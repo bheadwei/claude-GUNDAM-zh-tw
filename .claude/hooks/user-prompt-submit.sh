@@ -133,7 +133,7 @@ if [ "$SUGGEST_MODE" != "low" ]; then
     if [ -f "$CLAUDE_DIR/taskmaster-data/wbs.md" ] \
        && has '(新增|實作|實現|開發|加一個|加個|加上|做一個|做個|追加|建一個|建個)|(支援|要有|想要|需要).{0,45}(功能|頁面|模組|元件|API|端點|介面|服務|系統|報表|流程|機制)|新功能|擴充功能|下一階段|第二階段|還想做' \
        && ! has '壞了|不動|沒反應|報錯|出錯|失敗了|為什麼|怎麼|如何|是什麼|bug|broken|crash'; then
-        add "偵測到新功能需求／CR → ①先用 **/task-add** 追加進 WBS（自動拆解、接編號、算依賴、回填 Plan 欄）②跨 ≥2 檔或 ≥1h 就**委派 planner**（\`subagent_type: \"planner\"\`）產分階段藍圖。跳過 WBS 會讓進度與時間統計失真。**若這筆會動到 API／路由／schema／對外介面，任務結束前必須同步文件**——/verify 會擋。"
+        add "偵測到新功能需求／CR → ①先用 **/task-add** 追加進 WBS（自動拆解、接編號、算依賴、重算現況）②跨 ≥2 檔或 ≥1h 就**委派 planner**（\`subagent_type: \"planner\"\`）產分階段藍圖。跳過 WBS 會讓進度與時間統計失真。**若這筆會動到 API／路由／schema／對外介面，任務結束前必須同步文件**——/verify 會擋。"
     fi
     if has 'pull request|開 pr|發 pr|送審|merge request|合併請求'; then
         add "偵測到要開 PR → 用 **/pr**（分析完整 commit 歷史與 \`diff base...HEAD\`、可選先跑把關鏈、產出含測試計畫的內容）。"

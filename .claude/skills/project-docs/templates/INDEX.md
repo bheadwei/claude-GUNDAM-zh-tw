@@ -58,7 +58,7 @@
 | # | 檔名 | 用途 |
 | :---: | :--- | :--- |
 | 15 | [documentation_and_maintenance_guide.md](./15_documentation_and_maintenance_guide.md) | 文檔維護（Diátaxis 四象限、docs-as-code、CI 檢查） |
-| 16 | [wbs_development_plan_template.md](./16_wbs_development_plan_template.md) | WBS 開發計劃（Shape Up Pitch + WBS + 里程碑路線圖） |
+| 16 | [wbs_development_plan_template.md](./16_wbs_development_plan_template.md) | WBS 開發計劃（Shape Up Pitch + 高階模組 + 里程碑交付物）。**不含任務表**——任務追蹤在 `.claude/taskmaster-data/wbs.md`，版面唯一來源 `.claude/templates/wbs.template.md` |
 
 ### 階段 7: AI 功能 (21)
 

@@ -71,6 +71,7 @@ created: "2026-04-20"
 updated: "2026-04-20"
 status: "🔄 進行中"           # ⏳ 未開始 / 🔄 進行中 / ✅ 完成
 current_phase: 2              # 目前在第幾階段
+mode: "standard"              # 任務模式 quick / standard / critical（WBS 不放這欄）
 files:                       # 本任務會「新增/修改」的檔案範圍
   - "src/lib/auth/middleware.ts"
   - "src/types/auth.ts"
@@ -162,11 +163,16 @@ Plan 獨有的技術層面依賴，非 WBS 的任務依賴：
 
 ### 與 WBS 的雙向同步
 
-- **Plan 建立時** → WBS 對應任務的 **`Plan` 欄**填入 `[計畫](plans/2.1-xxx.md)`
-  （不要塞「備註」欄——那欄留給其他說明）
-- **Plan 所有階段完成時** → 提示執行 `/verify`，通過後 WBS 對應任務標 ✅
-- **Plan 歸檔時**（`/verify`）→ WBS 的 `Plan` 欄同步改指 `plans/archive/<filename>`，
+- **Plan 建立時** → WBS 對應任務的 **`連結` 欄**加上 `[計畫](plans/2.1-xxx.md)`
+  （欄內原本是 `—` 就取代，已有別的連結就用 ` ・ ` 接在後面）
+- **執行帳本產生時** → 同一格再加 `[帳本](plans/2.1-xxx.progress.md)`
+- **Plan 所有階段完成時** → 提示執行 `/verify`，通過後 WBS 對應任務標 `✅ MM-DD`
+- **Plan 歸檔時**（`/verify`）→ WBS `連結` 欄裡的計畫與帳本同步改指 `plans/archive/<filename>`，
   否則歸檔後連結會斷
+
+WBS 版面與連結欄的完整規則見 `.claude/templates/wbs.template.md`（唯一來源）。
+**plan 是 WBS 長內容的去處之一**——驗證數據寫進該階段的「驗收」、帶給下一任務的疑慮寫進
+下一任務 plan 的「風險與緩解」，不要回頭塞進 WBS 的格子。
 
 反向連結由 plan frontmatter 的 `wbs_task` 提供，兩個方向都要維護才點得到。
 - **WBS 任務被跳過/刪除時** → Plan 檔保留但標記 `status: "⚠️ WBS 已移除"`

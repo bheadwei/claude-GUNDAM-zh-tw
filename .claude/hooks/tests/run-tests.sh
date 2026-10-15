@@ -476,6 +476,45 @@ run post-write.sh "$(w "$SANDBOX/.claude/taskmaster-data/wbs.md")" >/dev/null
 if [ -f "$SANDBOX/.claude/taskmaster-data/wbs-history.log" ]; then ok "WBS 寫入仍記歷史"
 else ng "WBS 寫入仍記歷史" "有 wbs-history.log" "（無）"; fi
 
+# ---- WBS 格子長度提醒 ----
+#
+# 長度必須以「字」計：一個中文字在 UTF-8 是 3 bytes，用位元組算的話
+# 14 個中文字就超標，短格子會被誤報。連結的 `](目標)` 不計入。
+WBS_F="$SANDBOX/.claude/taskmaster-data/wbs.md"
+wbs_doc() {   # $1 = 13.1 那一列的「狀態」格，$2 = 「連結」格
+    printf '%s\n' "# WBS — 測試" "" "## 現況" "" \
+        "| 里程碑 | 進度 | 狀態 | 目標日 |" "|---|---|---|---|" "| M1 測試 | ░░░░░ 0/1 | 🔄 進行中 | 11-15 |" "" \
+        "## M1 測試" "" \
+        "| # | 任務 | 狀態 | 優先 | 依賴 | 預估 | 連結 |" "|---|---|---|---|---|---|---|" \
+        "| 13.1 | 地端 rerank 拒答門檻 | $1 | 高 | — | 4h | $2 |" > "$WBS_F"
+}
+LONG_ZH='✅ 09-23 hit@5 達百分之九十五點八，帶到下一任務的疑慮有三項，選型理由是延遲較低且主機已確認'
+SHORT_ZH='進行中，三十個中文字以內的狀態說明大約就是這樣長度而已不會更多了'   # 32 字、96 bytes
+LONG_LINK='[計畫](plans/archive/13.1-a-very-long-plan-slug-that-goes-on-and-on-and-on.md) ・ [報告](../context/test/2026-09-23-evaluation-report-with-a-really-long-name.md)'
+
+reset; wbs_doc "$LONG_ZH" "—"
+WBS_OUT=$(run post-write.sh "$(w "$WBS_F")")
+expect_contains "WBS 中文超長格子會提醒"       "WBS 格子太長"   "$WBS_OUT"
+expect_contains "WBS 提醒指出任務編號與欄位"   "13.1 的「狀態」" "$WBS_OUT"
+expect_contains "WBS 提醒附長內容去處"         "執行帳本"       "$WBS_OUT"
+
+reset; wbs_doc "$SHORT_ZH" "—"
+expect_empty "WBS 短中文格子不提醒（以字計、非位元組）" "$(run post-write.sh "$(w "$WBS_F")")"
+
+reset; wbs_doc "🔄 進行中" "$LONG_LINK"
+expect_empty "WBS 長連結網址不誤報" "$(run post-write.sh "$(w "$WBS_F")")"
+
+reset; wbs_doc "$LONG_ZH" "—"
+expect_empty "WBS 長度提醒逃生門 WBS_CELL_CHECK=off" "$(run post-write.sh "$(w "$WBS_F")" WBS_CELL_CHECK=off)"
+if [ -f "$SANDBOX/.claude/taskmaster-data/wbs-history.log" ]; then ok "WBS 長度提醒關閉時仍記歷史"
+else ng "WBS 長度提醒關閉時仍記歷史" "有 wbs-history.log" "（無）"; fi
+
+# 舊版面（沒有「現況」區）要順帶指向 /task-status 的轉換
+reset
+printf '%s\n' "# WBS" "| # | 任務 | 狀態 | 優先級 | 依賴 | 預估 | Plan | 備註 |" "|---|---|---|---|---|---|---|---|" \
+    "| 2.1 | 架構 | $LONG_ZH | 高 | - | 2h | - | |" > "$WBS_F"
+expect_contains "WBS 舊版面提醒指向 /task-status 轉換" "/task-status" "$(run post-write.sh "$(w "$WBS_F")")"
+
 # ---- hook 語法檢查 ----
 #
 # 把 hook 改壞的當下沒有任何人告訴你（PostToolUse 不會抱怨），要等下一條指令
