@@ -151,7 +151,8 @@ Ready for PR: [YES/NO]
 
 在**主 checkout** 執行時：
 
-1. 將 WBS 該任務狀態更新為 `✅ 完成`
+1. 將 WBS 該任務狀態更新為 `✅ MM-DD`（完成日；驗證數據**不寫進格子**——
+   它屬於 plan 的驗收或評估報告，WBS 連結欄放 `[報告](…)` 即可）
 2. 清除 `.current-task`
 3. **Plan 歸檔**（若存在對應 plan 檔）：
    - 將 plan frontmatter 標 `status: "✅ 完成"`、`archived: "YYYY-MM-DD"`
@@ -159,8 +160,9 @@ Ready for PR: [YES/NO]
    - **同名的執行帳本 `<plan 同名>.progress.md` 一起搬到 `archive/`**（若存在）——
      留在 `plans/` 會讓下次同 ID 的任務誤認為「有續跑中的帳本」
    - 更新 `plans/INDEX.md`：該行的狀態改為 `✅ 完成（已歸檔）`，路徑改為 `archive/<filename>`
-   - **更新 WBS 該任務的 `Plan` 欄**改指 `plans/archive/<filename>`
+   - **更新 WBS 該任務的 `連結` 欄**：計畫（與帳本）改指 `plans/archive/<filename>`
      （漏掉這步，歸檔後從 WBS 點過去會是死連結）
+   - **重算 WBS「現況」區**與總進度（規則見 `.claude/templates/wbs.template.md` 第 3 節，唯一來源）
 4. 用 `AskUserQuestion` 詢問下一步（遵守 `.claude/rules/interactive-qa.md`）：
    - 「繼續下一個任務」(Recommended) — 自動執行 `/task-next` 流程
    - 「查看目前進度」 — 顯示 WBS 狀態摘要
@@ -206,8 +208,8 @@ Ready for PR: [YES/NO]
 要補登到 WBS 嗎？補登後進度統計與時間報表才會涵蓋它。
 ```
 
-- **補登為已完成**（Recommended）— 追加一行到 `wbs.md`，狀態直接標 `✅ 完成`，
-  備註填 `[計畫](plans/archive/<filename>)`
+- **補登為已完成**（Recommended）— 追加一行到 `wbs.md` 的當前里程碑節，狀態直接標 `✅ MM-DD`，
+  連結欄填 `[計畫](plans/archive/<filename>)`，並重算「現況」區（版面見 `.claude/templates/wbs.template.md`）
 - **不用，這是一次性的** — 不動 WBS
 - **補登並順便加後續任務** — 補登後接 `/task-add` 流程
 

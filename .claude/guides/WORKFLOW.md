@@ -122,9 +122,11 @@
 一個里程碑的任務全部完成 → `/verify` 會問要不要歸檔：
 
 ```
-wbs.md          只留活躍任務 + 里程碑摘要（長度跟「還沒做完的事」掛鉤）
+wbs.md          只留活躍里程碑 + 「現況」摘要（長度跟「還沒做完的事」掛鉤）
 wbs-archive.md  已完成里程碑的完整任務列（含實際耗時，可回顧估準不準）
 ```
+
+版面（每格一行、依里程碑分節、長內容該搬去哪）的唯一來源是 `.claude/templates/wbs.template.md`。
 
 編號**永不重用**，`/task-add` 會同時掃兩個檔決定新編號。
 `/task-status` 顯示「活躍 8 ・已歸檔 34」，`/time-log` 找不到任務時會回查歸檔。
@@ -438,4 +440,4 @@ bash scripts/check-counts.sh --tests 356   # 文件計數一致性
 CI（`.github/workflows/template-ci.yml`）會在 push 與 PR 時自動跑這兩項，
 加上 Windows/Git Bash 的回歸測試、shell 與 PowerShell 語法、copy/update-template 沙箱實跑。
 
-356 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
+364 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。

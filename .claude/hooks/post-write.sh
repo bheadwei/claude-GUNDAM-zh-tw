@@ -1,8 +1,8 @@
 #!/bin/bash
 # Post Write Hook — PostToolUse(Write|Edit)
 #
-# 兩個職責：
-#   (1) WBS 寫入歷史（沿用）
+# 職責：
+#   (1) WBS 寫入歷史（沿用）＋ WBS 格子長度提醒（只提醒，不擋；見下方該節）
 #   (2) 文件影響偵測：寫到「文件會描述的檔案」（API 路由、schema、對外介面…）時，
 #       記進 .doc-impact 並在本任務第一次命中時注入提醒。
 #       /verify 在標記 WBS ✅ 前必須處理這份清單。
@@ -32,7 +32,8 @@ FILE_PATH=""
 command -v jq >/dev/null 2>&1 && FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // ""')
 
 # WBS 更新時記錄歷史
-if [[ "$FILE_PATH" == *"taskmaster-data/wbs.md"* ]]; then
+# 比對前先把 `\` 轉成 `/`：Windows 的 payload 帶反斜線路徑，原本的字面比對在那裡永遠不中
+if [[ "$(printf '%s' "$FILE_PATH" | tr '\\' '/')" == *"taskmaster-data/wbs.md"* ]]; then
     mkdir -p "$DATA_DIR" 2>/dev/null
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] WBS updated" >> "$DATA_DIR/wbs-history.log" 2>/dev/null
 fi
@@ -89,6 +90,63 @@ done
 NORM=$(printf '%s' "$FILE_PATH" | tr '\\' '/')
 ROOT_NORM=$(printf '%s' "$PROJECT_ROOT" | tr '\\' '/')
 REL="${NORM#"$ROOT_NORM"/}"
+
+# ---------------------------------------------------------------- WBS 格子長度提醒
+#
+# WBS 會悄悄變成工作日誌：狀態／備註格塞進驗證數據、疑慮清單、選型理由、commit SHA，
+# 一列撐半個螢幕，打開再也看不出專案狀態。版面規則寫在範本裡，但「寫的當下」沒人看範本——
+# 判斷得出時機（寫入 wbs.md）的事就由機器提出。只提醒不擋：擋住會讓「先記下來、等等再搬」
+# 也做不到，而那比格子長更糟。
+#
+# 長度以 codepoint 計（jq 的 length），所以中文一字算一，不受 Git Bash 位元組計數影響。
+# 連結只算顯示文字，`](目標)` 不計——長路徑本來就該放在連結裡。
+# 每次寫入最多一則訊息。去處對照是範本第 4 節的簡短版，改範本那張表時同步這裡。
+#
+# 逃生門：WBS_CELL_CHECK=off（門檻 WBS_CELL_MAX，預設 40）
+case "$NORM" in
+    */taskmaster-data/wbs.md)
+        if [ "${WBS_CELL_CHECK:-on}" != "off" ] && [ -f "$NORM" ]; then
+            WBS_MSG=$(jq -Rsr --argjson max "${WBS_CELL_MAX:-40}" '
+                def cells: gsub("\\\\\\|"; "\u0001")
+                  | sub("^\\s*\\|"; "") | sub("\\|\\s*$"; "")
+                  | split("|") | map(gsub("\u0001"; "|") | gsub("^\\s+|\\s+$"; ""));
+                def visible: gsub("!?\\[(?<t>[^\\]]*)\\]\\([^)]*\\)"; "\(.t)")
+                  | gsub("<[a-z]+://[^>]*>"; "")
+                  | gsub("\\*\\*|__|`"; "");
+                def is_row: test("^\\s*\\|");
+                def is_sep: test("^\\s*\\|?(\\s*:?-{3,}:?\\s*\\|)+\\s*(:?-{3,}:?\\s*)?$");
+                gsub("\r"; "") as $doc
+                | (reduce ($doc | split("\n")[]) as $l
+                    ({hdr: [], prev: "", intable: false, hits: []};
+                     (if ($l | is_row | not) then .intable = false
+                      elif ($l | is_sep) then .intable = true | .hdr = (.prev | cells)
+                      elif .intable then
+                        .hdr as $h
+                        | ($l | cells) as $c
+                        | .hits += [ range(0; $c | length) as $i
+                                     | ($c[$i] | visible) as $v
+                                     | select(($v | length) > $max)
+                                     | {id: $c[0], col: ($h[$i] // "第\($i + 1)欄"), len: ($v | length)} ]
+                      else . end)
+                     | .prev = $l)
+                  | .hits) as $hits
+                | if ($hits | length) == 0 then empty else
+                    "📏 WBS 格子太長：`wbs.md` 有 \($hits | length) 格超過 \($max) 字。WBS 是打開就要能掌握專案狀態的文件，**每格只寫一行**——長內容搬出去，格子裡只留連結或風險 ID。\n\n"
+                    + ([$hits[:8][] | "- \(.id) 的「\(.col)」（\(.len) 字）"] | join("\n"))
+                    + (if ($hits | length) > 8 then "\n- …另有 \(($hits | length) - 8) 格" else "" end)
+                    + "\n\n該搬去哪：驗證數據／執行結果 → 評估報告或 plan 該階段的「驗收」・進度／派工／commit SHA → 執行帳本 `plans/*.progress.md`・帶給下一任務的疑慮 → 下一任務 plan 的「風險與緩解」・選型理由 → `context/decisions/` 或 ADR・阻塞原因 → 「風險與阻塞」表（任務列只寫風險 ID）・任務等級 → plan frontmatter。"
+                    + (if ($doc | test("(^|\n)## 現況")) then "" else "\n\n這份 WBS 沒有「現況」區，是舊版面——`/task-status` 會提議整份轉換（長內容搬出、不丟資料）。" end)
+                    + "\n\n版面唯一來源：`.claude/templates/wbs.template.md`。（只提醒，不擋。關閉：WBS_CELL_CHECK=off）"
+                  end
+            ' < "$NORM" 2>/dev/null)
+            if [ -n "$WBS_MSG" ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] wbs-cell-check: long cells in $REL" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
+                jq -n --arg m "$WBS_MSG" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $m}}' 2>/dev/null || true
+            fi
+        fi
+        exit 0
+        ;;
+esac
 
 # ---------------------------------------------------------------- 擴充維護提醒
 #

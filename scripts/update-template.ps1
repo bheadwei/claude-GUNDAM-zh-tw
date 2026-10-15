@@ -226,7 +226,7 @@ if (-not $DryRun -and -not $NoBackup) {
 if (-not $DryRun) {
     Write-Host ""
     Write-Host "👉 下一步：到目標專案開 Claude Code 跑一次 /task-status" -ForegroundColor Cyan
-    Write-Host "   若 wbs.md 還沒有 Plan 欄，它會提議把既有 plan 回填成連結（一次性遷移）"
+    Write-Host "   若 wbs.md 還是舊版面（沒有「現況」區），它會提議轉換成新版面（一次性遷移，長內容搬出不丟資料）"
 }
 Write-Host ""
 
