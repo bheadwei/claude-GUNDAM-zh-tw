@@ -658,6 +658,27 @@ run post-agent-report.sh "$(ag debug-investigator async)" >/dev/null
 if [ -s "$EXPECT_FILE" ]; then ok "debug-investigator 已納入稽核"
 else ng "debug-investigator 已納入稽核" "期望檔非空" "（空）"; fi
 
+# 但 quick 模式下它依定義不寫報告（agents/debug-investigator.md 模式表）→ 不能記成缺報告
+CR_LOG="$SANDBOX/.claude/logs/context-reports.log"
+reset; mkdir -p "$SANDBOX/.claude/context/quality"; echo quick > "$MODE_FILE"
+run post-agent-report.sh "$(ag debug-investigator sync)" >/dev/null
+if grep -q 'WARN: debug-investigator' "$CR_LOG" 2>/dev/null; then
+    ng "quick 模式同步派 debug-investigator 不記 WARN" "無 WARN" "$(cat "$CR_LOG")"
+else ok "quick 模式同步派 debug-investigator 不記 WARN"; fi
+expect_contains "quick 模式記 SKIP 一行" "SKIP: debug-investigator quick 模式不寫報告" \
+    "$(cat "$CR_LOG" 2>/dev/null)"
+
+reset; mkdir -p "$SANDBOX/.claude/context/quality"; echo quick > "$MODE_FILE"
+run post-agent-report.sh "$(ag debug-investigator async)" >/dev/null
+if grep -q '"agent":"debug-investigator"' "$EXPECT_FILE" 2>/dev/null; then
+    ng "quick 模式非同步派 debug-investigator 不記期望" "無該列" "$(cat "$EXPECT_FILE")"
+else ok "quick 模式非同步派 debug-investigator 不記期望"; fi
+
+reset; mkdir -p "$SANDBOX/.claude/context/quality"; echo standard > "$MODE_FILE"
+run post-agent-report.sh "$(ag debug-investigator sync)" >/dev/null
+expect_contains "standard 模式缺報告仍記 WARN" "WARN: debug-investigator completed but no report" \
+    "$(cat "$CR_LOG" 2>/dev/null)"
+
 # skill-curator 同一個坑：它寫報告到 context/decisions/，但 AREA 映射沒它，
 # 稽核永遠找不到那份報告（CLAUDE.md 的「連帶檢查」明文警告過這一條）
 reset; mkdir -p "$SANDBOX/.claude/context/decisions"
@@ -925,6 +946,50 @@ mp_empty "heredoc 內文提到指令不記入 .merge-pending"
 reset; pbashj 'grep -rn "git cherry-pick" .claude/' >/dev/null
 mp_empty "grep 樣式提到指令不記入 .merge-pending"
 
+# 2026-10-16：commit 訊息用 heredoc 帶（Claude Code 預設的 commit 寫法），內文一句
+# 「衝突的 merge 結束碼非 0」→ 清單被記成 `[merge] 結束碼非`。
+# 上面那條 heredoc 案例沒抓到，是因為它的內文**沒有一行以 `git ` 開頭**、也沒有真的 merge。
+reset; pbashj "git commit -q -m \"\$(cat <<'EOF'
+fix: x
+
+- 衝突的 merge 結束碼非 0，過去從未被記錄
+EOF
+)\"" >/dev/null
+mp_empty "heredoc commit 訊息提到 merge 不記入 .merge-pending"
+
+reset; pbashj "git commit -q -F - <<'EOF'
+fix: x
+git merge 是這樣用的
+EOF" >/dev/null
+mp_empty "heredoc 內文某行以 git merge 開頭也不記"
+
+# 10-16 的實際形狀：同一條指令先 heredoc commit、再真的 merge。合併該記，
+# 但 ref 曾從 heredoc 內文抽出來。
+reset; pbashj "git add -A && git commit -q -F - <<'EOF'
+fix: x
+
+- 衝突的 merge 結束碼非 0，過去從未被記錄
+EOF
+git switch -q main && git merge --no-ff -m \"merge: y\" feat/real" >/dev/null
+mp_has "heredoc commit 之後真的 merge → ref 取自真正的 merge" '[merge] feat/real'
+
+reset; pbashj 'git commit -m "說明 git merge foo 的用法"' >/dev/null
+mp_empty "引號內的 commit 訊息提到 git merge 不記"
+
+reset; pbashj "echo 'x
+git merge feature/y'" >/dev/null
+mp_empty "跨行單引號字串裡以 git merge 開頭的行不記"
+
+# 子指令只看 git 後第一個非選項字，不看整段任何位置
+reset; pbashj 'git log --oneline --grep merge' >/dev/null
+mp_empty "git log --grep merge 不是合併"
+
+reset; pbashj 'git -C /some/path merge feature/x' >/dev/null
+mp_has "git -C <路徑> merge 仍記錄（跳過全域選項）" '[merge] feature/x'
+
+reset; pbashj 'git -c core.editor=true --no-pager rebase main' >/dev/null
+mp_has "git -c k=v --no-pager rebase 仍記錄" '[rebase] main'
+
 # 正向：真的執行的仍然要記，且類型與 ref 不能跑掉
 reset; pbashj 'git merge feature/x' >/dev/null
 mp_has "真正的 merge 仍記錄（ref 正確抽出）" '[merge] feature/x'
@@ -1011,6 +1076,14 @@ reset
 out=$(pbf 'git switch -q main && git merge --no-ff -m "merge: x" feat/x >/dev/null && cat no-such-file' 'Exit code 1
 cat: no-such-file: No such file or directory')
 mp_has "合併成功但後段指令失敗仍記入 .merge-pending" '[merge] feat/x'
+
+# 10-16 那筆就是失敗事件送來的（event=PostToolUseFailure）
+reset; pbf "git commit -q -F - <<'EOF'
+fix: x
+- 衝突的 merge 結束碼非 0
+EOF
+git switch -q main && git merge --no-ff -m \"merge: y\" feat/real && cat no-such-file" 'Exit code 1' >/dev/null
+mp_has "失敗事件：heredoc commit + 真 merge → ref 取自真正的 merge" '[merge] feat/real'
 expect_contains "非零但無衝突 → 提示「非零結束」而非衝突" "非零結束" "$out"
 case "$out" in *conflict-resolver*) ng "非零但無衝突不導向 conflict-resolver" "不含 conflict-resolver" "$out" ;;
                 *) ok "非零但無衝突不導向 conflict-resolver" ;; esac
@@ -1156,6 +1229,17 @@ expect_decision "只是提到指令（heredoc 內文）不擋" allow \
     "$(gb 'cat > d.md <<EOF
 先打 tag 再 git reset --hard
 EOF')"
+# 上面那條的內文不以 git 開頭；這兩條是真的會撞的形狀（heredoc 內某行以 git 開頭、
+# 引號內的訊息）——2026-10-16 在 post-bash.sh 那邊實際撞到同一個切段缺陷
+expect_decision "heredoc commit 內文某行以 git reset --hard 開頭不擋" allow \
+    "$(gb "git commit -q -F - <<'EOF'
+docs: 說明
+git reset --hard 之前先打 tag
+EOF")"
+expect_decision "commit -m 訊息含 git reset --hard 不擋" allow \
+    "$(gb 'git commit -m "改用 tag，取代直接 git reset --hard"')"
+expect_decision "git -C <路徑> reset --hard 仍擋（跳過全域選項）" deny \
+    "$(gb "git -C $SANDBOX reset --hard HEAD")"
 
 # 逃生門
 expect_decision "GIT_BACKUP_GATE=off 關閉閘門"   allow "$(gb 'git reset --hard HEAD' GIT_BACKUP_GATE=off)"
