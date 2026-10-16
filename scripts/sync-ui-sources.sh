@@ -61,6 +61,15 @@ sha256() {
     fi
 }
 
+# 一次算多個檔的 hash，輸出格式同 sha256sum（「<hash>  <檔名>」）。
+# 與 sha256() 同一套退路：macOS 沒裝 coreutils 時沒有 sha256sum，只有 shasum。
+# 曾經只有 sha256() 有退路、批次那裡直接叫 sha256sum，在 set -euo pipefail 下整支中止。
+sha256_many() {
+    if command -v sha256sum >/dev/null 2>&1; then sha256sum -- "$@"
+    else shasum -a 256 -- "$@"
+    fi
+}
+
 # Windows 原生 jq 可能輸出 CRLF；比對前一律去掉 \r
 jqr() { jq -r "$@" | tr -d '\r'; }
 
@@ -251,7 +260,7 @@ while IFS= read -r src <&3; do
     warn_license "$src"
 
     # 一次讀完這個來源的所有 SOURCE.json、一次算完兩邊的 hash：
-    # 逐檔叫 jq／sha256sum，在 Windows 上一輪預覽要好幾分鐘
+    # 逐檔叫 jq／算 hash，在 Windows 上一輪預覽要好幾分鐘
     meta="$TMP_ROOT/meta-$src"
     (cd "$UI_DIR" && jq -r --arg src "$src" '
         select(.source == $src)
@@ -265,8 +274,8 @@ while IFS= read -r src <&3; do
     done < "$meta"
     lsums="$TMP_ROOT/lsum-$src"; usums="$TMP_ROOT/usum-$src"
     : > "$lsums"; : > "$usums"
-    if [ ${#lfiles[@]} -gt 0 ]; then (cd "$UI_DIR" && sha256sum -- "${lfiles[@]}") | tr -d '\r' > "$lsums"; fi
-    if [ ${#ufiles[@]} -gt 0 ]; then (cd "$updir" && sha256sum -- "${ufiles[@]}") | tr -d '\r' > "$usums"; fi
+    if [ ${#lfiles[@]} -gt 0 ]; then (cd "$UI_DIR" && sha256_many "${lfiles[@]}") | tr -d '\r' > "$lsums"; fi
+    if [ ${#ufiles[@]} -gt 0 ]; then (cd "$updir" && sha256_many "${ufiles[@]}") | tr -d '\r' > "$usums"; fi
     # 空欄位補 "-"：read 用 tab 切欄時，連續的 tab 會被併成一個
     rows="$TMP_ROOT/rows-$src"
     awk -F'\t' -v L="$lsums" -v U="$usums" '
@@ -297,6 +306,18 @@ while IFS= read -r src <&3; do
         fi
 
         [ "$local_sha" != "-" ] || { echo "  ⚠ $name 有 SOURCE.json 但沒有 DESIGN.md，略過" >&2; continue; }
+        # 標成 removed 之後上游又加回來：先把狀態改回 present。
+        # 內容與本地一模一樣時下一行會直接略過，不在這裡處理的話狀態永遠停在 removed。
+        if [ "$status" = "removed" ]; then
+            if [ "$MODE" = "apply" ]; then
+                json_set "$sj" '.upstream_status = "present"'
+                APPLIED+=("$name：upstream_status → present（上游加回來了）")
+            fi
+            if [ "$local_sha" = "$up_sha" ]; then
+                UPDATED+=("$name（上游加回來了，內容與本地相同；--apply 只把 upstream_status 改回 present）")
+                continue
+            fi
+        fi
         [ "$local_sha" = "$up_sha" ] && continue
 
         if [ "$local_sha" != "$base_sha" ]; then

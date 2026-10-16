@@ -2,7 +2,7 @@
 # ui-lint.sh — 寫前端檔的當下，提出三種「寫的人自己不會發現」的問題（只提醒，不擋）
 #
 #   ① 寫死色碼：元件裡出現 hex，而不是引用 tokens／CSS 變數
-#   ② 動畫等級不符：ui-style.json 的 motion 是 L1，檔案卻 import 了動畫函式庫（L2 則是 3D／WebGL）
+#   ② 動畫等級不符：等級是 L1（ui-style.json 的 motion，或這一頁 IA snippet 另外調的），檔案卻 import 了動畫函式庫（L2 則是 3D／WebGL）
 #   ③ AI 痕跡（P0）：從 avoid-ai-design 的 detect.mjs 挑出 grep 判斷得準的三條，用 bash 改寫
 #
 # 為什麼是 hook：這三件事以前只靠 ui-builder 寫完自己 grep（ui-style-compliance 階段 3）。
@@ -48,24 +48,29 @@ MAIN_CLAUDE="${4:-$WORK_CLAUDE}"
 REL=$(printf '%s' "$REL" | tr '\\' '/')
 REL="${REL#./}"
 # payload 沒帶 cwd 時 WORK_ROOT 會退回主 checkout，worktree 裡的檔案就變成 .claude/worktrees/<名>/src/…
+IA_ROOT=$(printf '%s' "$WORK_CLAUDE" | tr '\\' '/'); IA_ROOT="${IA_ROOT%/.claude}"
 case "$REL" in
-    .claude/worktrees/*/*) REL="${REL#.claude/worktrees/*/}" ;;
+    .claude/worktrees/*/*)
+        WT="${REL#.claude/worktrees/}"; IA_ROOT="$IA_ROOT/.claude/worktrees/${WT%%/*}"
+        REL="${REL#.claude/worktrees/*/}" ;;
 esac
 
 case "$REL" in
     .claude/*|docs/*) exit 0 ;;
     node_modules/*|*/node_modules/*|dist/*|*/dist/*|build/*|*/build/*|.next/*|*/.next/*|out/*|coverage/*) exit 0 ;;
-    __tests__/*|*/__tests__/*) exit 0 ;;
+    vendor/*|*/vendor/*|.git/*|*/.git/*) exit 0 ;;
+    __tests__/*|*/__tests__/*|test/*|*/test/*|tests/*|*/tests/*|*fixtures*) exit 0 ;;
 esac
 
 BASE="${REL##*/}"
 BASE_LC=$(printf '%s' "$BASE" | tr '[:upper:]' '[:lower:]')
+# 副檔名清單 post-write.sh 也有一份（啟動本檔前的預篩，省下多開一個 bash）。改這裡要同步那裡
 case "$BASE_LC" in
     *.tsx|*.jsx|*.vue|*.svelte|*.html|*.css|*.scss) ;;
     *) exit 0 ;;
 esac
 case "$BASE_LC" in
-    *.test.*|*.spec.*|*.stories.*) exit 0 ;;
+    *.test.*|*.spec.*|*.stories.*|*.min.css) exit 0 ;;
 esac
 
 # grep 的 -n 輸出 → 「- L12 `內容`」，最多 5 行，內容截到 70 字
@@ -118,6 +123,70 @@ done
 
 if [ -n "$UI_JSON" ] && command -v jq >/dev/null 2>&1; then
     MOTION=$(jq -r '(.motion // "L1") | ascii_upcase' "$UI_JSON" 2>/dev/null || echo "")
+
+    # 單頁等級：motion.md 開頭規定 `/ui-page` 另外調過的頁，以該頁 IA snippet 的「動畫等級」為準。
+    # IA snippet 的標題是「## 頁面名（/路由）」（ui-page.md 5.1 的格式），記的是**網址**不是檔名，
+    # 所以只有「檔名本身就決定網址」的頁面檔對應得到：Next.js 的 app/**/page.*、pages/**、
+    # SvelteKit 的 routes/**/+page.*（route group 的 `(名稱)` 不出現在網址上，先去掉）。
+    # 元件檔（components/sections/PricingCards.tsx）屬於哪一頁，從路徑推不出來。
+    #
+    # 對應不到時**寧可漏提醒也不誤報**：改用「專案與所有單頁中最寬鬆的那一級」。
+    # 理由：那個元件可能正是某個調到 L2 的頁在用的，照專案 L1 提醒就是叫人拆掉合法的動畫；
+    # 而沒有任何單頁調過時，最寬鬆的就是專案等級，行為與以前一樣。
+    page_route() { # 由 $REL 推網址（/、/pricing）；不是頁面檔就不輸出
+        local r="${REL#src/}"
+        case "$r" in
+            app/page.*|app/*/page.*)          r="${r#app}"; r="${r%/page.*}" ;;
+            pages/_*|pages/api/*)             return 0 ;;
+            pages/*)                          r="${r#pages}"; r="${r%.*}"; r="${r%/index}" ;;
+            routes/+page.*|routes/*/+page.*)  r="${r#routes}"; r="${r%/+page.*}" ;;
+            *) return 0 ;;
+        esac
+        r=$(printf '%s' "$r" | sed -E 's#/\([^/]*\)##g')
+        printf '%s\n' "${r:-/}"
+    }
+    IA_DOC=""
+    for f in "$IA_ROOT/docs/17_frontend_information_architecture.md" "$IA_ROOT"/docs/*frontend_information_architecture*.md; do
+        [ -f "$f" ] && { IA_DOC="$f"; break; }
+    done
+    # 每一份 snippet 輸出「路由<TAB>等級」，等級是 L1～L3，寫「沿用專案」或認不出來的是 -
+    IA_LEVELS=""
+    [ -n "$IA_DOC" ] && IA_LEVELS=$(awk '
+        /^## / {
+            cur = ""; r = $0; sub(/[ \t\r]+$/, "", r)
+            gsub(/（/, "(", r); gsub(/）/, ")", r)
+            if (match(r, /\([^()]*\)$/)) {
+                p = substr(r, RSTART + 1, RLENGTH - 2); gsub(/^[ \t`]+|[ \t`]+$/, "", p)
+                if (p ~ /^\//) { sub(/\/+$/, "", p); cur = (p == "") ? "/" : p }
+            }
+            next
+        }
+        cur != "" && /動畫等級/ {
+            lv = "-"
+            if (match($0, /另外調為[ \t]*[Ll][123]/)) lv = "L" substr($0, RSTART + RLENGTH - 1, 1)
+            else if ($0 !~ /沿用/ && match($0, /[Ll][123]/)) lv = "L" substr($0, RSTART + 1, 1)
+            print cur "\t" lv
+            cur = ""
+        }' "$IA_DOC" 2>/dev/null | tr -d '\r')
+    PROJECT_MOTION="$MOTION"
+    LV_SRC="\`ui-style.json\` 的動畫等級是 **${MOTION}**"
+    PAGE_ROUTE=$(page_route)
+    PAGE_LV=""
+    [ -n "$PAGE_ROUTE" ] && [ -n "$IA_LEVELS" ] && PAGE_LV=$(printf '%s\n' "$IA_LEVELS" \
+        | awk -F'\t' -v r="$PAGE_ROUTE" '$1 == r { print $2; exit }')
+    if [ -n "$PAGE_LV" ]; then
+        if [ "$PAGE_LV" != "-" ]; then
+            MOTION="$PAGE_LV"
+            LV_SRC="這一頁（\`${PAGE_ROUTE}\`）的 IA snippet 另外調過，動畫等級是 **${MOTION}**（\`${IA_DOC#"$IA_ROOT"/}\`，以單頁為準）"
+        fi
+    else
+        LOOSEST=$(printf '%s\n%s\n' "$PROJECT_MOTION" "$(printf '%s\n' "$IA_LEVELS" | cut -f2)" \
+            | grep -E '^L[123]$' | sort | tail -n 1)
+        if [ -n "$LOOSEST" ] && [ "$LOOSEST" != "$PROJECT_MOTION" ]; then
+            MOTION="$LOOSEST"
+            LV_SRC="這個檔對應不到單頁的 IA snippet，而有頁面另外調過等級，所以照專案與各頁中最寬鬆的 **${MOTION}** 檢查"
+        fi
+    fi
     HEAVY_PKG='three|@react-three/[a-z0-9-]+|vanta|@splinetool/[a-z0-9-]+'
     HEAVY_CDN='[/@](three|vanta)[@./]'
     case "$MOTION" in
@@ -138,7 +207,7 @@ if [ -n "$UI_JSON" ] && command -v jq >/dev/null 2>&1; then
         SCRIPT_RE="<script[^>]*src=['\"][^'\"]*${CDN}"
         MOTION_HITS=$(grep -nE -e "$IMPORT_RE" -e "$SCRIPT_RE" "$FILE" 2>/dev/null)
         if [ -n "$MOTION_HITS" ]; then
-            add_section "**動畫等級不符**：\`ui-style.json\` 的動畫等級是 **${MOTION}**——${ALLOWED}。這個檔卻載入了：
+            add_section "**動畫等級不符**：${LV_SRC}——${ALLOWED}。這個檔卻載入了：
 $(printf '%s\n' "$MOTION_HITS" | fmt_hits)
 改用原生 CSS，或先跑 \`/ui-style\` 把等級調高（每一級允許什麼見 \`ui-style-compliance/motion.md\` 第 2 節）。"
         fi

@@ -15,8 +15,13 @@
 # 而 `git commit -m "說明 git merge 的用法"` 這種整段都在同一行的，連開頭都不用撞。
 # 現在切段前先做兩件事：
 #   ① 拿掉 heredoc 內文（`<<[-]['"]WORD['"]` 到單獨一行的 `WORD`）
-#   ② 把引號內的內容清空（`"…"` → `""`、`'…'` → `''`），引號本身留著當佔位
+#   ② 把引號內的內容清空（`"…"` → `""`、`'…'` → `''`），引號本身留著當佔位；
+#      同一趟拿掉引號外的 `#` 註解（否則 `# it's broken` 的單引號會吃掉後面整段）
 # 兩者之後內文裡的 `&& || ; |` 與換行也不會再把一句話切成好幾段。
+#
+# 2026-10-16 code review 又補四個「切段讓真的指令消失或多出假指令」的洞（測試在
+# run-tests.sh 的「cmd-segments.sh — 切段邊界」節）：註解裡的單引號、`$((1<<x))`
+# 被當成 heredoc、`--git-dir <路徑>` 被當成子指令、`<<WORD` 內文縮排的 `  EOF` 提早結束 heredoc。
 #
 # 這份是 `git-backup-gate.sh`、`post-bash.sh`、`merge-noff-gate.sh`、
 # `branch-switch-gate.sh` 的**共用來源**。同一個坑之所以要修第二次，正是因為
@@ -27,6 +32,9 @@
 #   - 引號沒配對（`echo don't && git merge x`）時，後面整段被當成引號內容清掉 → 漏抓
 #   - `"$(git reset --hard)"` 這種包在引號裡的指令替換會漏抓（清空引號的代價）
 #   - 引號內出現 `<<WORD` 會被當成 heredoc 開頭，直到單獨一行的 WORD 為止全部略過 → 漏抓
+#   - 註解裡出現 `<<WORD` 也一樣（heredoc 剝除在註解處理之前，它不知道那是註解）→ 漏抓
+#   - 算術式跨行（`$((1` 換行接 `<< x))`）時，`<<` 仍會被當成 heredoc → 漏抓
+#   - `$( … )` 寫在引號外時不追蹤巢狀，裡面的 `#` 照一般規則判斷
 # 判準是：**真的要執行時，那一段幾乎一定以 `git ` 開頭，而且不在引號或 heredoc 裡。**
 #
 # 用法：
@@ -50,27 +58,36 @@ cmd_match() {
 # cmd_strip_heredoc —— stdin → stdout，拿掉 heredoc 內文與結束行，開頭那行保留
 # 一行可以開好幾個 heredoc（`cmd <<A <<B`），依序吃掉。
 # `<<<`（here-string）不是 heredoc；`$((1<<2))` 的 `<<` 後面是數字，不會被當成 WORD。
+# `$((1<<x))`、`((y <<= n))` 是算術位移：`<<` 之前未配對的 `((` 多於 `))` 就跳過
+# （只看同一行；跨行的算術式會漏，方向是「漏剝 heredoc」，而 heredoc 內文本來就很少以 `git ` 開頭）。
+# 結束行照 bash 的規則一字不差比對：只有 `<<-WORD` 允許行首 **tab**（不是空白），
+# 一般 `<<WORD` 內文裡縮排的 `  EOF` 不算結束——以前兩種都去掉行首空白，heredoc 提早結束，
+# 剩下的內文變成假的指令段。行尾只去 `\r`（CRLF 的殘留）。
 cmd_strip_heredoc() {
     awk '
-    BEGIN { q = "\047"; dq = "\"" }
+    function arith_open(s,   o, c) {
+        o = gsub(/\(\(/, "", s); c = gsub(/\)\)/, "", s)
+        return o - c
+    }
     {
         if (nw > 0) {
             line = $0
-            sub(/^[ \t]+/, "", line); sub(/[ \t\r]+$/, "", line)
+            sub(/\r$/, "", line)
+            if (dash[wi]) sub(/^\t+/, "", line)
             if (line == w[wi]) { wi++; if (wi > nw) { nw = 0; wi = 0 } }
             next
         }
         print
-        rest = $0; base = 0
-        while (match(rest, /<<-?[ \t]*["\047]?[A-Za-z_][A-Za-z0-9_]*["\047]?/)) {
-            pos = RSTART; len = RLENGTH
-            prev = (pos > 1) ? substr(rest, pos - 1, 1) : ""
-            tok = substr(rest, pos, len)
-            rest = substr(rest, pos + len)
+        s = $0; off = 0
+        while (match(substr(s, off + 1), /<<-?[ \t]*["\047]?[A-Za-z_][A-Za-z0-9_]*["\047]?/)) {
+            pos = off + RSTART; len = RLENGTH; off = pos + len - 1
+            prev = (pos > 1) ? substr(s, pos - 1, 1) : ""
             if (prev == "<") continue
+            if (arith_open(substr(s, 1, pos - 1)) > 0) continue
+            tok = substr(s, pos, len)
             word = tok
             sub(/^<<-?[ \t]*/, "", word); gsub(/["\047]/, "", word)
-            if (word != "") { if (nw == 0) wi = 1; w[++nw] = word }
+            if (word != "") { if (nw == 0) wi = 1; w[++nw] = word; dash[nw] = (substr(tok, 3, 1) == "-") }
         }
     }'
 }
@@ -87,6 +104,15 @@ cmd_mask_quotes() {
             c = substr(s, i, 1); top = substr(st, length(st), 1)
             if (st == "") {
                 if (c == "\\") { out = out c substr(s, i + 1, 1); i++; continue }
+                # 引號外、字的開頭的 `#` 是註解：拿掉到行尾（換行留著）。不先拿掉的話，
+                # 註解裡的單引號（英文縮寫）會被當成引號開頭，後面整段指令一起被遮掉。
+                # 「字的開頭」＝行首或前一個字元是空白／`;&|()`——所以 `$#`、`${#a}`、
+                # `http://x/#top`、`a#b` 都不是註解（與 bash 相同）。
+                if (c == "#" && (i == 1 || index(" \t\n;&|()", substr(s, i - 1, 1)) > 0)) {
+                    j = index(substr(s, i), "\n")
+                    if (j == 0) break
+                    i = i + j - 2; continue
+                }
                 if (c == q || c == "\"") { st = c; out = out c; continue }
                 out = out c; continue
             }
@@ -106,9 +132,26 @@ cmd_mask_quotes() {
     }'
 }
 
+# git 的全域選項（awk 函式，cmd_segments 與 cmd_git_subcmd 共用）——回傳子指令所在的欄位
+#   值放在下一個字的：-C -c --git-dir --work-tree --namespace --config-env --attr-source --super-prefix
+#   （`--git-dir=/x` 這種值寫在同一個字的，走「其他 `-` 開頭的跳一個字」）
+#   印完就結束、後面的字都不會執行的：--exec-path --html-path --man-path --info-path
+#   --version --help --list-cmds=…（git 2.53 實測 `git --exec-path status` 只印路徑）→ 回傳 NF+1（沒有子指令）
+_CMD_GIT_SUBCMD_AWK='
+function git_sub_index(   i) {
+    i = 2
+    while (i <= NF) {
+        if ($i ~ /^(-C|-c|--git-dir|--work-tree|--namespace|--config-env|--attr-source|--super-prefix)$/) { i += 2; continue }
+        if ($i ~ /^--(exec-path|html-path|man-path|info-path|version|help)$/ || $i ~ /^--list-cmds=/) return NF + 1
+        if ($i ~ /^-/) { i++; continue }
+        break
+    }
+    return i
+}'
+
 # cmd_segments <整條指令> —— 取出「以 git 開頭的指令段」（一行一段）
-# 輸出的每一段已經拿掉 git 的全域選項（`-C <路徑>`、`-c <k=v>`、`--no-pager`…），
-# 所以第二個字一定是子指令：`git -C /x merge y` → `git merge y`。
+# 輸出的每一段已經拿掉 git 的全域選項（`-C <路徑>`、`--git-dir <路徑>`、`-c <k=v>`、`--no-pager`…），
+# 所以第二個字一定是子指令：`git -C /x merge y` → `git merge y`。字與字之間正規化成一個空白。
 cmd_segments() {
     printf '%s\n' "$1" \
         | cmd_strip_heredoc \
@@ -116,14 +159,10 @@ cmd_segments() {
         | sed -e 's/&&/\n/g' -e 's/||/\n/g' -e 's/[;|]/\n/g' \
         | sed -e 's/^[[:space:]]*[({][[:space:]]*//' -e 's/^[[:space:]]*//' \
         | grep -E '^git[[:space:]]' \
-        | awk '{
-            n = split($0, t, /[ \t]+/); i = 2
-            while (i <= n) {
-                if (t[i] == "-C" || t[i] == "-c") { i += 2; continue }
-                if (t[i] ~ /^-/) { i++; continue }
-                break
-            }
-            out = "git"; for (; i <= n; i++) out = out " " t[i]
+        | awk "$_CMD_GIT_SUBCMD_AWK"'
+        {
+            i = git_sub_index()
+            out = "git"; for (; i <= NF; i++) out = out " " $i
             print out
         }'
 }
@@ -131,14 +170,10 @@ cmd_segments() {
 # cmd_git_subcmd <段落> —— 印出子指令（`git` 之後第一個非選項字）
 # 段落應該來自 cmd_segments；自己傳未正規化的字串進來也照樣跳過全域選項。
 cmd_git_subcmd() {
-    printf '%s\n' "$1" | awk '{
+    printf '%s\n' "$1" | awk "$_CMD_GIT_SUBCMD_AWK"'
+    {
         if ($1 != "git") exit
-        i = 2
-        while (i <= NF) {
-            if ($i == "-C" || $i == "-c") { i += 2; continue }
-            if ($i ~ /^-/) { i++; continue }
-            break
-        }
+        i = git_sub_index()
         if (i <= NF) print $i
         exit
     }'

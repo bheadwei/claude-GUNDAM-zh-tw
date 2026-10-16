@@ -151,6 +151,18 @@ check "--apply 後 upstream_status 是 removed" '[ "$(jq -r .upstream_status "$S
 run "$SB"
 check "已標 removed 的不再重複列出" '! section "上游已刪除" | grep -qx "  - bmw"' "$OUT"
 check "semrush（上游欄位全 null）的 SOURCE.json 沒被動" 'cmp -s "$SB/.claude/ui/semrush/SOURCE.json" "$REPO/.claude/ui/semrush/SOURCE.json"'
+# 標成 removed 之後，上游又原封不動加回來：hash 相同不能就此略過，狀態要改回 present
+mkdir -p "$SB/upstream/voltagent/design-md/bmw"
+cp "$SB/.claude/ui/bmw/DESIGN.md" "$SB/upstream/voltagent/design-md/bmw/DESIGN.md"
+bmw_before="$(sha "$SB/.claude/ui/bmw/DESIGN.md")"
+run "$SB"
+check "上游原封不動加回來 → 預覽列出並標明" 'section "上游有更新" | grep -q "  - bmw（上游加回來了"' "$OUT"
+check "預覽不改回 present" '[ "$(jq -r .upstream_status "$SB/.claude/ui/bmw/SOURCE.json" | tr -d "\r")" = "removed" ]'
+run "$SB" --apply
+check "--apply 後 upstream_status 改回 present" '[ "$(jq -r .upstream_status "$SB/.claude/ui/bmw/SOURCE.json" | tr -d "\r")" = "present" ]' "$OUT"
+check "加回來的內容相同 → bmw/DESIGN.md 沒被動" '[ "$(sha "$SB/.claude/ui/bmw/DESIGN.md")" = "$bmw_before" ]'
+run "$SB"
+check "改回 present 之後不再列出" '! printf "%s\n" "$OUT" | grep -q "  - bmw"' "$OUT"
 
 echo "▶ 9. --source 只看一個來源"
 SB="$(new_sandbox)"
@@ -237,6 +249,36 @@ if command -v powershell.exe >/dev/null 2>&1 && command -v cygpath >/dev/null 2>
     assert_dest "update-template.ps1" "$D"
 else
     echo "  - 略過 ps1（沒有 powershell.exe）"
+fi
+
+echo "▶ 13. 沒有 sha256sum（macOS 沒裝 coreutils）→ 批次算 hash 也走 shasum -a 256，不中斷"
+if command -v shasum >/dev/null 2>&1; then
+    # 造一條「其他工具都在、只少 sha256sum」的 PATH：含 sha256sum 的目錄整個拿掉，
+    # 那個目錄裡的其他指令用包裝腳本補回來
+    NOSHA="$TMP_ALL/nosha-bin"; mkdir -p "$NOSHA"; NOSHA_PATH="$NOSHA"
+    IFS=: read -ra path_dirs <<< "$PATH"
+    for d in "${path_dirs[@]}"; do
+        if [ -x "$d/sha256sum" ] || [ -x "$d/sha256sum.exe" ]; then
+            for f in "$d"/*; do
+                n="${f##*/}"; n="${n%.exe}"
+                [ "$n" = sha256sum ] && continue
+                [ -f "$f" ] && [ -x "$f" ] && [ ! -e "$NOSHA/$n" ] || continue
+                printf '#!/bin/sh\nexec "%s" "$@"\n' "$f" > "$NOSHA/$n"; chmod +x "$NOSHA/$n"
+            done
+        else
+            NOSHA_PATH="$NOSHA_PATH:$d"
+        fi
+    done
+    check "測試前提：這條 PATH 找不到 sha256sum" '! PATH="$NOSHA_PATH" command -v sha256sum >/dev/null 2>&1'
+    SB="$(new_sandbox)"
+    printf '\n## Extra upstream section\n' >> "$SB/upstream/voltagent/design-md/apple/DESIGN.md"
+    OUT="$(PATH="$NOSHA_PATH" bash "$SB/scripts/sync-ui-sources.sh" --upstream-dir "$SB/upstream" 2>&1)"; RC=$?
+    check "沒有 sha256sum 時預覽 exit 0" '[ "$RC" -eq 0 ]' "$OUT"
+    check "沒有 sha256sum 時照樣列出 apple 有更新" 'section "上游有更新" | grep -qx "  - apple"' "$OUT"
+    OUT="$(PATH="$NOSHA_PATH" bash "$SB/scripts/sync-ui-sources.sh" --upstream-dir "$SB/upstream" --apply 2>&1)"; RC=$?
+    check "沒有 sha256sum 時 --apply 寫入新內容且 imported_sha256 正確" 'cmp -s "$SB/.claude/ui/apple/DESIGN.md" "$SB/upstream/voltagent/design-md/apple/DESIGN.md" && [ "$(jq -r .imported_sha256 "$SB/.claude/ui/apple/SOURCE.json" | tr -d "\r")" = "$(sha "$SB/.claude/ui/apple/DESIGN.md")" ]' "$OUT"
+else
+    echo "  - 略過（沒有 shasum，驗不了退路）"
 fi
 
 echo ""

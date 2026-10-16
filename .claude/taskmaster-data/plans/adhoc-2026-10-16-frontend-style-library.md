@@ -3,7 +3,7 @@ wbs_task: "none"
 slug: "frontend-style-library"
 created: "2026-10-16"
 updated: "2026-10-16"
-status: "🔄 進行中"
+status: "✅ 完成"
 current_phase: 11
 mode: "standard"
 files:
@@ -410,7 +410,7 @@ files:
   - CATALOG 的非科技業分類裡，沒有任何一份是 bergside cafe／terracotta 這類通用風格
   - 在範例專案跑 `/ui-style` →「看預覽選」推薦咖啡店時，3 個方向裡至少 1 個對應到新匯入的非科技業 codename
 
-### 階段 11：整合驗收與文件 ⏳
+### 階段 11：整合驗收與文件 ✅
 
 - [ ] CLAUDE.md「改動時的連帶檢查」加一條：新增 `.claude/ui/` 風格 → 要有 `SOURCE.json`、CATALOG 兩處、上游新的話 `_sources.json` 和 `_licenses/`
 - [ ] 檢查 `.claude/.gitignore`：這次沒有新增執行時狀態檔（最後同步日期記在進版控的 `_sources.json`）。如果實作過程有新增，就補上
@@ -508,3 +508,4 @@ files:
 7. 階段 6 一併處理：`ui-site.md` 約第 194 行「產 tokens 一律做深色模式」與階段 4 的 D4 新規則矛盾（階段 4 回報）
 8. 階段 10 一併對 VoltAgent 跑 `sync-ui-sources.sh --apply`，整批換上上游更新的 50 份（新格式帶 YAML 檔頭）；`claude` 本地有改不動。換完抽幾份實測混搭模式抽得到內容
 9. 之後另案：`feat/claude-gitignore-single-source`（commit `cbba6b6`，建立 `.claude/.gitignore` 唯一來源）從未合進 main，本批完成後請使用者決定是否合併
+10. 階段 11：範例專案（`D:\模板\ui-demo-coffee`）的完整流程由使用者自行實測；三套腳本（run-tests 529、check-counts 698、sync test 84）全過；`/code-review` 10 項中修了 1～9（含 2 項會繞過安全閘門的 HIGH），第 10 項（子指令判斷三份重複）另排重構；兩份 ADR（bash 改寫掃描器、混搭對照表認新舊標題）未寫，理由已在各階段報告

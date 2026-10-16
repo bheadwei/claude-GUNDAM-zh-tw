@@ -440,4 +440,4 @@ bash scripts/check-counts.sh --tests 356   # 文件計數一致性
 CI（`.github/workflows/template-ci.yml`）會在 push 與 PR 時自動跑這兩項，
 加上 Windows/Git Bash 的回歸測試、shell 與 PowerShell 語法、copy/update-template 沙箱實跑。
 
-479 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
+529 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。

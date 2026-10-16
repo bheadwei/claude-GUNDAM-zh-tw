@@ -100,8 +100,26 @@ REL="${NORM#"$ROOT_NORM"/}"
 # 會走到 WBS、擴充維護兩節的都是 `.claude/**`，ui-lint 本來就跳過，不必在那裡合併。
 # 只接在 PostToolUse：寫檔失敗時磁碟內容沒變，沒有東西可檢查（理由見 ui-lint.sh 開頭）。
 # 逃生門：UI_LINT=off
+#
+# 先用 case 篩一次才啟動 ui-lint：每次寫檔都多開一個 bash，在這台機器要幾百毫秒，
+# 而絕大多數寫入是 `.claude/**`、`.md`、`.ts`，ui-lint 一進去就 exit。
+# 這裡只做最便宜的兩道（副檔名、`.claude/` 但不含 worktree）；完整範圍規則
+# （docs、測試、vendor、建置產物…）的唯一來源仍是 ui-lint.sh，**不要搬到這裡**。
+# 副檔名清單與 ui-lint.sh 的那份要一致（大小寫不分，不靠 tr 才不必多開行程）。
 UI_MSG=""
-if [ "${UI_LINT:-on}" != "off" ] && [ -f "$FILE_PATH" ]; then
+UI_CAND=0
+case "$REL" in
+    .claude/worktrees/*/*) UI_CAND=1 ;;
+    .claude/*) ;;
+    *) UI_CAND=1 ;;
+esac
+if [ "$UI_CAND" -eq 1 ]; then
+    case "$REL" in
+        *.[tT][sS][xX]|*.[jJ][sS][xX]|*.[vV][uU][eE]|*.[sS][vV][eE][lL][tT][eE]|*.[hH][tT][mM][lL]|*.[cC][sS][sS]|*.[sS][cC][sS][sS]) ;;
+        *) UI_CAND=0 ;;
+    esac
+fi
+if [ "$UI_CAND" -eq 1 ] && [ "${UI_LINT:-on}" != "off" ] && [ -f "$FILE_PATH" ]; then
     UI_MSG=$(bash "$(dirname "${BASH_SOURCE[0]}")/lib/ui-lint.sh" "$FILE_PATH" "$REL" "$WORK_CLAUDE" "$MAIN_CLAUDE" 2>/dev/null || true)
 fi
 
