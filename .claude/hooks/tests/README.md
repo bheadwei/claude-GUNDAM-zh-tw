@@ -4,7 +4,7 @@
 bash .claude/hooks/tests/run-tests.sh
 ```
 
-375 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。
+394 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。
 **Windows Git Bash 上約需 12 分鐘**（2026-09-17 實測 356 案例；2026-09-09 的 320 案例
 是 5 分鐘，案例增加時這個數字會繼續往上）——大量 `bash` + `jq` 子行程，
 process spawn 是主要成本。**看起來像掛住其實只是慢**：用背景執行並把輸出重導到檔案，
@@ -36,12 +36,17 @@ process spawn 是主要成本。**看起來像掛住其實只是慢**：用背�
 | **分支切換閘門** | 34 | 站在預設分支放行（即使有 agent 在跑）、站在 topic 分支擋一次、有 in-flight agent 時**持續擋**、標記記分支名（換分支重新受檢）、回預設分支清標記、帶 start-point 放行但有 agent 時仍擋、`git checkout <既有分支>`／`git switch <既有分支>`／`git checkout -- <file>` 不誤擋、detached HEAD 與非 repo 放行、兩個逃生門、**與 `pre-agent-gate` 共用同一份 in-flight 計數** |
 | 平行 agent 閘門 | 14 | 有 in-flight 就擋、deny-once、`isolation: worktree\|remote` 放行、in-flight 歸零後下一批重新受檢、舊格式紀錄（無 `agent_id`）忽略、兩個逃生門、**攔截訊息的推薦**（不乾淨／沒有帶 `files:` 的 plan → 序列化；乾淨 → worktree） |
 | **非同步派工的完成時機** | 13 | 走真的 `agent-monitor.sh`（不造假 JSONL）：`PreToolUse` 不記帳、派工返回只記 `agent_start`、**只有 `SubagentStop` 才沖銷 in-flight**、`agent_type` 空字串仍沖銷、沒見過的 `agent_id` 不轉負、同步完成的 agent 淨變化 0 |
+| **post-bash 失敗事件** | 21 | **`settings.json` 把 `post-bash.sh` 接在 `PostToolUse` 與 `PostToolUseFailure` 兩處**（真正的 bug 在接線）；payload 一律照官方 `PostToolUseFailure` 形狀（無 `tool_response`、頂層 `error`）：衝突的 merge／cherry-pick 記錄並導向 `conflict-resolver`、合併成功但後段指令失敗仍記錄、失敗的 grep／merge-base 不誤記、`--abort` 失敗不清單、用**真的衝突中 repo** 驗 `ls-files -u` 判定、失敗事件累加踩坑計數 |
 | 全體 hooks | 12 | 語法可解析、空 payload 不爆炸 |
 
 > 上面兩區分工刻意不同：「平行 agent 閘門」測**閘門怎麼讀帳**，
 > 「非同步派工的完成時機」測**帳記得對不對**。2026-09-11 那個 bug 在後者——
 > 閘門邏輯一直是對的，是 `agent_complete` 記在 `PostToolUse` 而 Agent 工具是非同步的，
 > 導致 in-flight 恆為 0。造假 JSONL 的測試永遠抓不到這種錯。
+>
+> 「post-bash 失敗事件」是同一類教訓的第二次：舊測試餵 `tool_response.is_error`
+> 給腳本——那是 Claude Code 從不送出的形狀，而且失敗時它根本不呼叫只接在
+> `PostToolUse` 的 hook。**payload 測試證明不了接線**，所以那一區開頭兩條直接驗 `settings.json`。
 
 > 這張表**不是全部**（缺合併閘門、resolve-roots 等區塊），
 > 各列的數字也只對得上自己那一區。要看完整清單請直接讀 `run-tests.sh` 的 `section` 標題。

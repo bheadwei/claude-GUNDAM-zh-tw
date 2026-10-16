@@ -873,14 +873,8 @@ expect_contains "合併成功會提醒未驗證" "還沒驗證" "$(pbash 'git me
 if grep -qx '\[merge\] worktree-search' "$MP_FILE" 2>/dev/null; then ok "合併記入 .merge-pending（帶類型與 ref）"
 else ng "合併記入 .merge-pending（帶類型與 ref）" "[merge] worktree-search" "$(cat "$MP_FILE" 2>/dev/null)"; fi
 
-# 衝突的合併**也要**記 —— 曾經只記成功的，那是個洞：
-# 衝突退出碼非零 → 不記 → conflict-resolver 解完 commit 後清單是空的
-# → 下一次合併直接放行、跳過驗證。解過衝突的結果更需要驗證，不是更不需要。
-reset
-expect_contains "衝突的合併會導向 conflict-resolver" "conflict-resolver" \
-    "$(run post-bash.sh "$(printf '{"tool_name":"Bash","tool_input":{"command":"git merge x"},"tool_response":{"is_error":true}}')")"
-if grep -qx '\[merge\] x' "$MP_FILE" 2>/dev/null; then ok "衝突的合併也記入 .merge-pending"
-else ng "衝突的合併也記入 .merge-pending" "[merge] x" "$(cat "$MP_FILE" 2>/dev/null)"; fi
+# 衝突的合併：見下一節「失敗事件」——衝突的 merge 退出碼非零，
+# Claude Code 送的是 PostToolUseFailure，不是帶 is_error 的 PostToolUse。
 
 # --abort 要清掉待驗證紀錄（放棄了就沒有東西待驗證）
 reset; mkdir -p "$(dirname "$MP_FILE")"; echo 'git merge x' > "$MP_FILE"
@@ -967,6 +961,126 @@ expect_decision "MERGE_GATE=off 關閉閘門"        allow \
 # 清單為空 → 放行（/verify 通過後的狀態）
 reset; mkdir -p "$(dirname "$MP_FILE")"; : > "$MP_FILE"
 expect_decision "清單為空時放行 merge" allow "$(bg 'git merge --no-ff worktree-cart')"
+
+# =========================================================================
+section "post-bash.sh — 失敗事件（PostToolUseFailure）"
+# =========================================================================
+#
+# PostToolUse 只在工具**成功**時觸發；指令非零結束走 PostToolUseFailure。
+# 本檔曾經只接 PostToolUse，於是：衝突的 merge 從沒被記過（下一次合併跳過驗證）、
+# 踩坑偵測的失敗計數從沒累加過。舊測試抓不到，因為它們直接餵
+# `tool_response.is_error` 給腳本——那是 Claude Code 從來不會送出的形狀。
+# 這一節的 payload 一律照官方文件的 PostToolUseFailure 形狀：沒有 tool_response，
+# 錯誤在頂層 `error`（首行 `Exit code N`）。
+# 見 context/learned/2026-10-15-posttooluse-skips-failures.md。
+
+# pbf <command> <error> [cwd] —— 模擬 Bash 的 PostToolUseFailure
+pbf() {
+    run post-bash.sh "$(jq -nc --arg c "$1" --arg e "$2" --arg d "${3:-}" '
+        {hook_event_name:"PostToolUseFailure",tool_name:"Bash",tool_input:{command:$c},
+         error:$e,is_interrupt:false} + (if $d == "" then {} else {cwd:$d} end)')"
+}
+STREAK_F="$SANDBOX/.claude/taskmaster-data/.bash-fail-streak"
+
+# 真正的 bug 在接線，不在腳本：下面的 payload 測試全綠也證明不了 Claude Code
+# 會在失敗時呼叫本檔。這兩條釘住 settings.json。
+SETTINGS="$HOOK_DIR/../settings.json"
+for ev in PostToolUse PostToolUseFailure; do
+    if jq -e --arg ev "$ev" '[.hooks[$ev][]? | select((.matcher // "") | split("|") | index("Bash")) | .hooks[] | select(.command | contains("post-bash.sh"))] | length > 0' "$SETTINGS" >/dev/null 2>&1; then
+        ok "settings.json 把 post-bash.sh 接在 $ev(Bash)"
+    else ng "settings.json 把 post-bash.sh 接在 $ev(Bash)" "有接線" "沒有"; fi
+done
+
+# ---- 合併 ----
+
+reset
+out=$(pbf 'git merge --no-ff feat/x' 'Exit code 1
+Auto-merging a.txt
+CONFLICT (content): Merge conflict in a.txt
+Automatic merge failed; fix conflicts and then commit the result.')
+expect_contains "衝突的 merge（失敗事件）導向 conflict-resolver" "conflict-resolver" "$out"
+mp_has "衝突的 merge（失敗事件）記入 .merge-pending" '[merge] feat/x'
+if grep -q 'feat/x (conflicted=1, event=PostToolUseFailure)' "$SANDBOX/.claude/logs/hooks.log" 2>/dev/null; then
+    ok "衝突的 merge 在 log 標 conflicted=1"
+else ng "衝突的 merge 在 log 標 conflicted=1" "conflicted=1" "$(tail -1 "$SANDBOX/.claude/logs/hooks.log" 2>/dev/null)"; fi
+# 回應的 hookEventName 必須等於觸發的事件，否則注入會被丟掉
+expect_contains "失敗事件的回應帶 hookEventName=PostToolUseFailure" '"PostToolUseFailure"' "$out"
+
+# 2026-10-15 實際漏記的那一條：合併成功，是鏈在後面的指令失敗
+reset
+out=$(pbf 'git switch -q main && git merge --no-ff -m "merge: x" feat/x >/dev/null && cat no-such-file' 'Exit code 1
+cat: no-such-file: No such file or directory')
+mp_has "合併成功但後段指令失敗仍記入 .merge-pending" '[merge] feat/x'
+expect_contains "非零但無衝突 → 提示「非零結束」而非衝突" "非零結束" "$out"
+case "$out" in *conflict-resolver*) ng "非零但無衝突不導向 conflict-resolver" "不含 conflict-resolver" "$out" ;;
+                *) ok "非零但無衝突不導向 conflict-resolver" ;; esac
+
+reset; pbf 'git cherry-pick abc123' 'Exit code 1
+error: could not apply abc123... fix
+hint: after resolving the conflicts, mark the corrected paths' >/dev/null
+mp_has "衝突的 cherry-pick（失敗事件）記入 .merge-pending" '[cherry-pick] abc123'
+
+# 失敗事件也要走切段比對，不能退回子字串
+reset; pbf 'grep -rn "git merge" .claude/ | head -1 && false' 'Exit code 1' >/dev/null
+mp_empty "失敗的 grep 提到指令名不記入 .merge-pending"
+reset; pbf 'git merge-base --is-ancestor abc main' 'Exit code 1' >/dev/null
+mp_empty "失敗的 merge-base（唯讀查詢）不記入 .merge-pending"
+
+# --abort 失敗不清：最常見的原因是「沒有進行中的合併」，清單裡那筆是真的待驗證
+reset; mkdir -p "$(dirname "$MP_FILE")"; echo '[merge] done-before' > "$MP_FILE"
+pbf 'git merge --abort' 'Exit code 128
+fatal: There is no merge to abort (MERGE_HEAD missing).' >/dev/null
+mp_has "--abort 失敗時保留待驗證紀錄" '[merge] done-before'
+
+# 真的 repo 狀態：輸出被 >/dev/null 吃掉、error 裡沒有衝突字樣時，
+# 仍要靠 `ls-files -u` 認出衝突。成功事件（`; true` 讓整條變 0）也一樣。
+GR="$SANDBOX/gitrepo"
+rm -rf "$GR"; mkdir -p "$GR"
+(
+    cd "$GR" || exit 1
+    g() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=base "$@" >/dev/null 2>&1; }
+    g init -q; echo a > f.txt; g add f.txt; g commit -qm base
+    g checkout -q -b side; echo side > f.txt; g commit -qam side
+    g checkout -q -; echo main > f.txt; g commit -qam main
+    g merge side
+)
+if [ -n "$(git -C "$GR" ls-files -u 2>/dev/null | head -1)" ]; then
+    reset
+    expect_contains "輸出被吃掉時靠 repo 狀態認出衝突" "conflict-resolver" \
+        "$(pbf 'git merge side >/dev/null 2>&1' 'Exit code 1' "$GR")"
+    reset
+    expect_contains "成功事件（; true）但 repo 有衝突 → 仍導向 conflict-resolver" "conflict-resolver" \
+        "$(run post-bash.sh "$(jq -nc --arg d "$GR" '{hook_event_name:"PostToolUse",tool_name:"Bash",cwd:$d,tool_input:{command:"git merge side; true"},tool_response:{stdout:"",stderr:"",interrupted:false,isImage:false}}')")"
+else
+    ng "建立衝突中的測試 repo" "有未合併路徑" "git 無法建出衝突狀態"
+fi
+rm -rf "$GR"
+
+# ---- 一般失敗指令 ----
+
+reset
+expect_empty "失敗的非 git 指令不輸出" "$(pbf 'npm test' 'Exit code 1
+Error: Cannot find module')"
+mp_empty "失敗的非 git 指令不記入 .merge-pending"
+if [ "$(cat "$STREAK_F" 2>/dev/null)" = "1" ]; then ok "失敗事件讓 .bash-fail-streak 累加"
+else ng "失敗事件讓 .bash-fail-streak 累加" "1" "$(cat "$STREAK_F" 2>/dev/null)"; fi
+
+# 踩坑偵測端到端：真實形狀的失敗事件 ×3 → 成功 → 提醒
+reset
+for _ in 1 2 3; do pbf 'uv run pytest' 'Exit code 1
+FAILED tests/test_x.py' >/dev/null; done
+expect_contains "失敗事件 ×3 後成功會提醒踩坑" "這是一個坑" "$(pb ok "uv run pytest")"
+
+# 被中斷的失敗也算一次（與舊有 interrupted 語意一致）
+reset
+run post-bash.sh '{"hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"sleep 99"},"error":"aborted","is_interrupt":true}' >/dev/null
+if [ "$(cat "$STREAK_F" 2>/dev/null)" = "1" ]; then ok "is_interrupt 的失敗事件也累加"
+else ng "is_interrupt 的失敗事件也累加" "1" "$(cat "$STREAK_F" 2>/dev/null)"; fi
+
+# 逃生門在失敗事件下照樣有效
+reset; run post-bash.sh '{"hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"npm test"},"error":"Exit code 1"}' LEARN_CAPTURE=off >/dev/null
+if [ ! -s "$STREAK_F" ]; then ok "LEARN_CAPTURE=off 時失敗事件不計數"
+else ng "LEARN_CAPTURE=off 時失敗事件不計數" "空" "$(cat "$STREAK_F" 2>/dev/null)"; fi
 
 # =========================================================================
 section "git backup 閘門 — destructive 操作前必須有安全快照"

@@ -72,7 +72,8 @@ severity: high
 目前模板裡「記錄 + 依記錄判斷」的組合還有：
 
 - `post-bash.sh` 寫 `.merge-pending` → `pre-tool-use.sh` 的 merge-gate 讀它
-  （Bash 是同步的，沒有這個問題）
+  （Bash 是同步的，沒有這個問題——**但有另一個同類坑**：PostToolUse 只在成功時觸發，
+  衝突的合併從沒被記過。見 `2026-10-15-posttooluse-skips-failures.md`）
 - `post-agent-report.sh` 寫 `.report-expectations.jsonl`
   （**已經是對的**：它偵測 `async_launched` 就只記期望、不當場稽核，
   由 `lib/check-report-expectations.sh` 在後續對話邊界重查。本次沒有動它）
@@ -85,6 +86,7 @@ severity: high
 - `.claude/hooks/agent-monitor.sh` 檔頭 — 三種事件各自寫什麼、為什麼
 - `.claude/hooks/pre-agent-gate.sh` — 讀帳的一方
 - `.claude/context/learned/2026-09-09-hook-sees-own-dispatch.md` — 同一支閘門的另一個坑
+- `.claude/context/learned/2026-10-15-posttooluse-skips-failures.md` — 同類坑：PostToolUse 只在成功時觸發，失敗的那一次 hook 收不到
 - `.claude/hooks/tests/run-tests.sh` 的
   「agent-monitor.sh × pre-agent-gate.sh — 非同步派工的完成時機」節 —
   這組不造假 JSONL，一律走真的 monitor，payload 用實測的欄位形狀
