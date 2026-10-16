@@ -170,15 +170,17 @@ semrush, posthog
 
 ## Metadata 欄位
 
-每個風格可從 `DESIGN.md` 分段覆蓋：
+每個風格可從 `DESIGN.md` 分段覆蓋（新舊兩種格式的標題都認，忽略標題前的編號）：
 
-| 覆蓋欄位 | 對應 DESIGN.md 段落 |
+| 覆蓋欄位 | 對應 DESIGN.md 段落（任一） |
 |---------|---------------------|
-| `color` | Color Palette & Roles |
-| `typography` | Typography Rules |
-| `components` | Components / Buttons / Cards / Inputs |
-| `layout` | Spacing / Grid / Section Rhythm |
-| `animation` | Motion / Transitions |
+| `color` | `Color Palette & Roles`、`Colors` |
+| `typography` | `Typography Rules`、`Typography` |
+| `components` | `Component Stylings`、`Components` |
+| `layout` | `Layout Principles`、`Layout` |
+
+抽取規則（含新格式要一併讀檔頭 YAML、找不到段落時怎麼說）見
+`ui-style-compliance` skill 的 1.2 節（唯一來源）。動畫不從品牌檔抽，改由 `ui-style.json` 的 `motion` 決定。
 
 ---
 
