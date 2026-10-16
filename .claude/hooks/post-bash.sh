@@ -93,15 +93,17 @@ fi
 # 切段邏輯與 git-backup-gate.sh 共用 lib/cmd-segments.sh（同一個坑不修第二遍）。
 # lib/merge-gate.sh 刻意**不**跟進：它只在 .merge-pending 非空這個罕見狀態下才
 # 進入比對，誤判成本低，改它是沒必要的風險。
+#
+# 子指令只看 `git` 後面第一個非選項字（cmd_git_subcmd），不看整段任何位置：
+# `git log --grep merge`、`git commit -m "…merge…"` 都不是合併。
 MP_OP=""; MP_SEG=""
-if [ "${MERGE_GATE:-on}" != "off" ] && declare -F cmd_segments >/dev/null 2>&1; then
+if [ "${MERGE_GATE:-on}" != "off" ] && declare -F cmd_git_subcmd >/dev/null 2>&1; then
     while IFS= read -r _seg; do
         [ -n "$_seg" ] || continue
-        if   cmd_match "$_seg" '[[:space:]]merge([[:space:]]|$)';       then MP_OP=merge
-        elif cmd_match "$_seg" '[[:space:]]cherry-pick([[:space:]]|$)'; then MP_OP=cherry-pick
-        elif cmd_match "$_seg" '[[:space:]]rebase([[:space:]]|$)';      then MP_OP=rebase
-        else continue
-        fi
+        case "$(cmd_git_subcmd "$_seg")" in
+            merge|cherry-pick|rebase) MP_OP=$(cmd_git_subcmd "$_seg") ;;
+            *) continue ;;
+        esac
         MP_SEG="$_seg"; break
     done <<< "$(cmd_segments "$CMD")"
 fi
@@ -156,7 +158,15 @@ if [ "${MERGE_GATE:-on}" != "off" ]; then
                     # 現在逐字元切 token：雙引號、單引號、$( ) 內的空白不算分隔；
                     # 帶值的選項（-m／-F／-s／-X 與長名）連同它的值一起跳過；
                     # 碰到 && || ; | 就停（那已經是下一條指令）。
-                    MP_REF=$(printf '%s' "$CMD" | tr '\n' ' ' | awk -v op="$MP_OP" -v q="'" '
+                    #
+                    # 先拿掉 heredoc 內文，而且 op 必須是「`git` 後第一個非選項字」。
+                    # 2026-10-16 實際記成 `[merge] 結束碼非`：同一條指令先 commit（heredoc
+                    # 內文有一句「衝突的 merge 結束碼非 0」）再真的 merge，舊寫法找
+                    # 「第一個等於 merge 的 token」，找到的是 heredoc 裡那個。
+                    MP_SRC="$CMD"
+                    declare -F cmd_strip_heredoc >/dev/null 2>&1 \
+                        && MP_SRC=$(printf '%s\n' "$CMD" | cmd_strip_heredoc)
+                    MP_REF=$(printf '%s' "$MP_SRC" | tr '\n' ' ' | awk -v op="$MP_OP" -v q="'" '
                         function flush() { if (tok != "") { t[++n] = tok; tok = "" } }
                         {
                             line = $0; st = ""; tok = ""; n = 0
@@ -180,7 +190,12 @@ if [ "${MERGE_GATE:-on}" != "off" ]; then
                                 tok = tok c
                             }
                             flush()
-                            for (i = 1; i <= n; i++) if (t[i] == op) { s = i + 1; break }
+                            for (i = 1; i <= n; i++) {
+                                if (t[i] != "git") continue
+                                j = i + 1
+                                while (j <= n && (t[j] == "-C" || t[j] == "-c" || t[j] ~ /^-/)) j += (t[j] == "-C" || t[j] == "-c") ? 2 : 1
+                                if (t[j] == op) { s = j + 1; break }
+                            }
                             if (!s) exit
                             for (i = s; i <= n; i++) {
                                 if (t[i] ~ /^(&&|\|\||;|\|)$/) exit
