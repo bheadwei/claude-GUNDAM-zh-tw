@@ -1,0 +1,16 @@
+{
+  "source": "jp",
+  "upstream_repo": "kzhrknt/awesome-design-md-jp",
+  "upstream_path": "design-md/ippodo/DESIGN.md",
+  "upstream_commit": "45cd605ea76fbe5f0aec4b07b272f292dc83dca3",
+  "upstream_format": "voltagent-9section",
+  "upstream_status": "present",
+  "imported_at": "2026-10-16",
+  "imported_sha256": "bdbd91ed9e1c6ce8cced25a7e112dee212657415f7d881f3a8d0a832a12fd601",
+  "license": "MIT",
+  "license_file": ".claude/ui/_licenses/jp-awesome-design-md-jp.txt",
+  "locally_modified": false,
+  "local_changes": "",
+  "language": "ja",
+  "extraction_method": "upstream"
+}

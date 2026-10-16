@@ -1,0 +1,16 @@
+{
+  "source": "jp",
+  "upstream_repo": "kzhrknt/awesome-design-md-jp",
+  "upstream_path": "design-md/kurashi-no-techo/DESIGN.md",
+  "upstream_commit": "45cd605ea76fbe5f0aec4b07b272f292dc83dca3",
+  "upstream_format": "voltagent-9section",
+  "upstream_status": "present",
+  "imported_at": "2026-10-16",
+  "imported_sha256": "a57f52e78f0115d01c62b7fdc43c7578abd1e21554189875eeb28e0f014e7b2d",
+  "license": "MIT",
+  "license_file": ".claude/ui/_licenses/jp-awesome-design-md-jp.txt",
+  "locally_modified": false,
+  "local_changes": "",
+  "language": "ja",
+  "extraction_method": "upstream"
+}

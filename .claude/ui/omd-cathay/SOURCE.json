@@ -1,0 +1,16 @@
+{
+  "source": "omd",
+  "upstream_repo": "kwakseongjae/oh-my-design",
+  "upstream_path": "web/references/cathay/DESIGN.md",
+  "upstream_commit": "973cabc4fd27eed895d7e514d24d29abd2eeb535",
+  "upstream_format": "google-alpha",
+  "upstream_status": "present",
+  "imported_at": "2026-10-16",
+  "imported_sha256": "96f1765d8ab755004c33f4f3e8542a9df77eac8906a04de2dd0bdc4fbeaeb267",
+  "license": "MIT",
+  "license_file": ".claude/ui/_licenses/omd-oh-my-design.txt",
+  "locally_modified": false,
+  "local_changes": "",
+  "language": "en",
+  "extraction_method": "upstream"
+}

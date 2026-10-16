@@ -70,6 +70,7 @@ check "semrush（沒有上游）不出現在任何清單" '! printf "%s\n" "$OUT
 check "沒有假上游的 jp／omd 略過、不中斷" 'printf "%s\n" "$OUT" | grep -q "沒有 jp/，略過"'
 
 echo "▶ 2. 同一情境加 --apply → 覆蓋並更新 SOURCE.json"
+jp_synced_before="$(jq -r ".sources[] | select(.id==\"jp\") | .last_synced" "$SB/.claude/ui/_sources.json" | tr -d "\r")"
 run "$SB" --apply
 check "--apply exit 0" '[ "$RC" -eq 0 ]' "$OUT"
 check "apple/DESIGN.md 變成上游內容" 'cmp -s "$SB/.claude/ui/apple/DESIGN.md" "$SB/upstream/voltagent/design-md/apple/DESIGN.md"'
@@ -77,7 +78,7 @@ check "apple upstream_commit 更新" '[ "$(jq -r .upstream_commit "$SB/.claude/u
 check "apple imported_sha256 等於新內容的 hash" '[ "$(jq -r .imported_sha256 "$SB/.claude/ui/apple/SOURCE.json" | tr -d "\r")" = "$(sha "$SB/.claude/ui/apple/DESIGN.md")" ]'
 check "apple locally_modified 變 false" '[ "$(jq -r .locally_modified "$SB/.claude/ui/apple/SOURCE.json" | tr -d "\r")" = "false" ]'
 check "voltagent last_synced 更新成今天" '[ "$(jq -r ".sources[] | select(.id==\"voltagent\") | .last_synced" "$SB/.claude/ui/_sources.json" | tr -d "\r")" = "$(date +%Y-%m-%d)" ]'
-check "jp last_synced 沒被動（這次沒抓 jp）" '[ "$(jq -r ".sources[] | select(.id==\"jp\") | .last_synced" "$SB/.claude/ui/_sources.json" | tr -d "\r")" = "null" ]'
+check "jp last_synced 沒被動（這次沒抓 jp）" '[ "$(jq -r ".sources[] | select(.id==\"jp\") | .last_synced" "$SB/.claude/ui/_sources.json" | tr -d "\r")" = "$jp_synced_before" ]'
 check "SOURCE.json 的中文欄位沒被 jq 弄壞（claude）" 'jq -r .local_changes "$SB/.claude/ui/claude/SOURCE.json" | grep -q "標題用字"'
 run "$SB"
 check "apply 後再預覽，apple 不再列為有更新" '! section "上游有更新" | grep -qx "  - apple"' "$OUT"
@@ -125,14 +126,14 @@ wise_before="$(sha "$SB/.claude/ui/wise/DESIGN.md")"
 run "$SB" --apply
 check "本地只改 YAML 裡的色碼也算本地已修改、不覆蓋" '[ "$(sha "$SB/.claude/ui/wise/DESIGN.md")" = "$wise_before" ] && section "本地已修改" | grep -qx "  - wise"' "$OUT"
 
-echo "▶ 7. 上游新增 starbucks → 預覽列出；--apply 不建目錄"
+echo "▶ 7. 上游新增一份本地沒有的（zz-newbrand） → 預覽列出；--apply 不建目錄"
 SB="$(new_sandbox)"
-mkdir -p "$SB/upstream/voltagent/design-md/starbucks"
-printf '# Starbucks\n\n## Colors\n\n## Typography\n' > "$SB/upstream/voltagent/design-md/starbucks/DESIGN.md"
+mkdir -p "$SB/upstream/voltagent/design-md/zz-newbrand"
+printf '# Zz Newbrand\n\n## Colors\n\n## Typography\n' > "$SB/upstream/voltagent/design-md/zz-newbrand/DESIGN.md"
 run "$SB"
-check "starbucks 列在「上游新增」" 'section "上游新增" | grep -q "  - starbucks ← voltagent:starbucks"' "$OUT"
+check "zz-newbrand 列在「上游新增」" 'section "上游新增" | grep -q "  - zz-newbrand ← voltagent:zz-newbrand"' "$OUT"
 run "$SB" --apply
-check "--apply 後 .claude/ui/starbucks/ 不存在" '[ ! -e "$SB/.claude/ui/starbucks" ]'
+check "--apply 後 .claude/ui/zz-newbrand/ 不存在" '[ ! -e "$SB/.claude/ui/zz-newbrand" ]'
 mkdir -p "$SB/upstream/voltagent/design-md/attio"
 cp "$SB/.claude/ui/attio/DESIGN.md" "$SB/upstream/voltagent/design-md/attio/DESIGN.md"
 run "$SB"
@@ -154,35 +155,37 @@ check "semrush（上游欄位全 null）的 SOURCE.json 沒被動" 'cmp -s "$SB/
 echo "▶ 9. --source 只看一個來源"
 SB="$(new_sandbox)"
 printf '\nchange\n' >> "$SB/upstream/voltagent/design-md/apple/DESIGN.md"
-mkdir -p "$SB/upstream/jp/design-md/ippodo"
-printf '# 一保堂茶舗のデザイン\n\n## 2. Color Palette & Roles\n\n## 3. Typography Rules\n' > "$SB/upstream/jp/design-md/ippodo/DESIGN.md"
+mkdir -p "$SB/upstream/jp/design-md/testtea"
+printf '# 一保堂茶舗のデザイン\n\n## 2. Color Palette & Roles\n\n## 3. Typography Rules\n' > "$SB/upstream/jp/design-md/testtea/DESIGN.md"
+# 沙箱裡拿掉 jp 的授權原文，才測得到「授權檔缺」的提醒（repo 裡已經有了）
+rm -f "$SB/.claude/ui/_licenses/jp-"*.txt
 run "$SB" --source jp
 check "--source jp 不列 voltagent 的項目" '! printf "%s\n" "$OUT" | grep -qx "  - apple"' "$OUT"
-check "--source jp 列出 jp 的新增（帶 jp- 前綴）" 'section "上游新增" | grep -q "  - jp-ippodo ← jp:ippodo"' "$OUT"
+check "--source jp 列出 jp 的新增（帶 jp- 前綴）" 'section "上游新增" | grep -q "  - jp-testtea ← jp:testtea"' "$OUT"
 check "jp 沒有授權檔 → 提醒" 'printf "%s\n" "$OUT" | grep -q "授權檔缺"' "$OUT"
 run "$SB" --source nope
 check "--source 不存在的來源 → exit 1" '[ "$RC" -eq 1 ]'
 
-echo "▶ 10. --import jp:ippodo → 建 DESIGN.md＋SOURCE.json，check-counts 擋 CATALOG"
-run "$SB" --import jp:ippodo
+echo "▶ 10. --import jp:testtea → 建 DESIGN.md＋SOURCE.json，check-counts 擋 CATALOG"
+run "$SB" --import jp:testtea
 check "--import exit 0" '[ "$RC" -eq 0 ]' "$OUT"
-check "jp-ippodo/DESIGN.md 存在且等於上游" 'cmp -s "$SB/.claude/ui/jp-ippodo/DESIGN.md" "$SB/upstream/jp/design-md/ippodo/DESIGN.md"'
+check "jp-testtea/DESIGN.md 存在且等於上游" 'cmp -s "$SB/.claude/ui/jp-testtea/DESIGN.md" "$SB/upstream/jp/design-md/testtea/DESIGN.md"'
 check "SOURCE.json：source=jp、license=MIT、imported_sha256 正確" '
-    sj="$SB/.claude/ui/jp-ippodo/SOURCE.json";
+    sj="$SB/.claude/ui/jp-testtea/SOURCE.json";
     [ "$(jq -r .source "$sj" | tr -d "\r")" = "jp" ] &&
     [ "$(jq -r .license "$sj" | tr -d "\r")" = "MIT" ] &&
-    [ "$(jq -r .upstream_path "$sj" | tr -d "\r")" = "design-md/ippodo/DESIGN.md" ] &&
-    [ "$(jq -r .imported_sha256 "$sj" | tr -d "\r")" = "$(sha "$SB/.claude/ui/jp-ippodo/DESIGN.md")" ]'
-check "language 依內容判成 ja" '[ "$(jq -r .language "$SB/.claude/ui/jp-ippodo/SOURCE.json" | tr -d "\r")" = "ja" ]'
+    [ "$(jq -r .upstream_path "$sj" | tr -d "\r")" = "design-md/testtea/DESIGN.md" ] &&
+    [ "$(jq -r .imported_sha256 "$sj" | tr -d "\r")" = "$(sha "$SB/.claude/ui/jp-testtea/DESIGN.md")" ]'
+check "language 依內容判成 ja" '[ "$(jq -r .language "$SB/.claude/ui/jp-testtea/SOURCE.json" | tr -d "\r")" = "ja" ]'
 check "提醒去 CATALOG.md 加兩處" 'printf "%s\n" "$OUT" | grep -q "CATALOG.md 加兩處"' "$OUT"
 check "提醒授權檔缺" 'printf "%s\n" "$OUT" | grep -q "授權檔缺"' "$OUT"
 check "CATALOG.md 沒被腳本改（留給人寫繁中說明）" 'cmp -s "$SB/.claude/ui/CATALOG.md" "$REPO/.claude/ui/CATALOG.md"'
 CC="$(bash "$SB/scripts/check-counts.sh" 2>&1)"
-check "check-counts 出現 ✗ 未列入 CATALOG.md：jp-ippodo" 'printf "%s\n" "$CC" | grep -q "未列入 CATALOG.md：jp-ippodo"' "$CC"
+check "check-counts 出現 ✗ 未列入 CATALOG.md：jp-testtea" 'printf "%s\n" "$CC" | grep -q "未列入 CATALOG.md：jp-testtea"' "$CC"
 run "$SB"
-check "剛匯入的不會出現在「本地已修改」" '! section "本地已修改" | grep -q "jp-ippodo"' "$OUT"
-check "剛匯入的不再列為上游新增" '! section "上游新增" | grep -q "jp-ippodo"' "$OUT"
-run "$SB" --import jp:ippodo
+check "剛匯入的不會出現在「本地已修改」" '! section "本地已修改" | grep -q "jp-testtea"' "$OUT"
+check "剛匯入的不再列為上游新增" '! section "上游新增" | grep -q "jp-testtea"' "$OUT"
+run "$SB" --import jp:testtea
 check "重複 --import 同一份 → exit 1 不覆蓋" '[ "$RC" -eq 1 ]'
 run "$SB" --import jp:nosuch
 check "--import 上游沒有的 id → exit 1" '[ "$RC" -eq 1 ] && [ ! -e "$SB/.claude/ui/jp-nosuch" ]'

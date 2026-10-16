@@ -178,7 +178,7 @@ description: 選擇或切換專案的 UI 設計風格——看三個方向的預
 
 **2A-2a（哲學路徑）：選哲學**
 
-從 8 種哲學選 1：
+從 11 種哲學選 1（後三種是非科技業的實站品牌）：
 - 極簡主義 (Minimalism) — apple, linear.app, stripe, vercel, cal, notion, superhuman...
 - 資料密集 (Data-dense) — clickhouse, posthog, sentry, supabase, airtable...
 - 終端機美學 (Terminal) — warp, cursor, claude, raycast, ollama...
@@ -187,12 +187,15 @@ description: 選擇或切換專案的 UI 設計風格——看三個方向的預
 - 奢華精品 (Luxurious) — ferrari, lamborghini, bmw, tesla, apple
 - 企業專業 (Corporate) — ibm, hashicorp, coinbase, kraken, revolut
 - 毛玻璃流體 (Glassmorphism) — framer, figma
+- 和風靜謐 (Japanese Quiet) — jp-ippodo, jp-toraya, jp-kaikado, jp-mitsui-kyoto, omd-muji...
+- 編輯刊物感 (Editorial) — wired, jp-brutus, jp-kurashi-no-techo, jp-dancyu, omd-readmoo...
+- 在地零售與生活 (Retail) — starbucks, nike, omd-icook, omd-pinkoi, omd-momoshop...
 
 **2A-3a：選該哲學下的具體品牌**（3-5 個選項，最推薦放第一個）
 
 **2A-2b（品牌類型路徑）：選產業**
 
-從 8 種產業選 1：
+從 14 種產業選 1（後六種是非科技業，見 CATALOG「非科技業」）：
 - AI / LLM
 - 開發工具 / IDE
 - 資料 / 後端 / DevOps
@@ -201,6 +204,12 @@ description: 選擇或切換專案的 UI 設計風格——看三個方向的預
 - 消費者 App
 - 汽車 / 精品 / 硬體
 - 行銷 / 分析
+- 餐飲與茶
+- 工藝與生活選物
+- 雜誌與編輯
+- 新聞媒體
+- 旅館與精品
+- 在地品牌與電商
 
 **2A-3b：選該產業下的具體品牌**（3-5 個選項）
 

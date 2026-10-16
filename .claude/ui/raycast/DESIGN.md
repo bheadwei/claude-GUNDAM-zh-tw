@@ -1,268 +1,669 @@
-# Design System Inspired by Raycast
+---
+version: alpha
+name: Raycast-design-analysis
+属于: A dark-canvas developer-tools system that treats the marketing page like an extended product screenshot — pure-near-black background, command-palette mockups as the hero, Inter typography with the ss03 stylistic set turned on, and a single white CTA pill that doesn't break the inky atmosphere. The chrome reads like Raycast's own command-palette UI scaled up to a marketing page: monochrome dark surfaces with a faint surface ladder (#07080a → #0d0d0d → #101111), tight 6–10px radius on cards, hairline 1px borders in #242728, and rare splashes of saturated accent (Hacker News yellow, Slack red, Mac green, info blue) reserved for product-tile category illustrations. The signature visual moment is a red gradient hero wordmark — three diagonal red stripes laid across the very top of the home page like a launch-banner — paired with full-bleed product UI screenshots that show Raycast's actual command palette, store, and AI chat surfaces.
+description: |
+  Raycast's marketing system reads like an extended product screenshot. The chrome IS the in-product chrome at marketing scale: pure-near-black canvas, hairline 1px borders, command-palette-style cards, Inter typography with the ss03 stylistic set enabled site-wide, white CTA pill, and a small set of saturated category accent colors (yellow / red / green / blue) reserved for extension and feature illustrations. Section rhythm is generous (~96px) but the page never breaks tonal continuity — the whole site sits in one continuous dark mode.
 
-## 1. Visual Theme & Atmosphere
+colors:
+  primary: "#ffffff"
+  primary-pressed: "#e8e8e8"
+  on-primary: "#000000"
+  ink: "#f4f4f6"
+  body: "#cdcdcd"
+  charcoal: "#d3d3d4"
+  mute: "#9c9c9d"
+  ash: "#6a6b6c"
+  stone: "#434345"
+  on-dark: "#ffffff"
+  on-dark-mute: "rgba(255,255,255,0.72)"
+  canvas: "#07080a"
+  surface: "#0d0d0d"
+  surface-elevated: "#101111"
+  surface-card: "#121212"
+  button-fg: "#18191a"
+  hairline: "#242728"
+  hairline-soft: "rgba(255,255,255,0.08)"
+  hairline-strong: "rgba(255,255,255,0.16)"
+  accent-blue: "#57c1ff"
+  accent-blue-soft: "rgba(87,193,255,0.15)"
+  accent-red: "#ff6161"
+  accent-red-soft: "rgba(255,97,97,0.15)"
+  accent-green: "#59d499"
+  accent-green-soft: "rgba(89,212,153,0.15)"
+  accent-yellow: "#ffc533"
+  accent-yellow-soft: "rgba(255,197,51,0.15)"
+  hero-stripe-start: "#ff5757"
+  hero-stripe-end: "#a1131a"
+  key-bg-start: "#121212"
+  key-bg-end: "#0d0d0d"
 
-Raycast's marketing site feels like the dark interior of a precision instrument — a Swiss watch case carved from obsidian. The background isn't just dark, it's an almost-black blue-tint (`#07080a`) that creates a sense of being inside a macOS native application rather than a website. Every surface, every border, every shadow is calibrated to evoke the feeling of a high-performance desktop utility: fast, minimal, trustworthy.
+typography:
+  display-xl:
+    fontFamily: Inter
+    fontSize: 64px
+    fontWeight: 600
+    lineHeight: 1.1
+    letterSpacing: 0
+    fontFeature: '"calt", "kern", "liga", "ss03"'
+  display-lg:
+    fontFamily: Inter
+    fontSize: 56px
+    fontWeight: 500
+    lineHeight: 1.17
+    letterSpacing: 0.2px
+    fontFeature: '"calt", "kern", "liga", "ss03"'
+  heading-xl:
+    fontFamily: Inter
+    fontSize: 24px
+    fontWeight: 500
+    lineHeight: 1.6
+    letterSpacing: 0.2px
+    fontFeature: '"calt", "kern", "liga", "ss03"'
+  heading-lg:
+    fontFamily: Inter
+    fontSize: 22px
+    fontWeight: 500
+    lineHeight: 1.15
+    letterSpacing: 0
+    fontFeature: '"calt", "kern", "liga", "ss03"'
+  heading-md:
+    fontFamily: Inter
+    fontSize: 20px
+    fontWeight: 500
+    lineHeight: 1.4
+    letterSpacing: 0.2px
+    fontFeature: '"calt", "kern", "liga", "ss03"'
+  heading-sm:
+    fontFamily: Inter
+    fontSize: 18px
+    fontWeight: 500
+    lineHeight: 1.4
+    letterSpacing: 0.2px
+    fontFeature: '"calt", "kern", "liga", "ss03"'
+  body-lg:
+    fontFamily: Inter
+    fontSize: 18px
+    fontWeight: 400
+    lineHeight: 1.6
+    letterSpacing: 0
+    fontFeature: '"calt", "kern", "liga", "ss03"'
+  body-md:
+    fontFamily: Inter
+    fontSize: 16px
+    fontWeight: 400
+    lineHeight: 1.6
+    letterSpacing: 0
+    fontFeature: '"calt", "kern", "liga", "ss03"'
+  body-strong:
+    fontFamily: Inter
+    fontSize: 16px
+    fontWeight: 500
+    lineHeight: 1.4
+    letterSpacing: 0.2px
+    fontFeature: '"calt", "kern", "liga", "ss03"'
+  body-sm:
+    fontFamily: Inter
+    fontSize: 14px
+    fontWeight: 400
+    lineHeight: 1.6
+    letterSpacing: 0
+    fontFeature: '"calt", "kern", "liga", "ss03"'
+  body-sm-strong:
+    fontFamily: Inter
+    fontSize: 14px
+    fontWeight: 500
+    lineHeight: 1.6
+    letterSpacing: 0.2px
+    fontFeature: '"calt", "kern", "liga", "ss03"'
+  caption-md:
+    fontFamily: Inter
+    fontSize: 13px
+    fontWeight: 400
+    lineHeight: 1.4
+    letterSpacing: 0.1px
+    fontFeature: '"calt", "kern", "liga", "ss03"'
+  caption-sm:
+    fontFamily: Inter
+    fontSize: 12px
+    fontWeight: 400
+    lineHeight: 1.5
+    letterSpacing: 0.4px
+    fontFeature: '"calt", "kern", "liga", "ss03"'
+  link-md:
+    fontFamily: Inter
+    fontSize: 16px
+    fontWeight: 500
+    lineHeight: 1.4
+    letterSpacing: 0.3px
+    fontFeature: '"calt", "kern", "liga", "ss03"'
+  button-md:
+    fontFamily: Inter
+    fontSize: 14px
+    fontWeight: 500
+    lineHeight: 1.6
+    letterSpacing: 0.2px
+    fontFeature: '"calt", "kern", "liga", "ss03"'
 
-The signature move is the layered shadow system borrowed from macOS window chrome: multi-layer box-shadows with inset highlights that simulate physical depth, as if cards and buttons are actual pressed or raised glass elements on a dark desk. Combined with Raycast Red (`#FF6363`) — deployed almost exclusively in the hero's iconic diagonal stripe pattern — the palette creates a brand that reads as "powerful tool with personality." The red doesn't dominate; it punctuates.
+rounded:
+  none: 0px
+  xs: 4px
+  sm: 6px
+  md: 8px
+  lg: 10px
+  xl: 16px
+  full: 9999px
 
-Inter is used everywhere — headings, body, buttons, captions — with extensive OpenType features (`calt`, `kern`, `liga`, `ss03`) creating a consistent, readable typographic voice. The positive letter-spacing (0.2px–0.4px on body text) is unusual for a dark UI and gives the text an airy, breathable quality that counterbalances the dense, dark surfaces. GeistMono appears for code elements, reinforcing the developer-tool identity.
+spacing:
+  xxs: 2px
+  xs: 4px
+  sm: 8px
+  md: 12px
+  lg: 16px
+  xl: 24px
+  xxl: 32px
+  section: 96px
+
+components:
+  button-primary:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-primary}"
+    typography: "{typography.button-md}"
+    rounded: "{rounded.md}"
+    padding: 8px 16px
+    height: 36px
+  button-primary-pressed:
+    backgroundColor: "{colors.primary-pressed}"
+    textColor: "{colors.on-primary}"
+    typography: "{typography.button-md}"
+    rounded: "{rounded.md}"
+  button-secondary:
+    backgroundColor: "transparent"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.button-md}"
+    rounded: "{rounded.md}"
+    padding: 8px 16px
+    height: 36px
+  button-tertiary:
+    backgroundColor: "{colors.surface-elevated}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.button-md}"
+    rounded: "{rounded.md}"
+    padding: 8px 16px
+    height: 36px
+  button-disabled:
+    backgroundColor: "{colors.surface-elevated}"
+    textColor: "{colors.ash}"
+    rounded: "{rounded.md}"
+  install-button:
+    backgroundColor: "transparent"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.button-md}"
+    rounded: "{rounded.md}"
+    padding: 6px 14px
+  text-input:
+    backgroundColor: "{colors.surface-elevated}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.md}"
+    padding: 8px 12px
+    height: 36px
+  text-input-focused:
+    backgroundColor: "{colors.surface-elevated}"
+    textColor: "{colors.on-dark}"
+    rounded: "{rounded.md}"
+  store-search-bar:
+    backgroundColor: "{colors.surface-elevated}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.md}"
+    padding: 10px 16px
+    height: 44px
+  command-palette-row:
+    backgroundColor: "transparent"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.sm}"
+    padding: 6px 10px
+  command-palette-row-active:
+    backgroundColor: "{colors.surface-card}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.sm}"
+  pill-tab:
+    backgroundColor: "transparent"
+    textColor: "{colors.body}"
+    typography: "{typography.body-sm}"
+    rounded: "{rounded.full}"
+    padding: 4px 10px
+  pill-tab-active:
+    backgroundColor: "{colors.surface-elevated}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.body-sm}"
+    rounded: "{rounded.full}"
+  badge-pro:
+    backgroundColor: "{colors.surface-elevated}"
+    textColor: "{colors.on-dark-mute}"
+    typography: "{typography.caption-sm}"
+    rounded: "{rounded.xs}"
+    padding: 2px 6px
+  badge-info-soft:
+    backgroundColor: "{colors.accent-blue-soft}"
+    textColor: "{colors.accent-blue}"
+    typography: "{typography.caption-sm}"
+    rounded: "{rounded.xs}"
+    padding: 2px 8px
+  keycap:
+    backgroundColor: "{colors.surface-card}"
+    textColor: "{colors.body}"
+    typography: "{typography.caption-md}"
+    rounded: "{rounded.xs}"
+    padding: 1px 6px
+    height: 20px
+  command-palette-card:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.lg}"
+    padding: 0px
+  feature-card-dark:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.lg}"
+    padding: 24px
+  feature-card-elevated:
+    backgroundColor: "{colors.surface-elevated}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.lg}"
+    padding: 24px
+  store-extension-card:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.md}"
+    padding: 16px
+  pricing-tier-card:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.lg}"
+    padding: 24px
+  pricing-tier-card-featured:
+    backgroundColor: "{colors.surface-elevated}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.lg}"
+    padding: 24px
+  hero-stripe-band:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.display-xl}"
+    rounded: "{rounded.none}"
+    padding: 96px 48px
+  app-icon-tile:
+    backgroundColor: "{colors.surface-card}"
+    rounded: "{rounded.md}"
+    size: 48px
+  app-icon-tile-large:
+    backgroundColor: "{colors.surface-card}"
+    rounded: "{rounded.md}"
+    size: 64px
+  primary-nav:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.body-sm-strong}"
+    rounded: "{rounded.none}"
+    height: 56px
+  footer-section:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.body}"
+    typography: "{typography.body-sm}"
+    rounded: "{rounded.none}"
+    padding: 64px 48px
+  link-inline:
+    textColor: "{colors.on-dark}"
+    typography: "{typography.link-md}"
+---
+
+## Overview
+
+Raycast's marketing site reads like an extended product screenshot. The chrome IS the in-product command palette at marketing scale: pure near-black canvas (`{colors.canvas}` — `#07080a`), hairline 1px borders (`{colors.hairline}` — `#242728`), command-palette-style cards with rounded corners between 6 and 16px, Inter typography with the **ss03 stylistic set enabled site-wide** (a single character — the alternate `g` — that gives Raycast's typography its signature subtle distinction), a single white CTA pill that anchors every primary action, and small splashes of saturated accent reserved for category illustrations.
+
+The system has effectively one surface mode — dark — with a faint three-step surface ladder (`{colors.canvas}` → `{colors.surface}` → `{colors.surface-elevated}` → `{colors.surface-card}`) carrying cards, in-card panels, and key-cap glyph backgrounds. The signature decorative moment is a **red diagonal-stripe gradient band** across the very top of the home page hero, used as a launch-banner motif behind the headline (the only time saturated red appears on chrome). Beyond that single moment, color in the chrome is reserved for category accents inside extension and feature illustrations: Hacker News yellow, Slack red, Linear green, info blue.
+
+The design philosophy is "the marketing page is the product." Section rhythm is generous (`{spacing.section}` 96px) but the page never breaks tonal continuity — the whole site sits in one continuous dark mode, full-bleed product UI screenshots show Raycast's actual command palette / store / AI chat surfaces, and the typography ligature settings (`ss03`) are inherited from the in-product app's text rendering.
 
 **Key Characteristics:**
-- Near-black blue-tinted background (`#07080a`) — not pure black, subtly blue-shifted
-- macOS-native shadow system with multi-layer inset highlights simulating physical depth
-- Raycast Red (`#FF6363`) as a punctuation color — hero stripes, not pervasive
-- Inter with positive letter-spacing (0.2px) for an airy, readable dark-mode experience
-- Radix UI component primitives powering the interaction layer
-- Subtle rgba white borders (0.06–0.1 opacity) for containment on dark surfaces
-- Keyboard shortcut styling with gradient key caps and heavy shadows
+- Single dark surface mode with a 4-step surface ladder: `{colors.canvas}` (#07080a) → `{colors.surface}` (#0d0d0d) → `{colors.surface-elevated}` (#101111) → `{colors.surface-card}` (#121212)
+- White CTA pill (`{colors.primary}` — #ffffff) is the universal primary action; everything else is monochrome dark
+- Inter typography with `font-feature-settings: "calt", "kern", "liga", "ss03"` enabled site-wide — the ss03 alternate `g` is part of the brand voice
+- Hairline 1px borders (`{colors.hairline}` — #242728) carry every card edge; there are no drop shadows in the system
+- Multi-radius card vocabulary: `{rounded.sm}` (6px) for keycaps, `{rounded.md}` (8px) for buttons and small cards, `{rounded.lg}` (10px) for feature cards, `{rounded.xl}` (16px) for hero command-palette mockup containers
+- Saturated category accents (`{colors.accent-yellow}` for Hacker News, `{colors.accent-red}` for Slack/Apple, `{colors.accent-green}` for productivity tools, `{colors.accent-blue}` for info) appear only inside extension tile imagery — never on chrome
+- Signature red diagonal-stripe gradient band at the very top of the hero — three angled stripes in `{colors.hero-stripe-start}` → `{colors.hero-stripe-end}`, used once per page maximum
 
-## 2. Color Palette & Roles
+## Colors
 
-### Primary
-- **Near-Black Blue** (`#07080a`): Primary page background — the foundational void with a subtle blue-cold undertone
-- **Pure White** (`#ffffff`): Primary heading text, high-emphasis elements
-- **Raycast Red** (`#FF6363` / `hsl(0, 100%, 69%)`): Brand accent — hero stripes, danger states, critical highlights
+> **Source pages:** `/` (home), `/store` (extension marketplace), `/core-features/ai` (feature page), `/pricing` (plan tiers), `/thomas/hacker-news` (single extension detail). The chrome palette is identical across all five pages — the dark surface ladder, hairline borders, white CTA, and ss03-enabled typography are the same on every page.
 
-### Secondary & Accent
-- **Raycast Blue** (`hsl(202, 100%, 67%)` / ~`#55b3ff`): Interactive accent — links, focus states, selected items
-- **Raycast Green** (`hsl(151, 59%, 59%)` / ~`#5fc992`): Success states, positive indicators
-- **Raycast Yellow** (`hsl(43, 100%, 60%)` / ~`#ffbc33`): Warning accents, highlights
-- **Blue Transparent** (`hsla(202, 100%, 67%, 0.15)`): Blue tint overlay for interactive surfaces
-- **Red Transparent** (`hsla(0, 100%, 69%, 0.15)`): Red tint overlay for danger/error surfaces
+### Brand & Accent
+- **White** (`{colors.primary}` — `#ffffff`): the universal primary CTA pill background. "Download" / "Install Extension" / "Get Pro" — every primary action carries it.
+- **White Pressed** (`{colors.primary-pressed}` — `#e8e8e8`): pressed-state for the primary pill — a single notch dimmer.
+- **On Primary** (`{colors.on-primary}` — `#000000`): pure black text on the white CTA — the only place black appears as text in the system.
 
-### Surface & Background
-- **Deep Background** (`#07080a`): Page canvas, the darkest surface
-- **Surface 100** (`#101111`): Elevated surface, card backgrounds
-- **Key Start** (`#121212`): Keyboard key gradient start
-- **Key End** (`#0d0d0d`): Keyboard key gradient end
-- **Card Surface** (`#1b1c1e`): Badge backgrounds, tag fills, elevated containers
-- **Button Foreground** (`#18191a`): Dark surface for button text on light backgrounds
+### Surface
+- **Canvas** (`{colors.canvas}` — `#07080a`): pure-near-black page background. The dominant surface across every page.
+- **Surface** (`{colors.surface}` — `#0d0d0d`): card and elevated panel background — one notch lighter than canvas.
+- **Surface Elevated** (`{colors.surface-elevated}` — `#101111`): button-tertiary fill, text-input fill, store-search-bar fill, pill-tab-active fill.
+- **Surface Card** (`{colors.surface-card}` — `#121212`): app-icon-tile background, keycap fill, command-palette row hover.
+- **Button FG (in-card)** (`{colors.button-fg}` — `#18191a`): rare deep-card variant used inside featured pricing tier card backgrounds.
+- **Hairline** (`{colors.hairline}` — `#242728`): the universal 1px card border. Carries every card edge across every page.
+- **Hairline Soft** (`{colors.hairline-soft}` — `rgba(255,255,255,0.08)`): even fainter border on translucent over-image overlays.
+- **Hairline Strong** (`{colors.hairline-strong}` — `rgba(255,255,255,0.16)`): stronger 1px divider where a regular hairline reads as too soft.
 
-### Neutrals & Text
-- **Near White** (`#f9f9f9` / `hsl(240, 11%, 96%)`): Primary body text, high-emphasis content
-- **Light Gray** (`#cecece` / `#cdcdce`): Secondary body text, descriptions
-- **Silver** (`#c0c0c0`): Tertiary text, subdued labels
-- **Medium Gray** (`#9c9c9d`): Link default color, secondary navigation
-- **Dim Gray** (`#6a6b6c`): Disabled text, low-emphasis labels
-- **Dark Gray** (`#434345`): Muted borders, inactive navigation links
-- **Border** (`hsl(195, 5%, 15%)` / ~`#252829`): Standard border color for cards and dividers
-- **Dark Border** (`#2f3031`): Separator lines, table borders
+### Text
+- **Ink** (`{colors.ink}` — `#f4f4f6`): primary headlines on dark canvas. Slightly off-white for tonal coherence with the near-black background.
+- **Body** (`{colors.body}` — `#cdcdcd`): default paragraph text and inline-link color.
+- **Charcoal** (`{colors.charcoal}` — `#d3d3d4`): subtly brighter body where ink reads too soft.
+- **Mute** (`{colors.mute}` — `#9c9c9d`): metadata, footer link text, secondary captions.
+- **Ash** (`{colors.ash}` — `#6a6b6c`): disabled-state text, lowest-emphasis utility.
+- **Stone** (`{colors.stone}` — `#434345`): least-emphasis caption text and disabled icon color.
+- **On Dark** (`{colors.on-dark}` — `#ffffff`): interactive-state primary text (button label, focused tab).
+- **On Dark Mute** (`{colors.on-dark-mute}` — `rgba(255,255,255,0.72)`): translucent secondary text on dark surfaces.
 
-### Semantic & Accent
-- **Error Red** (`hsl(0, 100%, 69%)`): Error states, destructive actions
-- **Success Green** (`hsl(151, 59%, 59%)`): Success confirmations, positive states
-- **Warning Yellow** (`hsl(43, 100%, 60%)`): Warnings, attention-needed states
-- **Info Blue** (`hsl(202, 100%, 67%)`): Informational highlights, links
+### Semantic
+- **Accent Blue** (`{colors.accent-blue}` — `#57c1ff`) + **Soft** (`{colors.accent-blue-soft}` — `rgba(87,193,255,0.15)`): info and informational badge — used inside feature illustrations and the rare "New" pill.
+- **Accent Red** (`{colors.accent-red}` — `#ff6161`) + **Soft** (`{colors.accent-red-soft}` — `rgba(255,97,97,0.15)`): destructive/error indicator + Slack/Apple category accent in extension illustrations.
+- **Accent Green** (`{colors.accent-green}` — `#59d499`) + **Soft** (`{colors.accent-green-soft}` — `rgba(89,212,153,0.15)`): success state + productivity category accent in extension illustrations.
+- **Accent Yellow** (`{colors.accent-yellow}` — `#ffc533`) + **Soft** (`{colors.accent-yellow-soft}` — `rgba(255,197,51,0.15)`): "warning" semantic + the Hacker News orange-yellow that appears as the most prominent accent illustration on the home page hero.
 
-### Gradient System
-- **Keyboard Key Gradient**: Linear gradient from `#121212` (top) to `#0d0d0d` (bottom) — simulates physical key depth
-- **Warm Glow**: `rgba(215, 201, 175, 0.05)` radial spread — subtle warm ambient glow behind featured elements
+### Brand Gradient
+- **Hero Stripe Gradient** — three diagonal red stripes layered across the very top of the home page hero, fading from `{colors.hero-stripe-start}` (`#ff5757`) to `{colors.hero-stripe-end}` (`#a1131a`). The system's only chromatic gradient on chrome — used once per page maximum and reserved for hero launch-banner moments.
+- **Keycap Gradient** — the small key-glyph background uses a subtle linear-gradient from `{colors.key-bg-start}` (`#121212`) to `{colors.key-bg-end}` (`#0d0d0d`) that gives Raycast's keycap UI its slight 3D-key feel.
 
-## 3. Typography Rules
+## Typography
 
 ### Font Family
-- **Primary**: `Inter` — humanist sans-serif, used everywhere. Fallbacks: `Inter Fallback`, system sans-serif
-- **System**: `SF Pro Text` — Apple system font for select macOS-native UI elements. Fallbacks: `SF Pro Icons`, `Inter`, `Inter Fallback`
-- **Monospace**: `GeistMono` — Vercel's monospace font for code elements. Fallbacks: `ui-monospace`, `SFMono-Regular`, `Roboto Mono`, `Menlo`, `Monaco`
-- **OpenType features**: `calt`, `kern`, `liga`, `ss03` enabled globally; `ss02`, `ss08` on display text; `liga` disabled (`"liga" 0`) on hero headings
+**Inter** is the system's primary face, loaded with the `Inter Fallback` system fallback variant. Critically, Raycast enables `font-feature-settings: "calt", "kern", "liga", "ss03"` site-wide — the **ss03 stylistic set** swaps in Inter's alternate `g` glyph (single-story open `g`), which is the brand's signature typographic detail. Standard ligatures (`liga`), kerning (`kern`), and contextual alternates (`calt`) are also active. The display tier additionally enables `ss02` and `ss08` and disables standard `liga` to render the hero "Raycast Pro" wordmark with its distinctive geometric construction.
+
+There is no monospace face used outside of inline `<code>` chips in documentation; the marketing pages use Inter for everything.
 
 ### Hierarchy
 
-| Role | Size | Weight | Line Height | Letter Spacing | Notes |
-|------|------|--------|-------------|----------------|-------|
-| Display Hero | 64px | 600 | 1.10 | 0px | OpenType: liga 0, ss02, ss08 |
-| Section Display | 56px | 400 | 1.17 | 0.2px | OpenType: calt, kern, liga, ss03 |
-| Section Heading | 24px | 500 | normal | 0.2px | OpenType: calt, kern, liga, ss03 |
-| Card Heading | 22px | 400 | 1.15 | 0px | OpenType: calt, kern, liga, ss03 |
-| Sub-heading | 20px | 500 | 1.60 | 0.2px | Relaxed line-height for readability |
-| Body Large | 18px | 400 | 1.15 | 0.2px | OpenType: calt, kern, liga, ss03 |
-| Body | 16px | 500 | 1.60 | 0.2px | Primary body text, relaxed rhythm |
-| Body Tight | 16px | 400 | 1.15 | 0.1px | UI labels, compact contexts |
-| Button | 16px | 600 | 1.15 | 0.3px | Semibold, slightly wider tracking |
-| Nav Link | 16px | 500 | 1.40 | 0.3px | Links in navigation |
-| Caption | 14px | 500 | 1.14 | 0.2px | Small labels, metadata |
-| Caption Bold | 14px | 600 | 1.40 | 0px | Emphasized captions |
-| Small | 12px | 600 | 1.33 | 0px | Badges, tags, micro-labels |
-| Small Link | 12px | 400 | 1.50 | 0.4px | Footer links, fine print |
-| Code | 14px (GeistMono) | 500 | 1.60 | 0.3px | Code blocks, technical content |
-| Code Small | 12px (GeistMono) | 400 | 1.60 | 0.2px | Inline code, terminal output |
+| Token | Size | Weight | Line Height | Letter Spacing | Use |
+|---|---|---|---|---|---|
+| `{typography.display-xl}` | 64px | 600 | 1.1 | 0 | Hero "Built for the perfect tools" / "The new way to..." headline (with `liga: 0`, `ss02`, `ss08`) |
+| `{typography.display-lg}` | 56px | 500 | 1.17 | 0.2px | Section headline ("Explore", "Pricing", store hero "Store") |
+| `{typography.heading-xl}` | 24px | 500 | 1.6 | 0.2px | Sub-section heading, pricing-tier name |
+| `{typography.heading-lg}` | 22px | 500 | 1.15 | 0 | Mid-section feature heading |
+| `{typography.heading-md}` | 20px | 500 | 1.4 | 0.2px | Card group title, in-card heading |
+| `{typography.heading-sm}` | 18px | 500 | 1.4 | 0.2px | Small heading, extension card title |
+| `{typography.body-lg}` | 18px | 400 | 1.6 | 0 | Pricing tier description, hero subtitle |
+| `{typography.body-md}` | 16px | 400 | 1.6 | 0 | Default body, paragraph text |
+| `{typography.body-strong}` | 16px | 500 | 1.4 | 0.2px | Inline emphasis, primary nav link |
+| `{typography.body-sm}` | 14px | 400 | 1.6 | 0 | Card description, secondary copy |
+| `{typography.body-sm-strong}` | 14px | 500 | 1.6 | 0.2px | In-card label, table-header text |
+| `{typography.caption-md}` | 13px | 400 | 1.4 | 0.1px | Caption, metadata |
+| `{typography.caption-sm}` | 12px | 400 | 1.5 | 0.4px | Smallest utility text, badge label |
+| `{typography.link-md}` | 16px | 500 | 1.4 | 0.3px | Inline body anchor link |
+| `{typography.button-md}` | 14px | 500 | 1.6 | 0.2px | Standard button label |
 
 ### Principles
-- **Positive tracking on dark**: Unlike most dark UIs that use tight or neutral letter-spacing, Raycast applies +0.2px to +0.4px — creating an airy, readable feel that compensates for the dark background
-- **Weight 500 as baseline**: Most body text uses medium weight (500), not regular (400) — subtle extra heft improves legibility on dark surfaces
-- **Display restraint**: Hero text at 64px/600 is confident but not oversized — Raycast avoids typographic spectacle in favor of functional elegance
-- **OpenType everywhere**: `ss03` (stylistic set 3) is enabled globally across Inter, giving the typeface a slightly more geometric, tool-like quality
+The hierarchy works on a 1.6-line-height ladder for body and a 1.1–1.4 ladder for display/heading. Letter-spacing is consistently positive (0.1–0.4px) — slightly opening the type — which gives Raycast's chrome an airy quality at body sizes despite the dark canvas. The `ss03` stylistic set is the brand's most distinctive typographic detail; without it, the body face renders identically to plain Inter and loses Raycast's signature rendering.
 
-## 4. Component Stylings
+### Note on Font Substitutes
+Inter is open-source and Google-Fonts-hosted; load it directly. To preserve the brand's signature look, you must enable `font-feature-settings: "calt", "kern", "liga", "ss03"` on the body element. Without `ss03`, the typography is recognizably "Inter default" rather than "Raycast." On systems where Inter cannot be loaded, the documented fallback is `Inter Fallback` (a self-hosted variant) → `system-ui`. **JetBrains Mono** or **Geist Mono** are acceptable substitutes for inline code chips when needed, though Raycast's marketing chrome rarely uses code-styled text.
 
-### Buttons
-- **Primary Pill**: Transparent background, white text, pill shape (86px radius), multi-layer inset shadow (`rgba(255, 255, 255, 0.1) 0px 1px 0px 0px inset`). Hover: opacity 0.6
-- **Secondary Button**: Transparent background, white text, 6px radius, `1px solid rgba(255, 255, 255, 0.1)` border, subtle drop shadow (`rgba(0, 0, 0, 0.03) 0px 7px 3px`). Hover: opacity 0.6
-- **Ghost Button**: No background or border, gray text (`#6a6b6c`), 86px radius, same inset shadow. Hover: opacity 0.6, text brightens to white
-- **CTA (Download)**: Semi-transparent white background (`hsla(0, 0%, 100%, 0.815)`), dark text (`#18191a`), pill shape. Hover: full white background (`hsl(0, 0%, 100%)`)
-- **Transition**: All buttons use opacity transition for hover rather than background-color change — a signature Raycast interaction pattern
-
-### Cards & Containers
-- **Standard Card**: `#101111` surface, `1px solid rgba(255, 255, 255, 0.06)` border, 12px–16px border-radius
-- **Elevated Card**: Ring shadow `rgb(27, 28, 30) 0px 0px 0px 1px` outer + `rgb(7, 8, 10) 0px 0px 0px 1px inset` inner — creates a double-ring containment
-- **Feature Card**: 16px–20px border-radius, subtle warm glow (`rgba(215, 201, 175, 0.05) 0px 0px 20px 5px`) behind hero elements
-- **Hover**: Cards brighten slightly via border opacity increase or subtle shadow enhancement
-
-### Inputs & Forms
-- Dark input fields with `#07080a` background, `1px solid rgba(255, 255, 255, 0.08)` border, 8px border-radius
-- Focus state: Border brightens, blue glow (`hsla(202, 100%, 67%, 0.15)`) ring appears
-- Text: `#f9f9f9` input color, `#6a6b6c` placeholder
-- Labels: `#9c9c9d` at 14px weight 500
-
-### Navigation
-- **Top nav**: Dark background blending with page, white text links at 16px weight 500
-- **Nav links**: Gray text (`#9c9c9d`) → white on hover, underline decoration on hover
-- **CTA button**: Semi-transparent white pill at nav end
-- **Mobile**: Collapses to hamburger, maintains dark theme
-- **Sticky**: Nav fixed at top with subtle border separator
-
-### Image Treatment
-- **Product screenshots**: macOS window chrome style — rounded corners (12px), deep shadows simulating floating windows
-- **Full-bleed sections**: Dark screenshots blend seamlessly into the dark background
-- **Hero illustration**: Diagonal stripe pattern in Raycast Red — abstract, geometric, brand-defining
-- **App UI embeds**: Showing actual Raycast command palette and extensions — product as content
-
-### Keyboard Shortcut Keys
-- **Key cap styling**: Gradient background (`#121212` → `#0d0d0d`), heavy multi-layer shadow (`rgba(0, 0, 0, 0.4) 0px 1.5px 0.5px 2.5px` + inset shadows), creating realistic physical key appearance
-- Border-radius: 4px–6px for individual keys
-
-### Badges & Tags
-- **Neutral badge**: `#1b1c1e` background, white text, 6px radius, 14px font at weight 500, `0px 6px` padding
-- Compact, pill-like treatment for categorization
-
-## 5. Layout Principles
+## Layout
 
 ### Spacing System
-- **Base unit**: 8px
-- **Scale**: 1px, 2px, 3px, 4px, 8px, 10px, 12px, 16px, 20px, 24px, 32px, 40px
-- **Section padding**: 80px–120px vertical between major sections
-- **Card padding**: 16px–32px internal spacing
-- **Component gaps**: 8px–16px between related elements
+- **Base unit:** 8px (with 2/4/12px steps for tight inline gaps).
+- **Tokens (front matter):** `{spacing.xxs}` (2px) · `{spacing.xs}` (4px) · `{spacing.sm}` (8px) · `{spacing.md}` (12px) · `{spacing.lg}` (16px) · `{spacing.xl}` (24px) · `{spacing.xxl}` (32px) · `{spacing.section}` (96px).
+- **Universal section rhythm:** every page in the set uses `{spacing.section}` (96px) as the vertical gap between major content blocks. Card grids use `{spacing.lg}` (16px) gutters; in-card padding sits at `{spacing.xl}` (24px) for feature cards and `{spacing.lg}` (16px) for store extension cards.
 
 ### Grid & Container
-- **Max width**: ~1200px container (breakpoint at 1204px), centered
-- **Column patterns**: Single-column hero, 2–3 column feature grids, full-width showcase sections
-- **App showcase**: Product UI presented in centered window frames
+- **Max width:** ~1240px content area at desktop with 24px gutters (~48px at ultrawide). Hero command-palette mockups run wider (~1080px) with the page background extending to full bleed.
+- **Store extension grid:** 2-up at desktop with rows of 2 cards stacked, collapsing to 1-up at mobile. Each card is a horizontal layout with a large square app icon at the left and copy + Install button at the right.
+- **Pricing tier grid:** 3-up at desktop (Free / Pro / Pro+Advanced AI), collapsing to 1-up stacked at mobile.
+- **Featured extension card grid:** 3-up at desktop in the "Featured" row at the top of the store page.
+- **Comparison table:** full-width on the pricing page below the tier cards — 5-column table (Free / Pro / Advanced AI / Custom for Teams / Enterprise) with feature rows.
+- **Footer:** 6-column horizontal link grid at desktop, collapsing to 2-up at tablet and 1-up at mobile.
 
 ### Whitespace Philosophy
-- **Dramatic negative space**: Sections float in vast dark void, creating cinematic pacing between features
-- **Dense product, sparse marketing**: The product UI screenshots are information-dense, but the surrounding marketing copy uses minimal text with generous spacing
-- **Vertical rhythm**: Consistent 24px–32px gaps between elements within sections
+Whitespace is generous and the canvas is uninterrupted. Sections sit 96px apart with no decorative dividers between them — the dark canvas continues edge-to-edge from hero to footer. Inside a section, content is left-aligned in a tight column, with command-palette mockup imagery occupying the right 50–60% of the band on home-page feature rows. The signature decorative element — the red diagonal-stripe gradient band — only appears in the very first hero band; from the second section down, the page is monochrome dark.
 
-### Border Radius Scale
-- **2px–3px**: Micro-elements, code spans, tiny indicators
-- **4px–5px**: Keyboard keys, small interactive elements
-- **6px**: Buttons, badges, tags — the workhorse radius
-- **8px**: Input fields, inline components
-- **9px–11px**: Images, medium containers
-- **12px**: Standard cards, product screenshots
-- **16px**: Large cards, feature sections
-- **20px**: Hero cards, prominent containers
-- **86px+**: Pill buttons, nav CTAs — full pill shape
-
-## 6. Depth & Elevation
+## Elevation & Depth
 
 | Level | Treatment | Use |
-|-------|-----------|-----|
-| Level 0 (Void) | No shadow, `#07080a` surface | Page background |
-| Level 1 (Subtle) | `rgba(0, 0, 0, 0.28) 0px 1.189px 2.377px` | Minimal lift, inline elements |
-| Level 2 (Ring) | `rgb(27, 28, 30) 0px 0px 0px 1px` outer + `rgb(7, 8, 10) 0px 0px 0px 1px inset` inner | Card containment, double-ring technique |
-| Level 3 (Button) | `rgba(255, 255, 255, 0.05) 0px 1px 0px 0px inset` + `rgba(255, 255, 255, 0.25) 0px 0px 0px 1px` + `rgba(0, 0, 0, 0.2) 0px -1px 0px 0px inset` | macOS-native button press — white highlight top, dark inset bottom |
-| Level 4 (Key) | 5-layer shadow stack with inset press effects | Keyboard shortcut key caps — physical 3D appearance |
-| Level 5 (Floating) | `rgba(0, 0, 0, 0.5) 0px 0px 0px 2px` + `rgba(255, 255, 255, 0.19) 0px 0px 14px` + insets | Command palette, floating panels — heavy depth with glow |
+|---|---|---|
+| 0 — Flat | No border, no shadow | Default for canvas-on-canvas blocks, hero text, footer body |
+| 1 — Hairline border | 1px solid `{colors.hairline}` (#242728) | Every card on `{colors.surface}`, store extension card, pricing tier card |
+| 2 — Hairline strong | 1px solid `{colors.hairline-strong}` | Stronger inline divider, table-row separator on the comparison table |
+| 3 — Surface ladder elevation | `{colors.canvas}` → `{colors.surface}` → `{colors.surface-elevated}` → `{colors.surface-card}` | Multi-step background-color ladder used to create elevation without shadows |
 
-### Shadow Philosophy
-Raycast's shadow system is the most macOS-native on the web. Multi-layer shadows combine:
-- **Outer rings** for containment (replacing traditional borders)
-- **Inset top highlights** (`rgba(255, 255, 255, 0.05–0.25)`) simulating light source from above
-- **Inset bottom darks** (`rgba(0, 0, 0, 0.2)`) simulating shadow underneath
-- The effect is physical: elements feel like glass or brushed metal, not flat rectangles
+The system has no drop-shadow elevation at all. Depth is built entirely from the surface-color ladder: each notch lighter on the dark scale reads as one step closer to the viewer.
 
 ### Decorative Depth
-- **Warm glow**: `rgba(215, 201, 175, 0.05) 0px 0px 20px 5px` behind featured elements — a subtle warm aura on the cold dark canvas
-- **Blue info glow**: `rgba(0, 153, 255, 0.15)` for interactive state emphasis
-- **Red danger glow**: `rgba(255, 99, 99, 0.15)` for error/destructive state emphasis
+Depth comes from product imagery and a single stripe-gradient band:
+- **Hero stripe gradient** — three diagonal red stripes (`{colors.hero-stripe-start}` → `{colors.hero-stripe-end}`) layered across the home-page hero band, evoking a launch-banner / motion-blur effect. The system's signature decorative moment.
+- **Command-palette mockups** — full-fidelity Raycast in-product UI screenshots (the actual Spotlight-style overlay with rounded keycaps, command rows, and accent-color glyphs) sitting inside the home-page hero and feature rows. These ARE the brand decoration.
+- **App icon tiles** — small 48–64px rounded-corner tiles displaying real app icons (Slack, Spotify, Figma, Notion, Linear, Hacker News) inside store and feature illustrations.
+- **Keycap glyphs** — subtle gradient-filled rounded keycap glyphs used inline to indicate keyboard shortcuts (e.g., `⌘ K`), with a faint `{colors.key-bg-start}` → `{colors.key-bg-end}` linear gradient suggesting a physical key surface.
 
-## 7. Do's and Don'ts
+## Shapes
+
+### Border Radius Scale
+
+| Token | Value | Use |
+|---|---|---|
+| `{rounded.none}` | 0px | Hero band, primary nav, footer, full-bleed structural surfaces |
+| `{rounded.xs}` | 4px | Keycap glyphs, badge-pro chips, small inline tags |
+| `{rounded.sm}` | 6px | Command-palette row, inline buttons, micro chips |
+| `{rounded.md}` | 8px | Standard buttons, text inputs, store search bar, app-icon tiles, store extension card |
+| `{rounded.lg}` | 10px | Feature card, command-palette mockup card, pricing tier card |
+| `{rounded.xl}` | 16px | Large hero command-palette mockup container, oversized feature panel |
+| `{rounded.full}` | 9999px | Pill-tab chips, avatar circles |
+
+The radius vocabulary clusters tightly between 4 and 16px, with most chrome at 6–10px. The system never goes flat (0px) on cards and never above 16px except for fully-rounded pills.
+
+### Photography Geometry
+There is no traditional photography. Visual elements are limited to:
+- **Command-palette mockups** — full-fidelity Raycast UI screenshots at 16:9 or 4:3 aspect inside `{rounded.xl}` (16px) containers.
+- **App icon tiles** — 48–64px square at `{rounded.md}` (8px), displaying real app icons.
+- **Avatar circles** — 32–40px at `{rounded.full}` for in-extension author attribution.
+- **Hero stripe gradient** — full-bleed wash with no aspect ratio.
+
+## Components
+
+> **No hover states documented** per system policy. Each spec covers Default and Active/Pressed only.
+
+### Buttons
+
+**`button-primary`** — the universal Raycast CTA
+- Background `{colors.primary}` (white), text `{colors.on-primary}` (black), type `{typography.button-md}`, padding `8px 16px`, height ~36px, rounded `{rounded.md}`.
+- Used for "Download" (sticky top-nav CTA), "Get Pro", "Install" — every primary action across every surface.
+- Pressed state lives in `button-primary-pressed` — background dims to `{colors.primary-pressed}`.
+
+**`button-secondary`** — transparent text button
+- Background transparent, text `{colors.on-dark}`, type `{typography.button-md}`, padding `8px 16px`, height ~36px, rounded `{rounded.md}`.
+- Lower-emphasis action: "Sign in" (top nav), "Learn more →", "View on GitHub".
+
+**`button-tertiary`** — soft surface button
+- Background `{colors.surface-elevated}`, text `{colors.on-dark}`, type `{typography.button-md}`, padding `8px 16px`, height ~36px, rounded `{rounded.md}`.
+- Mid-emphasis: "Watch demo", "View extension", "Manage" buttons inside cards.
+
+**`button-disabled`**
+- Background `{colors.surface-elevated}`, text `{colors.ash}` — dim utility state.
+
+**`install-button`** — the store-page install pill
+- Background transparent with 1px solid `{colors.hairline-strong}` border, text `{colors.on-dark}`, type `{typography.button-md}`, padding `6px 14px`, rounded `{rounded.md}`.
+- Sits at the right edge of every store extension card with the label "Install Extension".
+
+### Filter & Tab Chips
+
+**`pill-tab`** + **`pill-tab-active`** — small filter chip strip
+- Default: transparent background, text `{colors.body}`, type `{typography.body-sm}`, padding `4px 10px`, rounded `{rounded.full}`.
+- Active: background flips to `{colors.surface-elevated}`, text `{colors.on-dark}` — the chip "lifts" by one surface notch.
+- Used in the store filter row ("All Extensions", "Recently Added", "Most Popular") and similar segmented controls.
+
+**`badge-pro`** — small Pro/Plan label
+- Background `{colors.surface-elevated}`, text `{colors.on-dark-mute}`, type `{typography.caption-sm}`, padding `2px 6px`, rounded `{rounded.xs}`.
+- Inline "Pro" / "Pro+" / "Free" tier indicators on pricing tier cards.
+
+**`badge-info-soft`** — translucent info chip
+- Background `{colors.accent-blue-soft}`, text `{colors.accent-blue}`, type `{typography.caption-sm}`, padding `2px 8px`, rounded `{rounded.xs}`.
+- Rare "New" / "Beta" inline tag.
+
+### Inputs & Forms
+
+**`text-input`** + **`text-input-focused`**
+- Default: background `{colors.surface-elevated}`, text `{colors.on-dark}`, 1px solid `{colors.hairline}`, type `{typography.body-md}`, padding `8px 12px`, height ~36px, rounded `{rounded.md}`.
+- Focused: same surface; 1px border becomes `{colors.hairline-strong}` — a subtle brightening rather than a colored ring.
+
+**`store-search-bar`** — the store-page search field
+- Background `{colors.surface-elevated}`, text `{colors.on-dark}`, type `{typography.body-md}`, padding `10px 16px`, height ~44px, rounded `{rounded.md}`.
+- Sits at the top of the store page hero with a magnifier icon at the left and "Search the store..." placeholder. Slightly taller than the standard `text-input`.
+
+### Cards & Containers
+
+**`command-palette-card`** — the home-page hero command-palette mockup
+- Container: background `{colors.surface}`, 1px solid `{colors.hairline}`, padding 0 (the mockup contents fill the card), rounded `{rounded.lg}` or `{rounded.xl}` depending on hero size.
+- Layout: top header strip with macOS traffic-light dots + a search input row, body with a vertical stack of `{component.command-palette-row}` items, bottom-right keycap hint cluster.
+
+**`command-palette-row`** + **`command-palette-row-active`** — single row inside the command palette
+- Default: transparent background, text `{colors.on-dark}` in `{typography.body-md}`, padding `6px 10px`, rounded `{rounded.sm}`.
+- Active: background `{colors.surface-card}` (one notch lighter than the surrounding palette card) — the selection state.
+- Each row contains a small app-icon tile + label + optional keycap shortcut at the right edge.
+
+**`feature-card-dark`** — standard product feature card
+- Container: background `{colors.surface}`, 1px solid `{colors.hairline}`, padding `{spacing.xl}` (24px), rounded `{rounded.lg}`.
+- Used in 2- or 3-up grids on home and feature pages — pairs a small product mockup or app-icon row with body copy and a "Learn more →" `{component.button-secondary}`.
+
+**`feature-card-elevated`** — slightly-elevated variant
+- Same chrome as `feature-card-dark` but background flips to `{colors.surface-elevated}` — used to break visual rhythm in alternating feature rows.
+
+**`store-extension-card`** — store-page extension card
+- Container: background `{colors.surface}`, 1px solid `{colors.hairline}`, padding `{spacing.lg}` (16px), rounded `{rounded.md}`.
+- Layout: 48px `{component.app-icon-tile}` at left, vertical stack of name + by-author metadata + 1-line description in the center, `{component.install-button}` at the right edge.
+
+**`pricing-tier-card`** — pricing plan card (default tier)
+- Container: background `{colors.surface}`, 1px solid `{colors.hairline}`, padding `{spacing.xl}` (24px), rounded `{rounded.lg}`.
+- Layout: tier name in `{typography.heading-xl}` (24px), price in larger numeric in `{typography.display-lg}`, body description in `{typography.body-lg}`, CTA `{component.button-primary}` (or `{component.button-secondary}` for free tier), feature checklist with `✓` glyphs.
+
+**`pricing-tier-card-featured`** — middle "Pro" featured tier
+- Same chrome but background flips to `{colors.surface-elevated}` (one notch lighter) — the only visual cue distinguishing the featured tier from the surrounding cards.
+
+**`hero-stripe-band`** — home-page hero with red stripe gradient
+- Background `{colors.canvas}` with three diagonal red stripes layered across the top half (`{colors.hero-stripe-start}` → `{colors.hero-stripe-end}`).
+- Padding `{spacing.section}` 96px vertical / 48px horizontal, rounded `{rounded.none}`.
+- Carries the hero headline in `{typography.display-xl}` and a single `{component.button-primary}` "Download" CTA.
+
+### Decorative
+
+**`app-icon-tile`** — small 48px square app icon
+- Background `{colors.surface-card}`, padding 0 (icon fills the tile), rounded `{rounded.md}`, size 48×48.
+- Used in command-palette rows and store extension cards.
+
+**`app-icon-tile-large`** — 64px feature variant
+- Same but at 64×64. Used in featured store cards and home-page hero illustration rows.
+
+**`keycap`** — keyboard shortcut glyph
+- Background `{colors.surface-card}` with a subtle linear gradient `{colors.key-bg-start}` → `{colors.key-bg-end}`, text `{colors.body}` in `{typography.caption-md}`, padding `1px 6px`, height ~20px, rounded `{rounded.xs}`.
+- Renders inline command-palette shortcut hints like `⌘ K`, `⏎`, `Esc`. The signature "physical-key" feel on a flat dark canvas.
+
+### Navigation
+
+**`primary-nav`**
+- Background `{colors.canvas}`, text `{colors.on-dark}`, height ~56px, type `{typography.body-sm-strong}`, rounded `{rounded.none}`, with a 1px `{colors.hairline}` bottom rule.
+- Layout (desktop): Raycast wordmark at left, centered nav cluster ("Pro · AI · Store · Manual · Changelog · Blog · Pricing"), right cluster (Sign in link + the always-white `{component.button-primary}` "Download" CTA pill).
+
+**Top Nav (Mobile)**
+- Hamburger menu icon at left, Raycast wordmark at center, "Download" white CTA pill at right. Primary nav collapses into a full-screen drawer that slides from the left.
+
+### Footer
+
+**`footer-section`**
+- Background `{colors.canvas}`, text `{colors.body}` in `{typography.body-sm}`, padding `64px 48px`, with a 1px `{colors.hairline}` top rule.
+- Layout: 6-column horizontal link grid (Product · Core Features · Top Extensions · Company · Community · By Raycast) with column headers in `{typography.body-sm-strong}` `{colors.on-dark}` and link lists in `{typography.body-sm}` `{colors.body}`.
+- Bottom row: small Raycast wordmark + a subscribe newsletter input field with `{component.button-primary}` "Subscribe" at the right.
+- The very top of the footer band has a faint red stripe-gradient repeat — a smaller echo of the hero's diagonal stripe motif.
+
+### Inline
+
+**`link-inline`** — body-prose anchor link
+- `{colors.on-dark}` text with no underline by default; underlines on focus. Inline body links are full-white rather than a tinted accent color, which keeps the dark canvas tonally pure.
+
+## Do's and Don'ts
 
 ### Do
-- Use `#07080a` (not pure black) as the background — the blue-cold tint is essential to the Raycast feel
-- Apply positive letter-spacing (+0.2px) on body text — this is deliberately different from most dark UIs
-- Use multi-layer shadows with inset highlights for interactive elements — the macOS-native depth is signature
-- Keep Raycast Red (`#FF6363`) as punctuation, not pervasive — reserve it for hero moments and error states
-- Use `rgba(255, 255, 255, 0.06)` borders for card containment — barely visible, structurally essential
-- Apply weight 500 as the body text baseline — medium weight improves dark-mode legibility
-- Use pill shapes (86px+ radius) for primary CTAs, rectangular shapes (6px–8px) for secondary actions
-- Enable OpenType features `calt`, `kern`, `liga`, `ss03` on all Inter text
-- Use opacity transitions (hover: opacity 0.6) for button interactions, not color changes
+- Render the entire site in one continuous dark mode. There is no light variant in the system.
+- Use `{colors.primary}` (white pill) for every primary CTA. There is no second primary color — white IS the brand action.
+- Build elevation from the surface-color ladder (`{colors.canvas}` → `{colors.surface}` → `{colors.surface-elevated}` → `{colors.surface-card}`), never from drop shadows.
+- Enable `font-feature-settings: "calt", "kern", "liga", "ss03"` on the body element. The ss03 alternate `g` is part of the brand identity.
+- Anchor a `{component.command-palette-card}` mockup as the hero's load-bearing visual. Real Raycast UI is the brand.
+- Use `{component.keycap}` glyphs inline to indicate keyboard shortcuts. Subtle key-bg gradient (`{colors.key-bg-start}` → `{colors.key-bg-end}`) is the brand's only "depth" decoration.
+- Reserve `{colors.hero-stripe-start}` → `{colors.hero-stripe-end}` red gradient for the hero band exactly once per page. Never repeat the stripe gradient deeper in the page.
+- Use saturated category accents (`{colors.accent-yellow}`, `{colors.accent-red}`, `{colors.accent-green}`, `{colors.accent-blue}`) only inside extension and feature illustrations — never on chrome buttons or text.
 
 ### Don't
-- Use pure black (`#000000`) as the background — the blue tint differentiates Raycast from generic dark themes
-- Apply negative letter-spacing on body text — Raycast deliberately uses positive spacing for readability
-- Use Raycast Blue as the primary accent for everything — blue is for interactive/info, red is the brand color
-- Create single-layer flat shadows — the multi-layer inset system is core to the macOS-native aesthetic
-- Use regular weight (400) for body text when 500 is available — the extra weight prevents dark-mode text from feeling thin
-- Mix warm and cool borders — stick to the cool gray (`hsl(195, 5%, 15%)`) border palette
-- Apply heavy drop shadows without inset companions — shadows always come in pairs (outer + inset)
-- Use decorative elements, gradients, or colorful backgrounds — the dark void is the stage, content is the performer
+- Don't introduce a light mode. The system is dark-only by design.
+- Don't add drop shadows on cards. Elevation is built from the surface ladder, not from shadows.
+- Don't replace `{colors.primary}` (white) with a tinted accent for the primary CTA. Pure white is the brand action color.
+- Don't use the saturated accent colors (`{colors.accent-yellow}`, `{colors.accent-red}`, `{colors.accent-green}`, `{colors.accent-blue}`) on text, buttons, or chrome surfaces. They belong inside extension illustrations.
+- Don't repeat the hero stripe gradient outside the top hero band. The one-band rule is the system's restraint.
+- Don't use Inter without the `ss03` feature flag enabled. The chrome will lose its signature voice.
+- Don't pad cards with 32px+ on all sides. The system runs tight at 16–24px in-card padding.
 
-## 8. Responsive Behavior
+## Responsive Behavior
 
 ### Breakpoints
+
 | Name | Width | Key Changes |
-|------|-------|-------------|
-| Mobile | <600px | Single column, stacked cards, hamburger nav, hero text reduces to ~40px |
-| Small Tablet | 600px–768px | 2-column grid begins, nav partially visible |
-| Tablet | 768px–1024px | 2–3 column features, nav expanding, screenshots scale |
-| Desktop | 1024px–1200px | Full layout, all nav links visible, 64px hero display |
-| Large Desktop | >1200px | Max-width container centered, generous side margins |
+|---|---|---|
+| ultrawide | 1920px+ | Content max-width holds at 1240px; outer gutters grow to ~80px |
+| desktop-large | 1440px | Default — 3-up pricing grid, 2-up store extension grid |
+| desktop | 1280px | Same with narrower outer gutters |
+| desktop-small | 1024px | 3-up pricing collapses to 2+1; primary nav remains horizontal |
+| tablet | 768px | Pricing → 1-up stacked; primary nav becomes hamburger drawer |
+| mobile | 480px | Single-column everything; hero `{typography.display-xl}` scales 64px → ~36px |
+| mobile-narrow | 320px | Section padding tightens to 48px |
 
 ### Touch Targets
-- Pill buttons: 86px radius with 20px padding — well above 44px minimum
-- Secondary buttons: 8px padding minimum, but border provides visual target expansion
-- Nav links: 16px text with surrounding padding for accessible touch targets
+All interactive elements meet WCAG AA at 36px+. `{component.button-primary}` and `{component.button-tertiary}` sit at 36px height with 16px padding. `{component.text-input}` sits at 36px. `{component.store-search-bar}` sits at 44px (above AAA). `{component.pill-tab}` is ~24–28px height with 10px padding extending to 36–40px tappable via inline padding (above AA but below AAA — intentional, the chips are compact). `{component.install-button}` sits at ~32px height with 14px padding.
 
 ### Collapsing Strategy
-- **Navigation**: Full horizontal nav → hamburger at mobile with slide-out menu
-- **Hero**: 64px display → 48px → 36px across breakpoints
-- **Feature grids**: 3-column → 2-column → single-column stack
-- **Product screenshots**: Scale within containers, maintaining macOS window chrome proportions
-- **Keyboard shortcut displays**: Simplify or hide on mobile where keyboard shortcuts are irrelevant
+- **Primary nav:** desktop horizontal cluster → tablet hamburger drawer at 768px. The white "Download" CTA stays visible at every breakpoint.
+- **Hero command-palette mockup:** desktop full-fidelity 2-column with copy at left + mockup at right → tablet stacks vertical with mockup below copy → mobile mockup scales down to ~80% width.
+- **Store extension grid:** 2-up → 1-up at tablet.
+- **Pricing tier grid:** 3-up → 2+1 at desktop-small → 1-up stacked at tablet.
+- **Comparison table:** desktop full 5-column → tablet horizontal scroll → mobile vertical card stack with one tier per card.
+- **Footer:** 6-up link columns → 3-up at tablet → 2-up at mobile-landscape → 1-up at mobile.
+- **Section padding:** `{spacing.section}` (96px) desktop → 64px tablet → 48px mobile.
+- **Hero headline:** `{typography.display-xl}` (64px) at desktop, scaling 56px / 44px / 36px down the breakpoint stack.
 
 ### Image Behavior
-- Product screenshots scale responsively within fixed-ratio containers
-- Hero diagonal stripe pattern scales proportionally
-- macOS window chrome rounded corners maintained at all sizes
-- No lazy-loading artifacts — images are critical to the product narrative
+The only "imagery" in the system is in-product Raycast UI screenshots and small app-icon assets:
+- **Command-palette mockups** scale fluidly with the container; the in-product UI itself is responsive and re-renders for each breakpoint.
+- **App-icon tiles** stay at 48–64px fixed size at every breakpoint; they tile in flexible rows that wrap at narrower widths.
+- **Hero stripe gradient** stays at the top of the hero band at every breakpoint with the stripe angle preserved.
 
-## 9. Agent Prompt Guide
+## Iteration Guide
 
-### Quick Color Reference
-- Primary Background: Near-Black Blue (`#07080a`)
-- Primary Text: Near White (`#f9f9f9`)
-- Brand Accent: Raycast Red (`#FF6363`)
-- Interactive Blue: Raycast Blue (`hsl(202, 100%, 67%)` / ~`#55b3ff`)
-- Secondary Text: Medium Gray (`#9c9c9d`)
-- Card Surface: Surface 100 (`#101111`)
-- Border: Dark Border (`hsl(195, 5%, 15%)` / ~`#252829`)
+1. Focus on ONE component at a time. Pull its YAML entry and verify every property resolves.
+2. Reference component names and tokens directly (`{colors.primary}`, `{component.button-primary-pressed}`, `{rounded.md}`) — do not paraphrase.
+3. Run `npx @google/design.md lint DESIGN.md` after edits — `broken-ref`, `contrast-ratio`, and `orphaned-tokens` warnings flag issues automatically.
+4. Add new variants as separate component entries (`-pressed`, `-disabled`, `-active`) — do not bury them inside prose.
+5. Default body to `{typography.body-md}` (16px / 400 / 1.6); reach for `{typography.body-strong}` for emphasis; reserve `{typography.display-xl}` strictly for the hero band.
+6. Keep `{colors.primary}` (white CTA pill) scarce per viewport — at most one solid white pill per fold.
+7. When introducing a new component, ask whether it can be expressed with the existing surface-ladder + 8px-radius + ss03-Inter vocabulary before adding new tokens. The system's strength is that it almost never needs new ones.
 
-### Example Component Prompts
-- "Create a hero section on #07080a background with 64px Inter heading (weight 600, line-height 1.1), near-white text (#f9f9f9), and a semi-transparent white pill CTA button (hsla(0,0%,100%,0.815), 86px radius, dark text #18191a)"
-- "Design a feature card with #101111 background, 1px solid rgba(255,255,255,0.06) border, 16px border-radius, double-ring shadow (rgb(27,28,30) 0px 0px 0px 1px outer), 22px Inter heading, and #9c9c9d body text"
-- "Build a navigation bar on dark background (#07080a), Inter links at 16px weight 500 in #9c9c9d, hover to white, and a translucent white pill button at the right end"
-- "Create a keyboard shortcut display with key caps using gradient background (#121212→#0d0d0d), 5-layer shadow for physical depth, 4px radius, Inter 12px weight 600 text"
-- "Design an alert card with #101111 surface, Raycast Red (#FF6363) left border accent, translucent red glow (hsla(0,100%,69%,0.15)), white heading, and #cecece description text"
+## Known Gaps
 
-### Iteration Guide
-When refining existing screens generated with this design system:
-1. Check the background is `#07080a` not pure black — the blue tint is critical
-2. Verify letter-spacing is positive (+0.2px) on body text — negative spacing breaks the Raycast aesthetic
-3. Ensure shadows have both outer and inset layers — single-layer shadows look flat and wrong
-4. Confirm Inter has OpenType features `calt`, `kern`, `liga`, `ss03` enabled
-5. Test that hover states use opacity transitions (0.6) not color swaps — this is a core interaction pattern
+- **Mobile screenshots not captured** — responsive behavior synthesizes Raycast's mobile pattern (hamburger drawer, single-column grid, hero downscale) from desktop evidence and the breakpoint stack.
+- **Hover states not documented** by system policy. Raycast's in-product app has rich hover behavior on command-palette rows that this document doesn't capture.
+- **In-product app chrome** (the actual Raycast launcher running on macOS) is referenced in marketing screenshots but not documented as a separate UI system here. The marketing site is documented; the in-product app surface is its own design system.
+- **Dark mode is the only mode** — no light variant exists in the captured surfaces.
+- **Form validation states** beyond the focused-input border treatment are not present in the captured surfaces.
+- **Authenticated chrome** (account dashboard, billing settings, team management) not in the captured pages.

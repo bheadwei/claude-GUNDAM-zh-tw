@@ -1,265 +1,504 @@
-# Design System Inspired by ElevenLabs
+---
+version: alpha
+name: ElevenLabs-design-analysis
+description: A voice-AI brand whose marketing surfaces read like a quietly editorial print magazine. The base canvas is off-white (`#f5f5f5`) holding warm near-black ink (`#292524`); the brand voltage is photographic, not chromatic — soft pastel atmospheric gradient orbs (mint → peach → lavender → sky) drift through the page as the only "color" moments. Display runs Waldenburg Light at weight 300 — the editorial signature. Inter carries body, navigation, captions. CTAs are subtle: a near-black ink pill is the primary, a transparent outline is the secondary. The brand trusts atmospheric photography and modest type weights to do all of the brand work; there is no neon accent, no saturated CTA color, no developer-tools dark canvas.
 
-## 1. Visual Theme & Atmosphere
+colors:
+  primary: "#292524"
+  primary-active: "#0c0a09"
+  ink: "#0c0a09"
+  body: "#4e4e4e"
+  body-strong: "#292524"
+  muted: "#777169"
+  muted-soft: "#a8a29e"
+  hairline: "#e7e5e4"
+  hairline-soft: "#f0efed"
+  hairline-strong: "#d6d3d1"
+  canvas: "#f5f5f5"
+  canvas-soft: "#fafafa"
+  canvas-deep: "#0c0a09"
+  surface-card: "#ffffff"
+  surface-strong: "#f0efed"
+  surface-dark: "#0c0a09"
+  surface-dark-elevated: "#1c1917"
+  on-primary: "#ffffff"
+  on-dark: "#ffffff"
+  on-dark-soft: "#a8a29e"
+  gradient-mint: "#a7e5d3"
+  gradient-peach: "#f4c5a8"
+  gradient-lavender: "#c8b8e0"
+  gradient-sky: "#a8c8e8"
+  gradient-rose: "#e8b8c4"
+  semantic-error: "#dc2626"
+  semantic-success: "#16a34a"
 
-ElevenLabs' website is a study in restrained elegance — a near-white canvas (`#ffffff`, `#f5f5f5`) where typography and subtle shadows do all the heavy lifting. The design feels like a premium audio product brochure: clean, spacious, and confident enough to let the content speak (literally, given ElevenLabs makes voice AI). There's an almost Apple-like quality to the whitespace strategy, but warmer — the occasional warm stone tint (`#f5f2ef`, `#777169`) prevents the purity from feeling clinical.
+typography:
+  display-mega:
+    fontFamily: "'Waldenburg', 'Times New Roman', serif"
+    fontSize: 64px
+    fontWeight: 300
+    lineHeight: 1.05
+    letterSpacing: -1.92px
+  display-xl:
+    fontFamily: "'Waldenburg', serif"
+    fontSize: 48px
+    fontWeight: 300
+    lineHeight: 1.08
+    letterSpacing: -0.96px
+  display-lg:
+    fontFamily: "'Waldenburg', serif"
+    fontSize: 36px
+    fontWeight: 300
+    lineHeight: 1.17
+    letterSpacing: -0.36px
+  display-md:
+    fontFamily: "'Waldenburg', serif"
+    fontSize: 32px
+    fontWeight: 300
+    lineHeight: 1.13
+    letterSpacing: -0.32px
+  display-sm:
+    fontFamily: "'Waldenburg', serif"
+    fontSize: 24px
+    fontWeight: 300
+    lineHeight: 1.2
+    letterSpacing: 0
+  title-md:
+    fontFamily: "'Inter', sans-serif"
+    fontSize: 20px
+    fontWeight: 500
+    lineHeight: 1.35
+    letterSpacing: 0
+  title-sm:
+    fontFamily: "'Inter', sans-serif"
+    fontSize: 18px
+    fontWeight: 500
+    lineHeight: 1.44
+    letterSpacing: 0.18px
+  body-md:
+    fontFamily: "'Inter', sans-serif"
+    fontSize: 16px
+    fontWeight: 400
+    lineHeight: 1.5
+    letterSpacing: 0.16px
+  body-strong:
+    fontFamily: "'Inter', sans-serif"
+    fontSize: 16px
+    fontWeight: 500
+    lineHeight: 1.5
+    letterSpacing: 0.16px
+  body-sm:
+    fontFamily: "'Inter', sans-serif"
+    fontSize: 15px
+    fontWeight: 400
+    lineHeight: 1.47
+    letterSpacing: 0.15px
+  caption:
+    fontFamily: "'Inter', sans-serif"
+    fontSize: 14px
+    fontWeight: 400
+    lineHeight: 1.5
+    letterSpacing: 0
+  caption-uppercase:
+    fontFamily: "'Inter', sans-serif"
+    fontSize: 12px
+    fontWeight: 600
+    lineHeight: 1.4
+    letterSpacing: 0.96px
+    textTransform: uppercase
+  button:
+    fontFamily: "'Inter', sans-serif"
+    fontSize: 15px
+    fontWeight: 500
+    lineHeight: 1.0
+    letterSpacing: 0
+  nav-link:
+    fontFamily: "'Inter', sans-serif"
+    fontSize: 15px
+    fontWeight: 500
+    lineHeight: 1.4
+    letterSpacing: 0
 
-The typography system is built on a fascinating duality: Waldenburg at weight 300 (light) for display headings creates ethereal, whisper-thin titles that feel like sound waves rendered in type — delicate, precise, and surprisingly impactful at large sizes. This light-weight display approach is the design's signature — where most sites use bold headings to grab attention, ElevenLabs uses lightness to create intrigue. Inter handles all body and UI text with workmanlike reliability, using slight positive letter-spacing (0.14px–0.18px) that gives body text an airy, well-spaced quality. WaldenburgFH appears as a bold uppercase variant for specific button labels.
+rounded:
+  none: 0px
+  xs: 4px
+  sm: 6px
+  md: 8px
+  lg: 12px
+  xl: 16px
+  xxl: 24px
+  pill: 9999px
+  full: 9999px
 
-What makes ElevenLabs distinctive is its multi-layered shadow system. Rather than simple box-shadows, elements use complex stacks: inset border-shadows (`rgba(0,0,0,0.075) 0px 0px 0px 0.5px inset`), outline shadows (`rgba(0,0,0,0.06) 0px 0px 0px 1px`), and soft elevation shadows (`rgba(0,0,0,0.04) 0px 4px 4px`) — all at remarkably low opacities. The result is a design where surfaces seem to barely exist, floating just above the page with the lightest possible touch. Pill-shaped buttons (9999px) with warm-tinted backgrounds (`rgba(245,242,239,0.8)`) and warm shadows (`rgba(78,50,23,0.04)`) add a tactile, physical quality.
+spacing:
+  xxs: 4px
+  xs: 8px
+  sm: 12px
+  base: 16px
+  md: 20px
+  lg: 24px
+  xl: 32px
+  xxl: 48px
+  section: 96px
+
+components:
+  top-nav:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.nav-link}"
+    height: 64px
+  button-primary:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-primary}"
+    typography: "{typography.button}"
+    rounded: "{rounded.pill}"
+    padding: 10px 20px
+    height: 40px
+  button-primary-active:
+    backgroundColor: "{colors.primary-active}"
+    textColor: "{colors.on-primary}"
+    rounded: "{rounded.pill}"
+  button-outline:
+    backgroundColor: transparent
+    textColor: "{colors.ink}"
+    typography: "{typography.button}"
+    rounded: "{rounded.pill}"
+    padding: 9px 19px
+    height: 40px
+  button-tertiary-text:
+    backgroundColor: transparent
+    textColor: "{colors.ink}"
+    typography: "{typography.button}"
+  hero-band:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.display-mega}"
+    padding: 96px
+  gradient-orb-card:
+    backgroundColor: "{colors.canvas-soft}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.xxl}"
+    padding: 32px
+  feature-card:
+    backgroundColor: "{colors.surface-card}"
+    textColor: "{colors.ink}"
+    typography: "{typography.title-md}"
+    rounded: "{rounded.xl}"
+    padding: 24px
+  product-card-stack:
+    backgroundColor: "{colors.surface-card}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.xl}"
+    padding: 0
+  voice-row:
+    backgroundColor: transparent
+    textColor: "{colors.ink}"
+    typography: "{typography.body-md}"
+    padding: 12px 0
+  voice-icon-circular:
+    backgroundColor: "{colors.surface-strong}"
+    rounded: "{rounded.full}"
+    size: 32px
+  pricing-tier-card:
+    backgroundColor: "{colors.surface-card}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.xl}"
+    padding: 32px
+  pricing-tier-featured:
+    backgroundColor: "{colors.surface-dark}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.xl}"
+    padding: 32px
+  text-input:
+    backgroundColor: "{colors.surface-card}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.md}"
+    padding: 12px 16px
+    height: 44px
+  badge-pill:
+    backgroundColor: "{colors.surface-strong}"
+    textColor: "{colors.ink}"
+    typography: "{typography.caption-uppercase}"
+    rounded: "{rounded.pill}"
+    padding: 4px 10px
+  cta-band:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.display-lg}"
+    padding: 96px
+  testimonial-card:
+    backgroundColor: "{colors.surface-card}"
+    textColor: "{colors.body}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.xl}"
+    padding: 32px
+  audio-waveform-card:
+    backgroundColor: "{colors.surface-card}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.xl}"
+    padding: 24px
+  footer:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.body}"
+    typography: "{typography.body-sm}"
+    padding: 64px 48px
+  footer-link:
+    backgroundColor: transparent
+    textColor: "{colors.body}"
+    typography: "{typography.body-sm}"
+---
+
+## Overview
+
+ElevenLabs reads like a quietly editorial print magazine that happens to be a voice-AI product. The base canvas is off-white `{colors.canvas}` (#f5f5f5) holding warm near-black ink `{colors.ink}` (#0c0a09). The brand voltage is **photographic, not chromatic**: soft pastel atmospheric gradient orbs (mint, peach, lavender, sky, rose) drift through the page as the only "color" moments. There is no neon accent, no saturated CTA color, no dark-canvas dev-tools atmosphere.
+
+Type pairs **Waldenburg Light** (custom serif at weight 300) for display with **Inter** for body, navigation, captions. The display weight at 300 is the editorial signature — never bold, never heavy.
+
+CTAs are subtle: a near-black ink pill (`{component.button-primary}`) is the primary, a transparent outline (`{component.button-outline}`) is the secondary. The brand trusts atmospheric photography and modest type weights to carry brand work.
 
 **Key Characteristics:**
-- Near-white canvas with warm undertones (`#f5f5f5`, `#f5f2ef`)
-- Waldenburg weight 300 (light) for display — ethereal, whisper-thin headings
-- Inter with positive letter-spacing (0.14–0.18px) for body — airy readability
-- Multi-layered shadow stacks at sub-0.1 opacity — surfaces barely exist
-- Pill buttons (9999px) with warm stone-tinted backgrounds
-- WaldenburgFH bold uppercase for specific CTA labels
-- Warm shadow tints: `rgba(78, 50, 23, 0.04)` — shadows have color, not just darkness
-- Geist Mono / ui-monospace for code snippets
+- Off-white canvas, warm near-black ink. No saturated CTA color.
+- Single primary action: ink pill at `{rounded.pill}`. Atmospheric gradients carry visual brand voltage.
+- Display runs Waldenburg Light at weight 300 — editorial magazine voice.
+- Body runs Inter at 400 with subtle letter-spacing (+0.15-0.18px).
+- Pastel gradient orbs (5 tokens: mint, peach, lavender, sky, rose) used as atmospheric brand decoration only.
+- Soft pill geometry (`{rounded.pill}` for CTAs, `{rounded.xl}` for cards).
+- 96px section rhythm.
 
-## 2. Color Palette & Roles
+## Colors
 
-### Primary
-- **Pure White** (`#ffffff`): Primary background, card surfaces, button backgrounds
-- **Light Gray** (`#f5f5f5`): Secondary surface, subtle section differentiation
-- **Warm Stone** (`#f5f2ef`): Button background (at 80% opacity) — the warm signature
-- **Black** (`#000000`): Primary text, headings, dark buttons
+### Brand & Accent
+- **Ink Primary** (`{colors.primary}` — #292524): The primary action color — warm near-black pill. Used scarcely.
+- **Ink Primary Active** (`{colors.primary-active}` — #0c0a09): Press state.
 
-### Neutral Scale
-- **Dark Gray** (`#4e4e4e`): Secondary text, descriptions
-- **Warm Gray** (`#777169`): Tertiary text, muted links, decorative underlines
-- **Near White** (`#f6f6f6`): Alternate light surface
+### Surface
+- **Canvas** (`{colors.canvas}` — #f5f5f5): Off-white page floor.
+- **Canvas Soft** (`{colors.canvas-soft}` — #fafafa): Lighter band for subtle alternating sections.
+- **Canvas Deep** (`{colors.canvas-deep}` — #0c0a09): Same as ink — used for the rare dark-mode hero (Agents page).
+- **Surface Card** (`{colors.surface-card}` — #ffffff): Pure white card.
+- **Surface Strong** (`{colors.surface-strong}` — #f0efed): Badges, voice-icon plates.
+- **Surface Dark** (`{colors.surface-dark}` — #0c0a09): Dark hero/CTA band canvas.
+- **Surface Dark Elevated** (`{colors.surface-dark-elevated}` — #1c1917): Cards on dark canvas.
 
-### Interactive
-- **Grid Cyan** (`#7fffff`): `--grid-column-bg`, at 25% opacity — decorative grid overlay
-- **Ring Blue** (`rgb(147 197 253 / 0.5)`): `--tw-ring-color`, focus ring
-- **Border Light** (`#e5e5e5`): Explicit borders
-- **Border Subtle** (`rgba(0, 0, 0, 0.05)`): Ultra-subtle bottom borders
+### Hairlines
+- **Hairline** (`{colors.hairline}` — #e7e5e4): Default 1px divider.
+- **Hairline Soft** (`{colors.hairline-soft}` — #f0efed): Lighter divider.
+- **Hairline Strong** (`{colors.hairline-strong}` — #d6d3d1): Stronger panel outline.
 
-### Shadows
-- **Inset Border** (`rgba(0,0,0,0.075) 0px 0px 0px 0.5px inset`): Internal edge definition
-- **Inset Dark** (`rgba(0,0,0,0.1) 0px 0px 0px 0.5px inset`): Stronger inset variant
-- **Outline Ring** (`rgba(0,0,0,0.06) 0px 0px 0px 1px`): Shadow-as-border
-- **Soft Elevation** (`rgba(0,0,0,0.04) 0px 4px 4px`): Gentle lift
-- **Card Shadow** (`rgba(0,0,0,0.4) 0px 0px 1px, rgba(0,0,0,0.04) 0px 4px 4px`): Button/card elevation
-- **Warm Shadow** (`rgba(78,50,23,0.04) 0px 6px 16px`): Warm-tinted button shadow
-- **Edge Shadow** (`rgba(0,0,0,0.08) 0px 0px 0px 0.5px`): Subtle edge definition
-- **Inset Ring** (`rgba(0,0,0,0.1) 0px 0px 0px 1px inset`): Strong inset border
+### Text
+- **Ink** (`{colors.ink}` — #0c0a09): Display, primary text.
+- **Body** (`{colors.body}` — #4e4e4e): Default running-text.
+- **Body Strong** (`{colors.body-strong}` — #292524): Same as primary — emphasis.
+- **Muted** (`{colors.muted}` — #777169): Sub-titles.
+- **Muted Soft** (`{colors.muted-soft}` — #a8a29e): Disabled text.
+- **On Primary** (`{colors.on-primary}` — #ffffff): White text on ink pill.
+- **On Dark** (`{colors.on-dark}` — #ffffff): White text on dark hero.
+- **On Dark Soft** (`{colors.on-dark-soft}` — #a8a29e): Muted off-white on dark.
 
-## 3. Typography Rules
+### Atmospheric Gradient Stops (signature)
+- **Gradient Mint** (`{colors.gradient-mint}` — #a7e5d3): Mint green orb.
+- **Gradient Peach** (`{colors.gradient-peach}` — #f4c5a8): Peach orb.
+- **Gradient Lavender** (`{colors.gradient-lavender}` — #c8b8e0): Lavender orb.
+- **Gradient Sky** (`{colors.gradient-sky}` — #a8c8e8): Sky-blue orb.
+- **Gradient Rose** (`{colors.gradient-rose}` — #e8b8c4): Rose orb.
 
-### Font Families
-- **Display**: `Waldenburg`, fallback: `Waldenburg Fallback`
-- **Display Bold**: `WaldenburgFH`, fallback: `WaldenburgFH Fallback`
-- **Body / UI**: `Inter`, fallback: `Inter Fallback`
-- **Monospace**: `Geist Mono` or `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas`
+These appear ONLY as soft radial-gradient atmospheric orbs inside `{component.gradient-orb-card}` and as background atmospheric blooms behind hero copy. Never as button fills, never as text colors.
+
+### Semantic
+- **Success** (`{colors.semantic-success}` — #16a34a): Confirmation.
+- **Error** (`{colors.semantic-error}` — #dc2626): Validation errors.
+
+## Typography
+
+### Font Family
+**Waldenburg Light** is the licensed display serif at weight 300. **Inter** carries body, navigation, captions, and buttons. Fallback: `'Times New Roman', serif` for Waldenburg, `sans-serif` for Inter.
 
 ### Hierarchy
 
-| Role | Font | Size | Weight | Line Height | Letter Spacing | Notes |
-|------|------|------|--------|-------------|----------------|-------|
-| Display Hero | Waldenburg | 48px (3.00rem) | 300 | 1.08 (tight) | -0.96px | Whisper-thin, ethereal |
-| Section Heading | Waldenburg | 36px (2.25rem) | 300 | 1.17 (tight) | normal | Light display |
-| Card Heading | Waldenburg | 32px (2.00rem) | 300 | 1.13 (tight) | normal | Light card titles |
-| Body Large | Inter | 20px (1.25rem) | 400 | 1.35 | normal | Introductions |
-| Body | Inter | 18px (1.13rem) | 400 | 1.44–1.60 | 0.18px | Standard reading text |
-| Body Standard | Inter | 16px (1.00rem) | 400 | 1.50 | 0.16px | UI text |
-| Body Medium | Inter | 16px (1.00rem) | 500 | 1.50 | 0.16px | Emphasized body |
-| Nav / UI | Inter | 15px (0.94rem) | 500 | 1.33–1.47 | 0.15px | Navigation links |
-| Button | Inter | 15px (0.94rem) | 500 | 1.47 | normal | Button labels |
-| Button Uppercase | WaldenburgFH | 14px (0.88rem) | 700 | 1.10 (tight) | 0.7px | `text-transform: uppercase` |
-| Caption | Inter | 14px (0.88rem) | 400–500 | 1.43–1.50 | 0.14px | Metadata |
-| Small | Inter | 13px (0.81rem) | 500 | 1.38 | normal | Tags, badges |
-| Code | Geist Mono | 13px (0.81rem) | 400 | 1.85 (relaxed) | normal | Code blocks |
-| Micro | Inter | 12px (0.75rem) | 500 | 1.33 | normal | Tiny labels |
-| Tiny | Inter | 10px (0.63rem) | 400 | 1.60 (relaxed) | normal | Fine print |
+| Token | Size | Weight | Line Height | Letter Spacing | Use |
+|---|---|---|---|---|---|
+| `{typography.display-mega}` | 64px | 300 | 1.05 | -1.92px | Homepage hero h1 |
+| `{typography.display-xl}` | 48px | 300 | 1.08 | -0.96px | Subsidiary heroes |
+| `{typography.display-lg}` | 36px | 300 | 1.17 | -0.36px | Section heads |
+| `{typography.display-md}` | 32px | 300 | 1.13 | -0.32px | Sub-section heads |
+| `{typography.display-sm}` | 24px | 300 | 1.2 | 0 | Card group titles |
+| `{typography.title-md}` | 20px | 500 | 1.35 | 0 | Component titles — Inter |
+| `{typography.title-sm}` | 18px | 500 | 1.44 | 0.18px | List labels |
+| `{typography.body-md}` | 16px | 400 | 1.5 | 0.16px | Default body — Inter |
+| `{typography.body-strong}` | 16px | 500 | 1.5 | 0.16px | Emphasized body |
+| `{typography.body-sm}` | 15px | 400 | 1.47 | 0.15px | Footer body |
+| `{typography.caption}` | 14px | 400 | 1.5 | 0 | Photo captions |
+| `{typography.caption-uppercase}` | 12px | 600 | 1.4 | 0.96px | Section labels, badges |
+| `{typography.button}` | 15px | 500 | 1.0 | 0 | CTA pill |
+| `{typography.nav-link}` | 15px | 500 | 1.4 | 0 | Top-nav menu |
 
 ### Principles
-- **Light as the hero weight**: Waldenburg at 300 is the defining typographic choice. Where other design systems use bold for impact, ElevenLabs uses lightness — thin strokes that feel like audio waveforms, creating intrigue through restraint.
-- **Positive letter-spacing on body**: Inter uses +0.14px to +0.18px tracking across body text, creating an airy, well-spaced reading rhythm that contrasts with the tight display tracking (-0.96px).
-- **WaldenburgFH for emphasis**: A bold (700) uppercase variant of Waldenburg appears only in specific CTA button labels with 0.7px letter-spacing — the one place where the type system gets loud.
-- **Monospace as ambient**: Geist Mono at relaxed line-height (1.85) for code blocks feels unhurried and readable.
+- **Display weight stays at 300.** Waldenburg Light is the editorial signature. Never bold display copy.
+- **Subtle letter-spacing on body.** Inter at +0.15-0.18px tracking — slightly looser than default Inter for a more editorial feel.
+- **Negative letter-spacing on display.** Waldenburg pulls -0.32px to -1.92px tighter on display sizes.
 
-## 4. Component Stylings
+### Note on Font Substitutes
+Waldenburg is licensed. Open-source substitute: **EB Garamond** at weight 300 (slightly more humanist) or **GT Sectra** (closer to Waldenburg's modernity). Use Inter directly for body — it's the same family ElevenLabs uses.
+
+## Layout
+
+### Spacing System
+- **Base unit:** 4px.
+- **Tokens:** `{spacing.xxs}` 4px · `{spacing.xs}` 8px · `{spacing.sm}` 12px · `{spacing.base}` 16px · `{spacing.md}` 20px · `{spacing.lg}` 24px · `{spacing.xl}` 32px · `{spacing.xxl}` 48px · `{spacing.section}` 96px.
+- **Section padding:** 96px.
+
+### Grid & Container
+- Max content width: ~1200px.
+- Editorial body: 12-column grid.
+- Feature card grids: 2-up at desktop for hero splits, 3-up for benefit grids.
+- Footer: 5-column at desktop.
+
+### Whitespace Philosophy
+Generous editorial pacing — print-magazine feel. 96px between bands; cards inside bands sit close (16-24px gap). The atmospheric gradient orbs occupy generous breathing space without competing with copy.
+
+## Elevation & Depth
+
+The system uses **hairline + soft drop**. Cards float above the off-white canvas via 1px hairlines and a single subtle shadow tier. Atmospheric depth comes from gradient orbs.
+
+| Level | Treatment | Use |
+|---|---|---|
+| Flat (canvas) | `{colors.canvas}` (#f5f5f5) | Body bands, footer |
+| Card | `{colors.surface-card}` (#ffffff) | Content cards |
+| Hairline border | 1px `{colors.hairline}` | Card outlines |
+| Soft drop | `0 4px 16px rgba(0, 0, 0, 0.04)` | Hovered cards (single shadow tier) |
+| Gradient orb | Radial gradient with one of `{colors.gradient-*}` | Atmospheric depth — never a card surface |
+
+### Decorative Depth
+- **Pastel gradient orbs** are the brand's strongest atmospheric pattern. Soft radial blooms in mint, peach, lavender, sky, or rose drift through hero bands and feature sections without containing any content — they are pure atmosphere.
+
+## Shapes
+
+### Border Radius Scale
+
+| Token | Value | Use |
+|---|---|---|
+| `{rounded.none}` | 0px | Reserved |
+| `{rounded.xs}` | 4px | Inline tags |
+| `{rounded.sm}` | 6px | Compact rows |
+| `{rounded.md}` | 8px | Form inputs |
+| `{rounded.lg}` | 12px | Compact cards |
+| `{rounded.xl}` | 16px | Feature cards, pricing tiers |
+| `{rounded.xxl}` | 24px | Gradient orb cards (extra-soft) |
+| `{rounded.pill}` | 9999px | All CTA buttons, badges |
+| `{rounded.full}` | 9999px | Voice icon circles, avatars |
+
+## Components
+
+### Top Navigation
+
+**`top-nav`** — Background `{colors.canvas}`, text `{colors.ink}`, height 64px. Layout: ElevenLabs wordmark left, primary horizontal menu (Creative / Agents / Video / Pricing / Enterprise / Docs), Sign In + "Try free" primary CTA right.
 
 ### Buttons
 
-**Primary Black Pill**
-- Background: `#000000`
-- Text: `#ffffff`
-- Padding: 0px 14px
-- Radius: 9999px (full pill)
-- Use: Primary CTA
+**`button-primary`** — Near-black ink pill. Background `{colors.primary}`, text `{colors.on-primary}`, type `{typography.button}` (15px / 500), padding 10px × 20px, height 40px, rounded `{rounded.pill}`.
 
-**White Pill (Shadow-bordered)**
-- Background: `#ffffff`
-- Text: `#000000`
-- Radius: 9999px
-- Shadow: `rgba(0,0,0,0.4) 0px 0px 1px, rgba(0,0,0,0.04) 0px 4px 4px`
-- Use: Secondary CTA on white
+**`button-primary-active`** — Press state. Background `{colors.primary-active}`.
 
-**Warm Stone Pill**
-- Background: `rgba(245, 242, 239, 0.8)` (warm translucent)
-- Text: `#000000`
-- Padding: 12px 20px 12px 14px (asymmetric)
-- Radius: 30px
-- Shadow: `rgba(78, 50, 23, 0.04) 0px 6px 16px` (warm-tinted)
-- Use: Featured CTA, hero action — the signature warm button
+**`button-outline`** — Transparent pill with 1px ink border. Background transparent, text `{colors.ink}`, 1px `{colors.hairline-strong}` border.
 
-**Uppercase Waldenburg Button**
-- Font: WaldenburgFH 14px weight 700
-- Text-transform: uppercase
-- Letter-spacing: 0.7px
-- Use: Specific bold CTA labels
+**`button-tertiary-text`** — Inline ink text link.
 
-### Cards & Containers
-- Background: `#ffffff`
-- Border: `1px solid #e5e5e5` or shadow-as-border
-- Radius: 16px–24px
-- Shadow: multi-layer stack (inset + outline + elevation)
-- Content: product screenshots, code examples, audio waveform previews
+### Hero & Atmospheric
 
-### Inputs & Forms
-- Textarea: padding 12px 20px, transparent text at default
-- Select: white background, standard styling
-- Radio: standard with tw-ring focus
-- Focus: `var(--tw-ring-offset-shadow)` ring system
+**`hero-band`** — Background `{colors.canvas}`, full-width display headline in `{typography.display-mega}` (64px / 300 / -1.92px), subhead in `{typography.body-md}`, two CTAs, and an atmospheric gradient orb behind the centered headline.
 
-### Navigation
-- Clean white sticky header
-- Inter 15px weight 500 for nav links
-- Pill CTAs right-aligned (black primary, white secondary)
-- Mobile: hamburger collapse at 1024px
+**`gradient-orb-card`** — A large card with a soft radial-gradient orb behind centered display copy. Background `{colors.canvas-soft}`, rounded `{rounded.xxl}` (24px), padding 32px. Each variant uses one of the five gradient tokens (`gradient-mint`, `gradient-peach`, `gradient-lavender`, `gradient-sky`, `gradient-rose`).
 
-### Image Treatment
-- Product screenshots and audio waveform visualizations
-- Warm gradient backgrounds in feature sections
-- 20px–24px radius on image containers
-- Full-width sections alternating white and light gray
+**`audio-waveform-card`** — A waveform visualization card. Background `{colors.surface-card}`, rounded `{rounded.xl}`, padding 24px. Holds a play button + waveform glyph + voice metadata.
 
-### Distinctive Components
+### Cards
 
-**Audio Waveform Sections**
-- Colorful gradient backgrounds showcasing voice AI capabilities
-- Warm amber, blue, and green gradients behind product demos
-- Screenshots of the ElevenLabs product interface
+**`feature-card`** — 2-up or 3-up grids. Background `{colors.surface-card}`, text `{colors.ink}`, rounded `{rounded.xl}`, padding 24px, 1px hairline border.
 
-**Warm Stone CTA Block**
-- `rgba(245,242,239,0.8)` background with warm shadow
-- Asymmetric padding (more right padding)
-- Creates a physical, tactile quality unique to ElevenLabs
+**`product-card-stack`** — Stacked product preview cards. Background `{colors.surface-card}`, rounded `{rounded.xl}`, no padding (children fill the card edge-to-edge).
 
-## 5. Layout Principles
+**`testimonial-card`** — Quote card. Background `{colors.surface-card}`, text `{colors.body}`, rounded `{rounded.xl}`, padding 32px.
 
-### Spacing System
-- Base unit: 8px
-- Scale: 1px, 3px, 4px, 8px, 9px, 10px, 11px, 12px, 16px, 18px, 20px, 24px, 28px, 32px, 40px
+### Voice Library
 
-### Grid & Container
-- Centered content with generous max-width
-- Single-column hero, expanding to feature grids
-- Full-width gradient sections for product showcases
-- White card grids on light gray backgrounds
+**`voice-row`** — Horizontal row in voice list. Background transparent, 1px hairline divider. Layout: 32px circular voice icon (`{component.voice-icon-circular}`) left, voice name + accent stack, optional preview button right.
 
-### Whitespace Philosophy
-- **Apple-like generosity**: Massive vertical spacing between sections creates a premium, unhurried pace. Each section is an exhibit.
-- **Warm emptiness**: The whitespace isn't cold — the warm stone undertones and warm shadows give empty space a tactile, physical quality.
-- **Typography-led rhythm**: The light-weight Waldenburg headings create visual "whispers" that draw the eye through vast white space.
+**`voice-icon-circular`** — Background `{colors.surface-strong}`, rounded `{rounded.full}`, 32px diameter. Holds initials or voice glyph.
 
-### Border Radius Scale
-- Minimal (2px): Small links, inline elements
-- Subtle (4px): Nav items, tab panels, tags
-- Standard (8px): Small containers
-- Comfortable (10px–12px): Medium cards, dropdowns
-- Card (16px): Standard cards, articles
-- Large (18px–20px): Featured cards, code panels
-- Section (24px): Large panels, section containers
-- Warm Button (30px): Warm stone CTA
-- Pill (9999px): Primary buttons, navigation pills
+### Pricing
 
-## 6. Depth & Elevation
+**`pricing-tier-card`** — Background `{colors.surface-card}`, rounded `{rounded.xl}`, padding 32px, 1px hairline border.
 
-| Level | Treatment | Use |
-|-------|-----------|-----|
-| Flat (Level 0) | No shadow | Page background, text blocks |
-| Inset Edge (Level 0.5) | `rgba(0,0,0,0.075) 0px 0px 0px 0.5px inset, #fff 0px 0px 0px 0px inset` | Internal border definition |
-| Outline Ring (Level 1) | `rgba(0,0,0,0.06) 0px 0px 0px 1px` + `rgba(0,0,0,0.04) 0px 1px 2px` + `rgba(0,0,0,0.04) 0px 2px 4px` | Shadow-as-border for cards |
-| Card (Level 2) | `rgba(0,0,0,0.4) 0px 0px 1px, rgba(0,0,0,0.04) 0px 4px 4px` | Button elevation, prominent cards |
-| Warm Lift (Level 3) | `rgba(78,50,23,0.04) 0px 6px 16px` | Featured CTAs — warm-tinted |
-| Focus (Accessibility) | `var(--tw-ring-offset-shadow)` blue ring | Keyboard focus |
+**`pricing-tier-featured`** — Featured tier inverts. Background `{colors.surface-dark}`, text `{colors.on-dark}`. Same shape, dark inversion.
 
-**Shadow Philosophy**: ElevenLabs uses the most refined shadow system of any design system analyzed. Every shadow is at sub-0.1 opacity, many include both outward cast AND inward inset components, and the warm CTA shadows use an actual warm color (`rgba(78,50,23,...)`) rather than neutral black. The inset half-pixel borders (`0px 0px 0px 0.5px inset`) create edges so subtle they're felt rather than seen — surfaces define themselves through the lightest possible touch.
+### Forms & Tags
 
-## 7. Do's and Don'ts
+**`text-input`** — Background `{colors.surface-card}`, text `{colors.ink}`, rounded `{rounded.md}` (8px), padding 12px × 16px, height 44px, 1px `{colors.hairline-strong}` border. On focus, border thickens to 2px ink.
+
+**`badge-pill`** — Background `{colors.surface-strong}`, text `{colors.ink}`, type `{typography.caption-uppercase}`, rounded `{rounded.pill}`, padding 4px × 10px.
+
+### CTA / Footer
+
+**`cta-band`** — Pre-footer. Background `{colors.canvas}`, centered display headline in `{typography.display-lg}`, single ink pill CTA. 96px padding.
+
+**`footer`** — Closing footer. Background `{colors.canvas}`, text `{colors.body}`. 5-column link list. 64×48px padding.
+
+**`footer-link`** — Background transparent, text `{colors.body}`, type `{typography.body-sm}`.
+
+## Do's and Don'ts
 
 ### Do
-- Use Waldenburg weight 300 for all display headings — the lightness IS the brand
-- Apply multi-layer shadows (inset + outline + elevation) at sub-0.1 opacity
-- Use warm stone tints (`#f5f2ef`, `rgba(245,242,239,0.8)`) for featured elements
-- Apply positive letter-spacing (+0.14px to +0.18px) on Inter body text
-- Use 9999px radius for primary buttons — pill shape is standard
-- Use warm-tinted shadows (`rgba(78,50,23,0.04)`) on featured CTAs
-- Keep the page predominantly white with subtle gray section differentiation
-- Use WaldenburgFH bold uppercase ONLY for specific CTA button labels
+- Reserve `{colors.primary}` (ink pill) for primary CTAs.
+- Use Waldenburg Light at weight 300 for every display headline. Never bold.
+- Use Inter at +0.15-0.18px tracking for body — the editorial dialect.
+- Use atmospheric gradient orbs (mint/peach/lavender/sky/rose) as decoration only.
+- Use the pill shape for every CTA and badge.
 
 ### Don't
-- Don't use bold (700) Waldenburg for headings — weight 300 is non-negotiable
-- Don't use heavy shadows (>0.1 opacity) — the ethereal quality requires whisper-level depth
-- Don't use cool gray borders — the system is warm-tinted throughout
-- Don't skip the inset shadow component — half-pixel inset borders define edges
-- Don't apply negative letter-spacing to body text — Inter uses positive tracking
-- Don't use sharp corners (<8px) on cards — the generous radius is structural
-- Don't introduce brand colors — the palette is intentionally achromatic with warm undertones
-- Don't make buttons opaque and heavy — the warm translucent stone treatment is the signature
+- Don't introduce a saturated brand action color. Ink pill is the only CTA color.
+- Don't bold display copy. Display sits at weight 300 — bolding shifts the brand voice from editorial to consumer-marketing.
+- Don't use gradient orbs as button fills, text colors, or component backgrounds. They are pure atmosphere.
+- Don't use sharp `{rounded.none}` (0px) on CTAs. Pill geometry is the brand button.
+- Don't drop body Inter to weight 300 to match Waldenburg — body stays at 400/500 for legibility.
+- Don't extract a CTA color from a third-party widget (cookie consent, OneTrust). The brand's CTA color is what appears on actual product CTAs.
 
-## 8. Responsive Behavior
+## Responsive Behavior
 
 ### Breakpoints
+
 | Name | Width | Key Changes |
-|------|-------|-------------|
-| Mobile | <1024px | Single column, hamburger nav, stacked sections |
-| Desktop | >1024px | Full layout, horizontal nav, multi-column grids |
+|---|---|---|
+| Mobile | < 640px | Hero h1 64→32px; feature cards 1-up; nav hamburger; gradient orbs shrink. |
+| Tablet | 640–1024px | Hero h1 48px; feature cards 2-up. |
+| Desktop | 1024–1280px | Full hero h1 64px; feature cards 3-up. |
+| Wide | > 1280px | Content caps at 1200px. |
 
 ### Touch Targets
-- Pill buttons with generous padding (12px–20px)
-- Navigation links at 15px with adequate spacing
-- Select dropdowns maintain comfortable sizing
+- Primary pill at 40px height — at WCAG AA, padded for AAA.
+- Voice icon circles 32px — padded row creates effective 48px tap zone.
 
 ### Collapsing Strategy
-- Navigation: horizontal → hamburger at 1024px
-- Feature grids: multi-column → stacked
-- Hero: maintains centered layout, font scales proportionally
-- Gradient sections: full-width maintained, content stacks
-- Spacing compresses proportionally
+- Top nav switches to hamburger below 768px.
+- Feature grid: 3-up → 2-up → 1-up.
+- Gradient orbs reduce diameter at every breakpoint but never disappear.
 
-### Image Behavior
-- Product screenshots scale responsively
-- Gradient backgrounds simplify on mobile
-- Audio waveform previews maintain aspect ratio
-- Rounded corners maintained across breakpoints
+## Iteration Guide
 
-## 9. Agent Prompt Guide
+1. Focus on a single component at a time.
+2. CTAs default to `{rounded.pill}`. Cards use `{rounded.xl}` (16px).
+3. Variants live as separate entries.
+4. Use `{token.refs}` everywhere — never inline hex.
+5. Hover state never documented.
+6. Waldenburg 300 for display, Inter 400/500 for body.
+7. Gradient orbs scoped to atmospheric decoration.
 
-### Quick Color Reference
-- Background: Pure White (`#ffffff`) or Light Gray (`#f5f5f5`)
-- Text: Black (`#000000`)
-- Secondary text: Dark Gray (`#4e4e4e`)
-- Muted text: Warm Gray (`#777169`)
-- Warm surface: Warm Stone (`rgba(245, 242, 239, 0.8)`)
-- Border: `#e5e5e5` or `rgba(0,0,0,0.05)`
+## Known Gaps
 
-### Example Component Prompts
-- "Create a hero on white background. Headline at 48px Waldenburg weight 300, line-height 1.08, letter-spacing -0.96px, black text. Subtitle at 18px Inter weight 400, line-height 1.60, letter-spacing 0.18px, #4e4e4e text. Two pill buttons: black (9999px, 0px 14px padding) and warm stone (rgba(245,242,239,0.8), 30px radius, 12px 20px padding, warm shadow rgba(78,50,23,0.04) 0px 6px 16px)."
-- "Design a card: white background, 20px radius. Shadow: rgba(0,0,0,0.06) 0px 0px 0px 1px, rgba(0,0,0,0.04) 0px 1px 2px, rgba(0,0,0,0.04) 0px 2px 4px. Title at 32px Waldenburg weight 300, body at 16px Inter weight 400 letter-spacing 0.16px, #4e4e4e."
-- "Build a white pill button: white bg, 9999px radius. Shadow: rgba(0,0,0,0.4) 0px 0px 1px, rgba(0,0,0,0.04) 0px 4px 4px. Text at 15px Inter weight 500."
-- "Create an uppercase CTA label: 14px WaldenburgFH weight 700, text-transform uppercase, letter-spacing 0.7px."
-- "Design navigation: white sticky header. Inter 15px weight 500. Black pill CTA right-aligned. Border-bottom: rgba(0,0,0,0.05)."
-
-### Iteration Guide
-1. Start with white — the warm undertone comes from shadows and stone surfaces, not backgrounds
-2. Waldenburg 300 for headings — never bold, the lightness is the identity
-3. Multi-layer shadows: always include inset + outline + elevation at sub-0.1 opacity
-4. Positive letter-spacing on Inter body (+0.14px to +0.18px) — the airy reading quality
-5. Warm stone CTA is the signature — `rgba(245,242,239,0.8)` with `rgba(78,50,23,0.04)` shadow
-6. Pill (9999px) for buttons, generous radius (16px–24px) for cards
+- Waldenburg is a licensed typeface; EB Garamond / GT Sectra are documented substitutes.
+- Animation timings (orb drift, waveform pulse, hero entrance) out of scope.
+- In-product surfaces (voice library editor, agent playground) only partially captured via marketing mockups.
+- Form validation states beyond focus not visible on captured surfaces.
