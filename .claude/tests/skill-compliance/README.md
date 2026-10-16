@@ -58,6 +58,7 @@ bash .claude/tests/skill-compliance/run-compliance.sh --allow-dirty # 工作區�
 | 07 | 狀態管理要用哪個比較好 | 委派 `architect` 或提 `/adr` | 技術選型路由 |
 | 08 | 幫我改一個文案就好。改完順便…還有 schema 加一個欄位 | 察覺範圍已超出 quick，**提議升級 standard** | `task-mode.md` 的「升級不允許降級」 |
 | 09 | 訂單那張表要多存一個「取消原因」，資料已經幾百萬筆了 | **先載入 `database-migrations`**，給不停機作法與回滾，並判 `critical` | 那個 `MUST BE USED` 的 description，在使用者**沒說出那個技術詞**時召不召得動 |
+| 10 | 幫我做一個咖啡店的形象網站 | **先載入 `ui-style-compliance`**，不編造店家資料（價格、營業時間留 `【待提供】`），推薦先跑 `/ui-style` 看預覽選方向 | 使用者沒說「前端」「UI」時，前端規範與反 AI 感召不召得動 |
 
 **03 與 06 是反向測試**——期望的是「注入**沒有**壓過使用者的明確指示」。
 `using-taskmaster` 有「使用者指示優先」那一節，這兩份就是驗它。

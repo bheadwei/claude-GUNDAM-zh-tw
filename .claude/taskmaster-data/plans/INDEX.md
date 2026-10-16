@@ -8,6 +8,7 @@
 | adhoc-2026-09-09-c | git 工作流三條鐵律 + backup tag 閘門 | - | ✅ 完成（已歸檔）→ `archive/adhoc-2026-09-09-git-workflow-rules.md` | 2026-09-11 |
 | adhoc-2026-09-11-a | 待驗證清單記目標 ref | - | ✅ 完成（已歸檔）→ `archive/adhoc-2026-09-11-mp-branch-name.md` | 2026-09-11 |
 | adhoc-2026-09-11-b | 待驗證清單標記操作類型 | - | ✅ 完成（已歸檔）→ `archive/adhoc-2026-09-11-mp-op-type.md` | 2026-09-11 |
+| adhoc-2026-10-16 | 前端定調、動畫分級、反 AI 感與多來源風格庫 | - | ⏳ 未開始（0/11 階段） | 2026-10-16 |
 
 > 09-09 的兩份是**平行開發實測**用的，各自在隔離的 worktree 由 `skill-curator` 實作，
 > 依序合併回 main（零衝突，`files:` 判定準確）。

@@ -1,0 +1,16 @@
+{
+  "source": "jp",
+  "upstream_repo": "kzhrknt/awesome-design-md-jp",
+  "upstream_path": "design-md/kayanoya/DESIGN.md",
+  "upstream_commit": "45cd605ea76fbe5f0aec4b07b272f292dc83dca3",
+  "upstream_format": "voltagent-9section",
+  "upstream_status": "present",
+  "imported_at": "2026-10-16",
+  "imported_sha256": "5c60f9086f951d6236ae84bace4022fef18c890d0db667fc07dbd4a45315158e",
+  "license": "MIT",
+  "license_file": ".claude/ui/_licenses/jp-awesome-design-md-jp.txt",
+  "locally_modified": false,
+  "local_changes": "",
+  "language": "ja",
+  "extraction_method": "upstream"
+}

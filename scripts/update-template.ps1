@@ -41,6 +41,10 @@ $syncClaudeFiles = @(
     'settings.json', 'README.md'
 )
 $syncRootDirs  = @('scripts')   # 倉庫根目錄下的輔助腳本（含本腳本自己）
+# 根目錄 scripts\ 裡只給模板維護者用的檔案：不同步過去，目標端舊版留下的也刪掉
+# （session-start.sh 靠「scripts/sync-ui-sources.sh 在不在」判斷是不是模板 repo）。
+# 四份 copy／update 腳本要一致
+$rootScriptsExclude = 'sync-ui-sources*'
 $syncRootFiles = @('.mcp.json.linux.example', '.mcp.json.windows.example', 'CLAUDE_TEMPLATE.md', '.gitattributes')
 # SEED：只在目標「不存在」時建立，永不覆寫（專案會自己加規則，且根目錄檔案沒備份）
 $seedRootFiles = @('.worktreeinclude')
@@ -94,7 +98,7 @@ if (-not $DryRun -and -not $NoBackup -and (Test-Path (Join-Path $destPath '.clau
 # ============================================================================
 
 function Invoke-Sync {
-    param([string]$Src, [string]$Dst, [switch]$Mirror, [switch]$AdditiveOnly)
+    param([string]$Src, [string]$Dst, [switch]$Mirror, [switch]$AdditiveOnly, [string]$ExcludeTop = '')
 
     if (-not (Test-Path $Src)) { return }   # 模板沒有就跳過
     New-Item -ItemType Directory -Path $Dst -Force | Out-Null
@@ -102,11 +106,16 @@ function Invoke-Sync {
     $rc = @($Src.TrimEnd('\'), $Dst.TrimEnd('\'), '/E', '/R:1', '/W:1', '/NP', '/NDL', '/NFL', '/NJH', '/NJS')
     if ($Mirror -and -not $AdditiveOnly) { $rc += '/PURGE' }   # /E + /PURGE = /MIR 效果
     if ($DryRun) { $rc += '/L' }
+    if ($ExcludeTop) { $rc += '/XF'; $rc += $ExcludeTop }
 
     & robocopy @rc | Out-Null
     if ($LASTEXITCODE -ge 8) {
         Write-Host "❌ robocopy 失敗 ($Src) exit=$LASTEXITCODE" -ForegroundColor Red
         exit 1
+    }
+    # 與 update-template.sh 一致：目標端第一層若有舊版漏過去的，也刪掉
+    if ($ExcludeTop -and -not $DryRun) {
+        Get-ChildItem -Path $Dst -File -Filter $ExcludeTop -ErrorAction SilentlyContinue | Remove-Item -Force
     }
 }
 
@@ -137,7 +146,8 @@ foreach ($d in $syncClaudeDirs) {
 }
 if (-not $ClaudeOnly) {
     foreach ($d in $syncRootDirs) {
-        Invoke-Sync (Join-Path $source $d) (Join-Path $destPath $d) -Mirror:$Prune
+        $excl = if ($d -eq 'scripts') { $rootScriptsExclude } else { '' }
+        Invoke-Sync (Join-Path $source $d) (Join-Path $destPath $d) -Mirror:$Prune -ExcludeTop $excl
     }
 } else {
     Write-Host "   ⏭  跳過根目錄目錄: $($syncRootDirs -join ', ')" -ForegroundColor DarkGray

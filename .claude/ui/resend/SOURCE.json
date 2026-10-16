@@ -1,0 +1,16 @@
+{
+  "source": "voltagent",
+  "upstream_repo": "VoltAgent/awesome-design-md",
+  "upstream_path": "design-md/resend/DESIGN.md",
+  "upstream_commit": "3b605329240ce735b510037cca322f1831fdd7f8",
+  "upstream_format": "google-alpha",
+  "upstream_status": "present",
+  "imported_at": "2026-10-16",
+  "imported_sha256": "99536f1b2380511a539f7f3466d46d351e4bf35a5af0c0df395bdc20af05c9be",
+  "license": "MIT",
+  "license_file": ".claude/ui/_licenses/voltagent-awesome-design-md.txt",
+  "locally_modified": false,
+  "local_changes": "",
+  "language": "en",
+  "extraction_method": "upstream"
+}

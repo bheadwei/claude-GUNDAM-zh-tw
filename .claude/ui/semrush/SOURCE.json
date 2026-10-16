@@ -1,0 +1,16 @@
+{
+  "source": "self-extracted",
+  "upstream_repo": null,
+  "upstream_path": null,
+  "upstream_commit": null,
+  "upstream_format": null,
+  "upstream_status": null,
+  "imported_at": "2026-09-08",
+  "imported_sha256": "b72d0db91887494a0b4d2cc445b919d9b0e8dd041e8bc0b57426012cde19089d",
+  "license": null,
+  "license_file": null,
+  "locally_modified": false,
+  "local_changes": "本體不是從上游複製的：上游 repo 從未收錄 design-md/semrush/DESIGN.md，只有一份指向 getdesign.md 的 README（2026-04-08 commit 3cf7176 新增、2026-05-01 commit e2ada21 刪除）。本地這份是 commit fdbc8d6 由 skill-curator 依 Semrush 官方設計系統 Intergalactic 的 light.json token 檔撰寫",
+  "language": "en",
+  "extraction_method": "design-tokens"
+}

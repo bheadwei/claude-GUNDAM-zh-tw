@@ -93,15 +93,17 @@ fi
 # 切段邏輯與 git-backup-gate.sh 共用 lib/cmd-segments.sh（同一個坑不修第二遍）。
 # lib/merge-gate.sh 刻意**不**跟進：它只在 .merge-pending 非空這個罕見狀態下才
 # 進入比對，誤判成本低，改它是沒必要的風險。
+#
+# 子指令只看 `git` 後面第一個非選項字（cmd_git_subcmd），不看整段任何位置：
+# `git log --grep merge`、`git commit -m "…merge…"` 都不是合併。
 MP_OP=""; MP_SEG=""
-if [ "${MERGE_GATE:-on}" != "off" ] && declare -F cmd_segments >/dev/null 2>&1; then
+if [ "${MERGE_GATE:-on}" != "off" ] && declare -F cmd_git_subcmd >/dev/null 2>&1; then
     while IFS= read -r _seg; do
         [ -n "$_seg" ] || continue
-        if   cmd_match "$_seg" '[[:space:]]merge([[:space:]]|$)';       then MP_OP=merge
-        elif cmd_match "$_seg" '[[:space:]]cherry-pick([[:space:]]|$)'; then MP_OP=cherry-pick
-        elif cmd_match "$_seg" '[[:space:]]rebase([[:space:]]|$)';      then MP_OP=rebase
-        else continue
-        fi
+        case "$(cmd_git_subcmd "$_seg")" in
+            merge|cherry-pick|rebase) MP_OP=$(cmd_git_subcmd "$_seg") ;;
+            *) continue ;;
+        esac
         MP_SEG="$_seg"; break
     done <<< "$(cmd_segments "$CMD")"
 fi
@@ -153,43 +155,22 @@ if [ "${MERGE_GATE:-on}" != "off" ]; then
                     # 抽 ref 要先懂 shell 的引號。曾經只用 sed 剪掉 `-m "訊息"`，
                     # 遇到 `-m "$(cat "$M/msg.txt")"`（引號裡再套引號）或 `-F <檔>`
                     # 就把 shell 片段當成 ref，記成 `[merge] $M/merge-msg.txt")"`。
-                    # 現在逐字元切 token：雙引號、單引號、$( ) 內的空白不算分隔；
-                    # 帶值的選項（-m／-F／-s／-X 與長名）連同它的值一起跳過；
-                    # 碰到 && || ; | 就停（那已經是下一條指令）。
-                    MP_REF=$(printf '%s' "$CMD" | tr '\n' ' ' | awk -v op="$MP_OP" -v q="'" '
-                        function flush() { if (tok != "") { t[++n] = tok; tok = "" } }
-                        {
-                            line = $0; st = ""; tok = ""; n = 0
-                            for (i = 1; i <= length(line); i++) {
-                                c = substr(line, i, 1); top = substr(st, length(st), 1)
-                                if (top == q) {
-                                    if (c == q) st = substr(st, 1, length(st) - 1)
-                                } else if (top == "\"") {
-                                    if (c == "\\") { tok = tok c; i++; c = substr(line, i, 1) }
-                                    else if (c == "\"") st = substr(st, 1, length(st) - 1)
-                                    else if (c == "$" && substr(line, i + 1, 1) == "(") { st = st "("; tok = tok c; i++; c = "(" }
-                                } else if (top == "(") {
-                                    if (c == "(") st = st "("
-                                    else if (c == ")") st = substr(st, 1, length(st) - 1)
-                                    else if (c == "\"" || c == q) st = st c
-                                } else {
-                                    if (c == " " || c == "\t") { flush(); continue }
-                                    if (c == "\"" || c == q) st = st c
-                                    else if (c == "$" && substr(line, i + 1, 1) == "(") { st = st "("; tok = tok c; i++; c = "(" }
-                                }
-                                tok = tok c
-                            }
-                            flush()
-                            for (i = 1; i <= n; i++) if (t[i] == op) { s = i + 1; break }
-                            if (!s) exit
-                            for (i = s; i <= n; i++) {
-                                if (t[i] ~ /^(&&|\|\||;|\|)$/) exit
-                                if (t[i] ~ /^(-m|-F|-s|-X|--file|--message|--strategy|--strategy-option)$/) { i++; continue }
-                                if (t[i] ~ /^-/) continue
-                                if (index(t[i], "\"") || index(t[i], q) || index(t[i], "$") || index(t[i], "(") || index(t[i], "`")) continue
-                                sub(/;+$/, "", t[i]); print t[i]; exit
-                            }
-                        }')
+                    # 後來改成在這裡逐字元自己切 token——等於把 cmd-segments.sh 的
+                    # 引號、heredoc、全域選項處理**再寫一份**，而那一份只認 `-C`／`-c`、
+                    # 不認註解：`git --git-dir /x merge y` 與「上一行是含單引號的註解」
+                    # 都記成整條指令（2026-10-16 code review）。
+                    # 現在直接用 MP_SEG：它來自 cmd_segments，引號內容已清空（`-m ""`）、
+                    # heredoc 與註解已拿掉、全域選項已去掉、已在 && || ; | 處切開，
+                    # 所以第 3 個字起就是子指令的參數。帶值的選項（-m／-F／-s／-X 與長名）
+                    # 連同它的值一起跳過；含引號或 `$` 的字（變數、被清空的字串）不當 ref。
+                    MP_REF=$(printf '%s\n' "$MP_SEG" | awk -v q="'" '{
+                        for (i = 3; i <= NF; i++) {
+                            if ($i ~ /^(-m|-F|-s|-X|--file|--message|--strategy|--strategy-option)$/) { i++; continue }
+                            if ($i ~ /^-/) continue
+                            if (index($i, "\"") || index($i, q) || index($i, "$") || index($i, "(") || index($i, "`")) continue
+                            sub(/;+$/, "", $i); print $i; exit
+                        }
+                    }')
                     # 抽不到就退回記整條指令（沒見過的指令形式、或續做時讀 MERGE_HEAD）。
                     #
                     # 截斷務必用 bash 的 ${var:0:n} —— 它算的是**字元**。

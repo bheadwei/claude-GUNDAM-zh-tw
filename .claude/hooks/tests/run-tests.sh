@@ -72,6 +72,9 @@ expect_empty() {
 
 section() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 
+# expect_eq <名稱> <期望（整串相等）> <實際>
+expect_eq() { [ "$3" = "$2" ] && ok "$1" || ng "$1" "${2:-（空輸出）}" "${3:-（空輸出）}"; }
+
 # payload 產生器
 w()  { printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$1"; }
 e()  { printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$1"; }
@@ -348,6 +351,18 @@ expect_empty "背景工作完成通知不做意圖路由" \
 expect_contains "使用者原話中途引用 [Subagent hand-back] 仍照常路由" "critical" \
     "$(run user-prompt-submit.sh "$(p "$(printf '幫我改認證邏輯\n第二行\n第三行\n剛才看到 [Subagent hand-back] 的字樣')")")"
 
+# 前端路由（D10）：`ui`／`css` 曾是裸子字串，quick、build、guide、access 都會命中；
+# 反過來「做個官網」「這個形象頁」這種從不講 UI 的說法又漏接
+reset
+for q in 'quick fix 一下 build 腳本' '看一下 guide' 'QUICK BUILD GUIDE' '這個 access token 的 test suite'; do
+    expect_not_contains "前端路由不被「$q」誤觸發" "ui-style-compliance" \
+        "$(run user-prompt-submit.sh "$(p "$q")")"
+done
+for q in '幫我做一個 landing page' '做餐廳的官網' 'UI 調整一下' '這個形象頁' '改一下ui的間距' '改 style.css 的顏色' '幫我做一個咖啡店的形象網站'; do
+    expect_contains "前端路由接得到「$q」" "ui-style-compliance" \
+        "$(run user-prompt-submit.sh "$(p "$q")")"
+done
+
 # =========================================================================
 section "pre-tool-use.sh — 坑閘門（context/learned/）"
 # =========================================================================
@@ -449,6 +464,172 @@ expect_empty   "DOC_SYNC_GATE=off 關閉偵測" \
 
 reset; echo off > "$SM_FILE"
 expect_empty   "suggest-mode=off 也關閉偵測"   "$(pw "src/api/x.ts")"
+
+# =========================================================================
+section "post-write.sh — 前端寫入檢查（lib/ui-lint.sh）"
+# =========================================================================
+#
+# 檢查的是磁碟上的檔案（Edit 的 payload 只有被換掉的那段），所以每個案例都真的建檔。
+UI_JSON="$SANDBOX/.claude/taskmaster-data/ui-style.json"
+uw() { # <相對路徑> <內容> [ENV=VAL ...] → post-write 的 additionalContext
+    local rel="$1" body="$2"; shift 2
+    mkdir -p "$(dirname "$SANDBOX/$rel")"
+    printf '%s\n' "$body" > "$SANDBOX/$rel"
+    run post-write.sh "$(w "$SANDBOX/$rel")" "$@" | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null
+}
+ui_clean() { rm -rf "$SANDBOX/src" "$SANDBOX/docs"; }
+
+reset; ui_clean
+out=$(uw "src/components/Hero.tsx" "$(printf 'export const Hero = () => (\n  <h1 style={{ color: %s }}>Hi</h1>\n)' "'#1D1D1F'")")
+expect_contains "元件寫死色碼 → 提醒"                 "寫死色碼"   "$out"
+expect_contains "提醒帶行號與色碼"                    'L2 `#1D1D1F`' "$out"
+expect_contains "提醒說明只提醒不擋"                  "只提醒，不擋" "$out"
+
+reset; ui_clean
+expect_empty "tokens 檔的 CSS 變數宣告不提醒" "$(uw "src/styles/tokens.css" "$(printf ':root {\n  --color-primary: #1D1D1F;\n}')")"
+expect_empty "tokens 檔裡的一般 hex 也不提醒" "$(uw "src/styles/tokens.css" '.a { color: #fff; }')"
+expect_empty "一行內的 :root 自訂屬性不提醒"  "$(uw "src/app.css" ':root { --c: #fff; }')"
+expect_empty "var() 的備援值不算寫死"         "$(uw "src/app.css" '.a { color: var(--c, #000); }')"
+expect_empty "頁內錨點 #face 不是色碼"        "$(uw "src/Nav.tsx" '<a href="#face">x</a>')"
+expect_empty "HTML 實體 &#8212; 不是色碼"     "$(uw "src/Nav.html" '<p>a &#8212; b</p>')"
+expect_empty "theme 檔不提醒"                 "$(uw "src/theme.css" '.a { color: #fff; }')"
+expect_empty "測試檔不提醒"                   "$(uw "src/Hero.test.tsx" "expect(c).toBe('#fff')")"
+expect_empty "非前端副檔名不提醒"             "$(uw "src/colors.ts" "export const c = '#fff'")"
+expect_empty "docs/ 不提醒"                   "$(uw "docs/demo.html" '<p style="color:#fff">x</p>')"
+reset; mkdir -p "$SANDBOX/.claude/ui/x"
+printf '<p style="color:#fff">x</p>\n' > "$SANDBOX/.claude/ui/x/preview.html"
+expect_empty ".claude/** 不提醒" \
+    "$(run post-write.sh "$(w "$SANDBOX/.claude/ui/x/preview.html")" | jq -r '.hookSpecificOutput.additionalContext // ""')"
+
+# payload 沒帶 cwd 時 WORK_ROOT 退回主 checkout，worktree 裡的檔案相對路徑會以 .claude/worktrees/ 開頭
+reset; mkdir -p "$SANDBOX/.claude/worktrees/wt1/src"
+printf "<p style={{color: '#fff'}}>x</p>\n" > "$SANDBOX/.claude/worktrees/wt1/src/Hero.tsx"
+expect_contains "worktree 裡的前端檔照樣檢查" "寫死色碼" \
+    "$(run post-write.sh "$(w "$SANDBOX/.claude/worktrees/wt1/src/Hero.tsx")" | jq -r '.hookSpecificOutput.additionalContext // ""')"
+
+# 動畫等級：沒有 ui-style.json＝還沒定調，不檢查
+GSAP_SRC="$(printf "import gsap from 'gsap'\nexport const A = () => null")"
+reset; ui_clean
+expect_empty "沒有 ui-style.json → 不做 motion 檢查" "$(uw "src/Anim.tsx" "$GSAP_SRC")"
+reset; ui_clean; echo '{"motion":"L1"}' > "$UI_JSON"
+out=$(uw "src/Anim.tsx" "$GSAP_SRC")
+expect_contains "L1 卻 import gsap → 提醒"       "動畫等級不符" "$out"
+expect_contains "motion 提醒帶 import 的行號"     "L1 \`import gsap from 'gsap'\`" "$out"
+reset; ui_clean; echo '{"motion":"L2"}' > "$UI_JSON"
+expect_empty "L2 import gsap → 不提醒" "$(uw "src/Anim.tsx" "$GSAP_SRC")"
+expect_contains "L2 import three → 提醒" "動畫等級不符" "$(uw "src/Scene.tsx" "import * as THREE from 'three'")"
+expect_contains "L2 用 CDN 載 three.js → 提醒" "動畫等級不符" \
+    "$(uw "src/index.html" '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>')"
+reset; ui_clean; echo '{"motion":"L3"}' > "$UI_JSON"
+expect_empty "L3 import three → 不提醒" "$(uw "src/Scene.tsx" "import * as THREE from 'three'")"
+reset; ui_clean; echo '{"source":"vercel"}' > "$UI_JSON"
+expect_contains "ui-style.json 沒有 motion → 當 L1（motion.md 的規定）" "動畫等級不符" "$(uw "src/Anim.tsx" "$GSAP_SRC")"
+reset; ui_clean; echo '{"motion":"L1"}' > "$UI_JSON"
+expect_empty "L1 但文字裡提到 three 不算 import" "$(uw "src/Copy.tsx" '<p>three steps to motion</p>')"
+expect_contains "L1 的 framer-motion 也算" "動畫等級不符" "$(uw "src/M.tsx" 'import { motion } from "framer-motion"')"
+
+# AI 痕跡（P0，改寫自 avoid-ai-design 的 detect.mjs：C6／C1／K1）
+reset; ui_clean
+out=$(uw "src/Title.tsx" '<h1 className="bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent">Hi</h1>')
+expect_contains "Tailwind 漸層字 → C6" "**C6**" "$out"
+expect_contains "Tailwind 紫靛漸層 → C1" "**C1**" "$out"
+expect_contains "AI 痕跡提醒附出處" "avoid-ai-design" "$out"
+expect_contains "CSS background-clip:text＋透明字 → C6" "**C6**" \
+    "$(uw "src/t.css" "$(printf '.t {\n  background-clip: text;\n  -webkit-text-fill-color: transparent;\n}')")"
+expect_contains "shadcn 預設 --primary → K1" "**K1**" \
+    "$(uw "src/globals.css" "$(printf ':root {\n  --primary: oklch(0.205 0 0);\n}')")"
+expect_empty "改過的 --primary 不算 K1" \
+    "$(uw "src/globals.css" "$(printf ':root {\n  --primary: oklch(0.45 0.12 30);\n}')")"
+expect_empty "藍綠漸層不算 C1" "$(uw "src/B.tsx" '<div className="bg-gradient-to-r from-sky-500 to-emerald-500">x</div>')"
+expect_empty "上一行 avoid-ai-design-ignore: C6 → 豁免" \
+    "$(uw "src/I.tsx" "$(printf '{/* avoid-ai-design-ignore: C6 */}\n<h1 className="bg-clip-text text-transparent">x</h1>')")"
+out=$(uw "src/J.css" "$(printf '/* avoid-ai-design-ignore-file: K1 */\n:root {\n  --primary: oklch(0.205 0 0);\n}\n.t { background-clip: text; color: transparent; }')")
+expect_not_contains "整檔豁免 K1 → 不報 K1"   "**K1**" "$out"
+expect_contains     "整檔豁免 K1 → 仍報 C6"   "**C6**" "$out"
+expect_empty "整檔豁免不帶 ID → 全部豁免" \
+    "$(uw "src/K.tsx" "$(printf '{/* avoid-ai-design-ignore-file */}\n<h1 className="bg-clip-text text-transparent">x</h1>')")"
+
+# 動畫等級以單頁 IA snippet 為準（motion.md 開頭）。對應得到才用單頁等級；
+# 對應不到（元件檔、沒有 snippet 的頁）就取「專案與所有單頁中最寬鬆的那級」——寧可漏提醒也不誤報。
+IA_DOC="$SANDBOX/docs/17_frontend_information_architecture.md"
+ia_page() { # <頁面路徑> <動畫等級那一行的值> —— append 一份最小 IA snippet
+    mkdir -p "$(dirname "$IA_DOC")"
+    printf '## 某頁（%s）\n\n### 實作筆記\n- 狀態管理：無\n- 動畫等級：%s\n\n' "$1" "$2" >> "$IA_DOC"
+}
+reset; ui_clean; echo '{"motion":"L1"}' > "$UI_JSON"; ia_page / '本頁另外調為 L2'
+expect_empty "專案 L1、首頁另外調為 L2 → app/page.tsx import gsap 不提醒" "$(uw "src/app/page.tsx" "$GSAP_SRC")"
+reset; ui_clean; echo '{"motion":"L2"}' > "$UI_JSON"; ia_page /pricing '本頁另外調為 L1'
+out=$(uw "src/app/pricing/page.tsx" "$GSAP_SRC")
+expect_contains "專案 L2、定價頁另外調為 L1 → 該頁 import gsap 要提醒" "動畫等級不符" "$out"
+expect_contains "提醒講明等級來自單頁 IA snippet" "IA snippet" "$out"
+expect_contains "pages router（pages/about.vue）也對應得到" "動畫等級不符" \
+    "$(ia_page /about '本頁另外調為 L1'; uw "src/pages/about.vue" "$GSAP_SRC")"
+reset; ui_clean; echo '{"motion":"L1"}' > "$UI_JSON"; ia_page /pricing '本頁另外調為 L2'
+expect_empty "route group (marketing) 去掉後對應到 /pricing（L2）→ 不提醒" \
+    "$(uw "src/app/(marketing)/pricing/page.tsx" "$GSAP_SRC")"
+expect_empty "對應不到頁面的元件、有單頁調到 L2 → 不提醒（保守）" \
+    "$(uw "src/components/sections/PricingCards.tsx" "$GSAP_SRC")"
+expect_contains "對應不到時仍守最寬鬆那級：L2 之上的 three 照樣提醒" "動畫等級不符" \
+    "$(uw "src/components/sections/Scene.tsx" "import * as THREE from 'three'")"
+reset; ui_clean; echo '{"motion":"L1"}' > "$UI_JSON"; ia_page /pricing '沿用專案 L1'
+expect_contains "單頁寫「沿用專案」→ 照專案 L1 提醒" "動畫等級不符" "$(uw "src/app/pricing/page.tsx" "$GSAP_SRC")"
+reset; ui_clean; echo '{"motion":"L2"}' > "$UI_JSON"; ia_page /pricing '本頁另外調為 L1'
+expect_empty "只有單頁往下調時，對應不到的元件照專案 L2 → gsap 不提醒" "$(uw "src/components/A.tsx" "$GSAP_SRC")"
+ui_clean
+
+# 路徑排除與 hooks/README.md、post-write.sh 一致：測試、fixtures、vendor、壓縮過的 css
+HEXSRC="<p style={{color: '#fff'}}>x</p>"
+ui_xclean() { rm -rf "$SANDBOX/test" "$SANDBOX/tests" "$SANDBOX/fixtures" "$SANDBOX/vendor" "$SANDBOX/public"; ui_clean; }
+reset; ui_xclean
+expect_empty "test/ 不提醒"            "$(uw "test/Hero.tsx" "$HEXSRC")"
+expect_empty "tests/ 不提醒"           "$(uw "src/tests/Hero.tsx" "$HEXSRC")"
+expect_empty "fixtures 不提醒"         "$(uw "src/__fixtures__/Hero.tsx" "$HEXSRC")"
+expect_empty "vendor/ 不提醒"          "$(uw "vendor/lib.css" '.a { color: #fff; }')"
+expect_empty "public/vendor/ 不提醒"   "$(uw "public/vendor/x/lib.css" '.a { color: #fff; }')"
+expect_empty "*.min.css 不提醒"        "$(uw "src/styles/app.min.css" '.a{color:#fff}')"
+expect_contains "名稱只是含 test 的元件照樣檢查（Testimonials.tsx）" "寫死色碼" \
+    "$(uw "src/components/Testimonials.tsx" "$HEXSRC")"
+ui_xclean
+
+# 逃生門與合併輸出
+reset; ui_clean; echo '{"motion":"L1"}' > "$UI_JSON"
+BOTH="$(printf "import gsap from 'gsap'\nexport const A = () => <p style={{color: '#fff'}}>x</p>")"
+expect_empty "UI_LINT=off → 兩種提醒都沒有" "$(uw "src/Both.tsx" "$BOTH" UI_LINT=off)"
+reset; ui_clean; echo '{"motion":"L1"}' > "$UI_JSON"; echo off > "$SM_FILE"
+expect_empty "suggest-mode=off → 也不檢查" "$(uw "src/Both.tsx" "$BOTH")"
+reset; ui_clean
+raw=$(mkdir -p "$SANDBOX/src/components" && printf "export const A = () => <p style={{color: '#fff'}}>x</p>\n" > "$SANDBOX/src/components/index.tsx" \
+      && run post-write.sh "$(w "$SANDBOX/src/components/index.tsx")")
+if echo "$raw" | jq -e '.hookSpecificOutput.hookEventName == "PostToolUse"' >/dev/null 2>&1; then
+    ok "同時命中文件影響與色碼 → 仍是一個合法 JSON"
+else
+    ng "同時命中文件影響與色碼 → 仍是一個合法 JSON" "單一 PostToolUse JSON" "${raw:0:120}"
+fi
+out=$(echo "$raw" | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null)
+expect_contains "合併輸出含文件影響提醒" "文件影響提醒" "$out"
+expect_contains "合併輸出含寫死色碼"     "寫死色碼"     "$out"
+ui_clean
+
+# post-write 先用副檔名與路徑篩過才啟動 ui-lint：每次寫檔多開一個 bash 在這台機器要好幾百毫秒，
+# 而絕大多數寫入是 .claude/**、.md、.ts。用一份 hooks 複本把 ui-lint 換成「被叫就留記號」來驗。
+PW_COPY="$SANDBOX/hookcopy"; PW_MARK="$SANDBOX/ui-lint-called"
+rm -rf "$PW_COPY"; mkdir -p "$PW_COPY"
+cp "$HOOK_DIR"/*.sh "$PW_COPY/"; cp -r "$HOOK_DIR/lib" "$PW_COPY/lib"
+printf '#!/bin/bash\necho "$2" >> "%s"\n' "$PW_MARK" > "$PW_COPY/lib/ui-lint.sh"
+pw_called() { # <相對路徑> → 印出 yes／no
+    rm -f "$PW_MARK"; mkdir -p "$(dirname "$SANDBOX/$1")"; echo x > "$SANDBOX/$1"
+    printf '%s' "$(w "$SANDBOX/$1")" | env CLAUDE_PROJECT_DIR="$SANDBOX" bash "$PW_COPY/post-write.sh" >/dev/null 2>&1
+    [ -s "$PW_MARK" ] && echo yes || echo no
+}
+reset
+expect_eq "寫 .claude/skills/x/SKILL.md 不啟動 ui-lint" no  "$(pw_called .claude/skills/x/SKILL.md)"
+expect_eq "寫 .claude/ui/x/preview.html 不啟動 ui-lint" no "$(pw_called .claude/ui/x/preview.html)"
+expect_eq "寫 src/a.ts 不啟動 ui-lint"                 no  "$(pw_called src/a.ts)"
+expect_eq "寫 README.md 不啟動 ui-lint"                no  "$(pw_called README.md)"
+expect_eq "寫 src/A.tsx 照樣啟動 ui-lint"              yes "$(pw_called src/A.tsx)"
+expect_eq "寫 src/A.CSS（大寫副檔名）照樣啟動"         yes "$(pw_called src/A.CSS)"
+expect_eq "worktree 裡的 .claude/worktrees/w/src/A.vue 照樣啟動" yes "$(pw_called .claude/worktrees/w/src/A.vue)"
+rm -rf "$PW_COPY" "$PW_MARK" "$SANDBOX/README.md" "$SANDBOX/.claude/worktrees"; ui_clean
 
 # =========================================================================
 section "post-write.sh — 擴充維護提醒（.claude/ 底下的改動）"
@@ -658,6 +839,27 @@ run post-agent-report.sh "$(ag debug-investigator async)" >/dev/null
 if [ -s "$EXPECT_FILE" ]; then ok "debug-investigator 已納入稽核"
 else ng "debug-investigator 已納入稽核" "期望檔非空" "（空）"; fi
 
+# 但 quick 模式下它依定義不寫報告（agents/debug-investigator.md 模式表）→ 不能記成缺報告
+CR_LOG="$SANDBOX/.claude/logs/context-reports.log"
+reset; mkdir -p "$SANDBOX/.claude/context/quality"; echo quick > "$MODE_FILE"
+run post-agent-report.sh "$(ag debug-investigator sync)" >/dev/null
+if grep -q 'WARN: debug-investigator' "$CR_LOG" 2>/dev/null; then
+    ng "quick 模式同步派 debug-investigator 不記 WARN" "無 WARN" "$(cat "$CR_LOG")"
+else ok "quick 模式同步派 debug-investigator 不記 WARN"; fi
+expect_contains "quick 模式記 SKIP 一行" "SKIP: debug-investigator quick 模式不寫報告" \
+    "$(cat "$CR_LOG" 2>/dev/null)"
+
+reset; mkdir -p "$SANDBOX/.claude/context/quality"; echo quick > "$MODE_FILE"
+run post-agent-report.sh "$(ag debug-investigator async)" >/dev/null
+if grep -q '"agent":"debug-investigator"' "$EXPECT_FILE" 2>/dev/null; then
+    ng "quick 模式非同步派 debug-investigator 不記期望" "無該列" "$(cat "$EXPECT_FILE")"
+else ok "quick 模式非同步派 debug-investigator 不記期望"; fi
+
+reset; mkdir -p "$SANDBOX/.claude/context/quality"; echo standard > "$MODE_FILE"
+run post-agent-report.sh "$(ag debug-investigator sync)" >/dev/null
+expect_contains "standard 模式缺報告仍記 WARN" "WARN: debug-investigator completed but no report" \
+    "$(cat "$CR_LOG" 2>/dev/null)"
+
 # skill-curator 同一個坑：它寫報告到 context/decisions/，但 AREA 映射沒它，
 # 稽核永遠找不到那份報告（CLAUDE.md 的「連帶檢查」明文警告過這一條）
 reset; mkdir -p "$SANDBOX/.claude/context/decisions"
@@ -712,6 +914,71 @@ expect_contains "注入 using-taskmaster 全文"       "using-taskmaster"  "$ses
 expect_contains "注入含強制委派標記"               "EXTREMELY"         "$sess_ctx"
 expect_contains "注入含 documentation-specialist"  "documentation-specialist" "$sess_ctx"
 expect_contains "注入含坑目錄指示"                 "context/learned"   "$sess_ctx"
+
+# =========================================================================
+section "session-start.sh — 風格庫提醒只在模板 repo 出現"
+# =========================================================================
+#
+# 判斷依據是 scripts/sync-ui-sources.sh 在不在（四份 copy／update 腳本都排除它）。
+# 新專案拿到的 .claude/ui/ 是快照、也沒有 taskmaster-data/，以前每個 session 都會被叫去「更新素材庫」。
+ss_ctx() { run session-start.sh '{}' | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null; }
+days_ago() { jq -nr --argjson d "$1" '(now - $d * 86400) | strftime("%Y-%m-%d")'; }
+ss_sources() { # <voltagent 的 last_synced（null 或日期）> —— self-extracted 永遠是 null，不該被算進去
+    local v="$1"; [ "$v" = "null" ] || v="\"$v\""
+    mkdir -p "$SANDBOX/.claude/ui"
+    printf '{"sources":[{"id":"voltagent","repo":"VoltAgent/awesome-design-md","last_synced":%s},{"id":"self-extracted","repo":null,"last_synced":null}]}\n' \
+        "$v" > "$SANDBOX/.claude/ui/_sources.json"
+}
+ss_template() { mkdir -p "$SANDBOX/scripts"; : > "$SANDBOX/scripts/sync-ui-sources.sh"; }
+ss_clean() { rm -rf "$SANDBOX/scripts"; }
+
+reset; ss_clean; ss_template; ss_sources "$(days_ago 100)"
+out=$(ss_ctx)
+expect_contains "模板 repo、上游 100 天沒同步 → 提醒跑同步腳本" "sync-ui-sources.sh" "$out"
+expect_contains "提醒寫出是哪個來源"                           "voltagent"          "$out"
+expect_not_contains "沒有上游的 self-extracted 不算"           "self-extracted"     "$out"
+reset; ss_clean; ss_template; ss_sources null
+expect_contains "模板 repo、上游從未同步 → 提醒" "從未同步" "$(ss_ctx)"
+reset; ss_clean; ss_template; ss_sources "$(days_ago 10)"
+expect_not_contains "上游 10 天前同步過 → 不提醒" "sync-ui-sources.sh" "$(ss_ctx)"
+reset; ss_clean; ss_sources "$(days_ago 100)"
+expect_not_contains "沒有 sync-ui-sources.sh（不是模板 repo）→ 不提醒同步" "sync-ui-sources.sh" "$(ss_ctx)"
+
+# 既有的「設計走向 90 天」提醒（使用者決定 3：一樣只在模板 repo）
+reset; ss_clean; ss_template; ss_sources "$(days_ago 10)"
+out=$(ss_ctx)
+expect_contains     "模板 repo、從未更新設計走向 → 提醒"       "設計走向"   "$out"
+expect_contains     "設計走向提醒指向 anti-ai.md（不是舊的 2.6 節）" "anti-ai.md" "$out"
+reset; ss_clean; ss_sources "$(days_ago 10)"
+expect_not_contains "不是模板 repo → 不提醒設計走向"           "設計走向"   "$(ss_ctx)"
+reset; ss_clean; ss_template; ss_sources "$(days_ago 10)"; : > "$SANDBOX/.claude/taskmaster-data/.ui-catalog-refreshed"
+expect_not_contains "模板 repo、設計走向剛更新 → 不提醒"       "設計走向"   "$(ss_ctx)"
+reset; ss_clean
+
+# 真的用 copy-template.sh 建一個新專案再開 session：上面的沙箱只證明「條件寫對了」，
+# 這組證明「新專案真的不滿足那個條件」——排除清單哪天漏了，這裡會紅
+NEWPROJ=$(mktemp -d)
+bash "$HOOK_DIR/../../scripts/copy-template.sh" "$NEWPROJ/app" >/dev/null 2>&1 </dev/null
+if [ -f "$NEWPROJ/app/.claude/ui/_sources.json" ] && [ -d "$NEWPROJ/app/.claude/hooks" ]; then
+    ok "copy-template 建出的新專案帶著 .claude/ui/_sources.json（前提成立）"
+else
+    ng "copy-template 建出的新專案帶著 .claude/ui/_sources.json（前提成立）" "有 _sources.json 與 hooks" "$(ls -A "$NEWPROJ/app/.claude" 2>/dev/null | tr '\n' ' ')"
+fi
+[ ! -e "$NEWPROJ/app/scripts/sync-ui-sources.sh" ] && ok "新專案沒有 scripts/sync-ui-sources.sh" \
+    || ng "新專案沒有 scripts/sync-ui-sources.sh" "不存在" "存在"
+# 換成一定過期的來源資料：真實的 _sources.json 哪天全部剛同步過，下面的反向測試就會變成空跑
+printf '{"sources":[{"id":"voltagent","repo":"VoltAgent/awesome-design-md","last_synced":null}]}\n' \
+    > "$NEWPROJ/app/.claude/ui/_sources.json" 2>/dev/null
+np_ctx=$(printf '{}' | env CLAUDE_PROJECT_DIR="$NEWPROJ/app" bash "$NEWPROJ/app/.claude/hooks/session-start.sh" 2>/dev/null \
+    | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null)
+expect_contains     "新專案的 session-start 正常注入"          "using-taskmaster"   "$np_ctx"
+expect_not_contains "新專案不出現同步提醒"                     "sync-ui-sources.sh" "$np_ctx"
+expect_not_contains "新專案不出現設計走向提醒"                 "設計走向"           "$np_ctx"
+: > "$NEWPROJ/app/scripts/sync-ui-sources.sh"
+np_ctx=$(printf '{}' | env CLAUDE_PROJECT_DIR="$NEWPROJ/app" bash "$NEWPROJ/app/.claude/hooks/session-start.sh" 2>/dev/null \
+    | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null)
+expect_contains "對照組：同一個新專案補上那支腳本 → 提醒出現（證明上面不是空跑）" "sync-ui-sources.sh" "$np_ctx"
+rm -rf "$NEWPROJ"
 
 # =========================================================================
 section "worktree 感知 — 狀態隔離邊界"
@@ -925,6 +1192,50 @@ mp_empty "heredoc 內文提到指令不記入 .merge-pending"
 reset; pbashj 'grep -rn "git cherry-pick" .claude/' >/dev/null
 mp_empty "grep 樣式提到指令不記入 .merge-pending"
 
+# 2026-10-16：commit 訊息用 heredoc 帶（Claude Code 預設的 commit 寫法），內文一句
+# 「衝突的 merge 結束碼非 0」→ 清單被記成 `[merge] 結束碼非`。
+# 上面那條 heredoc 案例沒抓到，是因為它的內文**沒有一行以 `git ` 開頭**、也沒有真的 merge。
+reset; pbashj "git commit -q -m \"\$(cat <<'EOF'
+fix: x
+
+- 衝突的 merge 結束碼非 0，過去從未被記錄
+EOF
+)\"" >/dev/null
+mp_empty "heredoc commit 訊息提到 merge 不記入 .merge-pending"
+
+reset; pbashj "git commit -q -F - <<'EOF'
+fix: x
+git merge 是這樣用的
+EOF" >/dev/null
+mp_empty "heredoc 內文某行以 git merge 開頭也不記"
+
+# 10-16 的實際形狀：同一條指令先 heredoc commit、再真的 merge。合併該記，
+# 但 ref 曾從 heredoc 內文抽出來。
+reset; pbashj "git add -A && git commit -q -F - <<'EOF'
+fix: x
+
+- 衝突的 merge 結束碼非 0，過去從未被記錄
+EOF
+git switch -q main && git merge --no-ff -m \"merge: y\" feat/real" >/dev/null
+mp_has "heredoc commit 之後真的 merge → ref 取自真正的 merge" '[merge] feat/real'
+
+reset; pbashj 'git commit -m "說明 git merge foo 的用法"' >/dev/null
+mp_empty "引號內的 commit 訊息提到 git merge 不記"
+
+reset; pbashj "echo 'x
+git merge feature/y'" >/dev/null
+mp_empty "跨行單引號字串裡以 git merge 開頭的行不記"
+
+# 子指令只看 git 後第一個非選項字，不看整段任何位置
+reset; pbashj 'git log --oneline --grep merge' >/dev/null
+mp_empty "git log --grep merge 不是合併"
+
+reset; pbashj 'git -C /some/path merge feature/x' >/dev/null
+mp_has "git -C <路徑> merge 仍記錄（跳過全域選項）" '[merge] feature/x'
+
+reset; pbashj 'git -c core.editor=true --no-pager rebase main' >/dev/null
+mp_has "git -c k=v --no-pager rebase 仍記錄" '[rebase] main'
+
 # 正向：真的執行的仍然要記，且類型與 ref 不能跑掉
 reset; pbashj 'git merge feature/x' >/dev/null
 mp_has "真正的 merge 仍記錄（ref 正確抽出）" '[merge] feature/x'
@@ -1011,6 +1322,14 @@ reset
 out=$(pbf 'git switch -q main && git merge --no-ff -m "merge: x" feat/x >/dev/null && cat no-such-file' 'Exit code 1
 cat: no-such-file: No such file or directory')
 mp_has "合併成功但後段指令失敗仍記入 .merge-pending" '[merge] feat/x'
+
+# 10-16 那筆就是失敗事件送來的（event=PostToolUseFailure）
+reset; pbf "git commit -q -F - <<'EOF'
+fix: x
+- 衝突的 merge 結束碼非 0
+EOF
+git switch -q main && git merge --no-ff -m \"merge: y\" feat/real && cat no-such-file" 'Exit code 1' >/dev/null
+mp_has "失敗事件：heredoc commit + 真 merge → ref 取自真正的 merge" '[merge] feat/real'
 expect_contains "非零但無衝突 → 提示「非零結束」而非衝突" "非零結束" "$out"
 case "$out" in *conflict-resolver*) ng "非零但無衝突不導向 conflict-resolver" "不含 conflict-resolver" "$out" ;;
                 *) ok "非零但無衝突不導向 conflict-resolver" ;; esac
@@ -1081,6 +1400,65 @@ else ng "is_interrupt 的失敗事件也累加" "1" "$(cat "$STREAK_F" 2>/dev/nu
 reset; run post-bash.sh '{"hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"npm test"},"error":"Exit code 1"}' LEARN_CAPTURE=off >/dev/null
 if [ ! -s "$STREAK_F" ]; then ok "LEARN_CAPTURE=off 時失敗事件不計數"
 else ng "LEARN_CAPTURE=off 時失敗事件不計數" "空" "$(cat "$STREAK_F" 2>/dev/null)"; fi
+
+# =========================================================================
+section "cmd-segments.sh — 切段邊界（註解、算術位移、全域選項、heredoc 結束字）"
+# =========================================================================
+#
+# 四個都是「切段讓真的指令消失或多出假指令」，而且都不報錯：
+# 消失 → git-backup-gate 放行、post-bash 不記；多出 → 清單多一筆假合併，擋下一次真的合併。
+# 這裡直接驗 cmd_segments 的輸出（四支閘門共用它），閘門層的回歸放在各自的節。
+
+cs() { ( source "$HOOK_DIR/lib/cmd-segments.sh"; cmd_segments "$1" ); }
+csub() { ( source "$HOOK_DIR/lib/cmd-segments.sh"; cmd_git_subcmd "$1" ); }
+
+# ① 註解裡的單引號被當成引號開頭 → 後面整段被遮掉
+expect_eq "整行註解含單引號，下一行的 reset --hard 還在" 'git reset --hard HEAD~1' \
+    "$(cs $'# reset because it\'s broken\ngit reset --hard HEAD~1')"
+expect_eq "行尾註解含單引號，下一行的 rebase 還在" $'git status\ngit rebase main' \
+    "$(cs $'git status # it\'s fine\ngit rebase main')"
+expect_eq "引號內的 # 不是註解" $'git commit -m ""\ngit merge feat/a' \
+    "$(cs $'git commit -m "fix #1 don\'t" && git merge feat/a')"
+expect_eq "\$# 不是註解" 'git rebase main' "$(cs '[ $# -gt 0 ] && git rebase main')"
+expect_eq "\${#var} 不是註解" 'git rebase main' "$(cs 'echo ${#arr[@]} && git rebase main')"
+expect_eq "URL 錨點（字中間的 #）不是註解" 'git rebase main' "$(cs 'curl http://x/#top && git rebase main')"
+expect_eq "註解裡提到的指令不算一段" '' "$(cs '# git merge feat/x')"
+
+# ② 算術裡的位元左移被當成 heredoc 開頭 → 之後全部被當成 heredoc 內文吃掉
+expect_eq "\$((1<<x)) 不是 heredoc" 'git rebase main' "$(cs $'echo $((1<<x))\ngit rebase main')"
+expect_eq "((y = 1<<x)) 不是 heredoc" 'git rebase main' "$(cs $'(( y = 1<<x ))\ngit rebase main')"
+expect_eq "<<< here-string 不是 heredoc" 'git rebase main' "$(cs $'cat <<<x\ngit rebase main')"
+expect_eq "同一行先算術、後真的 heredoc：heredoc 照樣剝掉" 'git rebase main' \
+    "$(cs $'echo $((1<<2)) && cat <<EOF\ngit merge fake\nEOF\ngit rebase main')"
+
+# ⑤ 值放在下一個字的全域選項
+expect_eq "--git-dir <路徑> merge" 'git merge feat' "$(cs 'git --git-dir /x/.git merge feat')"
+expect_eq "--git-dir=<路徑> merge" 'git merge feat' "$(cs 'git --git-dir=/x/.git merge feat')"
+expect_eq "--work-tree <路徑> --git-dir=<路徑> merge" 'git merge feat' \
+    "$(cs 'git --work-tree /w --git-dir=/x/.git merge feat')"
+expect_eq "--namespace <名稱> rebase" 'git rebase main' "$(cs 'git --namespace ns rebase main')"
+expect_eq "--config-env <k=v> --attr-source <tree> rebase" 'git rebase main' \
+    "$(cs 'git --config-env core.x=HOME --attr-source HEAD rebase main')"
+expect_eq "--exec-path=<路徑> merge" 'git merge feat' "$(cs 'git --exec-path=/p merge feat')"
+# 不帶 = 的 --exec-path 是「印出路徑就結束」（git 2.53 實測），後面的字都不會執行
+expect_eq "裸 --exec-path 之後沒有子指令" '' "$(csub 'git --exec-path merge feat')"
+expect_eq "cmd_git_subcmd 也跳過 --git-dir <路徑>" 'merge' "$(csub 'git --git-dir /x/.git merge feat')"
+
+# ⑥ 一般 <<WORD 的結束行必須一字不差；只有 <<-WORD 允許行首 tab（不是空白）
+expect_eq "<<EOF 內文縮排的 EOF 不會提早結束" 'git status' \
+    "$(cs $'cat <<EOF\n  EOF\ngit merge fake\nEOF\ngit status')"
+expect_eq "<<-EOF 的 tab 縮排結束行照樣結束" 'git rebase main' \
+    "$(cs $'cat <<-EOF\n\tbody\n\tEOF\ngit rebase main')"
+expect_eq "<<-EOF 用空白縮排的 EOF 不算結束" 'git status' \
+    "$(cs $'cat <<-EOF\n  EOF\ngit merge fake\nEOF\ngit status')"
+
+# 閘門層：post-bash.sh 的合併紀錄（pbashj／mp_has／mp_empty 定義在「合併閘門」節）
+reset; pbashj $'# merge because it\'s ready\ngit merge feat/x' >/dev/null
+mp_has "註解含單引號之後的 merge 仍記錄" '[merge] feat/x'
+reset; pbashj 'git --git-dir /x/.git merge feat' >/dev/null
+mp_has "git --git-dir <路徑> merge 記成正確的 ref" '[merge] feat'
+reset; pbashj $'cat > n.md <<EOF\n  EOF\ngit merge fake\nEOF' >/dev/null
+mp_empty "heredoc 內文縮排的 EOF 之後的內文不記成合併"
 
 # =========================================================================
 section "git backup 閘門 — destructive 操作前必須有安全快照"
@@ -1156,6 +1534,22 @@ expect_decision "只是提到指令（heredoc 內文）不擋" allow \
     "$(gb 'cat > d.md <<EOF
 先打 tag 再 git reset --hard
 EOF')"
+# 上面那條的內文不以 git 開頭；這兩條是真的會撞的形狀（heredoc 內某行以 git 開頭、
+# 引號內的訊息）——2026-10-16 在 post-bash.sh 那邊實際撞到同一個切段缺陷
+expect_decision "heredoc commit 內文某行以 git reset --hard 開頭不擋" allow \
+    "$(gb "git commit -q -F - <<'EOF'
+docs: 說明
+git reset --hard 之前先打 tag
+EOF")"
+expect_decision "commit -m 訊息含 git reset --hard 不擋" allow \
+    "$(gb 'git commit -m "改用 tag，取代直接 git reset --hard"')"
+expect_decision "git -C <路徑> reset --hard 仍擋（跳過全域選項）" deny \
+    "$(gb "git -C $SANDBOX reset --hard HEAD")"
+# 切段把真的指令弄丟的兩種形狀（cmd-segments 節有單元測試）
+expect_decision "註解含單引號之後的 reset --hard 仍擋" deny \
+    "$(gb $'# reset because it\'s broken\ngit reset --hard HEAD~1')"
+expect_decision "\$((1<<x)) 之後的 rebase 仍擋" deny \
+    "$(gb $'echo $((1<<x))\ngit rebase main')"
 
 # 逃生門
 expect_decision "GIT_BACKUP_GATE=off 關閉閘門"   allow "$(gb 'git reset --hard HEAD' GIT_BACKUP_GATE=off)"

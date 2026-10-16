@@ -62,6 +62,18 @@ esac
 # （只在回應裡回 STATUS 碼）。加進來會變成每次解衝突都發一次假警報。
 # 加新 agent 時的判準是「它的 tools 有 Write 且定義裡寫了報告落點」，不是「它重不重要」。
 
+# debug-investigator 在 quick 模式**依定義**不寫報告（agents/debug-investigator.md 的模式表：
+# 「小 bug 不值得這開銷」）。不排除的話，每次 quick 除錯都留一筆 WARN 或延後的補寫要求，
+# 是稽核自己判斷錯了——要改的是這裡，不是去要求 agent 多寫一份報告。
+# 模式在**啟動當下**讀：非同步派出後才改模式不影響這一筆。
+if [ "$AGENT_NAME" = "debug-investigator" ] && [ -n "$AREA" ]; then
+    _mode=$(tr -d '[:space:]' < "$WORK_DATA/.current-task-mode" 2>/dev/null || true)
+    if [ "$_mode" = "quick" ]; then
+        AREA=""
+        echo "[$TIMESTAMP] SKIP: debug-investigator quick 模式不寫報告" >> "$LOG_FILE" 2>/dev/null || true
+    fi
+fi
+
 if [ -n "$AREA" ]; then
     CONTEXT_DIR="$CLAUDE_DIR/context/$AREA"
     mkdir -p "$CONTEXT_DIR" 2>/dev/null || true

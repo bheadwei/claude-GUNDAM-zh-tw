@@ -18,10 +18,11 @@
 ## 改動時的連帶檢查
 
 - **要加或改 `.claude/` 底下任何東西** → **先讀 `writing-extensions` skill**（五層決策表）。這個模板踩過四次「選錯層」，都是把該用 hook 的事寫成文字規則
-- **改了注入內容**（`using-taskmaster`、關鍵字路由、rules）→ 跑一輪 `.claude/tests/skill-compliance/run-compliance.sh`。394 個 hook 測試證明不了「模型會不會照做」
+- **改了注入內容**（`using-taskmaster`、關鍵字路由、rules）→ 跑一輪 `.claude/tests/skill-compliance/run-compliance.sh`。529 個 hook 測試證明不了「模型會不會照做」
 - **新增 agent／skill／command／rule** → 跑 `bash scripts/check-counts.sh`，它會列出所有該同步卻沒同步的計數（CI 也會跑）
 - **改 `.claude/` 的目錄結構** → 同步 `scripts/copy-template.sh` 的 `EXCLUDES` **和** `scripts/copy-template.ps1` 的 `$excludeDirs` / `$excludeFiles`（兩份要一致，容易漏改 ps1）
 - **新增 skill** → 更新 `.claude/skills/INDEX.md`，否則沒人知道它存在
+- **新增 `.claude/ui/` 風格** → 一律用 `scripts/sync-ui-sources.sh --import <來源>:<id>`（自己抽的照 `_sources.json` 的 `self-extracted` 欄位定義手寫 `SOURCE.json`），再補 `CATALOG.md` 兩處（分類索引＋清單，附繁中一句話）；來源是新的上游時，同步 `_sources.json` 與 `_licenses/`。`check-counts.sh` 會擋缺 `SOURCE.json`、沒列進 CATALOG、抽不到配色或字型段落的風格。AI 痕跡判準見 `ui-style-compliance/anti-ai.md`
 - **改 hook** → `.claude/hooks/tests/run-tests.sh` 有測試。語法壞掉會由 `post-write.sh` 在寫入當下印出 `bash -n` 的錯誤（只出聲不擋；`post-write.sh` 自己壞掉時無人可報，那無解）
 - **寫「那件事做完了沒」的閘門** → **`PostToolUse` 只代表工具呼叫返回了**。`Agent` 是非同步的（tool response 帶 `async_launched`），拿它當完成訊號會讓計數恆為 0 而且完全無聲——`pre-agent-gate.sh` 這樣壞了一整段時間。真正的結束事件是 `SubagentStop`。先用一筆真實資料對時間差再寫測試（見 `context/learned/2026-09-11-async-dispatch-breaks-posttooluse-gates.md`）
 - **新增 hook 事件接線** → 同步 `.claude/settings.json` **和** `.claude/hooks/README.md`（檔案結構樹 + 各 hook 功能表）。hook 腳本數沒變時 `check-counts.sh` 不會提醒你

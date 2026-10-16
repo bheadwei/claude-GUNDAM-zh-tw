@@ -77,7 +77,10 @@ $excludeFiles = @(
     'Thumbs.db',
     '*.pyc',
     '*.tmp',
-    '*.bak'
+    '*.bak',
+    # 模板維護者工具（scripts/sync-ui-sources.sh 與其測試），在新專案沒有意義。
+    # 四份 copy／update 腳本要一致：copy-template.sh 的 EXCLUDES、update-template.{sh,ps1}
+    'sync-ui-sources*'
 )
 
 # ============================================================================

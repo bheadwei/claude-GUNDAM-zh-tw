@@ -1,0 +1,66 @@
+{
+  "notes": {
+    "sources": "每個上游一筆。prefix 是匯入時加在 codename 前面的字（避免不同來源的同名品牌撞名）；last_synced 是最後一次實際從上游拉內容的日期，null 代表還沒拉過",
+    "format": "該來源目前可能出現的 DESIGN.md 格式，可能不只一種（VoltAgent 正在從 voltagent-9section 改成 google-alpha）",
+    "SOURCE.json.upstream_commit": "對應的上游 commit。DESIGN.md 跟某個上游版本一模一樣就填那一個；都不一樣就填 imported_at 當天或之前、檔案還存在的最近一個",
+    "SOURCE.json.imported_sha256": "本地第一次 commit 這份 DESIGN.md 時的 sha256。有沒有本地修改以「現在的 hash ≠ 這個值」為準，不信任 locally_modified",
+    "SOURCE.json.locally_modified": "本地內容是否和 upstream_commit 那一版不同（資訊用）。true 但 hash 等於 imported_sha256，代表匯入時就不同、之後沒有再改",
+    "SOURCE.json.upstream_status": "present／removed 指上游現在還有沒有這個目錄；沒有上游時為 null",
+    "SOURCE.json.extraction_method": "upstream（從上游複製）／firecrawl（從實站抽）／design-tokens（從品牌公開的 token 檔寫）／puppeteer／code-scan"
+  },
+  "sources": [
+    {
+      "id": "voltagent",
+      "repo": "VoltAgent/awesome-design-md",
+      "ref": "main",
+      "path_pattern": "design-md/{id}/DESIGN.md",
+      "license": "MIT",
+      "license_file": ".claude/ui/_licenses/voltagent-awesome-design-md.txt",
+      "format": [
+        "google-alpha",
+        "voltagent-9section"
+      ],
+      "prefix": "",
+      "last_synced": "2026-10-16"
+    },
+    {
+      "id": "jp",
+      "repo": "kzhrknt/awesome-design-md-jp",
+      "ref": "main",
+      "path_pattern": "design-md/{id}/DESIGN.md",
+      "license": "MIT",
+      "license_file": ".claude/ui/_licenses/jp-awesome-design-md-jp.txt",
+      "format": [
+        "voltagent-9section"
+      ],
+      "prefix": "jp-",
+      "last_synced": "2026-10-16"
+    },
+    {
+      "id": "omd",
+      "repo": "kwakseongjae/oh-my-design",
+      "ref": "main",
+      "path_pattern": "web/references/{id}/DESIGN.md",
+      "license": "MIT",
+      "license_file": ".claude/ui/_licenses/omd-oh-my-design.txt",
+      "format": [
+        "omd-v3"
+      ],
+      "prefix": "omd-",
+      "last_synced": "2026-10-16"
+    },
+    {
+      "id": "self-extracted",
+      "repo": null,
+      "ref": null,
+      "path_pattern": null,
+      "license": null,
+      "license_file": null,
+      "format": [
+        "voltagent-9section"
+      ],
+      "prefix": "",
+      "last_synced": null
+    }
+  ]
+}
