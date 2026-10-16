@@ -221,7 +221,7 @@ git checkout main && git pull --rebase
 git merge --no-ff worktree-<name>
 
 # 4. 立刻 /verify  ←── 這一步是機器強制的，不是建議
-#    合併成功時 post-bash.sh 記一筆進 .merge-pending，
+#    合併（成功或衝突皆然）時 post-bash.sh 記一筆進 .merge-pending，
 #    在 /verify 通過清掉它之前，pre-tool-use.sh 會**擋下下一次 merge**
 
 # 5. 衝突只在主 checkout 解

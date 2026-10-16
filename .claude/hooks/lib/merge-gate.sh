@@ -10,9 +10,10 @@
 #      測試紅，要回頭二分找元凶——那正是「一次一個 merge」規則存在的理由，
 #      但那條規則寫在 worktree-orchestration skill 裡，是自律。
 #
-# 所以：merge 成功後記一筆待驗證；在那筆被 /verify 清掉之前，**擋下下一次 merge**。
+# 所以：merge 後記一筆待驗證；在那筆被 /verify 清掉之前，**擋下下一次 merge**。
 #
-# 標記檔由 post-bash.sh 在偵測到 merge 成功時寫入，由 /verify 通過後刪除。
+# 標記檔由 post-bash.sh 在偵測到執行了合併時寫入（成功、衝突、非零結束皆記；
+# 失敗的那一次靠 PostToolUseFailure 事件送達），由 /verify 通過後刪除。
 #
 # 逃生門：MERGE_GATE=off
 #

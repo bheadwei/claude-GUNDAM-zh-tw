@@ -74,7 +74,7 @@ Ready for PR: [YES/NO]
 ### 0a. 合併驗證關卡（**若有待驗證的合併，先做這個**）
 
 讀 `.claude/taskmaster-data/.merge-pending`。這份清單由 `post-bash.sh` 在偵測到
-`git merge`／`cherry-pick`／`rebase` **成功**時累積。清單非空表示：**有合併結果還沒被驗過**。
+`git merge`／`cherry-pick`／`rebase` 執行時累積（成功、衝突、非零結束都記）。清單非空表示：**有合併結果還沒被驗過**。
 
 清單非空時，除了上面的步驟 1-6，**額外做這三件事**：
 
