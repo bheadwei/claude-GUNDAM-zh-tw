@@ -61,7 +61,17 @@ Read .claude/ui/{primary}/DESIGN.md
 覆蓋段落優先於主風格，其他段落維持不變。動畫不在這張表裡——絕大多數風格檔沒有動畫段落，
 動畫強度改由 `ui-style.json` 的頂層 `motion` 欄位（L1／L2／L3）決定，不從品牌檔抽。
 
-### 1.3 寫碼前必答（無法略過）
+### 1.3 載入附屬檔
+
+和本檔同一個目錄（`.claude/skills/ui-style-compliance/`）：
+
+| 檔案 | 什麼時候讀 |
+|---|---|
+| `anti-ai.md` | **一律讀**。反 AI 感的產出前／產出後清單、文案與「不准編事實」 |
+| `motion.md` | `ui-style.json` 的 `motion` 是 `L2` 或 `L3` 時才讀（沒有 `motion` 欄位＝L1，不讀）。L1 只看本檔 2.6③ |
+| `fonts-cjk.md` | 專案語言含繁體中文時讀（頁面 `lang` 是 `zh-Hant`／`zh-TW`／`zh-HK`，或內容是繁中）。jp 風格的日文字型換成繁中的對照表也在這裡 |
+
+### 1.4 寫碼前必答（無法略過）
 
 在寫任何 UI 程式碼前，**必須在回覆中明確陳述**：
 
@@ -75,6 +85,9 @@ Read .claude/ui/{primary}/DESIGN.md
     - 間距基準：4px / 8px
     - 圓角規範：小元素 Xpx、卡片 Xpx
     - 陰影：[spec]
+  - 動畫等級：[L1 / L2 / L3]（沒有 motion 欄位＝L1）
+  - 已讀附屬檔：anti-ai.md［+ motion.md］［+ fonts-cjk.md］
+  - 風格本身接近的 AI 樣式：[無 / 有：見 anti-ai.md「例外」，照選定風格做]
 ```
 
 **未陳述此確認就寫 UI 程式碼 = 違規**。
@@ -108,6 +121,8 @@ Read .claude/ui/{primary}/DESIGN.md
 
 > Token 分層與交換格式對齊 W3C DTCG（global → semantic/alias → component），
 > 詳見範本 `12_frontend_architecture_specification.md`。
+>
+> 動畫的時長、easing、位移距離也是 token，不要散在元件裡（L2／L3 的寫法見 `motion.md` 第 4 節）。
 
 ### 2.2 字體禁令
 
@@ -124,93 +139,41 @@ Read .claude/ui/{primary}/DESIGN.md
 同類元件（按鈕、卡片、輸入框）**不得同時存在 2 種風格**。已建立 `Button` 就不要再寫
 inline `<button>`；已有 `Card` 不要再寫自訂卡片。
 
-### 2.5 反 AI slop 禁令（除非選定的 DESIGN.md 明確要求）
+### 2.5 反 AI 感 → `anti-ai.md`（唯一來源）
 
-❌ **禁止**以下「AI 生成味」的預設美學：
+紫色漸層、全站 Inter、罐頭版型這類「第一層預設」，和米白底＋襯線＋陶土色這類「有品味的預設」，
+規則與例外都在 `anti-ai.md`（1.3 節規定一律讀）：
 
-- 紫色/藍紫漸層背景或按鈕（`purple gradient`、`#8B5CF6 → #EC4899` 這類）
-- 無理由用 Inter / Roboto / Arial 充當品牌字型（fallback 模式的系統字體堆疊除外）
-- 彈跳（bounce）、過度 spring 動畫；**UI 微互動**（hover、focus、展開收合）一律 150-300ms ease。
-  這個時長限制**不適用於捲動連動的動畫**（它的進度跟著捲動走，沒有固定時長；細節在 `motion.md`）
-- Cookie-cutter 版型：hero 大標 + 三欄 icon 卡片 + 置中 CTA 的罐頭結構
-- 擁擠間距（元素貼邊、區塊間無呼吸空間）
-- **發光球體／抽象 3D blob**、glassmorphism 卡片配霓虹光暈
-- **每張卡都加 1px 灰邊**（邊框要有理由，不是預設加上去的）
-- 沒人要求的深色模式（除非 DESIGN.md 指定，或使用者要求）
-- 「一群人看著筆電」的 stock hero 圖、過度平滑對稱的 AI 插畫
+- **產出前**（挑方向、配色、字型時）：五種常見樣式、被用爛的字型、動手前先寫計畫再對照題目
+- **產出後**（自檢時）：逐項對照的清單
+- **例外**：選定的 DESIGN.md 本身就是那種樣式（`claude`、`granola` 等）時怎麼處理
 
-### 2.6 反 AI slop 的「該做什麼」
+### 2.6 跨風格通用規則（入口）
 
-禁令只擋掉爛的，不會產出好的。以下是**主動要做**的：
+跨風格通用的規則一律放在本節指向的地方，**不因選了哪個品牌而變**，也不寫進任何一份 DESIGN.md。
+色彩、字體、版型的個性從選定的 DESIGN.md 取；沒有 DESIGN.md 時用文末 Fallback。
+編號沿用舊版，既有的指標（例如「2.6 ②」）照樣找得到。
 
-**① 字體當主角，不是配角**
+| 編號 | 規則 | 在哪裡 |
+|---|---|---|
+| ① | 字體當主角 | `anti-ai.md`「該主動做的事」 |
+| ② | 文案的具體性、**不准編事實**（查不到的留 `【待提供：<項目>】`） | `anti-ai.md`「文案與事實」 |
+| ③ | 動畫底線（所有等級） | **本節下方**（L1 只看這裡） |
+| ④ | 原生 CSS 優先、瀏覽器支援度 | `motion.md` 第 2、5 節 |
+| ⑤ | 一次只做一個區塊 | `anti-ai.md`「該主動做的事」 |
+| ⑥ | 影片 hero | `anti-ai.md`「該主動做的事」 |
 
-AI 讓版型與素材都變便宜了，字體是現在最能表達個性的東西。
-
-- 標題用 viewport 縮放（`clamp()`），敢放大到真的有存在感
-- 字重對比要強（400 vs 700 不夠，用 300 vs 800）
-- **用字體撐起 hero，而不是找一張圖來填**
-
-**② 文案的具體性 —— 這是槓桿最大的一項**
-
-版型再好，一句通用文案就露餡。AI 的預設是「Empower your workflow with
-AI-driven solutions」這種誰都能套的句子。
-
-| ❌ 通用 | ✅ 具體 |
-|---|---|
-| 「用 AI 驅動你的工作流」 | 「Financial infrastructure for the internet」（Stripe） |
-| 「打造更好的產品體驗」 | 「Plan and build products」（Linear） |
-
-判準：**把公司名遮掉，這句話還能不能認出是在講什麼產品？** 不能 → 重寫。
-
-**不准編事實。** 具體不等於捏造。以下欄位沒有來源（使用者給的資料、IA doc、既有內容）
-就不能寫，一律留空位 `【待提供：<項目>】`，並列進回報的「開放問題」：
-
-- 價格、方案內容、營業時間、地址、電話、Email
-- 得獎、認證、成立年份、統計數字（「服務 10,000+ 客戶」）
-- 評論、推薦語、客戶名與 logo 牆
-
-`【待提供：月費價格】` 比一個看起來合理的 `NT$ 299` 好——假數字會被當成真的上線。
-
-**③ 動畫要有目的**
+**③ 動畫底線（L1／L2／L3 都要守）**
 
 > 動畫的職責是**解釋層級**或**回應互動**，不是讓所有元素同時飄。
 
-- 進場動畫一次只帶一個層級，不要整頁元素一起淡入
+- **UI 微互動**（hover、focus、展開收合）150～300ms、ease-out，不彈跳、不過衝。
+  這個時長限制**不適用於捲動連動的動畫**（進度跟著捲動走，沒有固定時長；L2／L3 見 `motion.md`）
+- 進場動畫一次只帶一個層級，不要整頁元素一起淡入，也不要每一段都同一個淡入上移
 - 裝飾性動畫**超過 5 秒必須可暫停**（WCAG 2.2）
-- **必須**處理 `prefers-reduced-motion: reduce`：自動播放改成靜態 poster
-
-**④ 用原生 CSS，不要動輒上動畫庫**
-
-過去要靠 GSAP／Framer Motion 的裝飾動畫，約 70% 現在純 CSS 就能做，
-且跑在 compositor thread 上（跟捲動一樣順）：
-
-- **Scroll-driven animations**（`animation-timeline: scroll()` / `view()`）——
-  Chrome/Edge 115+、Firefox 132+、Safari 18+
-- **View Transitions API** —— 同頁與跨頁轉場，Chrome/Edge/Safari 已支援，
-  Firefox 2026 初部分支援
-
-先問「這個效果原生 CSS 做不做得到」，做得到就不要加依賴。
-
-**⑤ 一次只做一個區塊**
-
-產出品質不來自一個完美的 prompt，來自**參考素材 + 模組拆解 + 驗證循環**。
-
-所以：先只做 hero，驗過再做下一區。一次生成整頁必然平庸 ——
-每個區塊都只拿到平均值的注意力。
-
-**⑥ 影片 hero（若 DESIGN.md 走 cinematic 方向）**
-
-```html
-<video autoplay muted loop playsinline poster="fallback.jpg"></video>
-```
-
-- `object-fit: cover`，中央**預留足夠負空間**讓標題疊上去
-- 標題疊圖用 `mix-blend-mode: exclusion` 之類的混合模式，不要一律蓋黑色遮罩
-- **一定要有 `poster`** —— `prefers-reduced-motion` 與載入失敗時就靠它
-
-✅ 色彩/字體/版型個性一律從選定的 DESIGN.md 取得；無 DESIGN.md 時遵循
-fallback 的克制中性色 + 單一強調色。**本節的規則跨風格通用**，不因選了哪個品牌而變。
+- **必須**處理 `prefers-reduced-motion: reduce`：自動播放改成靜態 poster，位移動畫改成直接顯示
+- **L1 只用 CSS `transition`／`animation`，不 import 任何動畫函式庫**
+- 等級是 L2／L3 → 讀 `motion.md`（允許的技術、效能預算、降級方式、函式庫速查與常見坑）
 
 ---
 
@@ -234,10 +197,13 @@ fallback 的克制中性色 + 單一強調色。**本節的規則跨風格通用
       只有 DESIGN.md 有定義或使用者要求時才做第二套值
 - [x] 元件一致性：同類元件無並存多風格
 - [x] 語意化 HTML：header / nav / main / section / footer 使用恰當，不是整頁 div
-- [x] 反 AI slop：無紫漸層/罐頭版型/彈跳動畫/發光球體/無理由的灰邊（見 2.5）
-- [x] 文案具體性：遮掉公司名後仍看得出在講什麼產品（見 2.6 ②）
-- [x] 動畫有目的：解釋層級或回應互動，非全頁一起飄；已處理 `prefers-reduced-motion`
-- [x] 動畫實作：能用原生 CSS（scroll-driven / View Transitions）就沒加動畫庫
+- [x] 反 AI 感：已逐項對照 `anti-ai.md` 的「產出後」清單；命中但由 DESIGN.md 要求的，寫明是哪一份要求的
+- [x] 文案具體性：遮掉公司名後仍看得出在講什麼產品（見 `anti-ai.md`「文案與事實」）
+- [x] 事實沒有編造：價格、營業時間、電話、得獎、年份、評論、客戶名都有來源；
+      缺的都標了 `【待提供：<項目>】`，並列進回報的「開放問題」（見 2.6 ②）
+- [x] 動畫有目的：解釋層級或回應互動，非全頁一起飄；已處理 `prefers-reduced-motion`（見 2.6 ③）
+- [x] 動畫等級：用到的技術沒有超出 `ui-style.json` 的 `motion` 等級（L1 沒有 import 動畫函式庫；L2／L3 照 `motion.md` 第 2 節）
+- [x] 動畫實作：能用原生 CSS（scroll-driven / View Transitions）就沒加動畫庫，而且有不支援時的退路
 - [x] a11y：文字對比 ≥ 4.5:1、focus 狀態可見、觸控目標 ≥ 44px、圖片有 alt
 - [x] 斷點：390、1440 已截圖看過；768、1024 沒有水平捲軸
 - [ ] 未達成項目說明：[如有]
@@ -271,7 +237,7 @@ fallback 的克制中性色 + 單一強調色。**本節的規則跨風格通用
 - **圓角：** 小元素 4-8px、卡片 12-16px
 - **陰影：** `0 1px 3px rgba(0,0,0,0.1)`
 - **毛玻璃：** `backdrop-filter: blur(20px) saturate(180%)`，背景 `rgba(255,255,255,0.72)` / 深色 `rgba(28,28,30,0.72)`
-- **動畫：** UI 微互動 150-300ms ease（捲動連動的動畫不受此限，見 2.5）
+- **動畫：** UI 微互動 150-300ms ease（捲動連動的動畫不受此限，見 2.6 ③）
 - **深色模式：** 預設不做。token 一律用語意命名（`--color-surface`、`--color-text-primary`），
   之後要加深色模式只需補一套值，不必改元件。使用者要求時才做
 
