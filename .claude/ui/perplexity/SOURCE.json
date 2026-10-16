@@ -1,0 +1,16 @@
+{
+  "source": "self-extracted",
+  "upstream_repo": null,
+  "upstream_path": null,
+  "upstream_commit": null,
+  "upstream_format": "voltagent-9section",
+  "upstream_status": null,
+  "imported_at": "2026-07-24",
+  "imported_sha256": "a8603ea0444cefd3c2ba2018b1d0db52fbaa871a5afdd4c66cf680ab58d50c3a",
+  "license": null,
+  "license_file": null,
+  "locally_modified": false,
+  "local_changes": "",
+  "language": "en",
+  "extraction_method": "firecrawl"
+}

@@ -75,7 +75,7 @@ N_DOCTPL=$(find .claude/skills/project-docs/templates -maxdepth 1 -name '*.md' !
 
 echo ""
 echo "檔案系統實況"
-N_UI=$(find .claude/ui -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
+N_UI=$(find .claude/ui -mindepth 1 -maxdepth 1 -type d ! -name '_*' 2>/dev/null | wc -l | tr -d ' ')
 printf '  agents %-4s skills %-4s commands %-4s rules %-4s hooks %-4s UI 風格 %-4s 文件範本 %s
 ' \
     "$N_AGENTS" "$N_SKILLS" "$N_CMDS" "$N_RULES" "$N_HOOKS" "$N_UI" "$N_DOCTPL"
@@ -209,21 +209,46 @@ if [ -f "$RC" ]; then
     fi
 fi
 
-# UI 風格：每個 .claude/ui/<name>/ 都要有 DESIGN.md，且要被 CATALOG.md 列到
+# UI 風格：每個 .claude/ui/<name>/ 都要有 DESIGN.md、SOURCE.json，要被 CATALOG.md 列到，
+# 而且 DESIGN.md 抽得到配色與字型段落
 #
 # 為什麼：`/ui-style` 只從 CATALOG.md 挑選。目錄建了卻沒進 CATALOG，
 # 那個風格就永遠選不到——跟孤兒 skill 一樣，不會報錯。
+# SOURCE.json 是同步腳本判斷「上游有沒有更新、本地有沒有改過」的依據，缺了就無從比對。
+# 配色／字型段落：mixed 模式照段落標題抽內容，標題對不上時抽到空的也不會報錯。
+#
+# 段落標題別名的唯一來源是 `ui-style-compliance` 1.2 節的 mixed 對照表。
+# 這裡只複製其中「配色」「字型」兩列；改那張表時要同步下面兩個樣式。
+# 比對時忽略標題前的編號（`## 2. Color Palette & Roles` 與 `## Colors` 都算）。
+UI_COLOR_RE='^##[[:space:]]+([0-9]+\.[[:space:]]*)?(Color Palette & Roles|Colors)[[:space:]]*$'
+UI_TYPO_RE='^##[[:space:]]+([0-9]+\.[[:space:]]*)?(Typography Rules|Typography)[[:space:]]*$'
 if [ -d .claude/ui ]; then
     for d in .claude/ui/*/; do
         [ -d "$d" ] || continue
         name=$(basename "$d")
+        # `_` 前綴＝不是風格（`_project` 是反推出來的、`_licenses` 是授權原文），整個跳過
+        case "$name" in _*) continue ;; esac
         CHECKED=$((CHECKED + 1))
         if [ ! -f "$d/DESIGN.md" ]; then
             FAIL=$((FAIL + 1))
             printf '  %s UI 風格缺 DESIGN.md：%s\n' "$(red '✗')" "$name"
+        else
+            CHECKED=$((CHECKED + 1))
+            if ! grep -qE "$UI_COLOR_RE" "$d/DESIGN.md" 2>/dev/null; then
+                FAIL=$((FAIL + 1))
+                printf '  %s UI 風格找不到配色段落：%s（mixed 模式抽不到 color）\n' "$(red '✗')" "$name"
+            fi
+            CHECKED=$((CHECKED + 1))
+            if ! grep -qE "$UI_TYPO_RE" "$d/DESIGN.md" 2>/dev/null; then
+                FAIL=$((FAIL + 1))
+                printf '  %s UI 風格找不到字型段落：%s（mixed 模式抽不到 typography）\n' "$(red '✗')" "$name"
+            fi
         fi
-        # `_` 前綴＝非品牌（`_project` 是從現有程式碼反推出來的），不進品牌目錄
-        case "$name" in _*) continue ;; esac
+        CHECKED=$((CHECKED + 1))
+        if [ ! -f "$d/SOURCE.json" ]; then
+            FAIL=$((FAIL + 1))
+            printf '  %s UI 風格缺 SOURCE.json：%s（同步腳本無從判斷來源與本地修改）\n' "$(red '✗')" "$name"
+        fi
         CHECKED=$((CHECKED + 1))
         if ! grep -qF "$name" .claude/ui/CATALOG.md 2>/dev/null; then
             FAIL=$((FAIL + 1))
