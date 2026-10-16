@@ -4,7 +4,7 @@ slug: "frontend-style-library"
 created: "2026-10-16"
 updated: "2026-10-16"
 status: "🔄 進行中"
-current_phase: 9
+current_phase: 11
 mode: "standard"
 files:
   # 階段 1：順手修的小問題
@@ -346,7 +346,7 @@ files:
   - `bash scripts/update-template.sh <臨時目錄>` → 同上；在沒有 rsync 的情況（`PATH` 拿掉 rsync）也一樣
   - `copy-template.ps1`、`update-template.ps1` 用 PowerShell 跑一次 → 結果和 sh 版相同
 
-### 階段 9：hook（E 的 D10 和兩個 PostToolUse 提醒、C 的掃描器評估、F 的 90 天提醒） ⏳
+### 階段 9：hook（E 的 D10 和兩個 PostToolUse 提醒、C 的掃描器評估、F 的 90 天提醒） ✅
 
 - [ ] **D10**（`user-prompt-submit.sh` 第 147 行）：`ui` 改成前後不能是英文字母（`(^|[^a-z])ui([^a-z]|$)`），並加入
       `網站|官網|landing|形象頁|一頁式|首頁|版型|配色|字型`。`css` 同樣處理
@@ -384,7 +384,7 @@ files:
   - `bash .claude/hooks/tests/run-tests.sh` 全部通過；`bash scripts/check-counts.sh` → 0 個 ✗
   - `run-compliance.sh` 跑第 10 題 → 受測 session 有載入 `ui-style-compliance`（判讀寫進結果目錄的 `_判讀.md`）
 
-### 階段 10：匯入使用者挑選的品牌、CATALOG 非科技業分類（F） ⏳
+### 階段 10：匯入使用者挑選的品牌、CATALOG 非科技業分類（F） ✅
 
 > **前提：階段 3 的清單已經由使用者挑過。** 沒挑不能開始。
 

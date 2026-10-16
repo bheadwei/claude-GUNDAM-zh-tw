@@ -90,9 +90,9 @@ claude_v2026/
     ├── agents/       (15 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
     ├── skills/       (28 個)         # 按需載入（不佔常駐 context）
-    ├── hooks/                        # Hook 腳本 + lib/ + 410 案例回歸測試
+    ├── hooks/                        # Hook 腳本 + lib/ + 479 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）
-    ├── ui/           (69 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
+    ├── ui/           (104 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │
     ├── guides/                       # 參考文件（不自動載入）
     │   ├── WORKFLOW.md               # 開發流程指南
@@ -168,7 +168,7 @@ claude_v2026/
 | 交付級 | `/pr` | 建立 PR（分析完整 commit 歷史 + 測試計畫） |
 | | `/deploy` | 部署（先安全把關再委派 deployment-expert） |
 | | `/deps` | 依賴維護（依風險分批升級） |
-| UI 前端 | `/ui-style` | 選擇/切換 UI 風格（69 種設計系統） |
+| UI 前端 | `/ui-style` | 選擇/切換 UI 風格（104 種設計系統） |
 | | `/ui-site` | 網站雛形產生器（Q&A → IA 文檔 + 多頁骨架 + tokens） |
 | | `/ui-page <path>` | 單頁深化（讀 IA、Q&A 補細節、委派 ui-builder） |
 | 環境設定 | `/pm-choose` | 選擇 Node.js 套件管理器（bun / pnpm / npm） |

@@ -171,6 +171,7 @@
 | `claude` | 是（`#FAF9F5`、`#F5F4ED`） | 是（Anthropic Serif） | 是（`#C96442`） | **3** |
 | `oura`（階段 10 匯入） | 是（米色紙張感） | 是（Editorial New） | 是（陶土、芥末黃、橄欖綠） | **3** |
 | `granola` | 是（`#F7F7F2`） | 是（Quadrant 粗襯線，h1 110px） | 否（橄欖綠 `#5B6F00`） | 2 |
+| `mastercard`（階段 10 匯入） | 是（`#F3F0EE` 溫暖灰米色） | 否（無襯線） | 是（接近陶土的訊號橘） | 2 |
 | `zed` | 否（`#F5F5F3`，R 只比 B 高 2，是中性灰白） | 是（IBM Plex Serif） | 否（工程藍 `#1348DC`） | 1 |
 | `perplexity` | 否（`#FCFCF9` 幾乎是白；`#E7E5DE` 是暖灰區塊，不夠亮） | **否**（全站 pplxSans 無襯線） | 否（深青 `#016A71`） | 0 |
 

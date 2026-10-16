@@ -148,7 +148,7 @@ skill 寫了沒人喚起、description 是內容摘要、同一份模板散在�
 
 1. `WebSearch` 查當前的設計走向與技術（**不要憑記憶** —— 瀏覽器支援度每年都在動）
 2. 判斷是「跨風格通用」還是「某個品牌變了」：
-   - **跨風格通用** → 寫進 `ui-style-compliance` 的 2.6 節（唯一來源），
+   - **跨風格通用** → 寫進 `ui-style-compliance/anti-ai.md`（唯一來源），
      **不要**複製到每一份 DESIGN.md 裡
    - **某個品牌改版了** → 更新那一份 DESIGN.md
 3. 更新 `.ui-catalog-refreshed` 的日期
@@ -196,7 +196,7 @@ skill 寫了沒人喚起、description 是內容摘要、同一份模板散在�
 - ❌ 判斷得出時機的事寫成文字規則
 - ❌ 只跑 `check-counts.sh` 就宣稱「已生效」
 - ❌ 為了湊數量搬 skill 進來 —— **搬進來就要維護**
-- ❌ 把跨風格通用的規則複製進每一份 DESIGN.md（該進 `ui-style-compliance` 2.6）
+- ❌ 把跨風格通用的規則複製進每一份 DESIGN.md（該進 `ui-style-compliance/anti-ai.md`）
 - ❌ 新增 UI 風格卻沒同步 `CATALOG.md` 兩處
 - ❌ 改動 DESIGN.md 的段落標題（`mode: mixed` 靠標題抽取）
 - ❌ 反推 DESIGN.md 時編造設計意圖
