@@ -504,3 +504,5 @@ files:
 3. 既有「設計走向 90 天」提醒也改成只在模板 repo 出現
 4. `semrush`：本地保留，`SOURCE.json` 寫 `upstream_status: "removed"`，CATALOG 標「（上游已移除）」
 5. 第一批（階段 1～4）以 4 條 worktree 平行執行
+6. 階段 10 匯入清單：`skill-curator-2026-10-16-1034-brand-candidates.md`「給使用者挑選用的精簡清單」推薦的 35 份全收（VoltAgent 7、jp 15、omd 13），含 AI 痕跡標中／高者（作對照組，由 anti-ai.md 在提方向時避開或標註）
+7. 階段 6 一併處理：`ui-site.md` 約第 194 行「產 tokens 一律做深色模式」與階段 4 的 D4 新規則矛盾（階段 4 回報）
