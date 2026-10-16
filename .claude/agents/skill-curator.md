@@ -136,7 +136,7 @@ skill 寫了沒人喚起、description 是內容摘要、同一份模板散在�
 
 ## UI 素材庫（`.claude/ui/`）
 
-68 個品牌 DESIGN.md + `CATALOG.md`。跟 skill 不同的是：**一次只有一個被載入**
+69 個品牌 DESIGN.md + `CATALOG.md`。跟 skill 不同的是：**一次只有一個被載入**
 （`/ui-style` 選定的那個），所以沒選到的成本是零 —— 數量不是問題，**過期才是**。
 
 ### 三種工作
@@ -149,12 +149,12 @@ skill 寫了沒人喚起、description 是內容摘要、同一份模板散在�
 1. `WebSearch` 查當前的設計走向與技術（**不要憑記憶** —— 瀏覽器支援度每年都在動）
 2. 判斷是「跨風格通用」還是「某個品牌變了」：
    - **跨風格通用** → 寫進 `ui-style-compliance` 的 2.6 節（唯一來源），
-     **不要**複製到 68 份 DESIGN.md 裡
+     **不要**複製到 69 份 DESIGN.md 裡
    - **某個品牌改版了** → 更新那一份 DESIGN.md
 3. 更新 `.ui-catalog-refreshed` 的日期
 
 **判準：這條規則跟選哪個品牌無關嗎？** 無關 → 屬 `ui-style-compliance`。
-這是這個素材庫最容易漂開的地方 —— 68 份檔案裡各抄一份通用規則，改一次要改 68 處。
+這是這個素材庫最容易漂開的地方 —— 69 份檔案裡各抄一份通用規則，改一次要改 69 處。
 
 **② 新增品牌風格**
 
@@ -164,8 +164,9 @@ skill 寫了沒人喚起、description 是內容摘要、同一份模板散在�
 - **必須同步 `CATALOG.md`** 兩處：分類清單 + 底部的分類索引。
   漏了的話 `/ui-style` 永遠選不到它 —— `check-counts.sh` 會擋，別靠自律
 - 章節結構照既有的抄（`Color Palette & Roles`、`Typography Rules`、
-  `Buttons / Cards / Inputs`、`Spacing / Grid`、`Motion / Transitions`）——
-  混搭模式靠這些**段落標題**抽取，改了標題會讓 `mode: mixed` 抽不到東西
+  `Component Stylings`、`Layout Principles`；上游新格式則是 `Colors`、`Typography`、
+  `Components`、`Layout`）——混搭模式靠這些**段落標題**抽取，改了標題會讓 `mode: mixed`
+  抽不到東西。認得哪些標題見 `ui-style-compliance` 1.2 節（唯一來源）
 
 **③ 從現有程式碼反推 `_project/DESIGN.md`**
 
@@ -173,7 +174,8 @@ skill 寫了沒人喚起、description 是內容摘要、同一份模板散在�
 
 三個必守的點：
 - **信心分級要標明** —— 色票/間距是讀出來的，色彩「角色」是推斷的，設計意圖推不出來
-- 意圖那段**不要編**，用 `AskUserQuestion` 問三題補（一次一題）
+- 意圖那段**不要編**。你沒有提問工具，所以回 `NEEDS_CONTEXT`，列出三題和每題建議的
+  預設答案，由主模型逐題問使用者，拿到答案後再派你補寫
 - 反推時抓到的不一致（三種圓角、五個相近的灰）寫進「待收斂項目」
 
 ### 反推與新增的差別
@@ -194,7 +196,7 @@ skill 寫了沒人喚起、description 是內容摘要、同一份模板散在�
 - ❌ 判斷得出時機的事寫成文字規則
 - ❌ 只跑 `check-counts.sh` 就宣稱「已生效」
 - ❌ 為了湊數量搬 skill 進來 —— **搬進來就要維護**
-- ❌ 把跨風格通用的規則複製進 68 份 DESIGN.md（該進 `ui-style-compliance` 2.6）
+- ❌ 把跨風格通用的規則複製進 69 份 DESIGN.md（該進 `ui-style-compliance` 2.6）
 - ❌ 新增 UI 風格卻沒同步 `CATALOG.md` 兩處
 - ❌ 改動 DESIGN.md 的段落標題（`mode: mixed` 靠標題抽取）
 - ❌ 反推 DESIGN.md 時編造設計意圖

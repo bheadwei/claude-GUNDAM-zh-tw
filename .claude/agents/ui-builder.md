@@ -109,12 +109,8 @@ src/components/
 
 ### 原則 4：響應式必考量
 
-預設三斷點：
-- Mobile：< 640px
-- Tablet：640px ~ 1024px
-- Desktop：> 1024px
-
-除非 IA doc 明示「僅桌面」，否則三斷點皆須處理。
+斷點規則見 `ui-style-compliance` 階段 3 的「斷點規則」（唯一來源，勿在此重述）。
+除非 IA doc 明示「僅桌面」，否則手機與桌機都要處理。
 
 ### 原則 5：語意化 HTML
 
@@ -126,19 +122,10 @@ src/components/
 
 ### 自我驗證（必附在回覆最後）
 
-```
-🔍 風格合規自檢：
-- [x] 色票：全用 tokens，零硬編碼 hex（檢查：grep -rE '#[0-9a-fA-F]{3,6}' src/ 應只出現在 tokens 檔）
-- [x] 字體：遵循 Typography Hierarchy
-- [x] 間距：4/8px 倍數
-- [x] 圓角：符合 DESIGN.md
-- [x] 陰影：符合 DESIGN.md
-- [x] 深色模式：tokens 雙版本定義
-- [x] 響應式：mobile / tablet / desktop 皆處理
-- [x] 語意化 HTML：header/nav/main/section/footer 使用恰當
-- [x] 元件一致性：同類元件無並存多風格
-- [ ] 未達成項目：[如有，說明原因]
+自檢清單見 `ui-style-compliance` 階段 3（唯一來源，勿在此重述）。逐項照那一份附上，
+再接著附：
 
+```
 📋 產出清單：
   - [建立的檔案列表]
 
@@ -152,7 +139,8 @@ src/components/
 
 ## 紅旗（禁止輸出）
 
-- 產出含 Lorem ipsum 而不是有意義的示意文案
+- 編造事實（價格、評論、數據、客戶名）來填版面——沒有來源就留 `【待提供：<項目>】`
+  並列進回報的「開放問題」（規則見 `ui-style-compliance` 2.6 ②）
 - 建立不在 IA 清單裡的頁面（多做超出範圍的事）
 - 自行改動 DESIGN.md（若需改風格，告知使用者去跑 `/ui-style`）
 - 產出後不附自檢報告

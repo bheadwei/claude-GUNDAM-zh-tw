@@ -182,19 +182,9 @@ IA snippet 格式（最小模式）：
 
 ## 風格合規硬檢查（由 ui-builder 執行）
 
-每次產出後回覆最後必附：
+每次產出後回覆最後必附風格合規自檢。
 
-```
-🔍 風格合規自檢：
-- [x] 色票：全用 tokens
-- [x] 字體：遵循 Typography Hierarchy
-- [x] 間距：4/8px 倍數
-- [x] 圓角：符合 DESIGN.md
-- [x] 深色模式：已處理
-- [x] 響應式：mobile/tablet/desktop
-- [x] 語意化 HTML
-```
-
+自檢清單見 `.claude/skills/ui-style-compliance/SKILL.md` 階段 3（唯一來源，勿在此重述）。
 缺項需說明。
 
 ## 搭配其他指令

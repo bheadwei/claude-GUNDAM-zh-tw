@@ -42,17 +42,24 @@ Read .claude/ui/{primary}/DESIGN.md
 Read .claude/ui/{primary}/DESIGN.md
 ```
 
-再對每個非 null 的 `overrides` 欄位，載入對應風格並**只取對應段落**：
+再對每個非 null 的 `overrides` 欄位，載入對應風格並**只取對應段落**。
+風格檔有新舊兩種格式，兩種標題都要認（比對時忽略標題前的編號，例如 `## 2. `）：
 
-| overrides 欄位 | 讀取 `.claude/ui/<override>/DESIGN.md` 的段落 |
+| overrides 欄位 | 認這些 `##` 標題（任一） |
 |--------------|---------------------------------------------|
-| `color` | Color Palette & Roles |
-| `typography` | Typography Rules |
-| `components` | Buttons / Cards / Inputs / Components |
-| `layout` | Spacing / Grid / Section Rhythm |
-| `animation` | Motion / Transitions |
+| `color` | `Color Palette & Roles`、`Colors` |
+| `typography` | `Typography Rules`、`Typography` |
+| `components` | `Component Stylings`、`Components` |
+| `layout` | `Layout Principles`、`Layout` |
 
-覆蓋段落優先於主風格，其他段落維持不變。
+- **舊格式**（9 節，`## 2. Color Palette & Roles` 這種）：數值寫在段落內文
+- **新格式**（Google DESIGN.md 規格，檔頭 YAML 有 `version: alpha`）：段落內文用
+  `{colors.primary}` 這類引用，實際數值在檔頭 YAML 的同名區塊（`colors:`、`typography:`、
+  `spacing:`、`rounded:`、`components:`）——**段落和 YAML 區塊都要讀**，只讀段落拿不到數值
+- **對應段落找不到時要明說**：「`<codename>` 沒有 `<段落>`，沿用主風格」，不能默默略過
+
+覆蓋段落優先於主風格，其他段落維持不變。動畫不在這張表裡——絕大多數風格檔沒有動畫段落，
+動畫強度改由 `ui-style.json` 的頂層 `motion` 欄位（L1／L2／L3）決定，不從品牌檔抽。
 
 ### 1.3 寫碼前必答（無法略過）
 
@@ -123,7 +130,8 @@ inline `<button>`；已有 `Card` 不要再寫自訂卡片。
 
 - 紫色/藍紫漸層背景或按鈕（`purple gradient`、`#8B5CF6 → #EC4899` 這類）
 - 無理由用 Inter / Roboto / Arial 充當品牌字型（fallback 模式的系統字體堆疊除外）
-- 彈跳（bounce）、過度 spring 動畫；動畫一律 150-300ms ease
+- 彈跳（bounce）、過度 spring 動畫；**UI 微互動**（hover、focus、展開收合）一律 150-300ms ease。
+  這個時長限制**不適用於捲動連動的動畫**（它的進度跟著捲動走，沒有固定時長；細節在 `motion.md`）
 - Cookie-cutter 版型：hero 大標 + 三欄 icon 卡片 + 置中 CTA 的罐頭結構
 - 擁擠間距（元素貼邊、區塊間無呼吸空間）
 - **發光球體／抽象 3D blob**、glassmorphism 卡片配霓虹光暈
@@ -154,6 +162,15 @@ AI-driven solutions」這種誰都能套的句子。
 | 「打造更好的產品體驗」 | 「Plan and build products」（Linear） |
 
 判準：**把公司名遮掉，這句話還能不能認出是在講什麼產品？** 不能 → 重寫。
+
+**不准編事實。** 具體不等於捏造。以下欄位沒有來源（使用者給的資料、IA doc、既有內容）
+就不能寫，一律留空位 `【待提供：<項目>】`，並列進回報的「開放問題」：
+
+- 價格、方案內容、營業時間、地址、電話、Email
+- 得獎、認證、成立年份、統計數字（「服務 10,000+ 客戶」）
+- 評論、推薦語、客戶名與 logo 牆
+
+`【待提供：月費價格】` 比一個看起來合理的 `NT$ 299` 好——假數字會被當成真的上線。
 
 **③ 動畫要有目的**
 
@@ -199,27 +216,42 @@ fallback 的克制中性色 + 單一強調色。**本節的規則跨風格通用
 
 ## 階段 3：寫 UI 後的**自我驗證**
 
-完成 UI 後，**必須**在回覆最後附上「風格合規自檢」：
+完成 UI 後，**必須**在回覆最後附上「風格合規自檢」。
+
+**這是自檢清單的唯一來源。** `ui-builder` agent 與 `/ui-page`、`/ui-site` 都指向這裡，
+不各自抄一份——之前三份各自漂開，真正在寫程式碼的那份反而最短。
+要加檢查項目就加在這裡。
 
 ```
 🔍 風格合規自檢：
 - [x] 色票：全用 tokens / CSS 變數，零硬編碼 hex
+      （檢查：grep -rE '#[0-9a-fA-F]{3,8}\b' src/ 只應出現在 tokens 檔）
 - [x] 字體：遵循 Typography Hierarchy（使用 text-heading-md / text-body 等）
-- [x] 間距：4/8px 倍數
+- [x] 間距：4/8px 倍數（或 DESIGN.md 的 spacing scale）
 - [x] 圓角：符合 DESIGN.md 規範（小元素 Xpx、卡片 Xpx）
 - [x] 陰影：符合規範
-- [x] 深色模式：CSS 變數已雙版本定義
+- [x] 深色模式：token 用語意命名（--color-surface 而非 --white）；
+      只有 DESIGN.md 有定義或使用者要求時才做第二套值
 - [x] 元件一致性：同類元件無並存多風格
+- [x] 語意化 HTML：header / nav / main / section / footer 使用恰當，不是整頁 div
 - [x] 反 AI slop：無紫漸層/罐頭版型/彈跳動畫/發光球體/無理由的灰邊（見 2.5）
 - [x] 文案具體性：遮掉公司名後仍看得出在講什麼產品（見 2.6 ②）
 - [x] 動畫有目的：解釋層級或回應互動，非全頁一起飄；已處理 `prefers-reduced-motion`
 - [x] 動畫實作：能用原生 CSS（scroll-driven / View Transitions）就沒加動畫庫
 - [x] a11y：文字對比 ≥ 4.5:1、focus 狀態可見、觸控目標 ≥ 44px、圖片有 alt
-- [x] 斷點：390 / 768 / 1024 / 1440 px 都看過
+- [x] 斷點：390、1440 已截圖看過；768、1024 沒有水平捲軸
 - [ ] 未達成項目說明：[如有]
 ```
 
-**不附自檢 = 違規**。
+**斷點規則（唯一來源）**：
+
+- **必截圖**：390px（手機）與 1440px（桌機）
+- **只檢查沒有水平捲軸**：768px、1024px
+- **CSS 斷點本身**：照 DESIGN.md 的 Responsive 段落；沒寫就用框架預設
+  （例如 Tailwind 的 `sm`／`md`／`lg`），不要自己發明一組數字
+- 沒有截圖工具時，斷點那一項**不准勾**，在「未達成項目說明」寫「未截圖，原因：…」
+
+**不附自檢 = 違規**。沒做到的項目不准勾成 `[x]`——勾了沒做比不勾更糟。
 
 ---
 
@@ -239,8 +271,9 @@ fallback 的克制中性色 + 單一強調色。**本節的規則跨風格通用
 - **圓角：** 小元素 4-8px、卡片 12-16px
 - **陰影：** `0 1px 3px rgba(0,0,0,0.1)`
 - **毛玻璃：** `backdrop-filter: blur(20px) saturate(180%)`，背景 `rgba(255,255,255,0.72)` / 深色 `rgba(28,28,30,0.72)`
-- **動畫：** 150-300ms ease
-- **深色模式：** 必須支援，CSS 變數語意化命名
+- **動畫：** UI 微互動 150-300ms ease（捲動連動的動畫不受此限，見 2.5）
+- **深色模式：** 預設不做。token 一律用語意命名（`--color-surface`、`--color-text-primary`），
+  之後要加深色模式只需補一套值，不必改元件。使用者要求時才做
 
 ### 元件風格
 - **按鈕：** 主要實心、次要輪廓、三級文字
