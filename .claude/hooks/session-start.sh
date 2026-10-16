@@ -176,17 +176,56 @@ if [ "${CURATION_REMINDERS:-on}" != "off" ]; then
         note "🧠 有 ${_N} 筆「踩過的坑」候選還沒寫進 \`.claude/context/learned/\`（清單在 \`taskmaster-data/.learned-candidates\`）。這些是連續失敗後才解掉的問題——同一個坑不該踩第二次。**現在就處理掉**：讀清單、逐筆判斷值不值得留，值得的用 \`/learn\` 寫進 \`learned/\`，不值得的直接從清單刪。處理完清空該檔。"
     fi
 
-    # ② UI 素材庫太久沒跟上潮流
+    # ②③ 只在模板 repo 出現
+    #
+    # 維護 `.claude/ui/` 是模板維護者的事。用模板開出來的專案拿到的是一份快照，
+    # 在那裡提醒「素材庫該更新了」只會叫使用者去改一份下次 update-template 就被蓋掉的東西
+    # ——而且 copy-template 不帶 taskmaster-data/，`.ui-catalog-refreshed` 必定不存在，
+    # 等於每個新專案的每個 session 都會被提醒一次。
+    #
+    # 判斷依據：`scripts/sync-ui-sources.sh` 在不在。copy-template.{sh,ps1} 與
+    # update-template.{sh,ps1} 四份都排除它（含 cp 退路），所以新專案一定沒有。
+    # 不用 CLAUDE.md、`.git` 的 remote、目錄名這類特徵：前者新專案也會有（/task-init 產生），
+    # 後兩者使用者可以任意改。**改那四份腳本的排除清單時，這裡會跟著失準。**
+    _IS_TEMPLATE_REPO=0
+    [ -f "$PROJECT_ROOT/scripts/sync-ui-sources.sh" ] && _IS_TEMPLATE_REPO=1
+
+    # ② 設計走向太久沒跟上
     #    90 天：設計走向與瀏覽器支援度大約這個週期會有實質變化。
-    _UIREF="$_DATA/.ui-catalog-refreshed"
-    _UISTALE=0
-    if [ ! -f "$_UIREF" ]; then
-        _UISTALE=1; _UIAGE="從未"
-    elif [ -n "$(find "$_UIREF" -mtime +90 2>/dev/null)" ]; then
-        _UISTALE=1; _UIAGE="超過 90 天"
+    if [ "$_IS_TEMPLATE_REPO" -eq 1 ] && [ -d "$CLAUDE_DIR/ui" ]; then
+        _UIREF="$_DATA/.ui-catalog-refreshed"
+        _UISTALE=0
+        if [ ! -f "$_UIREF" ]; then
+            _UISTALE=1; _UIAGE="從未"
+        elif [ -n "$(find "$_UIREF" -mtime +90 2>/dev/null)" ]; then
+            _UISTALE=1; _UIAGE="超過 90 天"
+        fi
+        if [ "$_UISTALE" -eq 1 ]; then
+            note "🎨 UI 素材庫（\`.claude/ui/\`）的設計走向${_UIAGE}更新。**使用者若要做前端工作**，可委派 \`skill-curator\`（\`subagent_type: \"skill-curator\"\`）查一輪當前設計走向並更新——跨風格通用的規則進 \`.claude/skills/ui-style-compliance/anti-ai.md\`（動畫進同目錄的 \`motion.md\`；入口表在 \`SKILL.md\` 2.6），個別品牌改版才動那份 DESIGN.md。不做前端就忽略這條，別主動打斷使用者。"
+        fi
     fi
-    if [ "$_UISTALE" -eq 1 ] && [ -d "$CLAUDE_DIR/ui" ]; then
-        note "🎨 UI 素材庫（\`.claude/ui/\`）${_UIAGE}更新。**使用者若要做前端工作**，可委派 \`skill-curator\`（\`subagent_type: \"skill-curator\"\`）查一輪當前設計走向並更新——跨風格通用的規則進 \`ui-style-compliance\` 的 2.6 節，個別品牌改版才動那份 DESIGN.md。不做前端就忽略這條，別主動打斷使用者。"
+
+    # ③ 上游風格庫太久沒同步
+    #    看 `_sources.json` 每個「有上游」（repo 不是 null）的來源：last_synced 是 null 或超過 90 天就提醒。
+    #    self-extracted 這類沒有上游的來源不算——它永遠是 null，算進去就會天天叫。
+    _SRCJSON="$CLAUDE_DIR/ui/_sources.json"
+    if [ "$_IS_TEMPLATE_REPO" -eq 1 ] && [ -f "$_SRCJSON" ] && command -v jq >/dev/null 2>&1; then
+        _STALE_SRC=$(jq -r '
+            now as $now
+            | [ .sources[]? | select(.repo != null)
+                | . as $s
+                | (if .last_synced == null then "從未同步"
+                   else (try ((($now - ((.last_synced + "T00:00:00Z") | fromdateiso8601)) / 86400) | floor)
+                         catch null) as $d
+                        | if $d == null then "last_synced 不是 YYYY-MM-DD"
+                          elif $d > 90 then "\($d) 天前"
+                          else empty end
+                   end) as $age
+                | "\($s.id)（\($age)）" ]
+            | join("、")' "$_SRCJSON" 2>/dev/null || echo "")
+        if [ -n "$_STALE_SRC" ]; then
+            note "🔄 上游風格庫太久沒同步：${_STALE_SRC}。要更新時先跑 \`bash scripts/sync-ui-sources.sh\` 預覽（只列差異、不動檔案），確認後才 \`--apply\`。不做風格庫維護就忽略這條，別主動打斷使用者。"
+        fi
     fi
 fi
 

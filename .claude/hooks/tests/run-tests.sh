@@ -348,6 +348,18 @@ expect_empty "背景工作完成通知不做意圖路由" \
 expect_contains "使用者原話中途引用 [Subagent hand-back] 仍照常路由" "critical" \
     "$(run user-prompt-submit.sh "$(p "$(printf '幫我改認證邏輯\n第二行\n第三行\n剛才看到 [Subagent hand-back] 的字樣')")")"
 
+# 前端路由（D10）：`ui`／`css` 曾是裸子字串，quick、build、guide、access 都會命中；
+# 反過來「做個官網」「這個形象頁」這種從不講 UI 的說法又漏接
+reset
+for q in 'quick fix 一下 build 腳本' '看一下 guide' 'QUICK BUILD GUIDE' '這個 access token 的 test suite'; do
+    expect_not_contains "前端路由不被「$q」誤觸發" "ui-style-compliance" \
+        "$(run user-prompt-submit.sh "$(p "$q")")"
+done
+for q in '幫我做一個 landing page' '做餐廳的官網' 'UI 調整一下' '這個形象頁' '改一下ui的間距' '改 style.css 的顏色' '幫我做一個咖啡店的形象網站'; do
+    expect_contains "前端路由接得到「$q」" "ui-style-compliance" \
+        "$(run user-prompt-submit.sh "$(p "$q")")"
+done
+
 # =========================================================================
 section "pre-tool-use.sh — 坑閘門（context/learned/）"
 # =========================================================================
@@ -449,6 +461,109 @@ expect_empty   "DOC_SYNC_GATE=off 關閉偵測" \
 
 reset; echo off > "$SM_FILE"
 expect_empty   "suggest-mode=off 也關閉偵測"   "$(pw "src/api/x.ts")"
+
+# =========================================================================
+section "post-write.sh — 前端寫入檢查（lib/ui-lint.sh）"
+# =========================================================================
+#
+# 檢查的是磁碟上的檔案（Edit 的 payload 只有被換掉的那段），所以每個案例都真的建檔。
+UI_JSON="$SANDBOX/.claude/taskmaster-data/ui-style.json"
+uw() { # <相對路徑> <內容> [ENV=VAL ...] → post-write 的 additionalContext
+    local rel="$1" body="$2"; shift 2
+    mkdir -p "$(dirname "$SANDBOX/$rel")"
+    printf '%s\n' "$body" > "$SANDBOX/$rel"
+    run post-write.sh "$(w "$SANDBOX/$rel")" "$@" | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null
+}
+ui_clean() { rm -rf "$SANDBOX/src" "$SANDBOX/docs"; }
+
+reset; ui_clean
+out=$(uw "src/components/Hero.tsx" "$(printf 'export const Hero = () => (\n  <h1 style={{ color: %s }}>Hi</h1>\n)' "'#1D1D1F'")")
+expect_contains "元件寫死色碼 → 提醒"                 "寫死色碼"   "$out"
+expect_contains "提醒帶行號與色碼"                    'L2 `#1D1D1F`' "$out"
+expect_contains "提醒說明只提醒不擋"                  "只提醒，不擋" "$out"
+
+reset; ui_clean
+expect_empty "tokens 檔的 CSS 變數宣告不提醒" "$(uw "src/styles/tokens.css" "$(printf ':root {\n  --color-primary: #1D1D1F;\n}')")"
+expect_empty "tokens 檔裡的一般 hex 也不提醒" "$(uw "src/styles/tokens.css" '.a { color: #fff; }')"
+expect_empty "一行內的 :root 自訂屬性不提醒"  "$(uw "src/app.css" ':root { --c: #fff; }')"
+expect_empty "var() 的備援值不算寫死"         "$(uw "src/app.css" '.a { color: var(--c, #000); }')"
+expect_empty "頁內錨點 #face 不是色碼"        "$(uw "src/Nav.tsx" '<a href="#face">x</a>')"
+expect_empty "HTML 實體 &#8212; 不是色碼"     "$(uw "src/Nav.html" '<p>a &#8212; b</p>')"
+expect_empty "theme 檔不提醒"                 "$(uw "src/theme.css" '.a { color: #fff; }')"
+expect_empty "測試檔不提醒"                   "$(uw "src/Hero.test.tsx" "expect(c).toBe('#fff')")"
+expect_empty "非前端副檔名不提醒"             "$(uw "src/colors.ts" "export const c = '#fff'")"
+expect_empty "docs/ 不提醒"                   "$(uw "docs/demo.html" '<p style="color:#fff">x</p>')"
+reset; mkdir -p "$SANDBOX/.claude/ui/x"
+printf '<p style="color:#fff">x</p>\n' > "$SANDBOX/.claude/ui/x/preview.html"
+expect_empty ".claude/** 不提醒" \
+    "$(run post-write.sh "$(w "$SANDBOX/.claude/ui/x/preview.html")" | jq -r '.hookSpecificOutput.additionalContext // ""')"
+
+# payload 沒帶 cwd 時 WORK_ROOT 退回主 checkout，worktree 裡的檔案相對路徑會以 .claude/worktrees/ 開頭
+reset; mkdir -p "$SANDBOX/.claude/worktrees/wt1/src"
+printf "<p style={{color: '#fff'}}>x</p>\n" > "$SANDBOX/.claude/worktrees/wt1/src/Hero.tsx"
+expect_contains "worktree 裡的前端檔照樣檢查" "寫死色碼" \
+    "$(run post-write.sh "$(w "$SANDBOX/.claude/worktrees/wt1/src/Hero.tsx")" | jq -r '.hookSpecificOutput.additionalContext // ""')"
+
+# 動畫等級：沒有 ui-style.json＝還沒定調，不檢查
+GSAP_SRC="$(printf "import gsap from 'gsap'\nexport const A = () => null")"
+reset; ui_clean
+expect_empty "沒有 ui-style.json → 不做 motion 檢查" "$(uw "src/Anim.tsx" "$GSAP_SRC")"
+reset; ui_clean; echo '{"motion":"L1"}' > "$UI_JSON"
+out=$(uw "src/Anim.tsx" "$GSAP_SRC")
+expect_contains "L1 卻 import gsap → 提醒"       "動畫等級不符" "$out"
+expect_contains "motion 提醒帶 import 的行號"     "L1 \`import gsap from 'gsap'\`" "$out"
+reset; ui_clean; echo '{"motion":"L2"}' > "$UI_JSON"
+expect_empty "L2 import gsap → 不提醒" "$(uw "src/Anim.tsx" "$GSAP_SRC")"
+expect_contains "L2 import three → 提醒" "動畫等級不符" "$(uw "src/Scene.tsx" "import * as THREE from 'three'")"
+expect_contains "L2 用 CDN 載 three.js → 提醒" "動畫等級不符" \
+    "$(uw "src/index.html" '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>')"
+reset; ui_clean; echo '{"motion":"L3"}' > "$UI_JSON"
+expect_empty "L3 import three → 不提醒" "$(uw "src/Scene.tsx" "import * as THREE from 'three'")"
+reset; ui_clean; echo '{"source":"vercel"}' > "$UI_JSON"
+expect_contains "ui-style.json 沒有 motion → 當 L1（motion.md 的規定）" "動畫等級不符" "$(uw "src/Anim.tsx" "$GSAP_SRC")"
+reset; ui_clean; echo '{"motion":"L1"}' > "$UI_JSON"
+expect_empty "L1 但文字裡提到 three 不算 import" "$(uw "src/Copy.tsx" '<p>three steps to motion</p>')"
+expect_contains "L1 的 framer-motion 也算" "動畫等級不符" "$(uw "src/M.tsx" 'import { motion } from "framer-motion"')"
+
+# AI 痕跡（P0，改寫自 avoid-ai-design 的 detect.mjs：C6／C1／K1）
+reset; ui_clean
+out=$(uw "src/Title.tsx" '<h1 className="bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent">Hi</h1>')
+expect_contains "Tailwind 漸層字 → C6" "**C6**" "$out"
+expect_contains "Tailwind 紫靛漸層 → C1" "**C1**" "$out"
+expect_contains "AI 痕跡提醒附出處" "avoid-ai-design" "$out"
+expect_contains "CSS background-clip:text＋透明字 → C6" "**C6**" \
+    "$(uw "src/t.css" "$(printf '.t {\n  background-clip: text;\n  -webkit-text-fill-color: transparent;\n}')")"
+expect_contains "shadcn 預設 --primary → K1" "**K1**" \
+    "$(uw "src/globals.css" "$(printf ':root {\n  --primary: oklch(0.205 0 0);\n}')")"
+expect_empty "改過的 --primary 不算 K1" \
+    "$(uw "src/globals.css" "$(printf ':root {\n  --primary: oklch(0.45 0.12 30);\n}')")"
+expect_empty "藍綠漸層不算 C1" "$(uw "src/B.tsx" '<div className="bg-gradient-to-r from-sky-500 to-emerald-500">x</div>')"
+expect_empty "上一行 avoid-ai-design-ignore: C6 → 豁免" \
+    "$(uw "src/I.tsx" "$(printf '{/* avoid-ai-design-ignore: C6 */}\n<h1 className="bg-clip-text text-transparent">x</h1>')")"
+out=$(uw "src/J.css" "$(printf '/* avoid-ai-design-ignore-file: K1 */\n:root {\n  --primary: oklch(0.205 0 0);\n}\n.t { background-clip: text; color: transparent; }')")
+expect_not_contains "整檔豁免 K1 → 不報 K1"   "**K1**" "$out"
+expect_contains     "整檔豁免 K1 → 仍報 C6"   "**C6**" "$out"
+expect_empty "整檔豁免不帶 ID → 全部豁免" \
+    "$(uw "src/K.tsx" "$(printf '{/* avoid-ai-design-ignore-file */}\n<h1 className="bg-clip-text text-transparent">x</h1>')")"
+
+# 逃生門與合併輸出
+reset; ui_clean; echo '{"motion":"L1"}' > "$UI_JSON"
+BOTH="$(printf "import gsap from 'gsap'\nexport const A = () => <p style={{color: '#fff'}}>x</p>")"
+expect_empty "UI_LINT=off → 兩種提醒都沒有" "$(uw "src/Both.tsx" "$BOTH" UI_LINT=off)"
+reset; ui_clean; echo '{"motion":"L1"}' > "$UI_JSON"; echo off > "$SM_FILE"
+expect_empty "suggest-mode=off → 也不檢查" "$(uw "src/Both.tsx" "$BOTH")"
+reset; ui_clean
+raw=$(mkdir -p "$SANDBOX/src/components" && printf "export const A = () => <p style={{color: '#fff'}}>x</p>\n" > "$SANDBOX/src/components/index.tsx" \
+      && run post-write.sh "$(w "$SANDBOX/src/components/index.tsx")")
+if echo "$raw" | jq -e '.hookSpecificOutput.hookEventName == "PostToolUse"' >/dev/null 2>&1; then
+    ok "同時命中文件影響與色碼 → 仍是一個合法 JSON"
+else
+    ng "同時命中文件影響與色碼 → 仍是一個合法 JSON" "單一 PostToolUse JSON" "${raw:0:120}"
+fi
+out=$(echo "$raw" | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null)
+expect_contains "合併輸出含文件影響提醒" "文件影響提醒" "$out"
+expect_contains "合併輸出含寫死色碼"     "寫死色碼"     "$out"
+ui_clean
 
 # =========================================================================
 section "post-write.sh — 擴充維護提醒（.claude/ 底下的改動）"
@@ -733,6 +848,71 @@ expect_contains "注入 using-taskmaster 全文"       "using-taskmaster"  "$ses
 expect_contains "注入含強制委派標記"               "EXTREMELY"         "$sess_ctx"
 expect_contains "注入含 documentation-specialist"  "documentation-specialist" "$sess_ctx"
 expect_contains "注入含坑目錄指示"                 "context/learned"   "$sess_ctx"
+
+# =========================================================================
+section "session-start.sh — 風格庫提醒只在模板 repo 出現"
+# =========================================================================
+#
+# 判斷依據是 scripts/sync-ui-sources.sh 在不在（四份 copy／update 腳本都排除它）。
+# 新專案拿到的 .claude/ui/ 是快照、也沒有 taskmaster-data/，以前每個 session 都會被叫去「更新素材庫」。
+ss_ctx() { run session-start.sh '{}' | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null; }
+days_ago() { jq -nr --argjson d "$1" '(now - $d * 86400) | strftime("%Y-%m-%d")'; }
+ss_sources() { # <voltagent 的 last_synced（null 或日期）> —— self-extracted 永遠是 null，不該被算進去
+    local v="$1"; [ "$v" = "null" ] || v="\"$v\""
+    mkdir -p "$SANDBOX/.claude/ui"
+    printf '{"sources":[{"id":"voltagent","repo":"VoltAgent/awesome-design-md","last_synced":%s},{"id":"self-extracted","repo":null,"last_synced":null}]}\n' \
+        "$v" > "$SANDBOX/.claude/ui/_sources.json"
+}
+ss_template() { mkdir -p "$SANDBOX/scripts"; : > "$SANDBOX/scripts/sync-ui-sources.sh"; }
+ss_clean() { rm -rf "$SANDBOX/scripts"; }
+
+reset; ss_clean; ss_template; ss_sources "$(days_ago 100)"
+out=$(ss_ctx)
+expect_contains "模板 repo、上游 100 天沒同步 → 提醒跑同步腳本" "sync-ui-sources.sh" "$out"
+expect_contains "提醒寫出是哪個來源"                           "voltagent"          "$out"
+expect_not_contains "沒有上游的 self-extracted 不算"           "self-extracted"     "$out"
+reset; ss_clean; ss_template; ss_sources null
+expect_contains "模板 repo、上游從未同步 → 提醒" "從未同步" "$(ss_ctx)"
+reset; ss_clean; ss_template; ss_sources "$(days_ago 10)"
+expect_not_contains "上游 10 天前同步過 → 不提醒" "sync-ui-sources.sh" "$(ss_ctx)"
+reset; ss_clean; ss_sources "$(days_ago 100)"
+expect_not_contains "沒有 sync-ui-sources.sh（不是模板 repo）→ 不提醒同步" "sync-ui-sources.sh" "$(ss_ctx)"
+
+# 既有的「設計走向 90 天」提醒（使用者決定 3：一樣只在模板 repo）
+reset; ss_clean; ss_template; ss_sources "$(days_ago 10)"
+out=$(ss_ctx)
+expect_contains     "模板 repo、從未更新設計走向 → 提醒"       "設計走向"   "$out"
+expect_contains     "設計走向提醒指向 anti-ai.md（不是舊的 2.6 節）" "anti-ai.md" "$out"
+reset; ss_clean; ss_sources "$(days_ago 10)"
+expect_not_contains "不是模板 repo → 不提醒設計走向"           "設計走向"   "$(ss_ctx)"
+reset; ss_clean; ss_template; ss_sources "$(days_ago 10)"; : > "$SANDBOX/.claude/taskmaster-data/.ui-catalog-refreshed"
+expect_not_contains "模板 repo、設計走向剛更新 → 不提醒"       "設計走向"   "$(ss_ctx)"
+reset; ss_clean
+
+# 真的用 copy-template.sh 建一個新專案再開 session：上面的沙箱只證明「條件寫對了」，
+# 這組證明「新專案真的不滿足那個條件」——排除清單哪天漏了，這裡會紅
+NEWPROJ=$(mktemp -d)
+bash "$HOOK_DIR/../../scripts/copy-template.sh" "$NEWPROJ/app" >/dev/null 2>&1 </dev/null
+if [ -f "$NEWPROJ/app/.claude/ui/_sources.json" ] && [ -d "$NEWPROJ/app/.claude/hooks" ]; then
+    ok "copy-template 建出的新專案帶著 .claude/ui/_sources.json（前提成立）"
+else
+    ng "copy-template 建出的新專案帶著 .claude/ui/_sources.json（前提成立）" "有 _sources.json 與 hooks" "$(ls -A "$NEWPROJ/app/.claude" 2>/dev/null | tr '\n' ' ')"
+fi
+[ ! -e "$NEWPROJ/app/scripts/sync-ui-sources.sh" ] && ok "新專案沒有 scripts/sync-ui-sources.sh" \
+    || ng "新專案沒有 scripts/sync-ui-sources.sh" "不存在" "存在"
+# 換成一定過期的來源資料：真實的 _sources.json 哪天全部剛同步過，下面的反向測試就會變成空跑
+printf '{"sources":[{"id":"voltagent","repo":"VoltAgent/awesome-design-md","last_synced":null}]}\n' \
+    > "$NEWPROJ/app/.claude/ui/_sources.json" 2>/dev/null
+np_ctx=$(printf '{}' | env CLAUDE_PROJECT_DIR="$NEWPROJ/app" bash "$NEWPROJ/app/.claude/hooks/session-start.sh" 2>/dev/null \
+    | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null)
+expect_contains     "新專案的 session-start 正常注入"          "using-taskmaster"   "$np_ctx"
+expect_not_contains "新專案不出現同步提醒"                     "sync-ui-sources.sh" "$np_ctx"
+expect_not_contains "新專案不出現設計走向提醒"                 "設計走向"           "$np_ctx"
+: > "$NEWPROJ/app/scripts/sync-ui-sources.sh"
+np_ctx=$(printf '{}' | env CLAUDE_PROJECT_DIR="$NEWPROJ/app" bash "$NEWPROJ/app/.claude/hooks/session-start.sh" 2>/dev/null \
+    | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null)
+expect_contains "對照組：同一個新專案補上那支腳本 → 提醒出現（證明上面不是空跑）" "sync-ui-sources.sh" "$np_ctx"
+rm -rf "$NEWPROJ"
 
 # =========================================================================
 section "worktree 感知 — 狀態隔離邊界"
