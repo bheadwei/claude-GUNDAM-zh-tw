@@ -3,8 +3,8 @@ wbs_task: "none"
 slug: "frontend-style-library"
 created: "2026-10-16"
 updated: "2026-10-16"
-status: "⏳ 未開始"
-current_phase: 0
+status: "🔄 進行中"
+current_phase: 9
 mode: "standard"
 files:
   # 階段 1：順手修的小問題
@@ -111,7 +111,7 @@ files:
 
 ## 階段拆解
 
-### 階段 1：順手修的 3 個 hook／指令小問題（G1、G2、G4） ⏳
+### 階段 1：順手修的 3 個 hook／指令小問題（G1、G2、G4） ✅
 
 > G3（skill-curator 要求它沒有的 AskUserQuestion）放到階段 4，因為那一階段本來就要改 `skill-curator.md`。
 
@@ -141,7 +141,7 @@ files:
 - **注意**：寫測試時如果內文提到 `git merge`，可能被**還沒修好的閘門**擋下（`context/learned/2026-09-11-gate-blocks-its-own-fix.md` 那一次一樣）。
   被擋就單次加 `MERGE_GATE=off`，不要繞路改測試內容
 
-### 階段 2：授權檔、來源 metadata、CATALOG 檢查修正（F 的一部分） ⏳
+### 階段 2：授權檔、來源 metadata、CATALOG 檢查修正（F 的一部分） ✅
 
 - [ ] 建 `.claude/ui/_licenses/voltagent-awesome-design-md.txt`（上游 LICENSE 原文，`gh api` 抓，不要手打）
 - [ ] 建 `.claude/ui/_sources.json`：每個來源一筆 `{id, repo, ref, path_pattern, license, license_file, format, prefix, last_synced}`。
@@ -165,7 +165,7 @@ files:
   - `semrush/SOURCE.json` 的 `upstream_status` 是 `removed`
   - `.claude/ui/_licenses/voltagent-awesome-design-md.txt` 第一行含 `MIT License`，內文含 `Copyright (c) 2026 VoltAgent`
 
-### 階段 3：匯入品牌候選清單（只調查，**做完停下來給使用者挑**） ⏳
+### 階段 3：匯入品牌候選清單（只調查，**做完停下來給使用者挑**） ✅
 
 - [ ] VoltAgent 新增的 26 份：每份記下格式（舊 9 節／google-alpha）、產業、繁中一句話；**標出推薦的 6～10 份**
       （來源報告建議 starbucks、wired、theverge、aljazeera、mastercard、oura、nike、shopify）
@@ -183,7 +183,7 @@ files:
   - 沒有任何一列是科技／SaaS 類，除非在備註寫了理由
   - **主模型用 AskUserQuestion（multiSelect）讓使用者挑，挑完才可以開始階段 10**
 
-### 階段 4：`ui-style-compliance` 收斂與修正（E：D1、D3、D4、D5、D7、D8；G3） ⏳
+### 階段 4：`ui-style-compliance` 收斂與修正（E：D1、D3、D4、D5、D7、D8；G3） ✅
 
 - [ ] **D1／D7**：合規自檢清單只留 `SKILL.md` 階段 3 那一份（唯一來源）。`ui-builder.md` 第 127～147 行、`ui-page.md` 第 183～198 行改成一句指標
       「自檢清單見 `ui-style-compliance` 階段 3（唯一來源，勿在此重述）」。斷點統一寫法：
@@ -218,7 +218,7 @@ files:
   - 照新對照表，用 `airbnb`（舊 9 節）和一份 google-alpha 格式的檔案各抽一次 color 段落 → 兩份都抽得到非空內容（用 `awk` 實測，貼在 PR 說明）
   - `bash scripts/check-counts.sh` → 0 個 ✗
 
-### 階段 5：三份附屬檔（C 反 AI 感、B 動畫、D 繁中字型） ⏳
+### 階段 5：三份附屬檔（C 反 AI 感、B 動畫、D 繁中字型） ✅
 
 - [ ] **`anti-ai.md`**（新增）：把 SKILL.md 的 2.5 和 2.6 ①②⑤⑥ 搬過來（SKILL.md 改成指標），再整合兩個來源：
   - Anthropic frontend-design 的 5 種集群，**第 1 種寫在最前面**：米白底（約 #F4F1EA）＋高對比襯線標題＋陶土色強調（約 #D97757）
@@ -249,7 +249,7 @@ files:
   - SKILL.md 的行數比改之前少（2.5、2.6 搬出去了）；`grep -n 'anti-ai.md\|motion.md\|fonts-cjk.md' SKILL.md` 三個檔名都找得到
   - 使用者在 `/ui-style` 看到的動畫選項文字裡**沒有**任何函式庫名（這條在階段 6 驗）
 
-### 階段 6：`/ui-style` 三條新路徑、動畫分級問題；`/ui-page`、`/ui-site` 配合（A、B、D 的退件格式） ⏳
+### 階段 6：`/ui-style` 三條新路徑、動畫分級問題；`/ui-page`、`/ui-site` 配合（A、B、D 的退件格式） ✅
 
 - [ ] **入口題**改成：**看預覽選（Recommended）**／單一風格／混搭／用 Claude Design 定調／貼網址抽風格／從現有程式碼反推／瀏覽目錄。
       選項超過 4 個時拆成兩層（AskUserQuestion 一題最多 4 個選項）：第一層「讓我推薦（看預覽選）／我自己挑（單一、混搭、目錄）／我有參考來源（Claude Design、網址、現有程式碼）」
@@ -297,7 +297,7 @@ files:
   - `claude --version` 低於 2.1.265 時走「Claude Design」→ 顯示升級說明並回到入口題（可以用改寫版本字串的方式模擬）
   - `/ui-page /` 在使用者回「太擠」之後 → 交給 ui-builder 的 prompt 裡有「狀態 → 看到什麼 → 像什麼」三段
 
-### 階段 7：`ui-builder` 產出流程（D：截圖驗收、不准編事實） ⏳
+### 階段 7：`ui-builder` 產出流程（D：截圖驗收、不准編事實） ✅
 
 - [ ] `tools:` 加 Playwright MCP 的工具（`browser_navigate`、`browser_resize`、`browser_take_screenshot`、`browser_console_messages`、`browser_evaluate`；確切名稱先查 Playwright MCP 文件）。
       沿用 context7 那句寫法：「專案沒裝時工具不會出現」
@@ -315,7 +315,7 @@ files:
   - 頁面需要價格但沒提供 → 產出的頁面有 `【待提供：價格】`，報告的「開放問題」列出它
   - `bash scripts/check-counts.sh` → 0 個 ✗
 
-### 階段 8：同步腳本 `scripts/sync-ui-sources.sh`（F） ⏳
+### 階段 8：同步腳本 `scripts/sync-ui-sources.sh`（F） ✅
 
 - [ ] **只有 `.sh` 版，不做 `.ps1`**。理由：CLAUDE.md 要求「兩份要一致」的只有 copy／update 這種會**發佈到使用者專案**的腳本；
       維護者工具的前例是 `check-counts.sh`（只有 sh），而且本模板的 hook 本來就需要 bash
@@ -506,3 +506,5 @@ files:
 5. 第一批（階段 1～4）以 4 條 worktree 平行執行
 6. 階段 10 匯入清單：`skill-curator-2026-10-16-1034-brand-candidates.md`「給使用者挑選用的精簡清單」推薦的 35 份全收（VoltAgent 7、jp 15、omd 13），含 AI 痕跡標中／高者（作對照組，由 anti-ai.md 在提方向時避開或標註）
 7. 階段 6 一併處理：`ui-site.md` 約第 194 行「產 tokens 一律做深色模式」與階段 4 的 D4 新規則矛盾（階段 4 回報）
+8. 階段 10 一併對 VoltAgent 跑 `sync-ui-sources.sh --apply`，整批換上上游更新的 50 份（新格式帶 YAML 檔頭）；`claude` 本地有改不動。換完抽幾份實測混搭模式抽得到內容
+9. 之後另案：`feat/claude-gitignore-single-source`（commit `cbba6b6`，建立 `.claude/.gitignore` 唯一來源）從未合進 main，本批完成後請使用者決定是否合併
