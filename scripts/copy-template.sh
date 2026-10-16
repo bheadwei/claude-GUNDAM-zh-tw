@@ -94,6 +94,12 @@ EXCLUDES=(
 
     # 模板自身的 CI（專案的 CI 是專案自己的事；想沿用手動複製即可）
     ".github/"
+
+    # 模板維護者工具：同步 .claude/ui/ 的上游風格庫，在新專案沒有意義
+    # （session-start.sh 也靠「這支在不在」判斷是不是模板 repo）。
+    # 四份 copy／update 腳本要一致：copy-template.ps1 的 $excludeFiles、
+    # update-template.{sh,ps1} 的 scripts/ 同步排除
+    "scripts/sync-ui-sources*"
 )
 
 # ============================================================================

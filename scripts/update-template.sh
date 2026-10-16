@@ -43,6 +43,10 @@ SOURCE="$(cd "$SCRIPT_DIR/.." && pwd)"
 SYNC_CLAUDE_DIRS=(agents commands rules skills hooks guides output-styles plugins templates ui scripts)
 SYNC_CLAUDE_FILES=(statusline.sh statusline-debug.sh settings.json README.md)
 SYNC_ROOT_DIRS=(scripts)
+# 根目錄 scripts/ 裡只給模板維護者用的檔案：不同步過去，目標端舊版留下的也刪掉
+# （session-start.sh 靠「scripts/sync-ui-sources.sh 在不在」判斷是不是模板 repo，
+# 漏到專案裡會讓專案收到模板維護提醒）。四份 copy／update 腳本要一致
+ROOT_SCRIPTS_EXCLUDE="sync-ui-sources*"
 SYNC_ROOT_FILES=(.mcp.json.linux.example .mcp.json.windows.example CLAUDE_TEMPLATE.md .gitattributes)
 # SEED：只在目標「不存在」時建立，永不覆寫。
 # 這兩份檔案專案會自己加規則（.gitignore 加自家建置產物、.worktreeinclude 加自家秘密檔），
@@ -84,18 +88,24 @@ fi
 # ---- rsync 包裝（無 rsync 時 fallback 到 cp）----
 have_rsync=0; command -v rsync >/dev/null 2>&1 && have_rsync=1
 
-sync_dir() {  # $1=src $2=dst $3=mode(mirror|additive)
-  local src="$1" dst="$2" m="$3"
+sync_dir() {  # $1=src $2=dst $3=mode(mirror|additive) $4=排除的檔名樣式（只看第一層，可省略）
+  local src="$1" dst="$2" m="$3" excl="${4:-}"
   [ -d "$src" ] || return 0
   mkdir -p "$dst"
   if [ "$have_rsync" -eq 1 ]; then
     local flags=(-a)
     [ "$DRY_RUN" -eq 1 ] && flags+=(-n -v)
     [ "$m" = "mirror" ] && [ "$PRUNE" -eq 1 ] && flags+=(--delete)
+    [ -n "$excl" ] && flags+=(--exclude="/$excl")
     rsync "${flags[@]}" "$src/" "$dst/"
   else
     [ "$DRY_RUN" -eq 1 ] && { echo "   [dry] $dst/"; return 0; }
     cp -a "$src/." "$dst/"
+  fi
+  # cp -a 沒有排除功能，只能複製完再刪；rsync 路徑也刪，清掉舊版 update 漏過去的
+  if [ -n "$excl" ] && [ "$DRY_RUN" -eq 0 ]; then
+    # shellcheck disable=SC2086  # 刻意讓樣式展開
+    rm -f "$dst"/$excl
   fi
 }
 
@@ -125,7 +135,10 @@ echo ""
 echo "▶ SYNC 模板目錄..."
 for d in "${SYNC_CLAUDE_DIRS[@]}"; do sync_dir "$SOURCE/.claude/$d" "$DEST/.claude/$d" mirror; done
 if [ "$CLAUDE_ONLY" -eq 0 ]; then
-  for d in "${SYNC_ROOT_DIRS[@]}"; do sync_dir "$SOURCE/$d" "$DEST/$d" mirror; done
+  for d in "${SYNC_ROOT_DIRS[@]}"; do
+    excl=""; [ "$d" = "scripts" ] && excl="$ROOT_SCRIPTS_EXCLUDE"
+    sync_dir "$SOURCE/$d" "$DEST/$d" mirror "$excl"
+  done
 else
   echo "   ⏭  跳過根目錄目錄: ${SYNC_ROOT_DIRS[*]}"
 fi
