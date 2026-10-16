@@ -136,7 +136,7 @@ skill 寫了沒人喚起、description 是內容摘要、同一份模板散在�
 
 ## UI 素材庫（`.claude/ui/`）
 
-69 個品牌 DESIGN.md + `CATALOG.md`。跟 skill 不同的是：**一次只有一個被載入**
+上百個品牌 DESIGN.md + `CATALOG.md`（實際數字看 `check-counts.sh` 的「UI 風格」，這裡不寫死）。跟 skill 不同的是：**一次只有一個被載入**
 （`/ui-style` 選定的那個），所以沒選到的成本是零 —— 數量不是問題，**過期才是**。
 
 ### 三種工作
@@ -149,12 +149,12 @@ skill 寫了沒人喚起、description 是內容摘要、同一份模板散在�
 1. `WebSearch` 查當前的設計走向與技術（**不要憑記憶** —— 瀏覽器支援度每年都在動）
 2. 判斷是「跨風格通用」還是「某個品牌變了」：
    - **跨風格通用** → 寫進 `ui-style-compliance` 的 2.6 節（唯一來源），
-     **不要**複製到 69 份 DESIGN.md 裡
+     **不要**複製到每一份 DESIGN.md 裡
    - **某個品牌改版了** → 更新那一份 DESIGN.md
 3. 更新 `.ui-catalog-refreshed` 的日期
 
 **判準：這條規則跟選哪個品牌無關嗎？** 無關 → 屬 `ui-style-compliance`。
-這是這個素材庫最容易漂開的地方 —— 69 份檔案裡各抄一份通用規則，改一次要改 69 處。
+這是這個素材庫最容易漂開的地方 —— 上百份檔案裡各抄一份通用規則，改一次要改上百處。
 
 **② 新增品牌風格**
 
@@ -196,7 +196,7 @@ skill 寫了沒人喚起、description 是內容摘要、同一份模板散在�
 - ❌ 判斷得出時機的事寫成文字規則
 - ❌ 只跑 `check-counts.sh` 就宣稱「已生效」
 - ❌ 為了湊數量搬 skill 進來 —— **搬進來就要維護**
-- ❌ 把跨風格通用的規則複製進 69 份 DESIGN.md（該進 `ui-style-compliance` 2.6）
+- ❌ 把跨風格通用的規則複製進每一份 DESIGN.md（該進 `ui-style-compliance` 2.6）
 - ❌ 新增 UI 風格卻沒同步 `CATALOG.md` 兩處
 - ❌ 改動 DESIGN.md 的段落標題（`mode: mixed` 靠標題抽取）
 - ❌ 反推 DESIGN.md 時編造設計意圖

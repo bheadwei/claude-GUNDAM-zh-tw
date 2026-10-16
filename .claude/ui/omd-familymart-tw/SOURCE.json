@@ -1,0 +1,16 @@
+{
+  "source": "omd",
+  "upstream_repo": "kwakseongjae/oh-my-design",
+  "upstream_path": "web/references/familymart-tw/DESIGN.md",
+  "upstream_commit": "973cabc4fd27eed895d7e514d24d29abd2eeb535",
+  "upstream_format": "google-alpha",
+  "upstream_status": "present",
+  "imported_at": "2026-10-16",
+  "imported_sha256": "bbd986ec9991a06ef2f0a0742a4226e2d0578a577e7cd89f78627b3db55eb905",
+  "license": "MIT",
+  "license_file": ".claude/ui/_licenses/omd-oh-my-design.txt",
+  "locally_modified": false,
+  "local_changes": "",
+  "language": "en",
+  "extraction_method": "upstream"
+}

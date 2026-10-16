@@ -1,311 +1,589 @@
-# Design System Inspired by Renault
+---
+version: alpha
+name: Renault-design-analysis
+description: |
+  Renault's web presence pairs the freshly-modernised Renault diamond
+  (the 2021 flat-line rhombus mark) with a stark black-and-white canvas, a
+  signature Sunlight Yellow accent, and the proprietary NouvelR display
+  typeface. The system reads as confident, photography-first automotive — large
+  hero cars on neutral or atmospheric backdrops, square-edged or barely-rounded
+  containers, and a small disciplined palette where every coloured element is
+  intentional. Tile grids, full-bleed banners, and a recurring "configurator"
+  surface (white card, yellow accent dots, neutral product chrome) carry the
+  mass-market dealership tone without crossing into luxury.
 
-## 1. Visual Theme & Atmosphere
+colors:
+  primary: "#ffed00"
+  primary-deep: "#e6d200"
+  on-primary: "#000000"
+  ink: "#000000"
+  body: "#222222"
+  charcoal: "#333333"
+  mute: "#666666"
+  ash: "#8a8a8a"
+  stone: "#c4c4c4"
+  on-dark: "#ffffff"
+  on-dark-mute: "rgba(255,255,255,0.72)"
+  canvas: "#ffffff"
+  surface-soft: "#f7f7f7"
+  surface-card: "#ffffff"
+  surface-dark: "#000000"
+  surface-deep: "#111111"
+  hairline: "#f2f2f2"
+  hairline-strong: "#000000"
+  divider-dark: "rgba(255,255,255,0.16)"
+  badge-new: "#ffed00"
+  link: "#0000ee"
+  error: "#be6464"
+  warning: "#f0ad4e"
+  success: "#8dc572"
+  info: "#337ab7"
 
-Renault's website is a vibrant digital showroom that balances French automotive elegance with bold, forward-leaning energy — a departure from the monochromatic austerity of German or Italian luxury brands. The page opens with a full-screen hero that washes the viewport in a sweeping aurora gradient — ribbons of magenta, violet, and teal bleeding across the frame behind a dramatically lit vehicle. This chromatic expressiveness is the site's signature: while the interface structure is disciplined (NouvelR typography, black-and-white CTA framework, zero-radius buttons), the content is alive with color — gradient washes on hero slides, saturated vehicle photography, and splashes of Renault Yellow (`#EFDF00`) on accent CTAs. The effect is a showroom that feels energized rather than hushed.
+typography:
+  display-xl:
+    fontFamily: NouvelR
+    fontSize: 56px
+    fontWeight: 700
+    lineHeight: 0.95
+    letterSpacing: 0
+  display-lg:
+    fontFamily: NouvelR
+    fontSize: 40px
+    fontWeight: 700
+    lineHeight: 0.95
+    letterSpacing: 0
+  display-md:
+    fontFamily: NouvelR
+    fontSize: 32px
+    fontWeight: 700
+    lineHeight: 0.95
+    letterSpacing: 0
+  heading-lg:
+    fontFamily: NouvelR
+    fontSize: 24px
+    fontWeight: 700
+    lineHeight: 0.95
+    letterSpacing: 0
+  heading-md:
+    fontFamily: NouvelR
+    fontSize: 20px
+    fontWeight: 700
+    lineHeight: 0.95
+    letterSpacing: 0
+  heading-sm:
+    fontFamily: NouvelR
+    fontSize: 18px
+    fontWeight: 700
+    lineHeight: 1.0
+    letterSpacing: 0
+  subtitle:
+    fontFamily: NouvelR
+    fontSize: 19.2px
+    fontWeight: 600
+    lineHeight: 1.3
+    letterSpacing: 0
+  body-lg:
+    fontFamily: NouvelR
+    fontSize: 18px
+    fontWeight: 400
+    lineHeight: 1.5
+    letterSpacing: 0
+  body-md:
+    fontFamily: NouvelR
+    fontSize: 16px
+    fontWeight: 400
+    lineHeight: 1.4
+    letterSpacing: 0
+  body-sm:
+    fontFamily: NouvelR
+    fontSize: 14px
+    fontWeight: 400
+    lineHeight: 1.57
+    letterSpacing: 0
+  button-lg:
+    fontFamily: NouvelR
+    fontSize: 16px
+    fontWeight: 700
+    lineHeight: 1.0
+    letterSpacing: 0
+  button-md:
+    fontFamily: NouvelR
+    fontSize: 14.4px
+    fontWeight: 700
+    lineHeight: 1.0
+    letterSpacing: 0.144px
+  button-sm:
+    fontFamily: NouvelR
+    fontSize: 13px
+    fontWeight: 600
+    lineHeight: 1.2
+    letterSpacing: 0.13px
+  caption:
+    fontFamily: NouvelR
+    fontSize: 12px
+    fontWeight: 400
+    lineHeight: 1.4
+    letterSpacing: 0
+  overline:
+    fontFamily: NouvelR
+    fontSize: 10px
+    fontWeight: 700
+    lineHeight: 1.45
+    letterSpacing: 0
 
-The layout follows a card-based editorial rhythm. Below the hero carousel, content is organized into a grid of PromoCards — each a full-bleed photographic panel with a dark gradient overlay at top (fading from `rgba(0,0,0,0.6)` to transparent) to ensure white heading text remains legible over vivid imagery. These cards alternate between light and dark modes: white editorial panels with black text sit beside black `is-alternative-mode` sections with white text, creating a chessboard-like visual cadence. The grid is generous — large card formats dominate, giving each vehicle or campaign its own visual territory. The lower sections shift to a fully dark canvas (Absolute Black backgrounds) for the E-Tech electric and technology showcases, establishing a deliberate mood shift: electrification lives in darkness, tradition in light.
+rounded:
+  none: 0px
+  xs: 2px
+  sm: 3px
+  md: 4px
+  pill: 46px
+  full: 9999px
 
-Typography is unified under NouvelR — a proprietary geometric sans-serif designed by Black[Foundry] exclusively for Renault's rebrand. The typeface features a distinctive "radical r" with a terminal cut at 28 degrees to echo the Renault diamond logo's angles. Available in 6 weights from Light to Extrabold, the site primarily uses Bold (700) for headings and Regular (400) for body. Display headlines run large — 56px/0.95 line-height for hero titles, creating dense, impactful text blocks that sit tight against each other. The font supports Latin, Greek, Cyrillic, Hebrew, Arabic, and Korean, reflecting Renault's global market reach. All text rendering feels precise and engineered, with the geometric proportions lending a sense of modernity that aligns with Renault's electric-first brand positioning.
+spacing:
+  xxs: 4px
+  xs: 8px
+  sm: 12px
+  md: 16px
+  lg: 20px
+  xl: 24px
+  xxl: 32px
+  xxxl: 40px
+  section: 80px
+
+components:
+  button-primary:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-primary}"
+    typography: "{typography.button-md}"
+    rounded: "{rounded.xs}"
+    padding: 14px 24px
+    height: 48px
+  button-primary-pressed:
+    backgroundColor: "{colors.primary-deep}"
+    textColor: "{colors.on-primary}"
+    typography: "{typography.button-md}"
+    rounded: "{rounded.xs}"
+  button-secondary-dark:
+    backgroundColor: "{colors.surface-dark}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.button-md}"
+    rounded: "{rounded.xs}"
+    padding: 14px 24px
+  button-outline-dark:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.button-md}"
+    rounded: "{rounded.xs}"
+    padding: 13px 23px
+  button-outline-light:
+    backgroundColor: "{colors.surface-dark}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.button-md}"
+    rounded: "{rounded.xs}"
+    padding: 13px 23px
+  button-pill:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.button-sm}"
+    rounded: "{rounded.pill}"
+    padding: 8px 16px
+    height: 36px
+  button-icon-square:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.xs}"
+    size: 40px
+  text-input:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.none}"
+    padding: 12px 16px
+    height: 48px
+  hero-banner:
+    backgroundColor: "{colors.surface-dark}"
+    textColor: "{colors.on-dark}"
+    rounded: "{rounded.none}"
+    padding: 0
+  promo-tile-light:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.heading-lg}"
+    rounded: "{rounded.none}"
+    padding: 32px
+  promo-tile-dark:
+    backgroundColor: "{colors.surface-dark}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.heading-lg}"
+    rounded: "{rounded.none}"
+    padding: 32px
+  promo-tile-yellow:
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.on-primary}"
+    typography: "{typography.heading-lg}"
+    rounded: "{rounded.none}"
+    padding: 32px
+  vehicle-card:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.none}"
+    padding: 0
+  configurator-row:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.body-md}"
+    rounded: "{rounded.none}"
+    padding: 24px 0
+  configurator-swatch:
+    backgroundColor: "{colors.surface-soft}"
+    rounded: "{rounded.full}"
+    size: 56px
+  badge-new:
+    backgroundColor: "{colors.badge-new}"
+    textColor: "{colors.on-primary}"
+    typography: "{typography.button-md}"
+    rounded: "{rounded.full}"
+    padding: 6px 14px
+  nav-bar:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.button-md}"
+    rounded: "{rounded.none}"
+    height: 60px
+  sub-nav-pill:
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    typography: "{typography.button-sm}"
+    rounded: "{rounded.pill}"
+    padding: 8px 16px
+  footer:
+    backgroundColor: "{colors.surface-dark}"
+    textColor: "{colors.on-dark}"
+    typography: "{typography.body-sm}"
+    rounded: "{rounded.none}"
+    padding: 64px 24px
+---
+
+## Overview
+
+Renault's Turkish marketing surfaces are unapologetically high-contrast: a
+white canvas for browsing, a black canvas for product storytelling, and a
+single Sunlight Yellow accent (`{colors.primary}` — `#ffed00`) reserved for
+the most consequential actions. The brand's modernised flat diamond logo sets
+the tone — geometric, confident, slightly industrial — and the system follows
+suit. Square corners dominate, hairline borders are rare, and elevation is
+expressed through colour blocking rather than shadow.
+
+The typography is monolithic. Every text on the site is set in **NouvelR**,
+Renault's bespoke display family, with a strong preference for weight 700 at
+display sizes (with a tight `lineHeight: 0.95`) and weight 400 for body. There
+is no secondary serif, no decorative italic, no script — the discipline is
+the signature.
+
+Page rhythm cycles between three surface modes: a **white catalogue mode** for
+listings and configurators (`{colors.canvas}` with hairline-thin
+`{colors.hairline}` dividers), a **black storytelling mode** for hero
+sections, lifestyle imagery, and the lower half of campaign pages, and brief
+**yellow accent moments** (`{colors.primary}` tiles, "NEW" badges, R5-coded
+yellow paint shots) that punctuate the otherwise neutral palette.
 
 **Key Characteristics:**
-- Full-screen hero carousel with vivid aurora gradient backgrounds (magenta/violet/teal) behind vehicle imagery
-- NouvelR proprietary typeface with 28-degree "radical r" cut matching the diamond logo geometry
-- Renault Yellow (`#EFDF00`) as the super-primary accent — used sparingly for highest-priority CTAs
-- Zero border-radius on all buttons — sharp rectangular forms expressing precision engineering
-- Card-based editorial grid with full-bleed photography and dark gradient overlays
-- Binary black/white CTA system: primary (black bg/white text) and ghost (transparent/white border)
-- PromoCard dark-mode alternation creating a chessboard rhythm between light and dark sections
-- PrimeReact (21 components) + Element Plus (19 components) powering interactive elements
-- Link hover state in Renault Blue (`#1883FD`) — the sole chromatic interaction color
+- Two-tone canvas system — `{colors.canvas}` (white) for browsing, `{colors.surface-dark}` (black) for storytelling — switched in full-bleed bands rather than subtle gradations.
+- A single brand accent — `{colors.primary}` Sunlight Yellow — used scarcely on primary CTAs, "NEW" badges, R5 hero photography, and configurator dot indicators.
+- **NouvelR everywhere**, with `{typography.display-xl}` headlines at 56px / weight 700 / `lineHeight: 0.95` so condensed multi-line headlines stack cleanly.
+- Square geometry: `{rounded.xs}` (2px) on buttons, `{rounded.none}` on tiles and product cards, `{rounded.pill}` reserved exclusively for sub-nav chips and decorative badges.
+- Photography-first product tiles — vehicle photos full-bleed inside otherwise neutral cards, with copy stacked beneath rather than overlaid.
+- Page-level rhythm cycles white → black → yellow accent → black, with the wordmark and footer always closing on `{colors.surface-dark}`.
 
-## 2. Color Palette & Roles
+## Colors
 
-### Primary
-- **Renault Yellow** (`#EFDF00`): The brand's signature Pantone — a vivid, saturated yellow used for super-primary CTAs and the highest-priority action buttons. Appears as `--CtaLink-background-color` on `.is-cta-super-primary` class. Carries the energy of the diamond logo
-- **Absolute Black** (`#000000`): Primary button background, heading text on light surfaces, and the dominant dark section surface. The structural anchor of the entire interface
-- **Pure White** (`#FFFFFF`): Primary surface for editorial content, inverted button backgrounds, hero text color, and the dominant light-mode canvas (--rt-color-white)
+### Brand & Accent
+- **Sunlight Yellow** (`{colors.primary}` — `#ffed00`): the brand accent. Reserved for primary CTAs, "NEW" / "yeni" badges, configurator dot indicators, and full-bleed promotional tiles. Never decorative.
+- **Sunlight Yellow Pressed** (`{colors.primary-deep}` — `#e6d200`): the active/pressed state of `{colors.primary}` buttons and tiles.
+- **On-Primary** (`{colors.on-primary}` — `#000000`): label colour on top of `{colors.primary}` surfaces. Yellow always pairs with black text — never white.
 
-### Secondary & Accent
-- **Soft Yellow** (`#F8EB4C`): Lighter, warmer variant of Renault Yellow — used for hover/pressed states on yellow CTAs and secondary accent contexts
-- **Renault Blue** (`#1883FD`): Link hover color across all link variants — a bright, confident blue that signals interactivity without competing with the yellow brand accent
-- **Warm Gray** (`#D9D9D6`): Subtle warm neutral used for disabled states, inactive UI elements, and soft borders — carries a slight warmth that distinguishes it from cold grays
+### Surface
+- **Canvas** (`{colors.canvas}` — `#ffffff`): the default page background and card surface.
+- **Surface Soft** (`{colors.surface-soft}` — `#f7f7f7`): subtle elevation step for grouped configurator rows and inactive form fields.
+- **Surface Dark** (`{colors.surface-dark}` — `#000000`): the alternate canvas, used for hero bands, footer, and full-bleed storytelling sections.
+- **Surface Deep** (`{colors.surface-deep}` — `#111111`): a one-step-up elevation inside `{colors.surface-dark}` regions for inset cards and form panels.
+- **Hairline** (`{colors.hairline}` — `#f2f2f2`): the soft 1px divider between rows on white surfaces.
+- **Hairline Strong** (`{colors.hairline-strong}` — `#000000`): full-strength dividers on white, plus all card / button outlines.
+- **Divider Dark** (`{colors.divider-dark}` — `rgba(255,255,255,0.16)`): the corresponding low-contrast divider used inside `{colors.surface-dark}` regions.
 
-### Surface & Background
-- **Pure White** (`#FFFFFF`): Page background, light editorial sections, navigation bar, and footer
-- **Absolute Black** (`#000000`): Hero backgrounds, PromoCard dark-mode sections (`is-alternative-mode`), and E-Tech showcase areas
-- **Charcoal** (`#222222`): Secondary dark surface for text-heavy dark sections and footer sub-regions (--rt-color-dark)
-- **Pale Silver** (`#F2F2F2`): Subtle alternate light surface for section differentiation and card borders
+### Text
+- **Ink** (`{colors.ink}` — `#000000`): primary text colour on white surfaces. The same value also drives logos, icons, and outline borders — black is structural, not decorative.
+- **Body** (`{colors.body}` — `#222222`): secondary body text where pure black would feel too heavy in long paragraphs.
+- **Charcoal** (`{colors.charcoal}` — `#333333`): captions, metadata, and small labels.
+- **Mute** (`{colors.mute}` — `#666666`): supporting text and inactive nav labels.
+- **Ash** (`{colors.ash}` — `#8a8a8a`): placeholder text, disabled labels.
+- **Stone** (`{colors.stone}` — `#c4c4c4`): disabled-state foreground.
+- **On-Dark** (`{colors.on-dark}` — `#ffffff`): primary text on `{colors.surface-dark}` surfaces.
+- **On-Dark Mute** (`{colors.on-dark-mute}` — `rgba(255,255,255,0.72)`): secondary text in dark regions; preserves the brand's high-contrast feel without resorting to mid-grey.
 
-### Neutrals & Text
-- **Absolute Black** (`#000000`): Primary heading and body text on light surfaces — Renault uses true black rather than near-black
-- **Pure White** (`#FFFFFF`): Primary text on dark surfaces — hero headlines, dark-section headings, and inverted button labels
-- **Warm Gray** (`#D9D9D6`): Tertiary text, metadata, and subdued labels
-- **Border Gray** (`#D1D1D1`): Input field borders and subtle separators
+### Semantic
+- **Error** (`{colors.error}` — `#be6464`): muted desaturated red used for inline form errors. Notably warmer than typical pure-red error states.
+- **Warning** (`{colors.warning}` — `#f0ad4e`): amber alert.
+- **Success** (`{colors.success}` — `#8dc572`): muted green confirmation.
+- **Info** (`{colors.info}` — `#337ab7`): a desaturated mid-blue used in informational chips.
+- **Link** (`{colors.link}` — `#0000ee`): the unstyled-anchor default kept for fallback inline text links — production links inherit `{colors.ink}` and rely on underline/weight rather than colour.
 
-### Semantic & Accent
-- **Success Green** (`#8DC572`): Positive status indicators and confirmation messages (--rt-color-success)
-- **Error Rose** (`#BE6464`): Form validation errors and warning states (--rt-color-error)
-- **Warning Amber** (`#F0AD4E`): Cautionary alerts and attention-requiring states (--rt-color-warning)
-- **Info Blue** (`#337AB7`): Informational callouts and neutral status messaging (--rt-color-info)
-
-### Gradient System
-- **Hero Aurora**: Sweeping multi-color gradients (magenta → violet → teal) applied to hero slide backgrounds — the site's most distinctive visual element. These are photographic/composited rather than CSS gradients
-- **PromoCard Overlay**: `linear-gradient(rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 40%)` — applied to card tops to ensure heading text legibility over photography
-- No flat CSS gradients on surfaces — depth comes from photographic treatment and the black/white alternation
-
-## 3. Typography Rules
+## Typography
 
 ### Font Family
-- **NouvelR**: The sole typeface. A proprietary geometric sans-serif designed by Black[Foundry] for Renault's 2021+ rebrand. Features a distinctive "radical r" with a 28-degree terminal cut matching the diamond logo angle. Available in 6 weights (Light to Extrabold), supports 6 writing systems. Fallback: `sans-serif`. Declared as `"NouvelR, sans-serif"` in CSS
-- **No secondary typeface**: Unlike Ferrari (FerrariSans + Body-Font) or Lamborghini (LamboType + Open Sans), Renault uses a single font family for all text — headings, body, buttons, captions, and navigation
+
+The entire system is set in **NouvelR**, Renault's proprietary display
+family, used across navigation, headlines, body, captions, and button
+labels. The family carries a slightly geometric, semi-condensed personality
+with tall x-heights and squared apexes that pair naturally with the diamond
+logomark.
+
+When NouvelR cannot be licensed, suitable open-source substitutes include
+**Inter Tight**, **Manrope**, or **HK Grotesk Semi Condensed** — all share
+the geometric-with-warmth feel and adapt cleanly to weights 400 / 600 / 700.
+Tighten `lineHeight` on display sizes to ~0.95 to match the original; do not
+relax it.
 
 ### Hierarchy
 
-| Role | Size | Weight | Line Height | Letter Spacing | Notes |
-|------|------|--------|-------------|----------------|-------|
-| Hero Title | 56px (3.50rem) | 700 | 0.95 (53.2px) | normal | NouvelR, white on dark hero, all-caps model names |
-| Section Heading | 40px (2.50rem) | 700 | 0.95 (38px) | normal | NouvelR, PromoCard headings on dark/light sections |
-| Card Heading | 32px (2.00rem) | 700 | 0.95 | normal | NouvelR, medium-scale card headings |
-| Subheading | 24px (1.50rem) | 700 | 0.95 | normal | NouvelR, section sub-titles |
-| Module Title | 21.92px (1.37rem) | 600 | 1.20 | normal | NouvelR, component headings |
-| Content Title | 20px (1.25rem) | 700 | 0.95 | normal | NouvelR, smaller section titles |
-| UI Heading | 19.2px (1.20rem) | 600 | 1.30 | normal | NouvelR, card UI headings |
-| Emphasis | 18px (1.13rem) | 700 | 1.00 | normal | NouvelR, emphasized inline text and links |
-| Body Heading | 16px (1.00rem) | 700 | 1.40 | normal | NouvelR, paragraph-level headings |
-| Body Text | 14px (0.88rem) | 400 | 1.40 | normal | NouvelR, paragraph and descriptive content |
-| Body Bold | 14px (0.88rem) | 700 | 1.57 | normal | NouvelR, emphasized body text |
-| Button Label | 14.4px (0.90rem) | 700 | 1.00 | 0.144px | NouvelR, primary button text |
-| Nav Link | 13px (0.81rem) | 700 | 1.50 | normal | NouvelR, navigation and footer links |
-| Caption | 12.8px (0.80rem) | 400 | 1.10 | normal | NouvelR, small descriptive text |
-| Small Label | 12px (0.75rem) | 700 | 1.00 | normal | NouvelR, labels and tags |
-| Micro Text | 10px (0.63rem) | 700 | 1.45 | normal | NouvelR, smallest UI text, legal fine print |
-| Micro Caption | 8.5px (0.53rem) | 400 | normal | normal | NouvelR, absolute smallest text (legal) |
+| Token | Size | Weight | Line Height | Letter Spacing | Use |
+|---|---|---|---|---|---|
+| `{typography.display-xl}` | 56px | 700 | 0.95 | 0 | Hero headlines, campaign titles ("E-TECH ELEKTRİKLİ", "REVOLUTION"). |
+| `{typography.display-lg}` | 40px | 700 | 0.95 | 0 | Secondary section titles. |
+| `{typography.display-md}` | 32px | 700 | 0.95 | 0 | Page-level H1 on sub-pages and configurator panels. |
+| `{typography.heading-lg}` | 24px | 700 | 0.95 | 0 | Section headers, card titles. |
+| `{typography.heading-md}` | 20px | 700 | 0.95 | 0 | Sub-section headers, prominent labels. |
+| `{typography.heading-sm}` | 18px | 700 | 1.0 | 0 | Tile titles, list group headers. |
+| `{typography.subtitle}` | 19.2px | 600 | 1.3 | 0 | Lead paragraphs, hero subtitles. |
+| `{typography.body-lg}` | 18px | 400 | 1.5 | 0 | Long-form body. |
+| `{typography.body-md}` | 16px | 400 | 1.4 | 0 | Default body and form fields. |
+| `{typography.body-sm}` | 14px | 400 | 1.57 | 0 | Captions, metadata. |
+| `{typography.button-lg}` | 16px | 700 | 1.0 | 0 | Large CTAs in hero bands. |
+| `{typography.button-md}` | 14.4px | 700 | 1.0 | 0.144px | Default button label across the system. |
+| `{typography.button-sm}` | 13px | 600 | 1.2 | 0.13px | Sub-nav pills, small in-card actions. |
+| `{typography.caption}` | 12px | 400 | 1.4 | 0 | Footer disclosure, regulatory text. |
+| `{typography.overline}` | 10px | 700 | 1.45 | 0 | Short uppercase labels above titles. |
 
 ### Principles
-- **Single-family discipline**: NouvelR handles everything from 56px hero headlines to 8.5px legal captions — the font's geometric precision allows it to scale across this extreme range without losing character
-- **Bold-default headings**: Weight 700 dominates the heading hierarchy. Unlike brands that use medium (500) for headings, Renault's Bold weight creates a more assertive, energetic reading experience
-- **Ultra-tight display line-heights**: 0.95 line-height on hero and section headings — the lines nearly collide, creating a compressed, punchy typographic texture that feels urgent and modern
-- **28-degree radical r**: The typeface's signature detail — the lowercase "r" terminal is cut at precisely 28 degrees to mirror the angles of the Renault diamond logo, embedding brand identity into every word
-- **Capitalize transform on captions**: Some caption text uses `text-transform: capitalize` for editorial labeling, while micro text uses `lowercase` — a deliberate inversion for hierarchy signaling
+- Display sizes always weight 700, always at `lineHeight: 0.95`. The tightness is what makes the brand feel confident rather than corporate.
+- Body copy stays at weight 400 — never 500. The contrast between body and display is part of the system.
+- Button labels carry a tiny positive letter-spacing (`0.144px` on `{typography.button-md}`) — almost imperceptible, but it adds the small bit of mechanical precision the brand wants on CTAs.
+- No italics, no script, no decorative ligatures.
 
-## 4. Component Stylings
+### Note on Font Substitutes
+
+NouvelR is licensed; substitutes (Inter Tight / Manrope / HK Grotesk Semi
+Condensed) preserve the geometric character but typically render with
+slightly looser line heights at display sizes — clamp display
+`lineHeight` to 0.95 explicitly to match the source.
+
+## Layout
+
+### Spacing System
+- **Base unit**: 4px, with the working scale built on multiples of 4 and 8.
+- **Tokens**: `{spacing.xxs}` 4px · `{spacing.xs}` 8px · `{spacing.sm}` 12px · `{spacing.md}` 16px · `{spacing.lg}` 20px · `{spacing.xl}` 24px · `{spacing.xxl}` 32px · `{spacing.xxxl}` 40px · `{spacing.section}` 80px.
+- Section padding (full-bleed band → next band): `{spacing.section}` (80px) on desktop, collapsing to `{spacing.xxxl}` (40px) on mobile.
+- Promo-tile internal padding: `{spacing.xxl}` (32px) all sides on desktop.
+- Configurator row vertical padding: `{spacing.xl}` (24px) top/bottom with hairline divider between rows.
+
+### Grid & Container
+- **Max content width** ≈ 1440px. Beyond that, content remains centred and the dark/light bands extend full-bleed.
+- **Promo grid** on the homepage: a 2-column tile grid on desktop, dropping to 1-up on mobile. Each tile is square-cornered (`{rounded.none}`) with the photography or solid colour as the background.
+- **Vehicle range grids**: 3 to 4 cars per row at desktop, collapsing 2-up at tablet and 1-up at small mobile.
+- **Configurator** uses a fixed left visualisation pane (~60% width) with a right-hand scrolling option list (~40% width) on desktop.
+
+### Whitespace Philosophy
+- Whitespace is structural, not decorative. Sections are separated by colour-blocking (white → black) rather than soft padding ramps.
+- Inside cards and configurator rows, padding is generous but never airy — the brand is mass-market, so density is acceptable.
+- Hairline `{colors.hairline}` dividers on white surfaces create the sense of catalogue precision; on dark surfaces, `{colors.divider-dark}` carries the same role.
+
+## Elevation & Depth
+
+| Level | Treatment | Use |
+|---|---|---|
+| 0 — flat | No shadow, no border | Default page surface, full-bleed bands. |
+| 1 — outline | 1px solid `{colors.hairline-strong}` or `{colors.hairline}` | Promo tiles on light, vehicle cards, configurator panels. |
+| 2 — colour-blocked elevation | Surface colour shift (e.g. `{colors.canvas}` card sitting inside a `{colors.surface-soft}` band) | Configurator detail cards, related-content rows. |
+| 3 — dark inversion | Card swaps to `{colors.surface-dark}` against a `{colors.canvas}` band | "Ticari araç" hero promo tiles, lifestyle storytelling cards. |
+
+Drop shadows are extracted from the system but rarely visible on the marketing
+surfaces. When they appear, they are very subtle (~10% opacity, 2–4px blur)
+and used on floating elements like the configurator's sticky summary bar.
+
+### Decorative Depth
+- The R5 hero band uses an atmospheric mesh-gradient backdrop — purple-to-pink-to-yellow glow behind the car silhouette — that acts as the only true atmospheric depth in the system. Everywhere else, depth is structural (colour-blocking + outlines), not atmospheric.
+- E-TECH electric powertrain pages use a luminous magenta-to-violet gradient behind cutaway diagrams, reserved for the electric sub-brand.
+
+## Shapes
+
+### Border Radius Scale
+
+| Token | Value | Use |
+|---|---|---|
+| `{rounded.none}` | 0px | Tiles, vehicle cards, dividers, banner bands, full-bleed images. |
+| `{rounded.xs}` | 2px | Default buttons (primary yellow, secondary black, outline). |
+| `{rounded.sm}` | 3px | Tab panels, small chips. |
+| `{rounded.md}` | 4px | Form labels, inline tags. |
+| `{rounded.pill}` | 46px | Sub-nav pills, "yeni" / "NEW" badges, decorative carousel chips. |
+| `{rounded.full}` | 9999px | Configurator colour swatches, avatar dots. |
+
+### Photography Geometry
+- Vehicle photography is **always square-cornered** (`{rounded.none}`). No rounded vehicle hero shots, no soft-edged car cards.
+- Aspect ratios cluster around **16:9** (hero bands), **1:1** (square promo tiles), and **4:3** (vehicle range cards). Lifestyle imagery sometimes runs **2:1 wide** for full-bleed bands.
+- Avatars and small profile cues — when present — use `{rounded.full}` circles to contrast with the otherwise square geometry.
+
+## Components
 
 ### Buttons
-Renault's buttons are sharp-edged rectangles with zero border-radius — the industrial precision of a pressed metal body panel.
 
-**Super Primary (Yellow)** — The highest-emphasis CTA:
-- Default: bg `#EFDF00` (Renault Yellow), text `#000000`, borderRadius 0px, padding 10px 15px, border 1px solid `#EFDF00`
-- Inverted: bg `#EFDF00`, text `#000000` — same yellow on dark backgrounds
-- fontSize 16px (NouvelR), fontWeight 700, minHeight 46px, minWidth 46px
-- Used for: Primary conversion actions (configure, buy now)
+**`button-primary`** — yellow CTA
+- Background `{colors.primary}`, label `{colors.on-primary}`, type `{typography.button-md}`, padding `14px 24px`, `rounded: {rounded.xs}`.
+- The single most important action on a page (e.g. "Hemen randevu al", "Hesapla", "Konfigüratörü başlat").
+- Pressed state lives in `button-primary-pressed` (background `{colors.primary-deep}`).
 
-**Primary (Black)** — The default action button:
-- Default: bg `#000000`, text `#FFFFFF`, borderRadius 0px, padding 10px 15px, border 1px solid `#000000`
-- Inverted: bg `#FFFFFF`, text `#000000`, border 1px solid `#FFFFFF` — white fill on dark backgrounds
-- fontSize 16px (NouvelR), fontWeight 700
-- Used for: "keşfedin" (explore), secondary conversion actions
+**`button-secondary-dark`** — solid black CTA
+- Background `{colors.surface-dark}`, label `{colors.on-dark}`, type `{typography.button-md}`, `rounded: {rounded.xs}`.
+- Equal-weight secondary action paired with `{component.button-primary}`, or the primary action when used on a yellow tile background.
 
-**Ghost** — Transparent outline button:
-- Default (on dark): bg transparent, text `#FFFFFF`, border 1px solid `#FFFFFF`, borderRadius 0px, padding 10px 15px
-- Default (on light): bg transparent, text `#000000`, border 1px solid `#000000`
-- fontSize 16px (NouvelR), fontWeight 700
-- Used for: "ilk sen öğren" (be the first to know), "satın alın" (buy), secondary actions
+**`button-outline-dark`** — outlined CTA on light
+- Background `{colors.canvas}`, label `{colors.ink}`, 1px solid `{colors.hairline-strong}`, type `{typography.button-md}`, `rounded: {rounded.xs}`.
+- Tertiary action; appears alongside primary/secondary for "Detayları gör", "Modeller", etc.
 
-**Text Link** — Inline navigation:
-- Default (light): text `#000000`, no border, no background
-- Default (dark): text `#FFFFFF`
-- Hover: color shifts to `#1883FD` (Renault Blue), text-decoration none
-- All link variants hover to the same blue — consistent interactive feedback
+**`button-outline-light`** — outlined CTA on dark
+- Background `{colors.surface-dark}`, label `{colors.on-dark}`, 1px solid `{colors.on-dark}`, type `{typography.button-md}`, `rounded: {rounded.xs}`.
+- The dark-canvas counterpart to `{component.button-outline-dark}`.
+
+**`button-pill`** — sub-nav chip
+- Background `{colors.canvas}`, label `{colors.ink}`, 1px solid `{colors.hairline-strong}`, type `{typography.button-sm}`, `rounded: {rounded.pill}`, height 36px.
+- The only place the system uses a pill — for top-level filter chips ("Servis & randevu", "Sahiplik dönemi geçişi", "Kampanyalar") and configurator tab switches.
+
+**`button-icon-square`** — small icon button
+- Background `{colors.canvas}`, 1px solid `{colors.hairline-strong}`, `rounded: {rounded.xs}`, 40×40px square.
+- Carousel arrows, share, language switcher.
 
 ### Cards & Containers
 
-**PromoCard (Light)** — Editorial content card:
-- Background: white or transparent
-- Full-bleed photography with dark gradient overlay at top: `linear-gradient(rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 40%)`
-- Heading: NouvelR 40px/700, white text positioned over gradient
-- Border-radius: 0px — sharp rectangular containers
-- No shadow, no visible border
+**`promo-tile-light`** — white promo tile
+- Background `{colors.canvas}`, text `{colors.ink}`, type `{typography.heading-lg}`, padding `{spacing.xxl}`, `rounded: {rounded.none}`.
+- Used in the homepage 2-up grid for "Hybrid araç modelleri", "binek araç satış kampanyaları" tiles.
 
-**PromoCard (Dark / `is-alternative-mode`)** — Cinematic card:
-- Background: `#000000` (Absolute Black)
-- Same gradient overlay treatment
-- Heading: white NouvelR text
-- CTA buttons: inverted primary (white bg) or ghost (white border)
+**`promo-tile-dark`** — black promo tile
+- Background `{colors.surface-dark}`, text `{colors.on-dark}`, type `{typography.heading-lg}`, padding `{spacing.xxl}`, `rounded: {rounded.none}`.
+- Lifestyle / commercial-vehicle storytelling tiles ("ticari araç satış kampanyaları").
 
-**VehicleRangeCard** — Vehicle showcase:
-- Background: transparent
-- Vehicle image above, model name and price/spec below
-- No shadow, no border, clean flat treatment
-- Spacing between cards via grid gap
+**`promo-tile-yellow`** — accent promo tile
+- Background `{colors.primary}`, text `{colors.on-primary}`, type `{typography.heading-lg}`, padding `{spacing.xxl}`, `rounded: {rounded.none}`.
+- The single "PARLAK SARI" / "Sunlight Yellow" attention tile that anchors a campaign band. Reserved — usually one per page maximum.
+
+**`vehicle-card`** — car listing card
+- Background `{colors.canvas}`, full-bleed product photography on top, text below, `rounded: {rounded.none}`, no outer border.
+- Includes vehicle name (`{typography.heading-md}`), variant subtitle (`{typography.body-sm}`), and a single trailing arrow icon.
+
+**`hero-banner`** — full-bleed hero
+- Background `{colors.surface-dark}` with full-bleed photo or atmospheric gradient, content stacked left, type `{typography.display-xl}` for the title.
+- "SCENIC E-TECH ELEKTRİKLİ" hero on the homepage.
 
 ### Inputs & Forms
 
-**Search/Text Input:**
-- Background: `#FFFFFF`
-- Text: `#000000`
-- Border: 1px solid `#D1D1D1` (Border Gray)
-- Border-radius: 50px (pill-shaped — unusual deviation from the zero-radius button system)
-- Padding: 6px 35px 6px 15px (extra right padding for search icon)
-- Font: NouvelR, 12.8px
-- Focus: standard browser focus ring
+**`text-input`** — default input
+- Background `{colors.canvas}`, text `{colors.ink}`, type `{typography.body-md}`, 1px bottom border `{colors.hairline-strong}`, `rounded: {rounded.none}`, padding `{spacing.sm} {spacing.md}`, height 48px.
+- Inputs intentionally minimal — borderless on top and sides, single hairline at the bottom — keeping the catalogue feel.
+
+### Configurator
+
+**`configurator-row`** — option list row
+- Background `{colors.canvas}`, separator hairline `{colors.hairline}` between rows, padding `{spacing.xl}` top/bottom, type `{typography.body-md}`.
+- Right-side scrolling list on the configurator: "kasa tipi", "motor seçimi", "versiyon seçimi", "renk seçenekleri", etc.
+
+**`configurator-swatch`** — circular colour pick
+- Background `{colors.surface-soft}` (or the actual car colour), `rounded: {rounded.full}`, 56×56px.
+- Used for paint colour selection. Active state adds a 1px solid `{colors.hairline-strong}` ring.
 
 ### Navigation
-- **Desktop**: Renault diamond logo centered/left, horizontal nav links, sticky positioning
-- **Background**: white, no shadow at rest
-- **Links**: NouvelR, 13px, weight 700, black text
-- **Hover**: color shifts to `#1883FD` (Renault Blue)
-- **Mobile**: Hamburger collapse to full-screen navigation drawer
-- **CTA in nav**: Primary black button for main conversion action
 
-### Image Treatment
-- **Hero**: Full-viewport carousel with dramatic aurora-gradient backgrounds and art-directed vehicle photography — edge-to-edge, no padding
-- **PromoCards**: Full-bleed photography within card bounds, dark gradient overlay at top for text legibility
-- **Vehicle images**: Transparent-background renders on neutral/gradient backgrounds
-- **Aspect ratios**: Mixed — hero at roughly 16:9 viewport, promo cards at various ratios from square to wide panoramic
-- **Lazy loading**: Below-fold sections use lazy loading (framework-handled)
+**`nav-bar`** — top nav (desktop)
+- Background `{colors.canvas}`, type `{typography.button-md}`, height 60px, hairline `{colors.hairline}` bottom border.
+- Left: diamond logomark. Centre: top-level nav ("Modeller", "Hizmetler", "Renault Yaşamı", "MyRenault"). Right: language switcher + login icon.
 
-### Carousel Component
-- Full-screen hero carousel with auto-advancing slides
-- Each slide: background gradient/photo + vehicle image + headline + CTA buttons
-- Dot indicators for slide position
-- Navigation arrows at edges
+**`nav-bar`** (mobile)
+- Same height 60px, collapses centre nav into a hamburger icon. Logo stays left, login stays right.
 
-## 5. Layout Principles
+**`sub-nav-pill`** — pill-style sub-nav
+- Pill chips set in a horizontal scroll bar between hero and content body (e.g. "Servis & randevu", "Sahiplik dönemi geçişi", "Kampanyalar"), `{component.button-pill}` styling.
 
-### Spacing System
-- **Base unit**: 8px (detected system base)
-- **Scale**: 1px, 4px, 5px, 6px, 6.25px, 8px, 10px, 12px, 13px, 15px, 16px, 20px, 24px, 32px, 40px
-- **Button padding**: 10px 15px — consistent across all button variants
-- **Section padding**: Generous vertical spacing (40–80px) between major content blocks
-- **Card gaps**: 16–24px between grid items
-- **Minimum interactive size**: 46px (minWidth and minHeight on all buttons)
+### Signature Components
 
-### Grid & Container
-- **Max width**: 1440px (largest defined breakpoint)
-- **Hero**: Full-bleed, edge-to-edge, viewport-height
-- **PromoCard grid**: 2-up and 3-up layouts with mixed card sizes
-- **Vehicle range**: Horizontal scrollable card row or grid
-- **Footer**: Multi-column layout on white background
+**`badge-new`** — "yeni" badge
+- Background `{colors.primary}`, label `{colors.on-primary}`, type `{typography.button-md}`, `rounded: {rounded.full}`, padding `6px 14px`.
+- Anchored on the bottom-left of new vehicle cards.
 
-### Whitespace Philosophy
-Renault uses whitespace moderately — more generously than Ferrari but less extremely than Tesla. The card-based layout means content is organized into defined containers rather than floating in void. The visual breathing room comes primarily from the large card formats and the full-bleed hero carousel, which gives each vehicle its own cinematic moment. Between sections, spacing is consistent (32–40px) creating a rhythmic scroll experience. The alternation between light and dark sections also creates perceived whitespace — the mode switch itself acts as a visual separator.
+**`footer`** — global footer
+- Background `{colors.surface-dark}`, text `{colors.on-dark}`, type `{typography.body-sm}`, padding `64px 24px`.
+- Three-column legal/quick-links/locale grid above a single-line copyright row separated by `{colors.divider-dark}`.
 
-### Border Radius Scale
-| Value | Context |
-|-------|---------|
-| 0px | All buttons, PromoCards, most containers — the zero-radius default |
-| 2px | Small UI elements (region controls) |
-| 3px | Content panels (div, tabpanel) |
-| 4px | Labels and tag elements |
-| 46px | Pill-shaped elements (search input, filter chips) |
-| 50px | Full pill for search/input fields |
-
-## 6. Depth & Elevation
-
-| Level | Treatment | Use |
-|-------|-----------|-----|
-| Level 0 (Flat) | No shadow | Default for PromoCards, buttons, most containers |
-| Level 1 (Soft) | `rgba(0,0,0,0.2) 0px 4px 8px` | Card hover states, subtle lift effect |
-| Level 2 (Medium) | `rgba(0,0,0,0.2) 0px 0px 18px` | Floating UI elements, dropdown menus |
-| Level 3 (Layered) | `rgba(0,0,0,0) 0px 2px 4px, rgba(50,50,93,0.1) 0px 7px 14px` | Compound shadow for elevated cards and modals |
-| Level 4 (Deep) | `rgba(0,0,0,0.15) 0px 40px 80px` | Large floating panels, configurator overlays |
-| Level 5 (Directional) | `rgba(0,0,0,0.2) 5px 5px 8px` | Offset directional shadow for specific components |
-| Level 6 (Ambient) | `rgb(199,197,199) 0px 0px 12px 2px` | Ambient glow effect for highlighted elements |
-
-### Shadow Philosophy
-Renault uses a richer shadow system than Ferrari or Tesla — seven distinct shadow tokens reflecting a more layered, dimensional interface. The shadows progress from subtle 4px hover lifts to dramatic 80px deep panels. The compound shadow (Level 3) with its dual-layer approach (a tight dark shadow plus a wider purple-tinted one from `rgba(50,50,93,0.1)`) is particularly refined — it creates a photorealistic floating effect. The ambient glow (Level 6) in warm gray adds a unique touch that connects to Renault's warmer color personality.
-
-### Decorative Depth
-- **Hero aurora gradients**: The primary decorative depth element — vivid color gradients create atmospheric depth behind vehicle imagery
-- **PromoCard overlays**: `linear-gradient(rgba(0,0,0,0.6) → transparent)` creates depth within cards through transparency
-- **No blur effects** on UI elements — depth is communicated through shadow and color contrast
-
-## 7. Do's and Don'ts
+## Do's and Don'ts
 
 ### Do
-- Use Renault Yellow (`#EFDF00`) exclusively for super-primary CTAs — it carries the full weight of the diamond logo's identity
-- Maintain zero border-radius on all buttons — sharp edges are non-negotiable in the Renault system
-- Use NouvelR Bold (700) as the default heading weight — the assertive weight is central to the brand's energetic personality
-- Apply the dark gradient overlay (`rgba(0,0,0,0.6) → transparent`) on PromoCards to ensure text legibility over photography
-- Keep hero line-heights ultra-tight (0.95) for display text — the compressed texture feels urgent and modern
-- Alternate between black and white sections to create the signature chessboard rhythm
-- Use `#1883FD` (Renault Blue) consistently for all link hover states — one interactive color signal
-- Set minimum interactive size at 46×46px for all buttons — accessibility built into the component spec
-- Reserve pill-shaped radius (46–50px) exclusively for search inputs and filter elements — never for buttons
-- Use the PromoCard gradient overlay on every card that has text over photography
+- Reserve `{colors.primary}` exclusively for primary CTAs, "yeni"/"NEW" badges, and at most one accent promo tile per band — `{component.promo-tile-yellow}` is intentionally rare.
+- Pair `{colors.primary}` only with `{colors.on-primary}` text. Yellow + white is forbidden.
+- Set everything in **NouvelR** — no secondary serif, no script, no decorative italic.
+- Hold display headlines at `{typography.display-xl}` weight 700 with `lineHeight: 0.95` so they stack tightly on multi-line wraps.
+- Use `{rounded.xs}` (2px) on every standard button — the near-flat corner is part of the brand.
+- Switch full bands between `{colors.canvas}` and `{colors.surface-dark}` for storytelling rhythm. Avoid mid-greys as section backgrounds.
+- Show vehicle photography full-bleed inside `{component.vehicle-card}` with copy stacked beneath, never overlaid.
+- Use `{component.sub-nav-pill}` (`{rounded.pill}`) only for sub-nav and small filter rows — never for primary CTAs.
 
 ### Don't
-- Apply Renault Yellow as a background color for sections or surfaces — it's a CTA signal, not an atmosphere color
-- Add border-radius to buttons — the zero-radius rectangle is a core brand marker
-- Use any typeface besides NouvelR — the single-family discipline is a brand pillar
-- Mix multiple chromatic accent colors in a single section — the palette is monochrome-plus-yellow
-- Soften heading weights to 400 or 500 — NouvelR Bold is the brand voice, lighter weights read as off-brand
-- Add decorative borders to PromoCards or content containers — separation comes from background color alternation
-- Use the semantic colors (Success Green, Error Rose) for decorative purposes — they're reserved for form states
-- Apply the 56px hero size to anything below the fold — hero typography scale is reserved for the carousel
-- Create rounded-pill buttons — pill shapes are reserved for inputs, never for action elements
-- Use flat CSS gradients on UI surfaces — the only gradients should be the photographic hero auroras and the text-legibility overlays
+- Don't introduce a secondary accent colour. Yellow is the only brand accent; semantic colours (`{colors.error}`, `{colors.success}`, `{colors.warning}`) are functional, not decorative.
+- Don't round vehicle cards or promo tiles. Square-cornered photography is core to the brand expression.
+- Don't soften body weights to 500 or 600 — the system relies on the 400 / 700 contrast.
+- Don't apply `{colors.primary}` to body text or large surfaces beyond the single accent tile per band.
+- Don't add atmospheric gradient washes outside the dedicated R5 / E-TECH hero contexts.
+- Don't pair light grey text on white. Body text steps through `{colors.body}`, `{colors.charcoal}`, `{colors.mute}` — `{colors.ash}` and `{colors.stone}` are reserved for placeholders and disabled states.
+- Don't add drop shadows to vehicle cards or promo tiles — the system is shadow-free at the catalogue level.
 
-## 8. Responsive Behavior
+## Responsive Behavior
 
 ### Breakpoints
+
 | Name | Width | Key Changes |
-|------|-------|-------------|
-| Mobile Small | ≤425px | Single-column, full-width cards, hero text scales to ~32px, stacked CTAs, hamburger nav |
-| Mobile | 426–640px | Single-column, slightly larger cards, hero text at 32–40px |
-| Tablet Small | 641–768px | 2-column PromoCard grid begins, hero maintains full-width |
-| Tablet | 769–896px | Full 2-column layout, vehicle range shows 2–3 cards |
-| Desktop Small | 897–1024px | Navigation fully expanded, hero at 56px, 2-up card grid |
-| Desktop | 1025–1280px | Full layout, 3-up card grid, generous whitespace |
-| Large Desktop | 1281–1440px | Maximum content width, centered container, hero at full cinematic scale |
+|---|---|---|
+| Desktop XL | ≥ 1440px | Full max-width container, 3–4 column vehicle grid, 2-up promo tile grid. |
+| Desktop | 1280–1439px | Same layout, container shrinks to viewport with `{spacing.xl}` side padding. |
+| Tablet Large | 1024–1279px | Vehicle grid drops to 3-up, configurator left/right panes resize to 55/45. |
+| Tablet | 768–1023px | Promo tile grid collapses to 2-up, sub-nav pills become horizontal scroll. |
+| Mobile Large | 426–767px | Vehicle grid 2-up, configurator switches to stacked panes (visualisation on top, options below), nav collapses to hamburger. |
+| Mobile | ≤ 425px | All grids 1-up, hero `{typography.display-xl}` clamps to ~40px, section padding `{spacing.section}` collapses to `{spacing.xxxl}`. |
 
 ### Touch Targets
-- All buttons: minimum 46×46px (`minWidth: 46px, minHeight: 46px`) — exceeds WCAG AAA 44×44px requirement
-- Search input pill: adequate touch target with 50px border-radius creating a large tappable area
-- Navigation links: NouvelR 13px with adequate spacing between items
-- Carousel navigation: large arrow targets at viewport edges
+- All buttons ship at minimum 44×44px on mobile; default `{component.button-primary}` is 48px tall, comfortably exceeding WCAG AAA.
+- `{component.sub-nav-pill}` (36px) is bumped to 40px tall on mobile via increased vertical padding.
+- `{component.button-icon-square}` (40px) sits at the WCAG AA minimum and remains tappable, but should grow to 44px when used as a primary navigation control.
 
 ### Collapsing Strategy
-- **Navigation**: Full horizontal nav collapses to Renault diamond logo + hamburger menu on mobile
-- **Hero carousel**: Full-width at all breakpoints, headline scales from 56px (desktop) to ~32px (mobile)
-- **PromoCard grid**: 3-up → 2-up → single-column as viewport narrows
-- **Vehicle range**: Horizontal scroll maintained at all sizes, visible cards reduce
-- **CTA pairs**: Side-by-side buttons stack vertically on mobile
-- **Footer**: Multi-column collapses to single-column accordion on mobile
+- Top-level nav collapses to hamburger at < 1024px; the logo and login icon stay anchored.
+- 2-up promo grid collapses to 1-up at < 768px; tile padding shrinks from `{spacing.xxl}` to `{spacing.lg}`.
+- Configurator switches from side-by-side to stacked at < 1024px, with the visualisation pinned to the top of the viewport on scroll.
+- Display headlines clamp: `{typography.display-xl}` 56px → 40px → 32px across the breakpoint ladder.
+- Sub-nav pills convert from a wrap row to a horizontal scroll-rail at < 768px.
 
 ### Image Behavior
-- Hero images: full-bleed at all breakpoints with `object-fit: cover`
-- PromoCard images: responsive within card containers, gradient overlay scales proportionally
-- Vehicle images: transparent-background renders scale proportionally within grid cells
-- Art direction: mobile may crop to tighter vehicle views, reducing environmental context
+- Vehicle photography is served at 1.5× and 2× DPR; below 768px, the system swaps to a portrait-oriented composition where art direction allows.
+- Hero atmospheric gradients (R5, E-TECH) load lazily after primary content; they are not blocking.
+- Lifestyle / commercial photography in `{component.promo-tile-dark}` keeps the same 16:9 framing across breakpoints, cropping inward rather than letterboxing.
 
-## 9. Agent Prompt Guide
+## Iteration Guide
 
-### Quick Color Reference
-- Primary CTA (Super): "Renault Yellow (#EFDF00)"
-- Primary CTA (Default): "Absolute Black (#000000)"
-- Background Light: "Pure White (#FFFFFF)"
-- Background Dark: "Absolute Black (#000000)"
-- Secondary Dark: "Charcoal (#222222)"
-- Heading text (light bg): "Absolute Black (#000000)"
-- Body text: "Absolute Black (#000000)"
-- Link Hover: "Renault Blue (#1883FD)"
-- Border: "Pale Silver (#F2F2F2)"
-- Semantic Error: "Error Rose (#BE6464)"
+1. Focus on ONE component at a time. Most components share `{rounded.xs}`, `{colors.canvas}` / `{colors.surface-dark}`, and NouvelR — only the role-specific tokens (`{colors.primary}`, `{component.promo-tile-yellow}`) shift between variants.
+2. Reference component names and tokens directly (`{colors.primary}`, `{component.button-primary-pressed}`, `{rounded.pill}`) — do not paraphrase.
+3. Run `npx @google/design.md lint DESIGN.md` after edits; the orphaned-tokens warning will catch unused entries before they ship.
+4. Add new variants as separate entries (`-pressed`, `-disabled`, `-outline`) — do not bury them in prose.
+5. Default body type to `{typography.body-md}`; reach for `{typography.subtitle}` only on hero subtitles and lead paragraphs.
+6. Keep `{colors.primary}` scarce — if more than one yellow element appears per viewport, ask whether one of them should drop to `{colors.surface-dark}` or `{colors.canvas}` instead.
 
-### Example Component Prompts
-- "Create a hero section with a full-viewport aurora gradient background (magenta to violet to teal), a centered vehicle image, a NouvelR Bold headline at 56px with 0.95 line-height in white, and two buttons: a Primary (white bg, black text, 0px radius) 'Explore' and a Ghost (transparent bg, white border, white text, 0px radius) 'Learn More'"
-- "Design a PromoCard with a full-bleed photography background, a dark gradient overlay (rgba(0,0,0,0.6) top to transparent at 40%), a NouvelR Bold 40px white heading, a 14px body text line in white, and a Primary inverted button (white bg, black text, 0px radius, 10px 15px padding)"
-- "Build a vehicle range grid with 3 columns on white background, each card showing a transparent-background car render above a NouvelR Bold 24px model name in black, a 14px price caption, and a ghost button (black border, black text, 0px radius) labeled 'Configure'"
-- "Create a dark E-Tech section on Absolute Black (#000000) with a NouvelR Bold 40px white heading 'E-Tech electric powertrain', a 14px subtitle in white, and a Renault Yellow (#EFDF00) super-primary button with black text, 0px radius, and 10px 15px padding"
-- "Design a search input as a pill-shaped field (50px border-radius) with white background, 1px solid #D1D1D1 border, NouvelR 12.8px text, 6px 35px 6px 15px padding, and a search icon positioned inside the right padding area"
+## Known Gaps
 
-### Iteration Guide
-When refining existing screens generated with this design system:
-1. Focus on ONE component at a time — Renault's system has clear component boundaries (PromoCard, VehicleRangeCard, CTA variants)
-2. Reference specific color names and hex codes — the palette is small but each color has a precise function
-3. Use natural language descriptions, not CSS values — "sharp zero-radius rectangle" conveys intent better than "border-radius: 0"
-4. Describe the desired "feel" alongside specific measurements — "assertive automotive energy" communicates the NouvelR Bold heading personality better than "font-weight: 700"
-5. Always check whether a section should be light or dark — the chessboard alternation is a core pattern
-6. Reserve Renault Yellow for ONE button per screen — if yellow appears in more than one CTA, the hierarchy collapses
+- Active/pressed visual states are not consistently observable in static surfaces; `button-primary-pressed` documents the extracted darkened-yellow value, but no other component has a pressed variant promoted to the YAML.
+- Drop-shadow values exist in the extracted tokens but are rarely surfaced visually; only the configurator's sticky summary bar uses them on the captured pages.
+- The MyRenault application surfaces (logged-in product) are out of scope for this extraction — only the public marketing canvas is documented.
+- Form-field focus styling is not extracted; the system likely relies on a thicker bottom border at `{colors.ink}`, but this is not visually confirmed on the captured pages.

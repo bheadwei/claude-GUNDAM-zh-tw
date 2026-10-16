@@ -16,9 +16,12 @@
       "path_pattern": "design-md/{id}/DESIGN.md",
       "license": "MIT",
       "license_file": ".claude/ui/_licenses/voltagent-awesome-design-md.txt",
-      "format": ["google-alpha", "voltagent-9section"],
+      "format": [
+        "google-alpha",
+        "voltagent-9section"
+      ],
       "prefix": "",
-      "last_synced": "2026-04-19"
+      "last_synced": "2026-10-16"
     },
     {
       "id": "jp",
@@ -26,10 +29,12 @@
       "ref": "main",
       "path_pattern": "design-md/{id}/DESIGN.md",
       "license": "MIT",
-      "license_file": null,
-      "format": ["voltagent-9section"],
+      "license_file": ".claude/ui/_licenses/jp-awesome-design-md-jp.txt",
+      "format": [
+        "voltagent-9section"
+      ],
       "prefix": "jp-",
-      "last_synced": null
+      "last_synced": "2026-10-16"
     },
     {
       "id": "omd",
@@ -37,10 +42,12 @@
       "ref": "main",
       "path_pattern": "web/references/{id}/DESIGN.md",
       "license": "MIT",
-      "license_file": null,
-      "format": ["omd-v3"],
+      "license_file": ".claude/ui/_licenses/omd-oh-my-design.txt",
+      "format": [
+        "omd-v3"
+      ],
       "prefix": "omd-",
-      "last_synced": null
+      "last_synced": "2026-10-16"
     },
     {
       "id": "self-extracted",
@@ -49,7 +56,9 @@
       "path_pattern": null,
       "license": null,
       "license_file": null,
-      "format": ["voltagent-9section"],
+      "format": [
+        "voltagent-9section"
+      ],
       "prefix": "",
       "last_synced": null
     }
