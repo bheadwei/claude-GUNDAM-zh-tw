@@ -1,0 +1,16 @@
+{
+  "source": "voltagent",
+  "upstream_repo": "VoltAgent/awesome-design-md",
+  "upstream_path": "design-md/renault/DESIGN.md",
+  "upstream_commit": "e2ada2147d93fef2f11d8f844d9eba5903b46526",
+  "upstream_format": "voltagent-9section",
+  "upstream_status": "present",
+  "imported_at": "2026-04-19",
+  "imported_sha256": "d14f1b341612c446dddaa60c269b70ca07d39b2e75d4339be798bf117607186a",
+  "license": "MIT",
+  "license_file": ".claude/ui/_licenses/voltagent-awesome-design-md.txt",
+  "locally_modified": false,
+  "local_changes": "",
+  "language": "en",
+  "extraction_method": "upstream"
+}

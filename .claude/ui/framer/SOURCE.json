@@ -1,0 +1,16 @@
+{
+  "source": "voltagent",
+  "upstream_repo": "VoltAgent/awesome-design-md",
+  "upstream_path": "design-md/framer/DESIGN.md",
+  "upstream_commit": "80bbbc23ea94939ceda7ad74dd844224f07dcb9e",
+  "upstream_format": "voltagent-9section",
+  "upstream_status": "present",
+  "imported_at": "2026-04-19",
+  "imported_sha256": "d6b245993b073d02acd153556b82cbf5d1570e27cd30ed71d4ada79d54fe2c6c",
+  "license": "MIT",
+  "license_file": ".claude/ui/_licenses/voltagent-awesome-design-md.txt",
+  "locally_modified": true,
+  "local_changes": "與 80bbbc2 不一致，原因未記錄（差異只有第 1 行 H1 標題用字；匯入後本地未再修改）",
+  "language": "en",
+  "extraction_method": "upstream"
+}

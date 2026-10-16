@@ -1,0 +1,16 @@
+{
+  "source": "voltagent",
+  "upstream_repo": "VoltAgent/awesome-design-md",
+  "upstream_path": "design-md/claude/DESIGN.md",
+  "upstream_commit": "80bbbc23ea94939ceda7ad74dd844224f07dcb9e",
+  "upstream_format": "voltagent-9section",
+  "upstream_status": "present",
+  "imported_at": "2026-04-19",
+  "imported_sha256": "fe189d3b390c8613e7fe734af5e23f88cb08bc11f21087b524214f4b197b4b72",
+  "license": "MIT",
+  "license_file": ".claude/ui/_licenses/voltagent-awesome-design-md.txt",
+  "locally_modified": true,
+  "local_changes": "與 80bbbc2 不一致：第 1 行 H1 標題用字不同（原因未記錄）；另外本地 commit 7fcfbd2 把範例模型名稱從 Opus 4.5／Sonnet 4.5 改成 Opus 4.7／Sonnet 4.6",
+  "language": "en",
+  "extraction_method": "upstream"
+}
