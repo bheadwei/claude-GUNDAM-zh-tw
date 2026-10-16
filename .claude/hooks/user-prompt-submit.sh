@@ -144,7 +144,11 @@ if [ "$SUGGEST_MODE" != "low" ]; then
             add "偵測到文件維護 → **委派 documentation-specialist**（\`subagent_type: \"documentation-specialist\"\`），它會從程式碼反推 codemap／API 文檔／技術 README。不要自己一個一個檔案改。"
         fi
     fi
-    if has 'ui|前端|頁面|畫面|component|元件|tailwind|css|pencil|設計稿'; then
+    # `ui`／`css` 前後不能是英文字母：裸子字串會命中 quick、build、guide、suite、access，
+    # 把一堆跟前端無關的提問也導去載入 ui-style-compliance。
+    # 反過來，使用者說「做個官網」「這個形象頁」時從不講 UI 或前端，所以要列出網站類的說法。
+    if has '(^|[^a-z])(ui|css)([^a-z]|$)|前端|頁面|畫面|component|元件|tailwind|pencil|設計稿' \
+       || has '網站|官網|landing|形象頁|一頁式|首頁|版型|配色|字型'; then
         add "偵測到前端 UI/設計稿 → **先載入 \`ui-style-compliance\` skill**（風格三階段檢查已從常駐 rules 移出）；可用 /ui-page 或委派 ui-builder。"
     fi
     if has 'npm|pnpm|bun|yarn|package\.json|node_modules|lockfile|套件安裝'; then

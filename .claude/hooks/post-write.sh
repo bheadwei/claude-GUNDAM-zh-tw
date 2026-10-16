@@ -6,13 +6,14 @@
 #   (2) 文件影響偵測：寫到「文件會描述的檔案」（API 路由、schema、對外介面…）時，
 #       記進 .doc-impact 並在本任務第一次命中時注入提醒。
 #       /verify 在標記 WBS ✅ 前必須處理這份清單。
+#   (3) 前端寫入檢查：寫死色碼、動畫等級不符、AI 痕跡（P0）→ lib/ui-lint.sh（只提醒，不擋）
 #
 # 為什麼需要 (2)：新需求／客戶 CR 的程式都會寫出來，但文件常常沒跟上。
 # 原因是 documentation-specialist 在「任務完成路徑」上完全沒有位置——
 # /verify 只驗建置/型別/lint/測試，從不問文件。靠自律記得同步文件是行不通的，
 # 所以改成：機器在改動當下就標記，並在任務收尾時擋一次。
 #
-# 逃生門：DOC_SYNC_GATE=off、或 .suggest-mode 為 off
+# 逃生門：DOC_SYNC_GATE=off、UI_LINT=off、或 .suggest-mode 為 off
 
 INPUT=$(cat)
 
@@ -90,6 +91,30 @@ done
 NORM=$(printf '%s' "$FILE_PATH" | tr '\\' '/')
 ROOT_NORM=$(printf '%s' "$PROJECT_ROOT" | tr '\\' '/')
 REL="${NORM#"$ROOT_NORM"/}"
+
+# ---------------------------------------------------------------- 前端寫入檢查
+#
+# 寫死色碼、動畫等級不符、AI 痕跡（P0）。判斷全在 lib/ui-lint.sh（含範圍、出處、取捨）。
+# 這裡先算好、不馬上輸出：前端檔也可能同時命中下面的文件影響偵測（例如 `src/components/index.tsx`），
+# 而一次 hook 只能輸出一個 JSON，所以由 finish_with 合併成一則。
+# 會走到 WBS、擴充維護兩節的都是 `.claude/**`，ui-lint 本來就跳過，不必在那裡合併。
+# 只接在 PostToolUse：寫檔失敗時磁碟內容沒變，沒有東西可檢查（理由見 ui-lint.sh 開頭）。
+# 逃生門：UI_LINT=off
+UI_MSG=""
+if [ "${UI_LINT:-on}" != "off" ] && [ -f "$FILE_PATH" ]; then
+    UI_MSG=$(bash "$(dirname "${BASH_SOURCE[0]}")/lib/ui-lint.sh" "$FILE_PATH" "$REL" "$WORK_CLAUDE" "$MAIN_CLAUDE" 2>/dev/null || true)
+fi
+
+finish_with() { # [文件影響提醒] —— 與 UI_MSG 合併後輸出一則 additionalContext，然後結束
+    local msg="${1:-}"
+    if [ -n "$UI_MSG" ]; then
+        if [ -n "$msg" ]; then msg="$msg"$'\n\n'"$UI_MSG"; else msg="$UI_MSG"; fi
+    fi
+    if [ -n "$msg" ]; then
+        jq -n --arg m "$msg" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $m}}' 2>/dev/null || true
+    fi
+    exit 0
+}
 
 # ---------------------------------------------------------------- WBS 格子長度提醒
 #
@@ -192,16 +217,16 @@ if [ "${SKILL_CURATOR_GATE:-on}" != "off" ]; then
     fi
 fi
 
-[ "${DOC_SYNC_GATE:-on}" = "off" ] && exit 0
+[ "${DOC_SYNC_GATE:-on}" = "off" ] && finish_with ""
 
 # 先排除：模板自身、依賴、建置產物、文件本身、測試
 case "$REL" in
-    .claude/*|*/.claude/*) exit 0 ;;
-    docs/*|*/docs/*) exit 0 ;;
-    node_modules/*|*/node_modules/*|.venv/*|*/.venv/*|venv/*|*/venv/*) exit 0 ;;
-    dist/*|*/dist/*|build/*|*/build/*|.next/*|*/.next/*|target/*|*/target/*) exit 0 ;;
-    .git/*|*/.git/*) exit 0 ;;
-    *test*|*spec*|*__tests__*|*fixtures*) exit 0 ;;
+    .claude/*|*/.claude/*) finish_with "" ;;
+    docs/*|*/docs/*) finish_with "" ;;
+    node_modules/*|*/node_modules/*|.venv/*|*/.venv/*|venv/*|*/venv/*) finish_with "" ;;
+    dist/*|*/dist/*|build/*|*/build/*|.next/*|*/.next/*|target/*|*/target/*) finish_with "" ;;
+    .git/*|*/.git/*) finish_with "" ;;
+    *test*|*spec*|*__tests__*|*fixtures*) finish_with "" ;;
 esac
 
 # 文件會描述的檔案 —— 改到這些，文件就有機會過期
@@ -218,7 +243,7 @@ case "$REL" in
     */cli/*|*/commands/*|.env.example)
         DOC_BEARING=1 ;;
 esac
-[ "$DOC_BEARING" -eq 0 ] && exit 0
+[ "$DOC_BEARING" -eq 0 ] && finish_with ""
 
 mkdir -p "$DATA_DIR" 2>/dev/null || true
 IMPACT_FILE="$DATA_DIR/.doc-impact"
@@ -228,16 +253,11 @@ NOTIFIED="$DATA_DIR/.doc-impact-notified"
 grep -qxF "$REL" "$IMPACT_FILE" 2>/dev/null || echo "$REL" >> "$IMPACT_FILE" 2>/dev/null || true
 
 # 本任務只提醒一次，避免每次寫檔都吵
-[ -f "$NOTIFIED" ] && exit 0
+[ -f "$NOTIFIED" ] && finish_with ""
 : > "$NOTIFIED" 2>/dev/null || true
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] doc-impact: $REL" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
 
-jq -n --arg f "$REL" '{
-  hookSpecificOutput: {
-    hookEventName: "PostToolUse",
-    additionalContext: ("📘 文件影響提醒：你剛改了 `" + $f + "`——這類檔案（API／路由／schema／對外介面／CLI）是文件描述的對象，改了文件就可能過期。\n\n本任務的影響清單累積在 `.claude/taskmaster-data/.doc-impact`，**`/verify` 在標記 WBS ✅ 前會擋下來要求處理**（同步文件或明確豁免）。現在不用停下來，繼續實作即可；收尾時委派 `documentation-specialist` 一次處理完。\n（本任務只提醒這一次。關閉：DOC_SYNC_GATE=off）")
-  }
-}' 2>/dev/null || true
+DOC_MSG=$(jq -rn --arg f "$REL" '"📘 文件影響提醒：你剛改了 `" + $f + "`——這類檔案（API／路由／schema／對外介面／CLI）是文件描述的對象，改了文件就可能過期。\n\n本任務的影響清單累積在 `.claude/taskmaster-data/.doc-impact`，**`/verify` 在標記 WBS ✅ 前會擋下來要求處理**（同步文件或明確豁免）。現在不用停下來，繼續實作即可；收尾時委派 `documentation-specialist` 一次處理完。\n（本任務只提醒這一次。關閉：DOC_SYNC_GATE=off）"' 2>/dev/null || true)
 
-exit 0
+finish_with "$DOC_MSG"
