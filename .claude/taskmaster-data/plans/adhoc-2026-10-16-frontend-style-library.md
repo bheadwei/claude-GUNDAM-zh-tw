@@ -502,7 +502,7 @@ files:
 1. 同步腳本放 `scripts/sync-ui-sources.sh`，四份 copy／update 腳本加排除
 2. avoid-ai-design 掃描器：只挑高準確度的 P0 規則以 bash 改寫進 `ui-lint.sh`，不引入 Node，附 MIT 原文
 3. 既有「設計走向 90 天」提醒也改成只在模板 repo 出現
-4. `semrush`：本地保留，`SOURCE.json` 寫 `upstream_status: "removed"`，CATALOG 標「（上游已移除）」
+4. `semrush`：本地保留。階段 2 查證它從未在上游（依 Semrush 官方設計系統 Intergalactic 抽取），使用者改決定：CATALOG 標「（依官方設計系統抽取）」，SOURCE.json 上游欄位皆為 null
 5. 第一批（階段 1～4）以 4 條 worktree 平行執行
 6. 階段 10 匯入清單：`skill-curator-2026-10-16-1034-brand-candidates.md`「給使用者挑選用的精簡清單」推薦的 35 份全收（VoltAgent 7、jp 15、omd 13），含 AI 痕跡標中／高者（作對照組，由 anti-ai.md 在提方向時避開或標註）
 7. 階段 6 一併處理：`ui-site.md` 約第 194 行「產 tokens 一律做深色模式」與階段 4 的 D4 新規則矛盾（階段 4 回報）
