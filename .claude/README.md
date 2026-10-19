@@ -21,7 +21,7 @@
 ├── rules/        ( 6 個)      # 自動載入規則
 ├── skills/       (28 個)      # 專案特定領域知識
 ├── hooks/                     # Hook 腳本庫
-├── output-styles/             # 回覆風格（settings.json 的 outputStyle 指向 plain-language：先白話講結論再列細節）
+├── output-styles/             # 回覆風格（預設 plain-language；另有 terse／decision／teaching／report，用 /output-style 切換）
 ├── context/                   # 跨 Agent 上下文共享
 ├── coordination/              # Agent 協調配置
 └── taskmaster-data/           # WBS、時間日誌、plans/（計畫持久化）
