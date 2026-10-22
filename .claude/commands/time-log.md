@@ -30,6 +30,9 @@ description: 查看開發時間報表，按日期和 WBS 任務追蹤實際開�
    （任務表依里程碑分節，要掃**所有**節；版面見 `.claude/templates/wbs.template.md`）。
    **在 `wbs.md` 找不到該任務編號時，再查一次 `wbs-archive.md`**——
    已歸檔的任務仍有時間紀錄，不可顯示為「未分類」（歸檔規則見 `/task-status`）
+   **`task` 以 `adhoc-` 開頭的不是 WBS 編號**（它是 ad-hoc plan 的檔名主幹）——不要拿去查 WBS，
+   也不要歸進「未分類」；`--by-task` 時照原值列一行，名稱取該 plan 的標題
+   （`plans/` 或 `plans/archive/`），預估欄填 `--`
 5. 輸出報表
 
 ## 輸出格式

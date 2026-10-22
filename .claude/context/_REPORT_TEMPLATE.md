@@ -1,7 +1,7 @@
 ---
 agent: <agent-name>
 date: <YYYY-MM-DD-HHMM>
-area: <quality|security|testing|e2e|deployment|docs|decisions>
+area: <quality|security|testing|e2e|deployment|docs|decisions|planning>
 target: <檔案路徑或範圍>
 severity: <info|low|medium|high|critical>
 status: <findings|resolved|partial|blocked>
@@ -39,5 +39,5 @@ status: <findings|resolved|partial|blocked>
 
 ---
 
-> 報告檔保留規則：每個 area 只保留最新 5 份，超過自動歸檔到 `_archive/`
+> 報告檔保留規則：跑 `context-gc.sh` 時每個 agent 保留最新 5 份，其餘歸檔到 `_archive/`（`decisions/`、`learned/` 不清）
 > 詳見 `.claude/scripts/context-gc.sh`

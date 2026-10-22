@@ -47,8 +47,8 @@
 │ quick     直接寫 → /verify quick    │  跳過 plan 與 TDD
 │ standard  /plan → /tdd → /verify    │  門檻見 testing-standards
 │ critical  /plan（必要）→ /tdd        │  （只算改到的檔）
-│           → /code-review            │
-│           → /verify pre-pr          │
+│           → /verify pre-pr          │  審查節奏見 rules/task-mode.md
+│           → /pr（把關鏈不可跳過）   │
 └─────────────────────────────────────┘
    ▼
 /verify 通過 → WBS 標 ✅ → plan 歸檔 → 問要不要接下一個任務
@@ -440,4 +440,4 @@ bash scripts/check-counts.sh --tests 356   # 文件計數一致性
 CI（`.github/workflows/template-ci.yml`）會在 push 與 PR 時自動跑這兩項，
 加上 Windows/Git Bash 的回歸測試、shell 與 PowerShell 語法、copy/update-template 沙箱實跑。
 
-529 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
+647 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。

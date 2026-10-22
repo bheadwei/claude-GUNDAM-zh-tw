@@ -33,6 +33,11 @@ description: 對當前程式碼庫狀態執行全面驗證檢查。
 - 顯示未提交的變更
 - 顯示自上次 commit 以來修改的檔案
 
+### 7. 秘密掃描（僅 `pre-pr`／`pre-commit`）
+- 掃這次變更（`git diff` 與未追蹤檔）裡的硬編碼秘密：API key、token、密碼、私鑰、連線字串
+- 檢查清單見 `.claude/rules/security.md` 的「秘密管理」；有找到就列出檔案:行號，結果為 FAIL
+- 其他 profile 不跑，輸出寫 `Secrets: skipped`
+
 ## 輸出
 
 產出簡潔的驗證報告：
@@ -44,7 +49,7 @@ Build:    [OK/FAIL]
 Types:    [OK/X errors]
 Lint:     [OK/X issues]
 Tests:    [X/Y passed, Z% coverage]
-Secrets:  [OK/X found]
+Secrets:  [OK/X found/skipped]
 Logs:     [OK/X console.logs]
 
 Ready for PR: [YES/NO]
@@ -54,16 +59,22 @@ Ready for PR: [YES/NO]
 
 ## Plan 驗收標準比對
 
-若當前 `.current-task` 對應的 plan 存在（`.claude/taskmaster-data/plans/<id>-*.md`），在步驟 1-6 驗證後：
+若當前 `.current-task` 對應的 plan 存在（`.claude/taskmaster-data/plans/<值>.md` 或 `<值>-*.md`，
+值可能是 WBS id 或 `adhoc-…` 檔名主幹），在步驟 1-7 驗證後：
 
 1. 讀取 plan 檔的「驗收標準（整體）」checklist
 2. 逐項比對前面驗證結果：
    - 「測試覆蓋率達門檻」→ 由步驟 4 結果填入，門檻依任務模式（見 `testing-standards` skill）
    - 「所有階段狀態為 ✅」→ 讀 plan frontmatter `status`
-   - 「`/code-review` 無 CRITICAL/HIGH 問題」→ 若未執行，提示使用者執行
+   - 「階段審查無未解的 CRITICAL/HIGH」→ 讀帳本（`<plan 同名>.progress.md`）或 `context/quality/`、
+     `context/security/` 本任務的報告；審查節奏見 `rules/task-mode.md`。**`/verify` 不另派審查**
    - 其他自訂條件 → 呈現給使用者確認
 3. **Plan 檔內的 checklist 同步勾選**（已通過的標 `[x]`）
 4. 若全部 checklist 通過 → 視為整體驗收 PASS
+
+**在 worktree 裡**：`.current-task` 是 worktree 自己那份（不跟主 checkout 共用），
+由派工的第一步寫入（見 `worktree-orchestration` skill 的「派工」）。沒寫就對不到 plan——
+這時在輸出寫明「無 `.current-task`，未比對 plan 驗收」，不要靜默跳過。
 
 **相關規範：** `plan-format` skill
 
@@ -76,7 +87,7 @@ Ready for PR: [YES/NO]
 讀 `.claude/taskmaster-data/.merge-pending`。這份清單由 `post-bash.sh` 在偵測到
 `git merge`／`cherry-pick`／`rebase` 執行時累積（成功、衝突、非零結束都記）。清單非空表示：**有合併結果還沒被驗過**。
 
-清單是空的（或不存在）→ 跳過本節。清單非空時，除了上面的步驟 1-6，**額外做這三件事**：
+清單是空的（或不存在）→ 跳過本節。清單非空時，除了上面的步驟 1-7，**額外做這三件事**：
 
 1. **比對每一個已合併任務的 plan 驗收標準**（**有 plan 才做**）—— 不只當前 `.current-task`。
    平行開發合了 N 個分支就有 N 份 plan，每一份的「驗收標準（整體）」都要過。
@@ -102,16 +113,10 @@ Ready for PR: [YES/NO]
 >
 > 逃生門：`MERGE_GATE=off`（連偵測與閘門一起關）。
 
-## 任務完成銜接
+## 文件同步關卡（不論有沒有進行中任務）
 
-若 `.claude/taskmaster-data/.current-task` 存在（表示有進行中的任務），且驗證結果為 PASS：
-
-### 0a. 合併驗證關卡
-
-見上方「合併驗證關卡（不論有沒有進行中任務）」（唯一來源，勿在此重述）。
-清單非空且未通過 → **不得往下做 0b、不得標 WBS ✅**。
-
-### 0b. 文件同步關卡（**未處理不得標 ✅**）
+> 這一節**不依賴** `.current-task`，理由同上方合併關卡：沒有進行中任務時（合完分支直接
+> `/verify`、ad-hoc 修改）清單一樣會累積，放在「任務完成銜接」底下就永遠不會被問到。
 
 讀 `.claude/taskmaster-data/.doc-impact`。這份清單由 `post-write.sh` 自動累積——
 本任務改到過的「文件會描述的檔案」（API／路由／schema／對外介面／migration／CLI）。
@@ -130,7 +135,7 @@ Ready for PR: [YES/NO]
   我已經自己更新過了
       標記完成，不再詢問
   這次不需要（記錄原因）
-      寫進 plan 的「未同步文件」欄，下次碰到同一批檔案還會再問
+      寫進 plan 的「未同步文件」欄（沒有 plan 就寫在本次輸出），下次碰到同一批檔案還會再問
 ```
 
 - 選第一個 → 用 `Agent` 工具，`subagent_type: "documentation-specialist"`，
@@ -144,6 +149,20 @@ Ready for PR: [YES/NO]
 >
 > 逃生門：環境變數 `DOC_SYNC_GATE=off`（連偵測一起關）。
 
+## 任務完成銜接
+
+若 `.claude/taskmaster-data/.current-task` 存在（表示有進行中的任務），且驗證結果為 PASS：
+
+### 0a. 合併驗證關卡
+
+見上方「合併驗證關卡（不論有沒有進行中任務）」（唯一來源，勿在此重述）。
+清單非空且未通過 → **不得往下做 0b、不得標 WBS ✅**。
+
+### 0b. 文件同步關卡
+
+見上方「文件同步關卡（不論有沒有進行中任務）」（唯一來源，勿在此重述）。
+清單非空且未處理 → **不得標 WBS ✅**。
+
 ### 標記與歸檔
 
 > **在 worktree 裡跑的話：跳過這一整節。**
@@ -155,7 +174,8 @@ Ready for PR: [YES/NO]
 > 各改一次，合併時**必定**衝突——而且相鄰任務各自標 ✅ 的情況下，
 > `merge=union` 會靜默產出重複且狀態矛盾的列（試過，比報衝突更糟）。
 >
-> 所以 worktree 內的 `/verify` 只驗**程式碼**（步驟 1-6 ＋ plan 驗收標準比對），
+> 所以 worktree 內的 `/verify` 只驗**程式碼**（步驟 1-7 ＋ plan 驗收標準比對——
+> 後者需要 worktree 內已寫 `.current-task`，見上方「Plan 驗收標準比對」），
 > 驗完就停，回報「本 worktree 驗證通過，可以合併」。
 > **WBS 與 plan 的歸檔統一在主 checkout、全部合併完成後做一次**——
 > 那是 `commands/worktree.md` 合併迴圈的最後一步。
@@ -163,7 +183,9 @@ Ready for PR: [YES/NO]
 在**主 checkout** 執行時：
 
 1. 將 WBS 該任務狀態更新為 `✅ MM-DD`（完成日；驗證數據**不寫進格子**——
-   它屬於 plan 的驗收或評估報告，WBS 連結欄放 `[報告](…)` 即可）
+   它屬於 plan 的驗收或評估報告，WBS 連結欄放 `[報告](…)` 即可）。
+   **`.current-task` 以 `adhoc-` 開頭 → 跳過這步與下方所有改 WBS 的子步驟**（它不在 WBS 裡；
+   補登與否由「Ad-hoc plan 完成後：補登 WBS」那節問）
 2. 清除 `.current-task`
 3. **Plan 歸檔**（若存在對應 plan 檔）：
    - 將 plan frontmatter 標 `status: "✅ 完成"`、`archived: "YYYY-MM-DD"`
@@ -176,15 +198,20 @@ Ready for PR: [YES/NO]
    - **重算 WBS「現況」區**與總進度（規則見 `.claude/templates/wbs.template.md` 第 3 節，唯一來源）
 4. 用 `AskUserQuestion` 詢問下一步（遵守 `.claude/rules/interactive-qa.md`）：
    - 「繼續下一個任務」(Recommended) — 自動執行 `/task-next` 流程
+   - 「開 PR（`/pr`）」 — 這個分支的工作告一段落時
    - 「查看目前進度」 — 顯示 WBS 狀態摘要
    - 「結束，稍後再繼續」 — 停止
 
-## 里程碑完成時：規格收斂 ＋ 提議歸檔
+   這樣使用者不用手動再跑 `/task-next`，形成 **自動任務接力**，且計畫自動歸檔不佔主目錄。
 
-### 先跑規格收斂（**里程碑是唯一該做完整收斂的時機**）
+## 里程碑完成時：規格收斂 → 提議歸檔
 
-標記任務為 ✅ 且**該任務所屬里程碑全部完成**時，先載入 `spec-convergence` skill
-跑完整檢查（A 漏做 ／ B 範圍蔓延 ／ C 描述失真），再提議歸檔。
+標記任務為 ✅ 後，檢查**該任務所屬的里程碑是否全部完成**
+（所有任務皆為 ✅ 完成 或 ⏭️ 跳過）。若是，依序做兩件事：
+
+### 1. 先跑規格收斂（**里程碑是唯一該做完整收斂的時機**）
+
+載入 `spec-convergence` skill 跑完整檢查（A 漏做 ／ B 範圍蔓延 ／ C 描述失真）。
 
 順序不能反：歸檔會把已完成任務移到 `wbs-archive.md`，收斂檢查需要同時讀兩個檔，
 先歸檔不會壞掉但報告會少掉「這個里程碑做了什麼」的脈絡。
@@ -192,10 +219,9 @@ Ready for PR: [YES/NO]
 > **為什麼是里程碑而不是每個任務**：單一任務很少讓整份規格跑掉，每次都跑只會
 > 變成被忽略的噪音。里程碑是「一批工作完成」的自然邊界，也是客戶會來驗收的時點。
 
-## 里程碑完成時：提議歸檔
+### 2. 再提議歸檔
 
-標記任務為 ✅ 後，檢查**該任務所屬的里程碑是否全部完成**
-（所有任務皆為 ✅ 完成 或 ⏭️ 跳過）。若是，用 `AskUserQuestion` 問：
+用 `AskUserQuestion` 問：
 
 ```
 🎉 里程碑「M1: MVP」全部完成（12 個任務 / 預估 24.5h / 實際 27h）
@@ -225,8 +251,6 @@ Ready for PR: [YES/NO]
 - **補登並順便加後續任務** — 補登後接 `/task-add` 流程
 
 > 不補登會讓 WBS 逐漸偏離實際做過的事，`/task-status` 與 `/time-log` 的統計也會失真。
-
-這樣使用者不用手動再跑 `/task-next`，形成 **自動任務接力**，且計畫自動歸檔不佔主目錄。
 
 ## 參數
 
@@ -260,5 +284,6 @@ $ARGUMENTS 可以是：
 | `.current-task` | 下個任務被誤認為同一個 |
 | `.current-task-mode` | 沿用舊的任務模式（TTL 8h 是機器保底，但不該靠它） |
 | `.doc-impact` ・ `.doc-impact-notified` | 下個任務一開始就被上個任務的文件債擋住 |
+| `.learned-notified` | 下個任務踩坑時不再提醒 `/learn`（`post-bash.sh` 每個任務只提醒一次） |
 | `.pitfall-seen` | 不需清 —— 它由 `session-start.sh` 每個 session 重置 |
 | `.report-expectations.jsonl` | 不需清 —— 由稽核器自己按 deadline 汰除 |

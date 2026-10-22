@@ -24,12 +24,23 @@ isolation: worktree
 1. 檢查 `.claude/coordination/handoffs/` 中 `to: refactor-cleaner` 且 `status: pending` 的交接
 2. 讀取 `.claude/context/quality/` 最新報告，取得已標記的死碼與重複位置（省一次全域掃描）
 
+> worktree 裡的 `context/`、`coordination/` 是開分支當下的快照，之後的報告與交接看不到。
+> 主模型派你時應把 pending 交接的內容貼進 prompt；沒貼就以快照為準，並在報告註明。
+
 ### 結束後（**必須**）
-1. 寫入報告到 `.claude/context/quality/refactor-cleaner-{YYYY-MM-DD-HHMM}.md`：
-   已刪除的項目清單、跳過的項目與原因、每批的 commit hash
-2. **建立 handoff 給 `code-quality-specialist`**（請其確認移除後無回歸、無孤兒引用）
-3. 若移除動到有測試覆蓋的區域，另建 handoff 給 `test-automation-engineer`
-4. 將處理完的 handoff `status` 改為 `completed`
+
+**你寫不到主 checkout**（worktree 中的 subagent 對主 checkout 的寫入會被 Claude Code 擋下），
+而報告與交接必須落在主 checkout 才會被稽核與下一棒看到。所以**不要自己寫檔**，
+把下列兩份**全文**放在最終回應裡，由主模型落檔到主 checkout：
+
+1. **報告**，目標路徑 `.claude/context/quality/refactor-cleaner-{YYYY-MM-DD-HHMM}.md`
+   （格式遵循 `.claude/context/_REPORT_TEMPLATE.md`）：已刪除的項目清單、跳過的項目與原因、
+   每批的 commit hash、worktree 分支名
+2. **handoff 給 `code-quality-specialist`**，目標路徑
+   `.claude/coordination/handoffs/refactor-cleaner-to-code-quality-specialist-{YYYY-MM-DD-HHMM}.md`
+   （格式遵循 `_HANDOFF_TEMPLATE.md`）：請其確認移除後無回歸、無孤兒引用。
+   要不要再補測試由 code-quality-specialist 判斷，不是你
+3. 處理了 `to: refactor-cleaner` 的交接 → 在回應裡列出檔名，由主模型把 `status` 改為 `completed`
 
 ## 核心職責
 
@@ -114,7 +125,7 @@ deadcode ./...                              # Go 未使用程式碼
 
 | 狀態碼 | 什麼時候用 | 主模型會怎麼做 |
 |---|---|---|
-| `DONE` | 交付完成，沒有未解事項 | 收下產出，依你建立的 handoff 啟動下一棒 |
+| `DONE` | 交付完成，沒有未解事項 | 把回應裡的報告與 handoff 落檔到主 checkout → 啟動 code-quality-specialist |
 | `DONE_WITH_CONCERNS` | 完成了，但有你判斷不該私自處理的疑慮 | 先讀疑慮再決定要不要處理 |
 | `NEEDS_CONTEXT` | 缺了你拿不到的資訊（憑證、外部決策、使用者意圖） | 補齊資訊後重新派你 |
 | `BLOCKED` | 你無法完成，且不是靠補資訊能解決的 | 評估阻礙、換方法或換更強的模型 |

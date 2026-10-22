@@ -35,7 +35,7 @@
 | e2e-validation-specialist | `context/e2e/` |
 
 **運作**：Agent 啟動時讀最新報告 + handoffs → 結束時寫新報告 → 需後續處理則建立 handoff。
-**清理**：`bash .claude/scripts/context-gc.sh`
+**清理**：`bash .claude/scripts/context-gc.sh`（每個 agent 留最新 5 份；`decisions/`、`learned/` 不動；規則見腳本檔頭）
 
 ## 4. 持久化系統邊界
 

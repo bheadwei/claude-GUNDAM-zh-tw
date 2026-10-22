@@ -4,7 +4,7 @@ description: 部署入口指令。先跑安全把關（security-infrastructure-a
 
 # 部署
 
-部署是「PR 前把關 → 上線」鏈的最後一棒。本指令是 `deployment-expert` agent 的入口，並依 `agent-orchestration.md` 的部署鏈強制先過安全閘門。
+部署是「PR 前把關 → 上線」鏈的最後一棒。本指令是 `deployment-expert` agent 的入口，並依 `using-taskmaster` skill 路由表「部署、CI/CD、容器、IaC」列的鏈強制先過安全閘門。
 
 ## 流程
 
@@ -52,5 +52,5 @@ agent 會處理：建置/容器化、CI/CD pipeline、IaC、零停機發布策�
 
 - `.claude/agents/deployment-expert.md` — 實際執行者
 - `.claude/agents/security-infrastructure-auditor.md` — 部署前安全把關
-- `.claude/rules/agent-orchestration.md` — 部署鏈：security → deployment
+- `using-taskmaster` skill 路由表「部署、CI/CD、容器、IaC」列 — 部署鏈：security → deployment（唯一來源）
 - `.claude/rules/security.md` — Commit/上線前安全清單

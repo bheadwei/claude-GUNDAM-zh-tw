@@ -7,10 +7,21 @@
 | 模式 | 適用條件 | 流程 |
 |---|---|---|
 | `quick` | ≤ 2 個檔，且**沒有**動到對外介面（API／路由／CLI）或資料結構（schema／migration） | 直接寫 → `/verify quick` |
-| `standard` | 超過 2 個檔 ・ 動到對外介面 ・ 新增功能 ・ 重構 | `/plan` → `/tdd` → `/verify` |
-| `critical` | 金流 ・ 認證／授權邏輯 ・ 安全 ・ migration ・ 核心商業邏輯 | `/plan`（必要）→ `/tdd` → `/code-review` → `/verify pre-pr` |
+| `standard` | 超過 2 個檔 ・ 動到對外介面 ・ 新增功能 ・ 重構 | `/plan`（依門檻，見 `plan-format` skill）→ `/tdd` → `/verify` |
+| `critical` | 金流 ・ 認證／授權邏輯 ・ 安全 ・ migration ・ 核心商業邏輯 | `/plan`（必要）→ `/tdd` → `/verify pre-pr` → `/pr`（把關鏈不可跳過） |
 
 覆蓋率門檻見 `testing-standards` skill（唯一來源，本檔不寫數字）。
+
+## 審查節奏（唯一來源）
+
+| 模式 | 每階段（`/tdd`，審該階段的 diff） | 最後一道 |
+|---|---|---|
+| `quick` | 不審 | 無 |
+| `standard` | `code-quality-specialist` | 無額外審查 |
+| `critical` | `code-quality-specialist` ＋ `security-infrastructure-auditor` | `/pr` 的把關鏈（不可跳過，見 `commands/pr.md` 步驟 2） |
+
+不要再疊一層：每階段已審過，`/verify` 不另派審查；`/code-review` 是 Claude Code 內建 skill，
+需要時手動跑，不是流程的固定一棒。
 
 ## 自動分級啟發式
 
@@ -55,8 +66,8 @@
 
 | 指令 | 行為差異 |
 |---|---|
-| `/plan` | quick 跳過；standard 依門檻（跨 ≥2 檔 或 ≥1h）；critical 一律需要 |
-| `/tdd` | quick 走 Fast Lane（不強制 test-first、不檢查覆蓋率）；standard 標準流程；critical 加 `/code-review` |
+| `/plan` | 門檻見 `plan-format` skill 的「何時不該用 /plan」（唯一來源） |
+| `/tdd` | quick 走 Fast Lane（不強制 test-first、不檢查覆蓋率）；standard／critical 標準流程，每階段審查照上方「審查節奏」 |
 | `/verify` | quick → `verify quick`；standard → `verify full`；critical → `verify pre-pr` |
 
 覆蓋率門檻的唯一來源是 `testing-standards` skill，不在其他地方重述。

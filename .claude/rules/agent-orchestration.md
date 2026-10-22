@@ -32,18 +32,22 @@
 
 ### 哪些 agent 實作了接力
 
-**會寫報告 + 建 handoff（10）**：architect、code-quality-specialist、
-test-automation-engineer、security-infrastructure-auditor、e2e-validation-specialist、
-deployment-expert、refactor-cleaner、ui-builder、debug-investigator、skill-curator
+**會寫報告 + 建 handoff（8）**：architect、code-quality-specialist、
+security-infrastructure-auditor（程式問題由主模型修完才建給 code-quality 的 handoff）、
+e2e-validation-specialist、deployment-expert、ui-builder、debug-investigator、skill-curator
+
+**報告與 handoff 寫在回應裡、由主模型落檔（1）**：refactor-cleaner——它固定跑在 worktree
+（frontmatter `isolation: worktree`），對主 checkout 的寫入會被 Claude Code 擋下。
+主模型把回應裡的兩份全文寫到主 checkout，再啟動 code-quality-specialist
 
 **寫報告、下一棒由主模型接（1）**：planner——計畫寫好後由主模型跑 `/tdd`。
 實作者不是專屬 agent（主模型自己照 `tdd-workflow` skill 做，或派 `general-purpose`
 implementer，見 `subagent-execution`），所以沒有 handoff 對象
 
-**終端節點，不建 handoff（3）**：build-error-resolver（單點修完即止）、
-documentation-specialist、workflow-template-manager
+**終端節點，不建 handoff（4）**：build-error-resolver（單點修完即止）、
+documentation-specialist、workflow-template-manager、test-automation-engineer（只補被點名的缺口，補完鏈結束）
 
-10＋1＋3＝14，第 15 個 `conflict-resolver` **刻意不在名單裡**：它的 tools 沒有 Write，
+8＋1＋1＋4＝14，第 15 個 `conflict-resolver` **刻意不在名單裡**：它的 tools 沒有 Write，
 機制上寫不了報告檔（只在回應裡回 STATUS 碼），列進去會讓稽核每次解衝突都發假警報
 （見 `post-agent-report.sh` 的註解）。**不要把它「補」回來。**
 
@@ -72,6 +76,9 @@ documentation-specialist、workflow-template-manager
   的 `symlinkDirectories` 節（唯一來源）
 - **強制者是 `.claude/hooks/pre-agent-gate.sh`**（唯一來源，理由與事故都在它的訊息裡，
   勿在此重述）。上面這條它驗得出來，而且在這個情境下不採 deny-once
+- **閘門承認的例外**：唯讀 agent 名單（被派時放行、在跑時不計入併行寫入者），以及 agent
+  frontmatter 的 `isolation: worktree`（等同帶了 `isolation: "worktree"`）。
+  名單本身只在 `.claude/hooks/lib/agent-inflight.sh` 的 `AGENT_INFLIGHT_READONLY`（唯一來源，兩道閘門共用），勿在此抄一份
 - **完整程序**：見 `worktree-orchestration` skill（**唯一來源**）——狀態隔離邊界、
   原生 `claude -w`、依相依順序合併、清理判準
 - **入口**：`/task-next` 的平行選項（WBS 驅動）、`/worktree`（臨時隔離）

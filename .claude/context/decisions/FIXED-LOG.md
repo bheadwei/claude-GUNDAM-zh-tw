@@ -11,6 +11,37 @@
 
 ---
 
+### 已修（2026-10-20，流程鏈複查・文件線；hook 線另計）
+
+- ~~ad-hoc plan 是孤兒~~ → `/plan` 持久化後由主模型寫 `.current-task`（ad-hoc 寫檔名主幹，WBS 走 `/task-next`「狀態同步」）；`/tdd`／`/verify` 改搜 `<值>.md` 或 `<值>-*.md`；`/verify` 遇 `adhoc-` 不標 WBS；`/time-log` 不把 `adhoc-…` 當 WBS 編號
+- ~~critical 到 `/pr` 時把關鏈形同可跳過~~ → `/verify` 已清掉模式檔，`/pr` 改看本分支涵蓋的 plan（含 `plans/archive/`）的 `mode: critical`
+- ~~plan 門檻、審查節奏各寫四處~~ → plan 門檻唯一來源 `plan-format`「何時不該用 /plan」；審查節奏唯一來源 `rules/task-mode.md`「審查節奏」。刪 `/tdd` critical 的「每階段 `/code-review`」（`/code-review` 是 Claude Code 內建，不是固定一棒）
+- ~~文件同步關卡掛在「有進行中任務」底下~~ → `/verify` 搬成與合併關卡同級的獨立一節
+- ~~refactor-cleaner 在 worktree 寫報告與 handoff~~ → 寫不到主 checkout，改為全文放回應、主模型落檔；test-automation-engineer 改列終端節點（接力分類 8＋1＋1＋4）
+- ~~`context-gc.sh` 會把 ADR／FIXED-LOG／踩坑紀錄歸檔~~ → `decisions/`、`learned/` 跳過；其餘依 agent 前綴分組、依 mtime 各留 N 份
+- ~~`using-taskmaster` 常駐兩段與 `post-write.sh` 訊息、`/tdd` 重複~~ → 改成一行指標
+
+### 已修（2026-10-20，流程鏈複查・hook 線）
+
+- ~~in-flight 計數遇一行壞紀錄就歸零~~ → `lib/agent-inflight.sh` 改逐行容錯（`jq -R` + `fromjson?`）。真實 log 第 992 行被併發寫入截斷，`jq -s` 整檔 parse error，平行 agent 閘門與分支切換閘門**一起靜默失效**（與 2026-09-11 同一個結果）
+- ~~帶隔離與唯讀 agent 也被算成 in-flight~~ → 派工參數 `isolation`（`agent-monitor.sh` 記進 `agent_start`）、定義檔 frontmatter `isolation: worktree`（refactor-cleaner）、唯讀名單（Explore／Plan／claude-code-guide／planner／architect／workflow-template-manager，`general-purpose` 絕不進名單）都不算；要派的是後兩類也直接放行。依據與邊界在 `pre-agent-gate.sh` 檔頭
+- ~~`pre-tool-use.sh` 在 Windows 逼近 timeout，超時＝放行~~ → 指令不含 `git` 就跳過四道 git 閘門、切段只做一次（`CMD_SEGS`）、`cmd_match`／路徑正規化／log 時間改 bash 內建、三次 jq 合成一次（`@sh`）、git 檢查延到命中後；timeout 10→30（**不是**超時即擋）。實測（沙盒 clone，3 次平均）：`git checkout -b` 6.4s→2.5s、`git status` 9.5s→1.3s、`ls -la` 7.0s→0.7s
+- ~~PowerShell 工具完全繞過 git 閘門~~ → `pre-tool-use.sh` 的 git 閘門認 `Bash|PowerShell`（裸 cd 仍只管 Bash）；`settings.json` 的 PreToolUse 與 post-bash 兩個 matcher 加 `PowerShell`
+- ~~判級訊息寫 `$CLAUDE_PROJECT_DIR/…` 路徑~~ → 寫展開後的 `$MODE_FILE`，worktree 裡指向 worktree 那份
+- ~~TTL 過期或在新 worktree 裡要重新判級（變相降級）~~ → 依契約從 `.current-task` 對應 plan 的 `mode:` 還原並告知；讀不到才 deny
+- ~~`merge-gate.sh` 子字串比對誤擋~~ → 改用 `cmd_segments` + `cmd_git_subcmd`，`--abort` 逐段判斷。`git merge-base`、`git log | grep "git merge"`、commit 訊息提到 git merge 不再被擋
+- ~~合併沒發生也記待驗證~~ → 無衝突時看 `git reflog -1`，最新一筆不是 30 分鐘內的 merge／cherry-pick／rebase 就不記（成功事件也查：`git merge 打錯; echo done`）；讀不到 reflog 照舊記。逃生門 `MERGE_REFLOG_CHECK=off`
+- ~~`branch -D` 看 HEAD 的 tag、`reset --hard` 沒帶目標也要 tag~~ → `branch -D <b>` 看 `<b>` 的 tip、建議指令改 `git tag backup/<b>-… <b>`；無目標的 `reset --hard` 工作區乾淨放行、有改動則講明 tag 救不到未 commit 的改動
+- ~~意圖路由誤判~~ → pip／uv／test／bug 加單字邊界、金流比對前去掉 `git checkout`、`permission` 改弱訊號、裸 `token` 不再算認證邏輯字
+- ~~報告稽核催還在跑的 agent~~ → 期望記 `agent_id`，jsonl 沒有它的 `agent_complete` 就先不催（上限 4h）；refactor-cleaner 改提醒主模型從回應落檔
+- ~~踩坑偵測把不相干的失敗串成一個坑~~ → streak 以指令前 40 字為鍵，換指令就歸零；開場提醒改「收尾時處理」
+- ~~坑閘門的 `files:` 樣式被 glob 展開~~ → 外包 `set -f`
+- ~~agent 建的 handoff 要等下一次派工才被注入~~ → 掃描抽成 `lib/handoff-scan.sh`，也接到 `user-prompt-submit.sh`（同格式、同上限；不接 SubagentStop）
+- ~~新 session 不知道有做到一半的任務~~ → `session-start.sh` 注入「進行中任務 X（mode Y），用 `/tdd` 接續」＋最新 session 存檔路徑
+- ~~worktree 的文件債合併時遺失~~ → `post-bash.sh` 合併成功時以 `git diff --name-only ORIG_HEAD HEAD` 套 `lib/doc-impact.sh`（與 `post-write.sh` 共用）補進該 checkout 的 `.doc-impact`
+- ~~`tr '\' '/'` 沒跳脫、坑閘門註解說 PreToolUse 不支援 additionalContext~~ → 改 bash 內建替換；註解更正（坑閘門刻意維持 deny-once 的理由一併寫明）
+- ~~（2026-10-21 審查回歸）`branch -D "x"`／`$B`／`$(…)` 整個放行、`merge --squash` 不記待驗證、reflog 濾掉時跳過失敗計數、`doc-impact` 的 `*test*` 誤排 `latest/` 等路徑~~ → 分支名非字面值退回看 HEAD；reflog 檢查只套失敗事件（`; echo done` 改回偏多記）、濾掉時只跳過記錄；測試排除錨定目錄／檔名邊界。另把唯讀名單出處改指 `lib/agent-inflight.sh`、`/plan` 門檻的三份複本改成指向 `plan-format`
+
 ### 已修（2026-09-11）
 
 - ~~`.suggest-mode` 讀錯 root（原記載為 `pre-agent-gate.sh` 一支）~~ → **實際是三支**：

@@ -121,8 +121,8 @@ ls -t .claude/context/quality/*.md | head -5
 # 查看待處理交接
 grep -l "status: pending" .claude/coordination/handoffs/*.md
 
-# 清理舊報告
-bash .claude/scripts/context-gc.sh
+# 清理舊報告（每個 agent 留最新 5 份；decisions/、learned/ 不動）
+bash .claude/scripts/context-gc.sh --dry-run
 ```
 
 詳見 `guides/MECHANISMS.md`。
