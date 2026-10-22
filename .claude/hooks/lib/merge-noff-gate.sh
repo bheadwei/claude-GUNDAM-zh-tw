@@ -36,7 +36,7 @@
 
 # 指令切段一律走共用實作。子字串比對會把 `git merge-base --is-ancestor`（唯讀查詢）
 # 與文件內文當成真的合併——原因與取捨都寫在 cmd-segments.sh 檔頭。
-source "$(dirname "${BASH_SOURCE[0]}")/cmd-segments.sh" 2>/dev/null || true
+declare -F cmd_segments >/dev/null 2>&1 || source "${BASH_SOURCE[0]%/*}/cmd-segments.sh" 2>/dev/null || true
 
 # _mng_is_sync_ref <ref> <remotes>
 # 遠端 ref 或同步用 ref → 0（放行）
@@ -62,16 +62,23 @@ merge_noff_gate() {
     command -v jq >/dev/null 2>&1 || return 0
 
     local segs
-    segs=$(cmd_segments "$cmd")
+    segs=${CMD_SEGS-$(cmd_segments "$cmd")}
     [ -n "$segs" ] || return 0
 
-    # 遠端名稱清單。拿不到 git／不是 repo 時退回慣例值（方向偏放行）。
-    local remotes="origin upstream"
-    if command -v git >/dev/null 2>&1 && [ -n "$root" ]; then
-        local rl
-        rl=$(git -C "$root" remote 2>/dev/null | tr '\n' ' ')
-        [ -n "$rl" ] && remotes="$remotes $rl"
-    fi
+    # 遠端名稱清單：**用到時才問 git**（_mng_remotes）。絕大多數指令不是 merge，
+    # 每次都先開一個 git 行程是白花的 ~200ms，而 hook 的 timeout 是硬上限。
+    # 拿不到 git／不是 repo 時退回慣例值（方向偏放行）。
+    local remotes="" remotes_loaded=0
+    _mng_remotes() {
+        [ "$remotes_loaded" -eq 1 ] && return 0
+        remotes_loaded=1
+        remotes="origin upstream"
+        if command -v git >/dev/null 2>&1 && [ -n "$root" ]; then
+            local rl
+            rl=$(git -C "$root" remote 2>/dev/null | tr '\n' ' ')
+            [ -n "$rl" ] && remotes="$remotes $rl"
+        fi
+    }
 
     # token 切分用的是 shell word splitting，關掉 glob 展開：指令裡的 `*`
     # 不該被當成當前目錄的檔名展開成一串假 ref。
@@ -81,6 +88,8 @@ merge_noff_gate() {
     local seg hit="" hit_ref=""
     while IFS= read -r seg; do
         [ -n "$seg" ] || continue
+        # 先用內建比對篩掉不相干的段，省下面那個 sed 行程
+        cmd_match "$seg" '[[:space:]]merge([[:space:]]|$)' || continue
 
         # 先把引號字串換成**單一佔位 token** 再做所有比對：`-m "改用 --no-ff"`
         # 的訊息內容既不該被當成旗標、也不該被當成 ref。
@@ -127,6 +136,7 @@ merge_noff_gate() {
         [ -n "${refs// /}" ] || continue
 
         local r local_ref=""
+        _mng_remotes
         for r in $refs; do
             if ! _mng_is_sync_ref "$r" "$remotes"; then local_ref="$r"; break; fi
         done

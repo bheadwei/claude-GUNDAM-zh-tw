@@ -55,8 +55,8 @@
 
 # 指令切段一律走共用實作。子字串比對會把文件內文、以及 `git checkout -- file`
 # 這種還原檔案的用法誤判——原因與取捨都寫在 cmd-segments.sh 檔頭。
-source "$(dirname "${BASH_SOURCE[0]}")/cmd-segments.sh" 2>/dev/null || true
-source "$(dirname "${BASH_SOURCE[0]}")/agent-inflight.sh" 2>/dev/null || true
+declare -F cmd_segments >/dev/null 2>&1 || source "${BASH_SOURCE[0]%/*}/cmd-segments.sh" 2>/dev/null || true
+declare -F agent_inflight_types >/dev/null 2>&1 || source "${BASH_SOURCE[0]%/*}/agent-inflight.sh" 2>/dev/null || true
 
 # _bsg_default_branch <root> —— 印出預設分支名；問不出來印空字串
 _bsg_default_branch() {
@@ -91,10 +91,11 @@ branch_switch_gate() {
     command -v jq  >/dev/null 2>&1 || return 0
     command -v git >/dev/null 2>&1 || return 0
     [ -n "$root" ] || return 0
-    git -C "$root" rev-parse --git-dir >/dev/null 2>&1 || return 0
 
+    # 切段結果由 pre-tool-use.sh 算好放在 CMD_SEGS（見 cmd-segments.sh 檔頭）。
+    # 「是不是 repo」這種要開 git 的檢查延到確定命中之後——絕大多數指令不是開分支。
     local segs
-    segs=$(cmd_segments "$cmd")
+    segs=${CMD_SEGS-$(cmd_segments "$cmd")}
     [ -n "$segs" ] || return 0
 
     # token 切分用 shell word splitting，關掉 glob：指令裡的 `*` 不該被展開成檔名
@@ -104,6 +105,8 @@ branch_switch_gate() {
     local seg hit="" new_branch="" start_point=""
     while IFS= read -r seg; do
         [ -n "$seg" ] || continue
+        # 先用內建比對篩掉不相干的段，省下面那個 sed 行程
+        cmd_match "$seg" '[[:space:]](checkout|switch)([[:space:]]|$)' || continue
 
         # 引號字串換成單一佔位 token，理由同 merge-noff-gate.sh：
         # `git commit -m "改用 git checkout -b"` 的訊息內容不該被當成旗標或分支名
@@ -143,6 +146,7 @@ branch_switch_gate() {
 
     [ "$restore_f" -eq 1 ] && set +f
     [ -n "$hit" ] || return 0
+    git -C "$root" rev-parse --git-dir >/dev/null 2>&1 || return 0
 
     # detached HEAD → 判斷不了「你站在誰的分支上」，放行
     local branch

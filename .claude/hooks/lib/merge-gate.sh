@@ -20,6 +20,15 @@
 # 用法（pre-tool-use.sh 內，確定是 Bash 工具且取得 COMMAND 之後）：
 #   source "$(dirname "${BASH_SOURCE[0]}")/lib/merge-gate.sh"
 #   merge_gate "$COMMAND" "$DATA_DIR"      # 命中時自行輸出 deny JSON 並 exit 0
+#
+# 指令判斷走 lib/cmd-segments.sh（切段 + cmd_git_subcmd），寫法照 post-bash.sh。
+# 這裡**曾經刻意保留**子字串比對（理由是「只在 .merge-pending 非空時才比對，誤判成本低」）。
+# 2026-10-20 複查推翻了那個理由：待驗證期間正是最常查歷史、寫說明的時候，而子字串
+# 比對在那段期間擋下了 `git merge-base HEAD main`、`git log | grep "git merge"`、
+# `git commit -m "docs: git merge 說明"`——三個都是唯讀或與合併無關的指令。
+# 而且 `--abort` 以前是看**整條**指令：`git merge --abort && git merge feat/b` 會整條放行。
+
+declare -F cmd_segments >/dev/null 2>&1 || source "${BASH_SOURCE[0]%/*}/cmd-segments.sh" 2>/dev/null || true
 
 merge_gate() {
     local cmd="$1" data_dir="$2"
@@ -29,19 +38,30 @@ merge_gate() {
     local pending="$data_dir/.merge-pending"
     [ -s "$pending" ] || return 0
 
-    # 只擋「會產生新合併」的指令。cherry-pick 與 rebase 同樣把別的分支的
+    # 缺共用切段函式就放行 —— 與本模板其他閘門「判斷不了就放行」一致
+    declare -F cmd_segments >/dev/null 2>&1 || return 0
+
+    # 只擋「會產生新合併」的指令段。cherry-pick 與 rebase 同樣把別的分支的
     # 改動帶進來，未驗證前一樣不該疊上去。
-    case "$cmd" in
-        *"git merge"*|*"git cherry-pick"*|*"git rebase"*) ;;
-        *) return 0 ;;
-    esac
-    # --abort / --continue / --skip 是在收拾當前狀態，不是新合併，放行
-    case "$cmd" in
-        *--abort*|*--continue*|*--skip*|*--quit*) return 0 ;;
-    esac
+    # --abort / --continue / --skip / --quit 是在收拾當前狀態，不是新合併——**逐段**判斷，
+    # 同一條指令裡後面再接一個真的合併照樣擋。
+    local segs seg hit=0
+    segs=${CMD_SEGS-$(cmd_segments "$cmd")}
+    [ -n "$segs" ] || return 0
+    while IFS= read -r seg; do
+        [ -n "$seg" ] || continue
+        case "$(cmd_git_subcmd "$seg")" in
+            merge|cherry-pick|rebase) ;;
+            *) continue ;;
+        esac
+        cmd_match "$seg" '[[:space:]]--(abort|continue|skip|quit)([[:space:]]|$)' && continue
+        hit=1; break
+    done <<< "$segs"
+    [ "$hit" -eq 1 ] || return 0
 
     local n first
-    n=$(grep -c . "$pending" 2>/dev/null || echo 0)
+    n=$(grep -c . "$pending" 2>/dev/null)
+    case "$n" in ''|*[!0-9]*) n=0 ;; esac
     first=$(head -1 "$pending" 2>/dev/null)
 
     command -v jq >/dev/null 2>&1 || return 0

@@ -63,6 +63,30 @@
 # 完整教訓見 context/learned/2026-09-16-concurrent-read-write-not-file-overlap.md，
 # 判準的文字版見 rules/agent-orchestration.md「安全平行」。
 #
+# ---------------------------------------------------------------- 不必擋的兩類
+#
+# 2026-10-20 補。原本只認派工參數的 `isolation`，於是兩類**根本不會撞**的 agent 也被擋，
+# 而且它們在跑的時候還把別人算成「已有 N 個在跑」：
+#
+#   ① **定義檔自帶隔離**：frontmatter 寫 `isolation: worktree` 的（refactor-cleaner）。
+#      派工時不必再帶參數，Claude Code 照樣替它開 worktree。本閘門讀
+#      `$MAIN_CLAUDE/agents/<subagent_type>.md` 的**第一個** frontmatter 區塊判斷
+#      （實作在 lib/agent-inflight.sh 的 agent_def_isolated，in-flight 計數用同一支）。
+#
+#   ② **唯讀名單**（READONLY_AGENTS，名單本身在 lib/agent-inflight.sh 的
+#      AGENT_INFLIGHT_READONLY，兩道閘門共用）：
+#        Explore Plan claude-code-guide planner architect workflow-template-manager
+#      依據：它們的產出是「讀程式碼、寫一份自己的文件」——planner 寫 plan、architect 寫
+#      ADR／決策報告、workflow-template-manager 寫流程文件，不碰產品碼也不跑測試。
+#      要派的是名單內的 → 放行；在跑的名單內 agent 不算進 in-flight、也不進讀寫衝突掃描。
+#
+#      **邊界（不要假裝這是機器保證）**：planner 有 Write／Edit、Explore 有 Bash——
+#      名單成立靠的是它們**定義裡的自我約束**，不是工具集。哪天某個名單內 agent 的
+#      定義開始叫它改產品碼或跑測試，它就得移出名單。
+#      **general-purpose 絕不能進名單**：它什麼都能做，prompt 寫什麼它就做什麼，
+#      「這次只是叫它讀」是派工的人的自律，正是本閘門要取代的東西。
+#      掃描／驗證類（下方 SCAN_AGENTS）也不能進：它們讀整個 repo，是讀寫衝突的那一方。
+#
 # 同一則訊息連派多個時擋在第幾個：實測（另一個專案的 3 個 agent 批次）
 # 第 1 個的 PostToolUse 早於第 2 個的 PreToolUse 5 秒，所以**第 2 個會被擋**；
 # 但第 3 個的 PreToolUse 早於第 2 個的 PostToolUse，可見這條鏈不是嚴格交錯的。
@@ -115,13 +139,23 @@ case "$ISOLATION" in
 esac
 
 # 算 in-flight：start 過但沒有對應 complete 的 agent_id。
-# 實作與所有取捨（60 分鐘窗、agent_id 去重、缺 agent_type 印 `-`）都在
-# lib/agent-inflight.sh —— branch-switch-gate.sh 需要**同一個答案**，
-# 各寫各的就是 cmd-segments.sh 檔頭講的那種「同一個坑修兩次」。
+# 實作與所有取捨（逐行容錯、60 分鐘窗、agent_id 去重、缺 agent_type 印 `-`、
+# 排除帶隔離與唯讀名單）都在 lib/agent-inflight.sh —— branch-switch-gate.sh 需要
+# **同一個答案**，各寫各的就是 cmd-segments.sh 檔頭講的那種「同一個坑修兩次」。
 #
 # 要的是**每個 in-flight agent 的 agent_type，一行一個**（不是只有筆數）：
 # 下面的讀寫衝突判斷需要知道在跑的是誰。
 source "$(dirname "${BASH_SOURCE[0]}")/lib/agent-inflight.sh" 2>/dev/null || true
+
+# 定義檔自帶隔離、或在唯讀名單內 → 放行（理由與邊界見檔頭「不必擋的兩類」）
+if declare -F agent_def_isolated >/dev/null 2>&1 \
+   && agent_def_isolated "$MAIN_CLAUDE/agents" "$SUBAGENT"; then
+    exit 0
+fi
+READONLY_AGENTS="${AGENT_INFLIGHT_READONLY:-}"
+case " $READONLY_AGENTS " in
+    *" $SUBAGENT "*) exit 0 ;;
+esac
 
 INFLIGHT=0
 INFLIGHT_TYPES=""

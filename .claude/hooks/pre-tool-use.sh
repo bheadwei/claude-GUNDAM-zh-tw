@@ -4,11 +4,12 @@
 # 這是模板裡「唯一能真正攔截」的位置。它負責把 task-mode.md 的「入口自動分級」
 # 從散文變成機器強制：
 #
-#   1. 寫入程式碼檔前，若 .current-task-mode 不存在 → deny，要求主模型先判級再重試
+#   1. 寫入程式碼檔前，若 .current-task-mode 不存在 → 先從進行中任務的 plan（`mode:`）還原；
+#      還原不了才 deny，要求主模型先判級再重試
 #   2. TTL 過期自動清除 —— 解掉「/verify 沒清 → 判級永久不觸發」的互鎖
 #   3. 坑閘門 —— 要寫的檔案在 context/learned/ 有紀錄時擋一次，把教訓貼給模型
 #   4. 裸 cd 偵測（Bash）—— 取代已移除的 rules/bash-cwd.md，改由機器強制
-#   5. Bash 的四道 lib 閘門：merge-gate（上一個合併未驗證前不得再合併）、
+#   5. Bash／PowerShell 的四道 lib 閘門：merge-gate（上一個合併未驗證前不得再合併）、
 #      branch-switch-gate（站在 topic 分支上不得直接開新分支）、
 #      merge-noff-gate（合併本地 topic 分支必須帶 --no-ff）、
 #      git-backup-gate（destructive 操作前 HEAD 必須有 backup/* tag 指著）
@@ -32,7 +33,8 @@ set -u
 INPUT=$(cat)
 
 # worktree 感知：任務模式等短命旗標跟著 worktree，坑紀錄與 log 留在主 checkout
-source "$(dirname "${BASH_SOURCE[0]}")/lib/resolve-roots.sh" 2>/dev/null || true
+HOOK_HOME="${BASH_SOURCE[0]%/*}"; [ "$HOOK_HOME" = "${BASH_SOURCE[0]}" ] && HOOK_HOME=.   # 不開 dirname 行程（理由見 git 閘門段）
+source "$HOOK_HOME/lib/resolve-roots.sh" 2>/dev/null || true
 if declare -F resolve_roots >/dev/null 2>&1; then
     resolve_roots "$INPUT"
 else
@@ -47,10 +49,11 @@ MODE_FILE="$DATA_DIR/.current-task-mode"
 LEARNED_ROOT="$MAIN_CLAUDE"        # 坑紀錄：跨 worktree 共享
 TTL_HOURS="${TASKMODE_TTL_HOURS:-8}"
 
-mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null || true
+[ -d "$CLAUDE_DIR/logs" ] || mkdir -p "$CLAUDE_DIR/logs" 2>/dev/null || true
 
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] pre-tool${IN_WORKTREE:+[wt]}: $*" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
+    printf -v _ts '%(%Y-%m-%d %H:%M:%S)T' -1
+    echo "[$_ts] pre-tool${IN_WORKTREE:+[wt]}: $*" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
 }
 
 # jq 不可用 → 只 log 不攔（避免因環境缺依賴而擋住所有寫入）
@@ -59,9 +62,17 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 0
 fi
 
-TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // "unknown"')
-FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // ""')
-COMMAND=$(echo "$INPUT" | jq -r '.tool_input.command // ""')
+# 一次 jq 取三個欄位。用 `@sh` 而不是 `@tsv`：指令常是多行（heredoc），@tsv 會把換行
+# 轉義成 `\n`，還得再還原一次；@sh 產生的是可直接 eval 的單引號字串，內容原樣保留。
+# Git Bash 的 jq 會把輸出（含字串內的換行）寫成 CRLF，所以 eval 前先把 \r 全拿掉——
+# 以前三次 `$(jq -r …)` 拿到的指令本來就帶著這些 \r，拿掉不會改變任何閘門的判斷。
+# 為什麼要省這兩次 jq：這台機器開一個行程 ~170ms，而本 hook 的 timeout 是硬上限，
+# **超時等於放行**（見 settings.json 的 timeout 與本檔「Bash：git 閘門」段）。
+TOOL_NAME="unknown"; FILE_PATH=""; COMMAND=""
+_fields=$(printf '%s' "$INPUT" | jq -r '@sh "TOOL_NAME=\(.tool_name // "unknown") FILE_PATH=\(.tool_input.file_path // "") COMMAND=\(.tool_input.command // "")"' 2>/dev/null) || _fields=""
+_fields="${_fields//$'\r'/}"
+[ -n "$_fields" ] && eval "$_fields"
+unset _fields
 
 log "$TOOL_NAME ${FILE_PATH:-${COMMAND:0:60}}"
 
@@ -92,13 +103,24 @@ deny() {
 }
 
 # ============================================================================
-# Bash：裸 cd 偵測
+# Bash／PowerShell：裸 cd 偵測（只管 Bash）＋ 四道 git 閘門（兩者都管）
+#
+# PowerShell 工具（Windows 沒有 Git Bash 時的 shell，tool_name 是 `PowerShell`、
+# 指令同樣在 tool_input.command）以前完全不經過這裡——git 閘門只認 Bash，
+# 換個工具打同一條 `git reset --hard` 就繞過了。裸 cd 檢查維持只管 Bash：
+# 它擋的是 Bash tool 跨呼叫保留 CWD 這個特性，PowerShell 的 Set-Location 語法也不同。
+# settings.json 的 PreToolUse matcher 要同步含 PowerShell，否則這段改了也不會被呼叫。
 # ============================================================================
-if [ "$TOOL_NAME" = "Bash" ] && [ -n "$COMMAND" ]; then
+case "$TOOL_NAME" in Bash|PowerShell) IS_SHELL=1 ;; *) IS_SHELL=0 ;; esac
+if [ "$IS_SHELL" -eq 1 ] && [ -n "$COMMAND" ]; then
     # 只擋「以 cd 開頭且整條指令沒有用 subshell/&& 收尾」的情況。
     # 允許：(cd x && y)、cd x && y、cd "$VAR" && y
-    if printf '%s' "$COMMAND" | grep -qE '^[[:space:]]*cd[[:space:]]' \
-       && ! printf '%s' "$COMMAND" | grep -qE '&&|;'; then
+    # 用內建 `[[ =~ ]]` 而不是開 grep：理由見下方 git 閘門段（每個行程 ~170ms）。
+    # 任何一行以 cd 開頭都算（與以前逐行的 grep 同義）
+    _cd_re=$'(^|\n)[[:space:]]*cd[[:space:]]'
+    if [ "$TOOL_NAME" = "Bash" ] \
+       && [[ $COMMAND =~ $_cd_re ]] \
+       && ! [[ $COMMAND == *'&&'* || $COMMAND == *';'* ]]; then
         log "bare cd blocked: ${COMMAND:0:80}"
         deny "偵測到裸 cd —— Bash tool 的 CWD 會跨呼叫持續存在，這會污染後續所有相對路徑指令。
 
@@ -110,45 +132,66 @@ if [ "$TOOL_NAME" = "Bash" ] && [ -n "$COMMAND" ]; then
 若確實要長駐該目錄（使用者明確要求），設 TASKMODE_GATE=off 後重試。"
     fi
 
-    # 合併閘門：上一次合併未經 /verify 前，不得再合併下一個。
-    # 拆成 lib 是照 CLAUDE.md 的提醒——本檔已是最複雜的一支。
-    source "$(dirname "${BASH_SOURCE[0]}")/lib/merge-gate.sh" 2>/dev/null || true
-    if declare -F merge_gate >/dev/null 2>&1; then
-        merge_gate "$COMMAND" "$DATA_DIR"
+    # ---- 四道 git 閘門 ----
+    #
+    # 效能是這段的正確性問題，不是優化：Windows 上每開一個行程 ~170ms，四道閘門
+    # 各自把指令切段一次（每次 6 個行程）再各問幾次 git，`git checkout -b` 實測
+    # 12～15 秒，超過當時 10 秒的 timeout——**hook 超時，Claude Code 就放行那個工具呼叫**，
+    # 閘門等於不存在。所以：
+    #   ① 指令裡連 `git` 三個字都沒有 → 四道全跳過（絕大多數 Bash 呼叫）
+    #   ② 切段只做一次，放在 CMD_SEGS 給四道 lib 共用（見 cmd-segments.sh 檔頭）
+    #   ③ settings.json 的 timeout 調到 30 秒當安全邊際。**不要**改成「超時即擋」：
+    #      機器一慢就擋下所有 Bash，比漏擋一次 git 更糟
+    case "$COMMAND" in *git*) _git_gates=1 ;; *) _git_gates=0 ;; esac
+    if [ "$_git_gates" -eq 1 ]; then
+        source "$HOOK_HOME/lib/cmd-segments.sh" 2>/dev/null || true
+        if declare -F cmd_segments >/dev/null 2>&1; then
+            CMD_SEGS=$(cmd_segments "$COMMAND")
+            # 沒有任何真的會執行的 git 段（例：`grep -rn "git merge" .`）→ 四道都不會命中
+            [ -n "$CMD_SEGS" ] || _git_gates=0
+        fi
     fi
+    if [ "$_git_gates" -eq 1 ]; then
+        # 合併閘門：上一次合併未經 /verify 前，不得再合併下一個。
+        # 拆成 lib 是照 CLAUDE.md 的提醒——本檔已是最複雜的一支。
+        source "$HOOK_HOME/lib/merge-gate.sh" 2>/dev/null || true
+        if declare -F merge_gate >/dev/null 2>&1; then
+            merge_gate "$COMMAND" "$DATA_DIR"
+        fi
 
-    # 分支切換閘門：站在 topic 分支上不得直接 `git checkout -b`／`git switch -c`。
-    # 排在 merge-gate **之後**——「上一個合併還沒驗證」是整批工作卡在半空中，那件事
-    # 該先講完。
-    # 排在另外兩道 git 閘門**之前**：它們管的是 merge／reset／push／rebase，跟
-    # checkout／switch 不會是同一段指令，所以純看命中的話順序無所謂。真正會撞在
-    # 一起的是 `git checkout -b x && git reset --hard HEAD~1` 這種串接——那時該先
-    # 講「這條分支根本不該在這裡開」，先收到「去打 backup tag」等於在指導一個
-    # 不該發生的操作怎麼做得更安全。
-    source "$(dirname "${BASH_SOURCE[0]}")/lib/branch-switch-gate.sh" 2>/dev/null || true
-    if declare -F branch_switch_gate >/dev/null 2>&1; then
-        branch_switch_gate "$COMMAND" "$WORK_ROOT" "$MAIN_CLAUDE" "$DATA_DIR"
-    fi
+        # 分支切換閘門：站在 topic 分支上不得直接 `git checkout -b`／`git switch -c`。
+        # 排在 merge-gate **之後**——「上一個合併還沒驗證」是整批工作卡在半空中，那件事
+        # 該先講完。
+        # 排在另外兩道 git 閘門**之前**：它們管的是 merge／reset／push／rebase，跟
+        # checkout／switch 不會是同一段指令，所以純看命中的話順序無所謂。真正會撞在
+        # 一起的是 `git checkout -b x && git reset --hard HEAD~1` 這種串接——那時該先
+        # 講「這條分支根本不該在這裡開」，先收到「去打 backup tag」等於在指導一個
+        # 不該發生的操作怎麼做得更安全。
+        source "$HOOK_HOME/lib/branch-switch-gate.sh" 2>/dev/null || true
+        if declare -F branch_switch_gate >/dev/null 2>&1; then
+            branch_switch_gate "$COMMAND" "$WORK_ROOT" "$MAIN_CLAUDE" "$DATA_DIR"
+        fi
 
-    # --no-ff 閘門：合併本地 topic 分支必須留下 merge commit。
-    # 排在 merge-gate **之後**——「上一個合併還沒驗證」是**狀態**問題，那一批
-    # 工作正卡在半空中，該先講；`--no-ff` 只是這一條指令的形狀，補上旗標重打
-    # 同一條就過，晚一步講不會損失任何東西。
-    # 排在 git-backup-gate **之前**——`git merge` 不是 backup 閘門管的四種
-    # destructive 指令，兩者實際上不會撞在同一條指令上，但把「同類的合併語意」
-    # 放在一起讀比較清楚。
-    source "$(dirname "${BASH_SOURCE[0]}")/lib/merge-noff-gate.sh" 2>/dev/null || true
-    if declare -F merge_noff_gate >/dev/null 2>&1; then
-        merge_noff_gate "$COMMAND" "$WORK_ROOT"
-    fi
+        # --no-ff 閘門：合併本地 topic 分支必須留下 merge commit。
+        # 排在 merge-gate **之後**——「上一個合併還沒驗證」是**狀態**問題，那一批
+        # 工作正卡在半空中，該先講；`--no-ff` 只是這一條指令的形狀，補上旗標重打
+        # 同一條就過，晚一步講不會損失任何東西。
+        # 排在 git-backup-gate **之前**——`git merge` 不是 backup 閘門管的四種
+        # destructive 指令，兩者實際上不會撞在同一條指令上，但把「同類的合併語意」
+        # 放在一起讀比較清楚。
+        source "$HOOK_HOME/lib/merge-noff-gate.sh" 2>/dev/null || true
+        if declare -F merge_noff_gate >/dev/null 2>&1; then
+            merge_noff_gate "$COMMAND" "$WORK_ROOT"
+        fi
 
-    # backup tag 閘門：destructive 操作前 HEAD 必須有 backup/* tag 指著。
-    # 排在 merge-gate **之後**——待驗證的合併還沒處理完的話，該先講那件事；
-    # 而 `git rebase` 兩道閘門都攔，先收到「上一個合併沒驗」比先收到
-    # 「去打 tag」更接近使用者當下該做的事。
-    source "$(dirname "${BASH_SOURCE[0]}")/lib/git-backup-gate.sh" 2>/dev/null || true
-    if declare -F git_backup_gate >/dev/null 2>&1; then
-        git_backup_gate "$COMMAND" "$WORK_ROOT"
+        # backup tag 閘門：destructive 操作前 HEAD 必須有 backup/* tag 指著。
+        # 排在 merge-gate **之後**——待驗證的合併還沒處理完的話，該先講那件事；
+        # 而 `git rebase` 兩道閘門都攔，先收到「上一個合併沒驗」比先收到
+        # 「去打 tag」更接近使用者當下該做的事。
+        source "$HOOK_HOME/lib/git-backup-gate.sh" 2>/dev/null || true
+        if declare -F git_backup_gate >/dev/null 2>&1; then
+            git_backup_gate "$COMMAND" "$WORK_ROOT"
+        fi
     fi
 fi
 
@@ -177,8 +220,9 @@ fi
 # 任務模式閘門：只攔「程式碼檔」
 # ============================================================================
 
-# 正規化成正斜線，方便比對
-NORM=$(printf '%s' "$FILE_PATH" | tr '\' '/')
+# 正規化成正斜線，方便比對。用 bash 內建替換：以前的 `tr '\' '/'` 是一個沒跳脫的
+# 反斜線（GNU tr 會警告「不可攜」），而且每次多開一個行程。
+NORM="${FILE_PATH//'\'//}"     # 樣式寫成 '\'：雙引號裡的 \\ 不會被當成反斜線
 
 # 轉成「相對當前 checkout root」再比對排除規則。
 #
@@ -186,7 +230,7 @@ NORM=$(printf '%s' "$FILE_PATH" | tr '\' '/')
 # 所以 worktree 裡**每個**檔案的絕對路徑都含有 `/.claude/`。用 `*/.claude/*`
 # 比對會把整個 worktree 的檔案都當成「模板自身設定」放行，任務模式閘門與
 # 坑閘門在 worktree 裡就全部失效。（此 bug 由 tests 的 worktree 案例抓出。）
-WORK_NORM=$(printf '%s' "$WORK_ROOT" | tr '\' '/')
+WORK_NORM="${WORK_ROOT//'\'//}"
 REL_PATH="${NORM#"$WORK_NORM"/}"
 
 if [ "$REL_PATH" != "$NORM" ]; then
@@ -225,10 +269,11 @@ esac
 # ============================================================================
 # 坑閘門：這個檔案以前踩過坑嗎
 #
-# 為什麼要攔而不是提示：PreToolUse 不支援 additionalContext（只認
-# permissionDecision / permissionDecisionReason），所以「提醒」在這個 hook 事件
-# 裡無法非阻斷式送達。改用與任務模式閘門相同的 deny-once 模式：擋第一次、
-# 把坑貼給模型看、記錄後放行。同一個檔案一個 session 只會擋一次。
+# 為什麼要攔而不是提示：寫這段的時候 PreToolUse 還不支援 additionalContext，
+# 「提醒」在這個事件裡無法非阻斷式送達。現在官方已支援（hookSpecificOutput.additionalContext，
+# 本檔「從 plan 還原任務模式」那段就是用它），但坑閘門**刻意維持 deny-once**：
+# 非阻斷的提醒會跟這次編輯一起送出，模型讀到時改動已經寫下去了；擋一次才保證
+# 「先讀完坑、再決定怎麼改」。同一個檔案一個 session 只會擋一次。
 #
 # 逃生門：PITFALL_GATE=off（或 .suggest-mode off，已於上方處理）
 # ============================================================================
@@ -284,12 +329,18 @@ pitfall_gate() {
         case "$base" in _*|README.md) continue ;; esac
 
         matched=0
+        # `$(fm_files)` 靠 word splitting 拆成一個個樣式，而 `src/**/*.ts` 這種樣式在
+        # 沒關 glob 時會先被展開成**當前目錄**底下的實際檔名，比對的就不是樣式了。
+        # 寫法照 lib/branch-switch-gate.sh：只在原本沒關時才開關，不動呼叫端的設定。
+        local restore_f=0
+        case "$-" in *f*) ;; *) restore_f=1; set -f ;; esac
         for pat in $(fm_files "$f"); do
             [ -n "$pat" ] || continue
             case "$rel" in $pat) matched=1 ;; esac
             case "$target" in $pat|*/$pat) matched=1 ;; esac
             [ "$matched" -eq 1 ] && break
         done
+        [ "$restore_f" -eq 1 ] && set +f
         [ "$matched" -eq 1 ] || continue
 
         # 同一 session 同一 (檔案, 坑) 只擋一次
@@ -315,7 +366,9 @@ pitfall_gate() {
     [ -z "$hits" ] && return 0
 
     log "pitfall gate: $rel"
-    deny "⚠️ 這個檔案以前踩過坑，先讀完再改：
+    deny "${RESTORE_NOTE:+$RESTORE_NOTE
+
+}⚠️ 這個檔案以前踩過坑，先讀完再改：
 ${hits}
 這些紀錄來自 \`.claude/context/learned/\`（本專案累積的教訓）。
 
@@ -324,9 +377,62 @@ ${hits}
 （完全關閉：環境變數 PITFALL_GATE=off）"
 }
 
+# ============================================================================
+# 模式檔不在（或剛被 TTL 清掉）→ 先試著從進行中任務的 plan 還原
+#
+# 為什麼：模式檔是短命旗標，兩種情況會在任務**還沒做完**時消失——
+#   - TTL 過期（預設 8h，隔夜接著做就會碰到）
+#   - worktree 裡（模式檔跟著 worktree，新開的 worktree 沒有）
+# 以前一律 deny、要求重新判級。而任務當初的判級**已經寫在 plan 的 frontmatter**
+# （`mode:`），重新判一次是在給模型一個「這次判輕一點」的機會——變相降級，
+# 而 task-mode.md 明文不允許降級。
+#
+# 契約（與文件線共用，勿自行改格式）：
+#   `.current-task` 單行：WBS 任務 id（`13.2`）或 ad-hoc plan 檔名主幹（`adhoc-…`）
+#   plan：`plans/<值>.md`，或 `plans/<值>-*.md` 的第一個（不含 archive/）
+#   plan frontmatter：`mode: quick|standard|critical`
+# 兩者都在**當前 checkout** 的 taskmaster-data（DATA_DIR）：`.current-task` 跟著 worktree，
+# plans/ 是 git 追蹤的檔案，worktree 自然有一份。
+# 讀不到、或值不是三者之一 → 照舊 deny，不猜。
+# ============================================================================
+RESTORE_NOTE=""
+restore_mode_from_plan() {
+    local task plan m
+    [ -f "$DATA_DIR/.current-task" ] || return 1
+    task=$(tr -d '[:space:]' < "$DATA_DIR/.current-task" 2>/dev/null) || return 1
+    [ -n "$task" ] || return 1
+    case "$task" in */*|*..*) return 1 ;; esac
+    plan="$DATA_DIR/plans/$task.md"
+    if [ ! -f "$plan" ]; then
+        plan=""
+        local cand
+        for cand in "$DATA_DIR/plans/$task"-*.md; do
+            [ -f "$cand" ] && { plan="$cand"; break; }
+        done
+    fi
+    [ -n "$plan" ] || return 1
+    m=$(fm_field "$plan" mode | tr -d '[:space:]')
+    case "$m" in quick|standard|critical) ;; *) return 1 ;; esac
+    mkdir -p "$DATA_DIR" 2>/dev/null || true
+    printf '%s\n' "$m" > "$MODE_FILE" 2>/dev/null || return 1
+    RESTORE_NOTE="已從 plan 還原任務模式 mode=$m（.current-task=$task → ${plan##*/}）。模式檔遺失通常是 TTL 過期或在新的 worktree 裡；任務的判級以 plan 為準，不重新判級。"
+    log "mode restored from plan: $m ($task)"
+    return 0
+}
+
+if ! { [ -f "$MODE_FILE" ] && [ -s "$MODE_FILE" ]; }; then
+    restore_mode_from_plan || true
+fi
+
 # 模式已存在 → 任務模式閘門放行，但仍要過坑閘門
 if [ -f "$MODE_FILE" ] && [ -s "$MODE_FILE" ]; then
     pitfall_gate "$NORM"
+    # 剛從 plan 還原 → 用 additionalContext 告訴模型（不設 permissionDecision：
+    # 那會連帶跳過使用者的權限提示，這裡只是要講一句話）。stderr 同步留一行給人看。
+    if [ -n "$RESTORE_NOTE" ]; then
+        echo "$RESTORE_NOTE" >&2
+        jq -n --arg c "$RESTORE_NOTE" '{hookSpecificOutput: {hookEventName: "PreToolUse", additionalContext: $c}}' 2>/dev/null || true
+    fi
     exit 0
 fi
 
@@ -339,8 +445,8 @@ deny "尚未判定任務模式，不能開始寫程式碼（rules/task-mode.md �
   standard  超過 2 個檔 / 動到對外介面 / 新功能 / 重構
   critical  認證或授權邏輯本身 / 金流 / 安全 / migration / 核心商業邏輯
 
-寫入方式（擇一）：
-  echo standard > \"\$CLAUDE_PROJECT_DIR/.claude/taskmaster-data/.current-task-mode\"
+寫入方式（路徑已展開成**這個 checkout** 的模式檔；在 worktree 裡就是 worktree 那份）：
+  echo standard > \"$MODE_FILE\"
 
 判不準時往上一級靠。使用者可當場一句話否決你的判定。
 （不想被攔：/suggest-mode off，或設環境變數 TASKMODE_GATE=off）"

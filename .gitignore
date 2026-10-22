@@ -25,6 +25,7 @@
 .claude/taskmaster-data/.skill-impact
 .claude/taskmaster-data/.skill-impact-notified
 .claude/taskmaster-data/.bash-fail-streak
+.claude/taskmaster-data/.branch-switch-warned
 .claude/taskmaster-data/.learned-candidates
 .claude/taskmaster-data/.learned-notified
 .claude/taskmaster-data/.merge-pending

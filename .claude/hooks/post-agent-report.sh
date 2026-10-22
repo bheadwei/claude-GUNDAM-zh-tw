@@ -89,14 +89,22 @@ if [ -n "$AREA" ]; then
         # 此刻 agent 還沒動工，立即 find 必定假警報 → 記下期望，延後稽核
         EXPECT_FILE="$WORK_DATA/.report-expectations.jsonl"
         mkdir -p "$(dirname "$EXPECT_FILE")" 2>/dev/null || true
-        jq -nc --arg a "$AGENT_NAME" --arg ar "$AREA" --arg ts "$TIMESTAMP" \
+        # agent_id 一起記：稽核要先確認這個 agent **真的結束了**（agent-activity.jsonl 有它的
+        # agent_complete）才催報告。以前只看「啟動後過了多久」，跑超過寬限期的 agent
+        # 還在工作就被催「補寫報告」（見 check-report-expectations.sh）。
+        AGENT_ID=$(echo "$PAYLOAD" | jq -r '(.tool_response | objects | .agentId) // ""' 2>/dev/null | tr -d '\r')
+        jq -nc --arg a "$AGENT_NAME" --arg ar "$AREA" --arg ts "$TIMESTAMP" --arg id "$AGENT_ID" \
                --argjson ep "$(date +%s)" \
-            '{ts:$ts, epoch:$ep, agent:$a, area:$ar, notified:0}' \
+            '{ts:$ts, epoch:$ep, agent:$a, area:$ar, agent_id:$id, notified:0}' \
             >> "$EXPECT_FILE" 2>/dev/null || true
         echo "[$TIMESTAMP] DEFER: $AGENT_NAME 非同步啟動，報告稽核延後" >> "$LOG_FILE" 2>/dev/null || true
     else
         RECENT_REPORT=$(find "$CONTEXT_DIR" -maxdepth 1 -name "${AGENT_NAME}-*.md" -mmin -5 2>/dev/null | head -1)
-        if [ -z "$RECENT_REPORT" ]; then
+        if [ -z "$RECENT_REPORT" ] && [ "$AGENT_NAME" = "refactor-cleaner" ]; then
+            # 跑在自己的 worktree，寫不回主 checkout：報告與 handoff 全文在它的回應裡，
+            # 由主模型落檔（agents/refactor-cleaner.md）。沒有檔案是預期的，不是缺漏。
+            echo "[$TIMESTAMP] INFO: refactor-cleaner 的報告在回應裡，待主模型落檔到 context/$AREA/" >> "$LOG_FILE" 2>/dev/null || true
+        elif [ -z "$RECENT_REPORT" ]; then
             echo "[$TIMESTAMP] WARN: $AGENT_NAME completed but no report written to context/$AREA/" >> "$LOG_FILE" 2>/dev/null || true
         else
             echo "[$TIMESTAMP] OK: $AGENT_NAME wrote $(basename "$RECENT_REPORT")" >> "$LOG_FILE" 2>/dev/null || true
@@ -131,40 +139,13 @@ if declare -F archive_handoffs >/dev/null 2>&1; then
 fi
 
 NL=$'\n'
-LINES=""
-COUNT=0
 
-# handoff 目錄不存在時仍要讓報告稽核有機會注入 → 用 if 包住掃描而非 exit
-[ -d "$HANDOFF_DIR" ] && for f in "$HANDOFF_DIR"/*.md; do
-    [ -e "$f" ] || continue
-    [ "$(basename "$f")" = "_HANDOFF_TEMPLATE.md" ] && continue
-
-    status=$(grep -m1 '^status:' "$f" 2>/dev/null | sed 's/^status:[[:space:]]*//' | tr -d '\r')
-    case "$status" in *pending*) ;; *) continue ;; esac
-
-    to=$(grep -m1 '^to:'       "$f" 2>/dev/null | sed 's/^to:[[:space:]]*//'       | tr -d '\r')
-    from=$(grep -m1 '^from:'   "$f" 2>/dev/null | sed 's/^from:[[:space:]]*//'     | tr -d '\r')
-    prio=$(grep -m1 '^priority:' "$f" 2>/dev/null | sed 's/^priority:[[:space:]]*//' | tr -d '\r')
-    [ -z "$prio" ] && prio="medium"
-
-    # low 模式只顯示 high priority
-    if [ "$SUGGEST_MODE" = "low" ]; then
-        case "$prio" in high|HIGH) ;; *) continue ;; esac
-    fi
-
-    # 起因：抓「## 起因」後第一行非空白
-    reason=$(awk '/^## 起因/{getline; while($0 ~ /^[[:space:]]*$/ && (getline)>0){}; print; exit}' "$f" 2>/dev/null | tr -d '\r')
-    [ -z "$reason" ] && reason="(見交接檔)"
-
-    LINES="${LINES}${NL}  • [${prio}] ${from} → ${to}（$(basename "$f")）：${reason}"
-    COUNT=$((COUNT + 1))
-    [ "$COUNT" -ge 5 ] && break
-done
-
+# 掃描與訊息格式在 lib/handoff-scan.sh（user-prompt-submit.sh 也接同一份，理由見該檔頭）。
+# handoff 目錄不存在時 lib 印空字串，報告稽核照樣有機會注入。
 MSG=""
-
-if [ "$COUNT" -gt 0 ]; then
-    MSG="🔗 偵測到 ${COUNT} 個待處理 agent 交接（status: pending）。若符合當前目標，建議啟動對應的「to」agent 接手——各 agent 啟動時會自行讀取其 handoff 工作清單：${LINES}${NL}${NL}完成後請將對應 handoff 的 status 改為 completed —— 不用刪檔也不用搬檔，hook 會自動歸檔到 archive/YYYY-MM/，審計軌跡不會消失。"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/handoff-scan.sh" 2>/dev/null || true
+if declare -F handoff_pending_message >/dev/null 2>&1; then
+    MSG=$(handoff_pending_message "$HANDOFF_DIR" "$SUGGEST_MODE")
 fi
 
 if [ -n "$REPORT_AUDIT_MSG" ]; then

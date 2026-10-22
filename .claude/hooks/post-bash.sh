@@ -91,8 +91,8 @@ fi
 # 細節見 context/learned/2026-09-11-gate-blocks-its-own-fix.md。
 #
 # 切段邏輯與 git-backup-gate.sh 共用 lib/cmd-segments.sh（同一個坑不修第二遍）。
-# lib/merge-gate.sh 刻意**不**跟進：它只在 .merge-pending 非空這個罕見狀態下才
-# 進入比對，誤判成本低，改它是沒必要的風險。
+# lib/merge-gate.sh 原本刻意不跟進（理由是「只在 .merge-pending 非空時才比對」），
+# 2026-10-20 已改用同一套寫法——待驗證期間正是最常查歷史的時候，誤擋並不罕見。
 #
 # 子指令只看 `git` 後面第一個非選項字（cmd_git_subcmd），不看整段任何位置：
 # `git log --grep merge`、`git commit -m "…merge…"` 都不是合併。
@@ -139,8 +139,8 @@ if [ "${MERGE_GATE:-on}" != "off" ]; then
                     #
                     # 非零但沒衝突的情況也記：`git merge x && 後面某個指令失敗` 時合併
                     # 其實成功了，只是整條指令被判失敗（2026-10-15 實際漏記的就是這種）。
-                    # 合併根本沒發生（分支名打錯、工作區不乾淨被拒）也會被記，代價是
-                    # 多跑一次 /verify；反方向的代價是跳過驗證。寧可多記。
+                    # 合併根本沒發生（分支名打錯、工作區不乾淨被拒）則由下方的 reflog 檢查
+                    # 濾掉；讀不到 reflog 時照舊記——反方向的代價是跳過驗證，寧可多記。
                     #
                     # 標記是哪一種操作。三者被同一個 case 收進同一份清單，但合併後
                     # 要驗的東西不同：merge 驗兩邊 plan 的驗收標準都還成立；
@@ -183,7 +183,6 @@ if [ "${MERGE_GATE:-on}" != "off" ]; then
                     fi
                     BR="[$MP_OP] $MP_REF"
                     MP="$DATA_DIR/.merge-pending"
-                    grep -qxF "$BR" "$MP" 2>/dev/null || echo "$BR" >> "$MP" 2>/dev/null || true
 
                     # 衝突判定：退出碼非零不等於衝突（見上），要看證據。
                     #   ① 工作樹還有未合併路徑（`ls-files -u`）—— merge／cherry-pick／
@@ -204,31 +203,109 @@ if [ "${MERGE_GATE:-on}" != "off" ]; then
                         CONFLICTED=1
                     fi
 
-                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] merge-pending: $BR (conflicted=$CONFLICTED, event=$EVENT)" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
-
-                    if [ "$CONFLICTED" -eq 1 ]; then
-                        jq -n --arg ev "$EVENT" '{
-                          hookSpecificOutput: {
-                            hookEventName: $ev,
-                            additionalContext: ("⚠️ 合併有衝突。\n\n**委派 `conflict-resolver`**（`subagent_type: \"conflict-resolver\"`）。它只碰處於衝突狀態的檔案，理解兩邊各自的意圖後保留雙方，解完跑測試；遇到**設計決策**（API 語意、資料結構取捨、migration 順序）會 `git merge --abort` 並回報，不自己決定。\n\n**它不會 commit。** 解完之後由你跑 `/verify`——閘門會擋住下一次合併直到它通過。衝突解完的結果比乾淨合併**更**需要驗證。\n\n順便一件事：衝突代表那份 plan 的 `files:` 估算有漏，補正它，否則下次同樣組合又會被判成可平行。\n（關閉：MERGE_GATE=off）")
-                          }
-                        }' 2>/dev/null || true
-                    elif [ "$FAILED" -eq 1 ]; then
-                        jq -n --arg ev "$EVENT" --arg br "$BR" '{
-                          hookSpecificOutput: {
-                            hookEventName: $ev,
-                            additionalContext: ("⚠️ 這條含合併的指令**非零結束**，但沒偵測到衝突狀態。已保守記為待驗證：`" + $br + "`\n\n兩種可能，`git log -1 --oneline` 看一眼就分得出來：\n\n- **合併其實成功了**，是鏈在後面的指令失敗（`git merge … && 其他指令`）→ 照常跑 `/verify`\n- **合併根本沒執行**（分支名打錯、工作區不乾淨被拒）→ 這筆是多記的；向使用者說明後再清掉，不要自己默默刪\n\n在 `/verify` 通過前，`pre-tool-use.sh` 會擋下下一次 merge／cherry-pick／rebase。\n（關閉：MERGE_GATE=off）")
-                          }
-                        }' 2>/dev/null || true
-                    else
-                        jq -n --arg ev "$EVENT" '{
-                          hookSpecificOutput: {
-                            hookEventName: $ev,
-                            additionalContext: ("🔀 合併完成，**這一步還沒驗證**。\n\n各 worktree 自己 `/verify` 過，不代表合併結果是對的——它們看不到彼此，合併才第一次讓兩邊的程式碼真的碰面。\n\n**下一步跑 `/verify`。** 在它通過之前，`pre-tool-use.sh` 會擋下下一次 merge／cherry-pick／rebase（避免疊了好幾個才發現紅、還得回頭二分找元凶）。\n\n`/verify` 除了建置／型別／lint／測試，還會比對已合併任務的 plan 驗收標準；若這是平行開發的最後一個合併，它會再跑一次 `spec-convergence` 確認整體仍符合 WBS 與當初的規格。\n（關閉：MERGE_GATE=off）")
-                          }
-                        }' 2>/dev/null || true
+                    # 失敗且沒有衝突 → 看 reflog 分辨「合併其實發生了」與「根本沒執行」。
+                    #
+                    # 以前這種情況一律記（寧可多記）。代價比當時估的高：分支名打錯、
+                    # 工作區不乾淨被拒，各留一筆假的待驗證，擋下**下一次真正的合併**，
+                    # 而模型只能自己判斷要不要刪那筆——正是閘門該替它判斷的事。
+                    # git 自己有答案：合併真的發生過，reflog 最新一筆就是它
+                    # （`merge <ref>: …`、`cherry-pick: …`、`rebase (finish): …`），而且時間很近。
+                    # 最新一筆不是合併類、或太舊（MERGE_REFLOG_WINDOW 秒，預設 1800：
+                    # 涵蓋 `git merge x && 跑很久的測試` 那種鏈）→ 合併沒發生，不記。
+                    # **讀不到 reflog 就照舊記**（不是 repo、`git -C` 跑在別處）——方向偏多記。
+                    #
+                    # **只查失敗事件。** 成功事件曾經也查（為了 `git merge 打錯的分支; echo done`
+                    # 整條是 0 的那種假紀錄），但 `merge --squash`／`--no-commit` 成功時不動 HEAD、
+                    # 不留合併類 reflog，被一起濾掉 → 未驗證的合併結果直接進 commit（2026-10-21 審查）。
+                    # 兩種錯的代價不對稱：多記一筆是多跑一次 /verify，漏記是跳過驗證。
+                    # 被濾掉時只跳過記錄，不 exit——後面的連續失敗計數照跑。
+                    # 逃生門 MERGE_REFLOG_CHECK=off：不查 reflog、一律記（舊行為）。
+                    RL_CONFIRMED=0; MP_SKIP=0
+                    if [ "$FAILED" -eq 1 ] && [ "$CONFLICTED" -eq 0 ] && [ "${MERGE_REFLOG_CHECK:-on}" != "off" ]; then
+                        RL=$(git -C "$MP_DIR" reflog -1 --date=unix --format='%gd %gs' 2>/dev/null | head -1)
+                        if [ -n "$RL" ]; then
+                            RL_TS="${RL#*@\{}"; RL_TS="${RL_TS%%\}*}"
+                            RL_MSG="${RL#* }"
+                            case "$RL_TS" in ''|*[!0-9]*) RL_TS=0 ;; esac
+                            RL_RECENT=0
+                            [ $(( $(date +%s) - RL_TS )) -le "${MERGE_REFLOG_WINDOW:-1800}" ] && RL_RECENT=1
+                            case "$RL_MSG" in
+                                merge*|cherry-pick*|rebase*) [ "$RL_RECENT" -eq 1 ] && RL_CONFIRMED=1 ;;
+                            esac
+                            if [ "$RL_CONFIRMED" -eq 0 ]; then
+                                echo "[$(date '+%Y-%m-%d %H:%M:%S')] merge-pending skipped: $BR (failed, reflog: ${RL_MSG:0:60})" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
+                                MP_SKIP=1   # 只跳過記錄，後面的連續失敗計數照跑
+                            fi
+                        fi
                     fi
-                    exit 0
+
+                    if [ "$MP_SKIP" -eq 0 ]; then
+                        grep -qxF "$BR" "$MP" 2>/dev/null || echo "$BR" >> "$MP" 2>/dev/null || true
+
+                        # 合併成功 → 把它帶進來的文件債補進 .doc-impact。
+                        #
+                        # worktree 裡累積的 `.doc-impact` 是短命旗標（不進 git），合併回來時
+                        # **整份消失**，主 checkout 的 /verify 看到空清單就放行了。所以在這裡
+                        # 用合併前後的 diff 重新套一次 post-write.sh 的判斷規則（lib/doc-impact.sh，
+                        # 唯一來源）。寫進**這次合併所在 checkout** 的清單——在主 checkout 合併時
+                        # 就是主 checkout 那份，也就是接下來 /verify 會讀的那份。
+                        # 基準：merge／rebase 用 ORIG_HEAD（兩者都會設）；cherry-pick 不設 ORIG_HEAD，
+                        # 退回 HEAD@{1}（多個 commit 一次挑時只涵蓋最後一個——已知的漏網）。
+                        DOC_ADDED=0
+                        if [ "$CONFLICTED" -eq 0 ] && { [ "$FAILED" -eq 0 ] || [ "$RL_CONFIRMED" -eq 1 ]; } \
+                           && [ "${DOC_SYNC_GATE:-on}" != "off" ]; then
+                            source "$(dirname "${BASH_SOURCE[0]}")/lib/doc-impact.sh" 2>/dev/null || true
+                            if declare -F doc_bearing >/dev/null 2>&1; then
+                                case "$MP_OP" in cherry-pick) DI_BASE='HEAD@{1}' ;; *) DI_BASE=ORIG_HEAD ;; esac
+                                # 另讀 `--cached`：merge --squash／--no-commit 不動 HEAD，帶進來的改動還在 index 裡
+                                while IFS= read -r _f; do
+                                    _f="${_f%$'\r'}"
+                                    [ -n "$_f" ] || continue
+                                    doc_bearing "$_f" || continue
+                                    doc_impact_add "$DATA_DIR" "$_f" && DOC_ADDED=$((DOC_ADDED + 1))
+                                done <<< "$(git -C "$MP_DIR" diff --name-only "$DI_BASE" HEAD 2>/dev/null; git -C "$MP_DIR" diff --name-only --cached 2>/dev/null)"
+                            fi
+                        fi
+                        DOC_NOTE=""
+                        if [ "$DOC_ADDED" -gt 0 ]; then
+                            DOC_NOTE="
+
+    📘 這次合併帶進 ${DOC_ADDED} 個「文件描述的對象」（API／路由／schema／對外介面…），已補進 \`.claude/taskmaster-data/.doc-impact\`。worktree 裡那份清單不會跟著合併回來，所以在這裡重算一次。\`/verify\` 標 WBS ✅ 前會要求處理（同步文件或明確豁免）。"
+                        fi
+
+                        echo "[$(date '+%Y-%m-%d %H:%M:%S')] merge-pending: $BR (conflicted=$CONFLICTED, event=$EVENT) doc_added=$DOC_ADDED" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
+
+                        if [ "$CONFLICTED" -eq 1 ]; then
+                            jq -n --arg ev "$EVENT" '{
+                              hookSpecificOutput: {
+                                hookEventName: $ev,
+                                additionalContext: ("⚠️ 合併有衝突。\n\n**委派 `conflict-resolver`**（`subagent_type: \"conflict-resolver\"`）。它只碰處於衝突狀態的檔案，理解兩邊各自的意圖後保留雙方，解完跑測試；遇到**設計決策**（API 語意、資料結構取捨、migration 順序）會 `git merge --abort` 並回報，不自己決定。\n\n**它不會 commit。** 解完之後由你跑 `/verify`——閘門會擋住下一次合併直到它通過。衝突解完的結果比乾淨合併**更**需要驗證。\n\n順便一件事：衝突代表那份 plan 的 `files:` 估算有漏，補正它，否則下次同樣組合又會被判成可平行。\n（關閉：MERGE_GATE=off）")
+                              }
+                            }' 2>/dev/null || true
+                        elif [ "$FAILED" -eq 1 ] && [ "$RL_CONFIRMED" -eq 1 ]; then
+                            jq -n --arg ev "$EVENT" --arg br "$BR" --arg doc "$DOC_NOTE" '{
+                              hookSpecificOutput: {
+                                hookEventName: $ev,
+                                additionalContext: ("🔀 這條指令**非零結束**，但 reflog 顯示合併本身已經完成（是鏈在後面的指令失敗）。已記為待驗證：`" + $br + "`\n\n**下一步跑 `/verify`。** 在它通過之前，`pre-tool-use.sh` 會擋下下一次 merge／cherry-pick／rebase。" + $doc + "\n（關閉：MERGE_GATE=off）")
+                              }
+                            }' 2>/dev/null || true
+                        elif [ "$FAILED" -eq 1 ]; then
+                            jq -n --arg ev "$EVENT" --arg br "$BR" '{
+                              hookSpecificOutput: {
+                                hookEventName: $ev,
+                                additionalContext: ("⚠️ 這條含合併的指令**非零結束**，但沒偵測到衝突狀態，也讀不到 reflog 來確認合併有沒有發生（指令可能在別的目錄跑）。已保守記為待驗證：`" + $br + "`\n\n兩種可能，`git log -1 --oneline` 看一眼就分得出來：\n\n- **合併其實成功了**，是鏈在後面的指令失敗（`git merge … && 其他指令`）→ 照常跑 `/verify`\n- **合併根本沒執行**（分支名打錯、工作區不乾淨被拒）→ 這筆是多記的；向使用者說明後再清掉，不要自己默默刪\n\n在 `/verify` 通過前，`pre-tool-use.sh` 會擋下下一次 merge／cherry-pick／rebase。\n（關閉：MERGE_GATE=off）")
+                              }
+                            }' 2>/dev/null || true
+                        else
+                            jq -n --arg ev "$EVENT" --arg doc "$DOC_NOTE" '{
+                              hookSpecificOutput: {
+                                hookEventName: $ev,
+                                additionalContext: ("🔀 合併完成，**這一步還沒驗證**。\n\n各 worktree 自己 `/verify` 過，不代表合併結果是對的——它們看不到彼此，合併才第一次讓兩邊的程式碼真的碰面。\n\n**下一步跑 `/verify`。** 在它通過之前，`pre-tool-use.sh` 會擋下下一次 merge／cherry-pick／rebase（避免疊了好幾個才發現紅、還得回頭二分找元凶）。\n\n`/verify` 除了建置／型別／lint／測試，還會比對已合併任務的 plan 驗收標準；若這是平行開發的最後一個合併，它會再跑一次 `spec-convergence` 確認整體仍符合 WBS 與當初的規格。" + $doc + "\n（關閉：MERGE_GATE=off）")
+                              }
+                            }' 2>/dev/null || true
+                        fi
+                        exit 0
+                    fi
                     ;;
             esac
             ;;
@@ -246,16 +323,30 @@ NOTIFIED="$DATA_DIR/.learned-notified"
 # 連續失敗門檻。1-2 次失敗是打錯字，不是坑。
 THRESHOLD="${LEARN_CAPTURE_THRESHOLD:-3}"
 
+# 「同一件事」以指令前 40 字為準，換了指令就歸零。
+#
+# 以前只數「連續失敗幾次」，不管失敗的是什麼：`npm test` 失敗一次、`cat x` 打錯一次、
+# `ls y` 打錯一次，接著任何一個成功的指令都被記成「踩到坑」，候選清單塞滿雜訊，
+# 真正的坑反而被淹掉。取前 40 字而不是整條：重試時常常只改尾巴的參數或路徑，
+# 那仍是同一件事。檔案格式 `<次數>\t<指令前 40 字>`；舊格式（只有數字）讀起來
+# 指令欄是空的，等同「不同指令」→ 歸零，不會誤報。
+KEY="${CMD//$'\n'/ }"; KEY="${KEY//$'\t'/ }"; KEY="${KEY:0:40}"
+PREV_N=0; PREV_KEY=""
+if [ -s "$STREAK" ]; then
+    IFS=$'\t' read -r PREV_N PREV_KEY < "$STREAK" 2>/dev/null || true
+    PREV_KEY="${PREV_KEY%$'\r'}"
+    case "$PREV_N" in ''|*[!0-9]*) PREV_N=0 ;; esac
+fi
+
 if [ "$FAILED" -eq 1 ]; then
-    n=$(cat "$STREAK" 2>/dev/null | tr -dc '0-9')
-    n=$(( ${n:-0} + 1 ))
-    echo "$n" > "$STREAK" 2>/dev/null || true
+    if [ "$PREV_KEY" = "$KEY" ]; then n=$((PREV_N + 1)); else n=1; fi
+    printf '%s\t%s\n' "$n" "$KEY" > "$STREAK" 2>/dev/null || true
     exit 0
 fi
 
-# 成功了 —— 看它前面失敗了幾次
-n=$(cat "$STREAK" 2>/dev/null | tr -dc '0-9')
-n=${n:-0}
+# 成功了 —— 看同一件事前面失敗了幾次（不同指令的成功只是歸零）
+n=0
+[ "$PREV_KEY" = "$KEY" ] && n="$PREV_N"
 : > "$STREAK" 2>/dev/null || true
 [ "$n" -lt "$THRESHOLD" ] && exit 0
 

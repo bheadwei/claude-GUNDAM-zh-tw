@@ -720,6 +720,10 @@ expect_empty "WBS 短中文格子不提醒（以字計、非位元組）" "$(run
 reset; wbs_doc "🔄 進行中" "$LONG_LINK"
 expect_empty "WBS 長連結網址不誤報" "$(run post-write.sh "$(w "$WBS_F")")"
 
+reset; wbs_doc "🔄 進行中" "—"
+sed -i "s/| 地端 rerank 拒答門檻 |/| ${LONG_ZH} |/" "$WBS_F"
+expect_empty "WBS 任務欄寫完整名稱不提醒" "$(run post-write.sh "$(w "$WBS_F")")"
+
 reset; wbs_doc "$LONG_ZH" "—"
 expect_empty "WBS 長度提醒逃生門 WBS_CELL_CHECK=off" "$(run post-write.sh "$(w "$WBS_F")" WBS_CELL_CHECK=off)"
 if [ -f "$SANDBOX/.claude/taskmaster-data/wbs-history.log" ]; then ok "WBS 長度提醒關閉時仍記歷史"
@@ -1078,7 +1082,7 @@ expect_empty "失敗 2 次後成功未達門檻" "$(pb ok "x")"
 # 達門檻 → 提醒 + 記候選
 reset
 pb fail "x" >/dev/null; pb fail "x" >/dev/null; pb fail "x" >/dev/null
-expect_contains "失敗 3 次後成功會提醒" "這是一個坑" "$(pb ok "uv run pytest")"
+expect_contains "失敗 3 次後成功會提醒" "這是一個坑" "$(pb ok "x")"
 if grep -q '3 次失敗後成功' "$CAND_F" 2>/dev/null; then ok "候選已記入 .learned-candidates"
 else ng "候選已記入 .learned-candidates" "有紀錄" "$(cat "$CAND_F" 2>/dev/null)"; fi
 
@@ -1117,6 +1121,22 @@ expect_contains "exit_code 非零也算失敗" "這是一個坑" "$(pb ok "x")"
 reset
 expect_empty "空 command 不處理" "$(run post-bash.sh '{"tool_name":"Bash","tool_input":{}}')"
 
+# 「同一件事」以指令前 40 字為準（2026-10-20）：三個不相干的指令各錯一次，
+# 接著任何一個成功都不是坑——以前會被記成「3 次失敗後成功」
+reset
+pb fail "npm test" >/dev/null; pb fail "cat no-such" >/dev/null; pb fail "ls nope" >/dev/null
+expect_empty "不同指令各失敗一次後成功不算坑" "$(pb ok "ls nope")"
+reset
+pb fail "x" >/dev/null; pb fail "x" >/dev/null; pb fail "x" >/dev/null
+expect_empty "同一件事失敗 3 次後、成功的是別的指令 → 不算坑" "$(pb ok "y")"
+# 重試常只改尾巴：前 40 字相同就是同一件事
+LONGP="uv run pytest tests/integration/test_billing_flow.py"
+reset
+pb fail "$LONGP -x" >/dev/null; pb fail "$LONGP -k a" >/dev/null; pb fail "$LONGP -k b" >/dev/null
+expect_contains "前 40 字相同、尾巴不同 → 仍算同一件事" "這是一個坑" "$(pb ok "$LONGP -vv")"
+reset; mkdir -p "$SANDBOX/.claude/taskmaster-data"; echo 5 > "$SANDBOX/.claude/taskmaster-data/.bash-fail-streak"
+expect_empty "舊格式（只有數字）的計數檔視同不同指令，不誤報" "$(pb ok "x")"
+
 # =========================================================================
 section "合併閘門 — 合併未驗證前不得再合併"
 # =========================================================================
@@ -1130,7 +1150,7 @@ MP_FILE="$SANDBOX/.claude/taskmaster-data/.merge-pending"
 # bash <command> —— 模擬 Bash 工具的 PreToolUse
 bg() { run pre-tool-use.sh "$(printf '{"cwd":"%s","tool_name":"Bash","tool_input":{"command":"%s"}}' "$SANDBOX" "$1")"; }
 # pbash <command> [ENV=VAL] —— 模擬 Bash 工具的 PostToolUse（成功）
-pbash() { local c="$1"; shift; run post-bash.sh "$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"is_error":false}}' "$c")" "$@"; }
+pbash() { local c="$1"; shift; run post-bash.sh "$(printf '{"tool_name":"Bash","tool_input":{"command":"%s"},"tool_response":{"is_error":false}}' "$c")" MERGE_REFLOG_CHECK=off "$@"; }
 
 # 偵測：合併成功要記進 .merge-pending 並提醒
 reset
@@ -1165,7 +1185,7 @@ else ng "git merge --continue 保留待驗證紀錄" "仍有紀錄" "$(cat "$MP_
 # 現在改用 lib/cmd-segments.sh 切段（與 git-backup-gate.sh 同一份實作）。
 
 # pbashj <command> —— 同 pbash，但用 jq 組 payload（指令含引號／換行時要用這個）
-pbashj() { run post-bash.sh "$(jq -nc --arg c "$1" '{tool_name:"Bash",tool_input:{command:$c},tool_response:{is_error:false}}')"; }
+pbashj() { run post-bash.sh "$(jq -nc --arg c "$1" '{tool_name:"Bash",tool_input:{command:$c},tool_response:{is_error:false}}')" MERGE_REFLOG_CHECK=off; }
 mp_empty() {
     if [ ! -s "$MP_FILE" ]; then ok "$1"
     else ng "$1" "（不記錄）" "$(cat "$MP_FILE" 2>/dev/null)"; fi
@@ -1289,7 +1309,7 @@ section "post-bash.sh — 失敗事件（PostToolUseFailure）"
 pbf() {
     run post-bash.sh "$(jq -nc --arg c "$1" --arg e "$2" --arg d "${3:-}" '
         {hook_event_name:"PostToolUseFailure",tool_name:"Bash",tool_input:{command:$c},
-         error:$e,is_interrupt:false} + (if $d == "" then {} else {cwd:$d} end)')"
+         error:$e,is_interrupt:false} + (if $d == "" then {} else {cwd:$d} end)')" MERGE_REFLOG_CHECK=off
 }
 STREAK_F="$SANDBOX/.claude/taskmaster-data/.bash-fail-streak"
 
@@ -1381,8 +1401,8 @@ reset
 expect_empty "失敗的非 git 指令不輸出" "$(pbf 'npm test' 'Exit code 1
 Error: Cannot find module')"
 mp_empty "失敗的非 git 指令不記入 .merge-pending"
-if [ "$(cat "$STREAK_F" 2>/dev/null)" = "1" ]; then ok "失敗事件讓 .bash-fail-streak 累加"
-else ng "失敗事件讓 .bash-fail-streak 累加" "1" "$(cat "$STREAK_F" 2>/dev/null)"; fi
+if [ "$(cut -f1 "$STREAK_F" 2>/dev/null)" = "1" ]; then ok "失敗事件讓 .bash-fail-streak 累加"
+else ng "失敗事件讓 .bash-fail-streak 累加" "1" "$(cut -f1 "$STREAK_F" 2>/dev/null)"; fi
 
 # 踩坑偵測端到端：真實形狀的失敗事件 ×3 → 成功 → 提醒
 reset
@@ -1393,8 +1413,8 @@ expect_contains "失敗事件 ×3 後成功會提醒踩坑" "這是一個坑" "$
 # 被中斷的失敗也算一次（與舊有 interrupted 語意一致）
 reset
 run post-bash.sh '{"hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"sleep 99"},"error":"aborted","is_interrupt":true}' >/dev/null
-if [ "$(cat "$STREAK_F" 2>/dev/null)" = "1" ]; then ok "is_interrupt 的失敗事件也累加"
-else ng "is_interrupt 的失敗事件也累加" "1" "$(cat "$STREAK_F" 2>/dev/null)"; fi
+if [ "$(cut -f1 "$STREAK_F" 2>/dev/null)" = "1" ]; then ok "is_interrupt 的失敗事件也累加"
+else ng "is_interrupt 的失敗事件也累加" "1" "$(cut -f1 "$STREAK_F" 2>/dev/null)"; fi
 
 # 逃生門在失敗事件下照樣有效
 reset; run post-bash.sh '{"hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"npm test"},"error":"Exit code 1"}' LEARN_CAPTURE=off >/dev/null
@@ -1496,26 +1516,27 @@ gbo() {
 reset; gitq commit --allow-empty -m c1; gbg_untag
 
 # 沒有快照 → 四種 destructive 指令都要擋
-expect_decision "reset --hard 沒快照時被擋"      deny "$(gb 'git reset --hard HEAD')"
+expect_decision "reset --hard 沒快照時被擋"      deny "$(gb 'git reset --hard HEAD~1')"
 expect_decision "push --force 沒快照時被擋"      deny "$(gb 'git push --force origin main')"
 expect_decision "push -f 沒快照時被擋"           deny "$(gb 'git push -f origin main')"
 # --force-with-lease 防的是覆蓋**別人**的 push，不是防自己弄丟本地工作 → 不特例放行
 expect_decision "push --force-with-lease 不特例放行" deny "$(gb 'git push --force-with-lease origin main')"
+gitq branch feat/x
 expect_decision "branch -D 沒快照時被擋"         deny "$(gb 'git branch -D feat/x')"
 expect_decision "rebase 沒快照時被擋"            deny "$(gb 'git rebase main')"
 # 真實用法常是鏈式的，指令段不是整條指令的開頭
-expect_decision "鏈式 cd x && git reset --hard 也擋" deny "$(gb 'cd /tmp && git reset --hard HEAD')"
+expect_decision "鏈式 cd x && git reset --hard 也擋" deny "$(gb 'cd /tmp && git reset --hard HEAD~1')"
 
 # deny 訊息要能直接複製，不能只說「請先打 tag」
 expect_contains "deny 訊息給出可複製的 tag 指令" "git tag backup/" \
-    "$(gb 'git reset --hard HEAD' | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+    "$(gb 'git reset --hard HEAD~1' | jq -r '.hookSpecificOutput.permissionDecisionReason')"
 
 # 有快照 → 放行；但快照必須指向**當前** HEAD
 reset; gbg_untag; gitq tag "backup/main-test"
-expect_decision "backup tag 指向 HEAD 時放行"    allow "$(gb 'git reset --hard HEAD')"
+expect_decision "backup tag 指向 HEAD 時放行"    allow "$(gb 'git reset --hard HEAD~1')"
 
 gitq commit --allow-empty -m c2      # HEAD 前進，tag 留在舊 commit
-expect_decision "tag 指向舊 commit 時仍擋"       deny  "$(gb 'git reset --hard HEAD')"
+expect_decision "tag 指向舊 commit 時仍擋"       deny  "$(gb 'git reset --hard HEAD~1')"
 gbg_untag
 
 # --continue / --abort / --skip 是收拾當前狀態，不是新的 destructive 操作
@@ -1544,26 +1565,48 @@ EOF")"
 expect_decision "commit -m 訊息含 git reset --hard 不擋" allow \
     "$(gb 'git commit -m "改用 tag，取代直接 git reset --hard"')"
 expect_decision "git -C <路徑> reset --hard 仍擋（跳過全域選項）" deny \
-    "$(gb "git -C $SANDBOX reset --hard HEAD")"
+    "$(gb "git -C $SANDBOX reset --hard HEAD~1")"
 # 切段把真的指令弄丟的兩種形狀（cmd-segments 節有單元測試）
 expect_decision "註解含單引號之後的 reset --hard 仍擋" deny \
     "$(gb $'# reset because it\'s broken\ngit reset --hard HEAD~1')"
 expect_decision "\$((1<<x)) 之後的 rebase 仍擋" deny \
     "$(gb $'echo $((1<<x))\ngit rebase main')"
 
+# ---- 被保護的對象不一定是 HEAD（2026-10-20）----
+# branch -D 會弄丟的是**那條分支的 tip**：站在 main 上刪 feat/x，HEAD 的 tag 保不到它
+reset; gbg_untag; gitq branch -f feat/x; gitq commit --allow-empty -m moved; gitq tag backup/head-only
+expect_decision "branch -D：HEAD 有 tag 但被刪的分支沒有 → 仍擋" deny "$(gb 'git branch -D feat/x')"
+expect_contains "branch -D：建議指令對著那條分支打 tag" "feat/x" \
+    "$(gb 'git branch -D feat/x' | jq -r '.hookSpecificOutput.permissionDecisionReason' | grep -o 'git tag backup/feat/x-[0-9-]* feat/x')"
+gbg_untag; gitq checkout -q -b feat/tip; gitq commit --allow-empty -m tip; gitq tag backup/feat-tip; gitq checkout -q main
+expect_decision "branch -D：被刪的分支 tip 有 tag → 放行（HEAD 沒有也一樣）" allow "$(gb 'git branch -D feat/tip')"
+expect_decision "branch -D：分支不存在 → 放行（讓 git 自己報錯）" allow "$(gb 'git branch -D no-such-branch')"
+gbg_untag; gitq branch -D feat/tip
+# reset --hard 沒帶目標：HEAD 不動，tag 救不到的是未 commit 的改動
+reset; gbg_untag
+expect_decision "reset --hard（無目標）工作區乾淨 → 放行" allow "$(gb 'git reset --hard')"
+expect_decision "reset --hard HEAD 工作區乾淨 → 放行"    allow "$(gb 'git reset --hard HEAD')"
+echo v1 > "$SANDBOX/tracked.txt"; gitq add tracked.txt; gitq commit -m tracked; echo v2 > "$SANDBOX/tracked.txt"
+expect_decision "reset --hard（無目標）有未 commit 改動 → 擋" deny "$(gb 'git reset --hard')"
+expect_contains "有改動時講實話：tag 救不到" "backup tag 救不到這些" \
+    "$(gb 'git reset --hard' | jq -r '.hookSpecificOutput.permissionDecisionReason')"
+gitq tag backup/main-has-tag
+expect_decision "有改動時打 tag 也沒用（仍擋）" deny "$(gb 'git reset --hard HEAD')"
+gbg_untag; gitq checkout -- tracked.txt
+
 # 逃生門
-expect_decision "GIT_BACKUP_GATE=off 關閉閘門"   allow "$(gb 'git reset --hard HEAD' GIT_BACKUP_GATE=off)"
+expect_decision "GIT_BACKUP_GATE=off 關閉閘門"   allow "$(gb 'git reset --hard HEAD~1' GIT_BACKUP_GATE=off)"
 reset; echo off > "$SM_FILE"
-expect_decision "suggest-mode=off 也關閉閘門"    allow "$(gb 'git reset --hard HEAD')"
+expect_decision "suggest-mode=off 也關閉閘門"    allow "$(gb 'git reset --hard HEAD~1')"
 
 # 判斷不了就放行（缺依賴／狀態不明時寧可放行也不誤擋）
 reset
 GBG_EMPTY="$SANDBOX/emptyrepo"; mkdir -p "$GBG_EMPTY"
 git -c init.defaultBranch=main init -q "$GBG_EMPTY" >/dev/null 2>&1
-expect_decision "空 repo（unborn HEAD）放行"     allow "$(gbo 'git reset --hard HEAD' "$GBG_EMPTY")"
+expect_decision "空 repo（unborn HEAD）放行"     allow "$(gbo 'git reset --hard HEAD~1' "$GBG_EMPTY")"
 
 GBG_NOREPO=$(mktemp -d)
-expect_decision "不在 git repo 裡放行"           allow "$(gbo 'git reset --hard HEAD' "$GBG_NOREPO")"
+expect_decision "不在 git repo 裡放行"           allow "$(gbo 'git reset --hard HEAD~1' "$GBG_NOREPO")"
 rm -rf "$GBG_NOREPO"
 
 # =========================================================================
@@ -1707,7 +1750,7 @@ expect_decision "在 main 上開新分支放行"          allow "$(bs 'git check
 expect_decision "在 main 上 git switch -c 放行"   allow "$(bs 'git switch -c feat/x')"
 # 有 agent 在跑也照放：它們也站在 main 上，但「從 main 開分支」是本模板的主流程，
 # 擋它等於擋掉正常開發。這一格的取捨寫在 branch-switch-gate.sh 檔頭。
-reset; bs_start a1 planner
+reset; bs_start a1 ui-builder
 expect_decision "在 main 上即使有 agent 在跑也放行" allow "$(bs 'git checkout -b feat/x')"
 
 # ---- 不該誤擋的形狀（不帶 -b/-c 的 checkout/switch 都只是換分支或還原檔案）
@@ -1755,28 +1798,28 @@ expect_decision "git checkout -b x main（帶基底）放行" allow "$(bs 'git c
 expect_decision "git switch -c x main（帶基底）放行"   allow "$(bs 'git switch -c feat/x main')"
 
 # ---- 第二格：站在 topic 分支且有 in-flight agent → 持續擋（不採 deny-once）
-reset; bs_start a1 planner
+reset; bs_start a1 ui-builder
 expect_decision "有 agent 在跑時擋"               deny  "$(bs 'git checkout -b feat/x')"
 bs 'git checkout -b feat/x' >/dev/null
 expect_decision "有 agent 在跑時不採 deny-once"   deny  "$(bs 'git checkout -b feat/x')"
 # start-point 解決「基底錯了」，解決不了「HEAD 被搬走，站在上面的 agent 跟著被搬」
 expect_decision "有 agent 在跑時帶基底也擋"       deny  "$(bs 'git checkout -b feat/x main')"
 
-reset; bs_start a1 planner; bs_start a2 ui-builder
+reset; bs_start a1 ui-builder; bs_start a2 debug-investigator
 BS_MSG=$(bs_msg 'git checkout -b feat/x')
 expect_contains "訊息說出有幾個 agent 在跑"    "2 個 subagent 還在跑" "$BS_MSG"
-expect_contains "訊息點名是哪幾個 agent"       "ui-builder"            "$BS_MSG"
+expect_contains "訊息點名是哪幾個 agent"       "debug-investigator"            "$BS_MSG"
 expect_contains "訊息誠實說明計數可能含自己"   "你自己就是那個 subagent" "$BS_MSG"
 
 # in-flight 的判準與 pre-agent-gate 共用同一份 lib（agent-inflight.sh）。
 # 抽成共用函式之後兩邊必須看到**同一個數字**——各寫各的就是同一個坑修兩次。
 expect_decision "同一份 log 下 pre-agent-gate 也擋" deny \
-    "$(run pre-agent-gate.sh "$(printf '{"cwd":"%s","hook_event_name":"PreToolUse","tool_input":{"subagent_type":"planner"},"tool_use_id":"tX"}' "$SANDBOX")")"
+    "$(run pre-agent-gate.sh "$(printf '{"cwd":"%s","hook_event_name":"PreToolUse","tool_input":{"subagent_type":"ui-builder"},"tool_use_id":"tX"}' "$SANDBOX")")"
 # agent 完成後歸零 → 兩邊都放行（共用實作的 agent_id 配對沒被抽壞）
 echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"event\":\"agent_complete\",\"agent_id\":\"a1\"}" >> "$BS_LOG"
 echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"event\":\"agent_complete\",\"agent_id\":\"a2\"}" >> "$BS_LOG"
 expect_decision "agent 全部完成後 pre-agent-gate 放行" allow \
-    "$(run pre-agent-gate.sh "$(printf '{"cwd":"%s","hook_event_name":"PreToolUse","tool_input":{"subagent_type":"planner"},"tool_use_id":"tX"}' "$SANDBOX")")"
+    "$(run pre-agent-gate.sh "$(printf '{"cwd":"%s","hook_event_name":"PreToolUse","tool_input":{"subagent_type":"ui-builder"},"tool_use_id":"tX"}' "$SANDBOX")")"
 expect_decision "agent 全部完成後回到擋一次那一格" deny "$(bs 'git checkout -b feat/x')"
 
 # ---- 逃生門
@@ -1824,48 +1867,48 @@ ag() {
 }
 
 reset; mkdir -p "$SANDBOX/.claude/logs"
-expect_decision "無 in-flight 時放行" allow "$(ag planner)"
+expect_decision "無 in-flight 時放行" allow "$(ag ui-builder)"
 
 # 兩個不同 agent 都在跑 → 照擋（確認 unique 去重沒把正常情況也吃掉）
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1; ag_start a2
-expect_decision "兩筆不同 agent_id 的 start → 仍擋" deny "$(ag planner)"
+expect_decision "兩筆不同 agent_id 的 start → 仍擋" deny "$(ag ui-builder)"
 
 # 同一個 agent_id 重複寫入不該被算成兩個
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1; ag_start a1; ag_complete a1
-expect_decision "重複的 start 由 unique 去重（complete 後歸零）" allow "$(ag planner)"
+expect_decision "重複的 start 由 unique 去重（complete 後歸零）" allow "$(ag ui-builder)"
 
 # 舊格式（只有 tool_use_id、沒有 agent_id）一律忽略，不該讓閘門誤擋
 reset; mkdir -p "$SANDBOX/.claude/logs"
 echo "{\"timestamp\":\"$(date '+%Y-%m-%d %H:%M:%S')\",\"event\":\"agent_start\",\"tool_use_id\":\"old1\"}" >> "$AG_LOG"
-expect_decision "升級前的舊紀錄（無 agent_id）被忽略" allow "$(ag planner)"
+expect_decision "升級前的舊紀錄（無 agent_id）被忽略" allow "$(ag ui-builder)"
 
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
-expect_decision "有 1 個 in-flight 且新的無隔離 → deny" deny "$(ag planner)"
+expect_decision "有 1 個 in-flight 且新的無隔離 → deny" deny "$(ag ui-builder)"
 
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
-ag planner >/dev/null
-expect_decision "同一批只擋一次（deny-once）" allow "$(ag ui-builder)"
+ag ui-builder >/dev/null
+expect_decision "同一批只擋一次（deny-once）" allow "$(ag debug-investigator)"
 
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
 expect_decision "帶 isolation: worktree 直接放行" allow "$(ag refactor-cleaner worktree)"
 
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
-expect_decision "帶 isolation: remote 也放行" allow "$(ag planner remote)"
+expect_decision "帶 isolation: remote 也放行" allow "$(ag ui-builder remote)"
 
 # in-flight 歸零 → 標記清除，下一批重新受檢
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
-ag planner >/dev/null                       # 第一批擋一次
+ag ui-builder >/dev/null                       # 第一批擋一次
 ag_complete a1                              # 前一個完成
-ag planner >/dev/null                       # 歸零，標記應被清掉
+ag ui-builder >/dev/null                       # 歸零，標記應被清掉
 ag_start a2                                 # 新的一批
-expect_decision "下一批平行會重新被擋" deny "$(ag planner)"
+expect_decision "下一批平行會重新被擋" deny "$(ag ui-builder)"
 
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
 expect_decision "PARALLEL_AGENT_GATE=off 關閉閘門" allow \
-    "$(run pre-agent-gate.sh "$(printf '{"cwd":"%s","tool_input":{"subagent_type":"planner"}}' "$SANDBOX")" PARALLEL_AGENT_GATE=off)"
+    "$(run pre-agent-gate.sh "$(printf '{"cwd":"%s","tool_input":{"subagent_type":"ui-builder"}}' "$SANDBOX")" PARALLEL_AGENT_GATE=off)"
 
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1; echo off > "$SM_FILE"
-expect_decision "suggest-mode=off 也關閉閘門" allow "$(ag planner)"
+expect_decision "suggest-mode=off 也關閉閘門" allow "$(ag ui-builder)"
 
 # 攔截訊息要先給一個推薦，不是把三個選項丟回去讓使用者自己判斷。
 # 推薦只依兩件閘門算得出來的事：工作區乾不乾淨（**WORK_ROOT 下**的 git status）、
@@ -1898,7 +1941,7 @@ pg_setup() {
 }
 # pg_gate <root> —— 用該 root 當 CLAUDE_PROJECT_DIR 與 cwd 跑閘門，取回攔截理由
 pg_gate() {
-    printf '{"cwd":"%s","hook_event_name":"PreToolUse","tool_input":{"subagent_type":"planner"},"tool_use_id":"tX"}' "$1" \
+    printf '{"cwd":"%s","hook_event_name":"PreToolUse","tool_input":{"subagent_type":"ui-builder"},"tool_use_id":"tX"}' "$1" \
         | env CLAUDE_PROJECT_DIR="$1" bash "$HOOK_DIR/pre-agent-gate.sh" 2>/dev/null \
         | jq -r '.hookSpecificOutput.permissionDecisionReason // ""' 2>/dev/null
 }
@@ -1936,8 +1979,8 @@ ag_reason() { echo "$1" | jq -r '.hookSpecificOutput.permissionDecisionReason //
 
 # in-flight 是掃描類（這次派的是普通 agent）
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 code-quality-specialist
-expect_decision "in-flight 有掃描類 → 擋" deny "$(ag planner)"
-SCAN_MSG=$(ag_reason "$(ag planner)")
+expect_decision "in-flight 有掃描類 → 擋" deny "$(ag ui-builder)"
+SCAN_MSG=$(ag_reason "$(ag ui-builder)")
 expect_contains "掃描類推薦序列化"             "推薦：序列化"   "$SCAN_MSG"
 expect_contains "理由講的是讀寫衝突"           "讀撞到寫"       "$SCAN_MSG"
 expect_contains "附上假 failed 那起事故"       "假 failed"      "$SCAN_MSG"
@@ -1951,12 +1994,12 @@ expect_contains "掃描類註明不採 deny-once"     "不採 deny-once" "$SCAN_
 
 # 不套用 deny-once：連續三次都要擋（一般情境第二次就放行）
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 security-infrastructure-auditor
-ag planner >/dev/null
-ag planner >/dev/null
-expect_decision "掃描類不套用 deny-once（第三次仍擋）" deny "$(ag planner)"
+ag ui-builder >/dev/null
+ag ui-builder >/dev/null
+expect_decision "掃描類不套用 deny-once（第三次仍擋）" deny "$(ag ui-builder)"
 
 # 這次要派的是掃描類（in-flight 是普通 agent）
-reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 planner
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 ui-builder
 expect_decision "要派的是掃描類 → 擋" deny "$(ag test-automation-engineer)"
 ag test-automation-engineer >/dev/null
 expect_decision "要派的是掃描類 → 不套用 deny-once" deny "$(ag e2e-validation-specialist)"
@@ -1970,18 +2013,18 @@ ag_complete a1
 expect_decision "in-flight 歸零後放行"          allow "$(ag code-quality-specialist)"
 
 # 一般情境**完全不變**：三個選項都在、deny-once 照舊
-reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 planner
-NORM_MSG=$(ag_reason "$(ag ui-builder)")
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 ui-builder
+NORM_MSG=$(ag_reason "$(ag debug-investigator)")
 expect_contains "一般情境仍是三個選擇"         "三個選擇"               "$NORM_MSG"
 expect_contains "一般情境保留選項 3"           "確認範圍無交集後重試"   "$NORM_MSG"
 expect_contains "一般情境仍是 deny-once"       "本批只擋這一次"         "$NORM_MSG"
-reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 planner
-ag ui-builder >/dev/null
-expect_decision "一般情境 deny-once 不變（第二次放行）" allow "$(ag architect)"
+reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start_t a1 ui-builder
+ag debug-investigator >/dev/null
+expect_decision "一般情境 deny-once 不變（第二次放行）" allow "$(ag general-purpose)"
 
 # 舊格式（無 agent_type）不能讓 in-flight 計數消失——jq 把它印成 "-" 而不是空行
 reset; mkdir -p "$SANDBOX/.claude/logs"; ag_start a1
-expect_contains "無 agent_type 的 in-flight 仍算 1 個" "已經有 1 個" "$(ag_reason "$(ag planner)")"
+expect_contains "無 agent_type 的 in-flight 仍算 1 個" "已經有 1 個" "$(ag_reason "$(ag ui-builder)")"
 
 # =========================================================================
 section "agent-monitor.sh × pre-agent-gate.sh — 非同步派工的完成時機"
@@ -2026,44 +2069,44 @@ ag_events() { jq -rs '[.[]|.event]|join(",")' "$AG_LOG" 2>/dev/null; }
 # PreToolUse 不寫帳：agentId 只在 PostToolUse 拿得到，寫在 PreToolUse 就配不到
 # SubagentStop。這也是為什麼閘門不再需要「排除自己那一筆」——它跑在 PreToolUse，
 # 帳上不可能有自己。
-reset; mkdir -p "$SANDBOX/.claude/logs"; am_pre planner >/dev/null
+reset; mkdir -p "$SANDBOX/.claude/logs"; am_pre ui-builder >/dev/null
 [ -s "$AG_LOG" ] \
     && ng "PreToolUse 不寫 JSONL agent_start" "空的 jsonl" "$(ag_events)" \
     || ok "PreToolUse 不寫 JSONL agent_start"
-expect_decision "只派一個 agent 時不擋（自己不算 in-flight）" allow "$(ag planner)"
+expect_decision "只派一個 agent 時不擋（自己不算 in-flight）" allow "$(ag ui-builder)"
 [ -f "$WARNED_FILE" ] \
     && ng "誤擋不該吃掉 deny-once 額度" "無 warned 標記" "有標記" \
     || ok "誤擋不該吃掉 deny-once 額度"
 
 # 這是本 bug 的核心案例：agent 還在跑（有 PostToolUse、沒有 SubagentStop）
-reset; mkdir -p "$SANDBOX/.claude/logs"; am_post_async planner ag001 >/dev/null
+reset; mkdir -p "$SANDBOX/.claude/logs"; am_post_async ui-builder ag001 >/dev/null
 expect_contains "派工返回只記 agent_start" "agent_start" "$(ag_events)"
-expect_decision "真的 in-flight（未收到 SubagentStop）→ 再派一個要擋" deny "$(ag ui-builder)"
+expect_decision "真的 in-flight（未收到 SubagentStop）→ 再派一個要擋" deny "$(ag debug-investigator)"
 
 reset; mkdir -p "$SANDBOX/.claude/logs"
-am_post_async planner ag001 >/dev/null; am_stop ag001 planner >/dev/null
-expect_decision "收到 SubagentStop 後 → 再派一個放行" allow "$(ag ui-builder)"
+am_post_async ui-builder ag001 >/dev/null; am_stop ag001 ui-builder >/dev/null
+expect_decision "收到 SubagentStop 後 → 再派一個放行" allow "$(ag debug-investigator)"
 
 # 實測會收到 agent_type 為空字串的 SubagentStop。不能因此跳過寫入——
 # 漏一筆 complete 就讓那個 agent 的 in-flight 永遠不歸零，閘門會從此誤擋每一次委派。
 reset; mkdir -p "$SANDBOX/.claude/logs"
-am_post_async planner ag002 >/dev/null; am_stop ag002 "" >/dev/null
-expect_decision "agent_type 空字串的 SubagentStop 仍能沖銷 in-flight" allow "$(ag ui-builder)"
+am_post_async ui-builder ag002 >/dev/null; am_stop ag002 "" >/dev/null
+expect_decision "agent_type 空字串的 SubagentStop 仍能沖銷 in-flight" allow "$(ag debug-investigator)"
 
 # 實測也會收到這個 session 從沒派過的 agent_id
 reset; mkdir -p "$SANDBOX/.claude/logs"; am_stop never-dispatched Explore >/dev/null
-expect_decision "沒見過的 agent_id 的 SubagentStop → 不爆炸、計數不轉負" allow "$(ag planner)"
+expect_decision "沒見過的 agent_id 的 SubagentStop → 不爆炸、計數不轉負" allow "$(ag ui-builder)"
 reset; mkdir -p "$SANDBOX/.claude/logs"
-am_post_async planner ag003 >/dev/null; am_stop never-dispatched Explore >/dev/null
-expect_decision "多餘的 complete 不會沖掉別人的 in-flight" deny "$(ag ui-builder)"
+am_post_async ui-builder ag003 >/dev/null; am_stop never-dispatched Explore >/dev/null
+expect_decision "多餘的 complete 不會沖掉別人的 in-flight" deny "$(ag debug-investigator)"
 
 # 同步完成的 agent：PostToolUse 觸發時它已經結束，start/complete 一起寫，淨變化 0
 reset; mkdir -p "$SANDBOX/.claude/logs"; am_post_sync Explore tu9 >/dev/null
 expect_contains "同步完成同時記 start 與 complete" "agent_start,agent_complete" "$(ag_events)"
-expect_decision "同步完成的 agent 不算 in-flight" allow "$(ag planner)"
+expect_decision "同步完成的 agent 不算 in-flight" allow "$(ag ui-builder)"
 
 # 既有行為不能壞：帶隔離的一律放行（有自己的 checkout 與分支）
-reset; mkdir -p "$SANDBOX/.claude/logs"; am_post_async planner ag004 >/dev/null
+reset; mkdir -p "$SANDBOX/.claude/logs"; am_post_async ui-builder ag004 >/dev/null
 expect_decision "真 in-flight 下帶 isolation: worktree 仍放行" allow "$(ag refactor-cleaner worktree)"
 
 # 不是 Agent 工具的 PostToolUse 不該進這本帳
@@ -2133,7 +2176,7 @@ section "/suggest-mode 是專案級設定 — worktree 內也要吃主 checkout 
 #   .merge-pending          同理
 # 原本每條重建 worktree 剛好掩蓋了這三件事。
 
-wt_agent() { jq -nc --arg c "$1" '{tool_name:"Agent", cwd:$c, tool_input:{subagent_type:"planner"}}'; }
+wt_agent() { jq -nc --arg c "$1" '{tool_name:"Agent", cwd:$c, tool_input:{subagent_type:"ui-builder"}}'; }
 wt_bash()  { jq -nc --arg c "$1" '{tool_name:"Bash",  cwd:$c, tool_input:{command:"git merge feature/x"}}'; }
 wt_write() { jq -nc --arg c "$1" --arg f "$2" '{tool_name:"Write", cwd:$c, tool_input:{file_path:$f}}'; }
 
@@ -2162,13 +2205,13 @@ expect_decision "worktree 自己的 off 仍有效（fallback 沒壞）" allow \
     "$(run pre-agent-gate.sh "$(wt_agent "$WT")")"
 
 wt_clear
-out=$(run post-bash.sh "$(wt_bash "$WT")")
+out=$(run post-bash.sh "$(wt_bash "$WT")" MERGE_REFLOG_CHECK=off)
 [ -n "$out" ] && ok "（對照）worktree 沒設 off 時 post-bash 仍出聲" \
               || ng "（對照）worktree 沒設 off 時 post-bash 仍出聲" "有輸出" "空的"
 
 wt_clear; echo off > "$SM_FILE"
 expect_empty "主 checkout 的 off 關得掉 worktree 的合併偵測" \
-    "$(run post-bash.sh "$(wt_bash "$WT")")"
+    "$(run post-bash.sh "$(wt_bash "$WT")" MERGE_REFLOG_CHECK=off)"
 
 wt_clear
 out=$(run post-write.sh "$(wt_write "$WT" "$WT/src/api/x.ts")")
@@ -2178,6 +2221,310 @@ out=$(run post-write.sh "$(wt_write "$WT" "$WT/src/api/x.ts")")
 wt_clear; echo off > "$SM_FILE"
 expect_empty "主 checkout 的 off 關得掉 worktree 的文件債偵測" \
     "$(run post-write.sh "$(wt_write "$WT" "$WT/src/api/x.ts")")"
+
+# =========================================================================
+section "2026-10-20 複查修正 — 閘門失效、誤擋、接力注入"
+# =========================================================================
+#
+# 每一條都是獨立複查確認成立的問題。前三條是「閘門安靜地不攔」，最該先修。
+
+NOW_TS() { date '+%Y-%m-%d %H:%M:%S'; }
+AGL="$SANDBOX/.claude/logs/agent-activity.jsonl"
+ag2() { # <subagent_type> [isolation] —— 派工 PreToolUse
+    local iso=""; [ -n "${2:-}" ] && iso=",\"isolation\":\"$2\""
+    run pre-agent-gate.sh "$(printf '{"cwd":"%s","hook_event_name":"PreToolUse","tool_input":{"subagent_type":"%s"%s},"tool_use_id":"tX"}' "$SANDBOX" "$1" "$iso")"
+}
+st2() { # <agent_id> <agent_type> [isolation]
+    mkdir -p "$SANDBOX/.claude/logs"
+    jq -nc --arg ts "$(NOW_TS)" --arg a "$1" --arg t "$2" --arg i "${3:-}" \
+        '{timestamp:$ts,event:"agent_start",agent_id:$a,agent_type:$t,isolation:$i}' >> "$AGL"
+}
+
+# ---- #1 in-flight 計數遇壞行不能歸零 ----
+# 2026-10-16 真實 log 第 992 行只剩 `ord"}`（併發寫入截斷）。`jq -s` 整檔吞 → parse error
+# → 計數 0 → 兩道閘門一起靜默失效。
+reset; st2 a1 ui-builder; echo 'ord"}' >> "$AGL"
+printf '{\n  "timestamp": "x",\n  "event": "agent_start"\n}\n' >> "$AGL"   # 升級前的多行舊格式
+expect_decision "jsonl 有壞行時 in-flight 照算（仍擋）" deny "$(ag2 debug-investigator)"
+reset; echo 'garbage' >> "$AGL"; st2 a1 ui-builder
+expect_decision "壞行在前、正常紀錄在後也照算" deny "$(ag2 debug-investigator)"
+
+# ---- #2 帶隔離、定義自帶隔離、唯讀名單 ----
+reset; st2 a1 ui-builder worktree
+expect_decision "in-flight 帶 isolation: worktree 不算進計數" allow "$(ag2 debug-investigator)"
+reset; st2 a1 ui-builder remote
+expect_decision "in-flight 帶 isolation: remote 不算進計數" allow "$(ag2 debug-investigator)"
+reset; mkdir -p "$SANDBOX/.claude/agents"
+printf -- '---\nname: refactor-cleaner\ntools: ["Read","Bash"]\nisolation: worktree\n---\n\n正文 isolation: none\n' > "$SANDBOX/.claude/agents/refactor-cleaner.md"
+st2 a1 refactor-cleaner
+expect_decision "in-flight 的定義檔自帶 isolation: worktree → 不算" allow "$(ag2 debug-investigator)"
+reset; mkdir -p "$SANDBOX/.claude/agents"
+printf -- '---\nname: refactor-cleaner\nisolation: worktree\n---\n' > "$SANDBOX/.claude/agents/refactor-cleaner.md"
+st2 a1 ui-builder
+expect_decision "要派的 agent 定義檔自帶隔離 → 視同帶隔離放行" allow "$(ag2 refactor-cleaner)"
+reset; mkdir -p "$SANDBOX/.claude/agents"
+printf -- '---\nname: x\n---\n\nisolation: worktree\n' > "$SANDBOX/.claude/agents/ui-builder.md"
+st2 a1 debug-investigator
+expect_decision "isolation 寫在 frontmatter 之外不算（只看第一個區塊）" deny "$(ag2 ui-builder)"
+for ro in Explore Plan claude-code-guide planner architect workflow-template-manager; do
+    reset; st2 a1 ui-builder
+    expect_decision "唯讀名單：要派 $ro → 放行" allow "$(ag2 "$ro")"
+    reset; st2 a1 "$ro"
+    expect_decision "唯讀名單：在跑的 $ro 不算 in-flight" allow "$(ag2 ui-builder)"
+done
+reset; st2 a1 ui-builder
+expect_decision "general-purpose 不在唯讀名單（仍擋）" deny "$(ag2 general-purpose)"
+reset; st2 a1 planner; st2 a2 code-quality-specialist
+expect_decision "唯讀 agent 不會讓掃描類的讀寫衝突消失" deny "$(ag2 ui-builder)"
+# branch-switch-gate 用同一個 lib，自動受惠
+BSW="$SANDBOX/bsw-repo"; rm -rf "$BSW"
+git -c init.defaultBranch=main init -q "$BSW" >/dev/null 2>&1
+git -C "$BSW" -c user.email=t@t -c user.name=t commit -q --allow-empty -m c >/dev/null 2>&1
+git -C "$BSW" checkout -q -b feat/topic >/dev/null 2>&1
+mkdir -p "$BSW/.claude/logs"
+jq -nc --arg ts "$(NOW_TS)" '{timestamp:$ts,event:"agent_start",agent_id:"r1",agent_type:"planner"}' >> "$BSW/.claude/logs/agent-activity.jsonl"
+bsw() { jq -nc --arg cwd "$BSW" --arg c "$1" '{cwd:$cwd,tool_name:"Bash",tool_input:{command:$c}}' \
+        | env CLAUDE_PROJECT_DIR="$BSW" bash "$HOOK_DIR/pre-tool-use.sh" 2>/dev/null; }
+case "$(bsw 'git checkout -b feat/x' | jq -r '.hookSpecificOutput.permissionDecisionReason // ""')" in
+    *"subagent 還在跑"*) ng "branch-switch：在跑的只有唯讀 agent → 不走「持續擋」那一格" "deny-once 那一格" "持續擋" ;;
+    *) ok "branch-switch：在跑的只有唯讀 agent → 不走「持續擋」那一格" ;;
+esac
+rm -rf "$BSW"
+
+# agent-monitor 把派工參數的 isolation 記進帳
+reset; mkdir -p "$SANDBOX/.claude/logs"
+run agent-monitor.sh "$(jq -nc '{hook_event_name:"PostToolUse",tool_name:"Agent",session_id:"s",tool_use_id:"t",
+    tool_input:{subagent_type:"ui-builder",isolation:"worktree"},tool_response:{isAsync:true,status:"async_launched",agentId:"iso1"}}')" >/dev/null
+expect_eq "agent_start 記下 isolation" "worktree" "$(jq -r 'select(.event=="agent_start") | .isolation' "$AGL" 2>/dev/null)"
+
+# ---- #3 效能：沒有 git 的指令跳過四道 git 閘門；lib 單獨用時仍自己切段 ----
+reset; mkdir -p "$(dirname "$MP_FILE")"; echo '[merge] pending' > "$MP_FILE"
+expect_decision "不含 git 的指令完全不進 git 閘門" allow "$(bg 'npm test -- --grep merge')"
+( source "$HOOK_DIR/lib/merge-gate.sh"; unset CMD_SEGS
+  out=$(merge_gate "git rebase main" "$SANDBOX/.claude/taskmaster-data")
+  case "$out" in *deny*) exit 0 ;; *) exit 1 ;; esac ) \
+    && ok "lib 單獨呼叫（沒有 CMD_SEGS）仍自己切段" \
+    || ng "lib 單獨呼叫（沒有 CMD_SEGS）仍自己切段" "deny" "沒擋"
+SETTINGS="$HOOK_DIR/../settings.json"
+expect_eq "pre-tool-use 的 timeout 是 30（超時＝放行，不能貼著實測值）" "30" \
+    "$(jq -r '[.hooks.PreToolUse[].hooks[] | select(.command | contains("pre-tool-use.sh")) | .timeout][0]' "$SETTINGS")"
+
+# ---- #4 PowerShell 工具也要過 git 閘門 ----
+psg() { run pre-tool-use.sh "$(jq -nc --arg cwd "$SANDBOX" --arg c "$1" '{cwd:$cwd,tool_name:"PowerShell",tool_input:{command:$c}}')"; }
+reset; mkdir -p "$(dirname "$MP_FILE")"; echo '[merge] pending' > "$MP_FILE"
+expect_decision "PowerShell 的 git rebase 也被合併閘門擋" deny "$(psg 'git rebase main')"
+reset
+expect_decision "PowerShell 的裸 cd 不擋（那條只管 Bash）" allow "$(psg 'cd C:\temp')"
+for ev in PreToolUse PostToolUse PostToolUseFailure; do
+    if jq -e --arg ev "$ev" '[.hooks[$ev][]? | select((.matcher // "") | split("|") | index("PowerShell"))] | length > 0' "$SETTINGS" >/dev/null 2>&1; then
+        ok "settings.json 的 $ev 有接 PowerShell"
+    else ng "settings.json 的 $ev 有接 PowerShell" "matcher 含 PowerShell" "沒有"; fi
+done
+
+# ---- #5 判級訊息寫出**這個 checkout** 的模式檔實際路徑 ----
+reset
+M5=$(run pre-tool-use.sh "$(w /p/src/a.ts)" | jq -r '.hookSpecificOutput.permissionDecisionReason')
+expect_contains "判級訊息寫出展開後的模式檔路徑" "$SANDBOX/.claude/taskmaster-data/.current-task-mode" "$M5"
+case "$M5" in *'$CLAUDE_PROJECT_DIR'*) ng "判級訊息不再寫未展開的 \$CLAUDE_PROJECT_DIR" "不含" "含" ;;
+              *) ok "判級訊息不再寫未展開的 \$CLAUDE_PROJECT_DIR" ;; esac
+
+# ---- #6 模式檔不在 → 依契約從 plan 還原 ----
+PL="$SANDBOX/.claude/taskmaster-data/plans"
+reset; mkdir -p "$PL"; echo "13.2" > "$SANDBOX/.claude/taskmaster-data/.current-task"
+printf -- '---\ntitle: x\nmode: critical\n---\n' > "$PL/13.2-login.md"
+R6=$(run pre-tool-use.sh "$(w /p/src/a.ts)")
+expect_decision "有 .current-task＋plan 的 mode → 放行" allow "$R6"
+expect_contains "放行時告知已從 plan 還原" "已從 plan 還原任務模式 mode=critical" "$R6"
+expect_eq "模式檔被寫回 plan 的值" "critical" "$(cat "$MODE_FILE" 2>/dev/null)"
+reset; mkdir -p "$PL"; echo "adhoc-2026-10-20-fix-login" > "$SANDBOX/.claude/taskmaster-data/.current-task"
+printf -- '---\nmode: quick\n---\n' > "$PL/adhoc-2026-10-20-fix-login.md"
+echo standard > "$MODE_FILE"; touch -d '9 hours ago' "$MODE_FILE"
+expect_decision "TTL 過期後從 ad-hoc plan 還原（不變相重新判級）" allow "$(run pre-tool-use.sh "$(w /p/src/a.ts)")"
+expect_eq "還原的是 plan 的值，不是過期前的值" "quick" "$(cat "$MODE_FILE" 2>/dev/null)"
+reset; mkdir -p "$PL/archive"; echo "13.2" > "$SANDBOX/.claude/taskmaster-data/.current-task"
+printf -- '---\nmode: quick\n---\n' > "$PL/archive/13.2-old.md"
+expect_decision "archive/ 裡的 plan 不算" deny "$(run pre-tool-use.sh "$(w /p/src/a.ts)")"
+reset; mkdir -p "$PL"; echo "13.2" > "$SANDBOX/.claude/taskmaster-data/.current-task"
+printf -- '---\nmode: fast\n---\n' > "$PL/13.2.md"
+expect_decision "plan 的 mode 不是三者之一 → 照舊擋" deny "$(run pre-tool-use.sh "$(w /p/src/a.ts)")"
+reset
+expect_decision "沒有 .current-task → 照舊擋" deny "$(run pre-tool-use.sh "$(w /p/src/a.ts)")"
+
+# ---- #7 merge-gate 改用切段，不再誤擋 ----
+bgj() { run pre-tool-use.sh "$(jq -nc --arg cwd "$SANDBOX" --arg c "$1" '{cwd:$cwd,tool_name:"Bash",tool_input:{command:$c}}')"; }
+reset; mkdir -p "$(dirname "$MP_FILE")"; echo '[merge] pending' > "$MP_FILE"
+expect_decision "待驗證期間 git merge-base 放行" allow "$(bgj 'git merge-base HEAD main')"
+expect_decision "待驗證期間 git log | grep \"git merge\" 放行" allow "$(bgj 'git log --oneline | grep "git merge"')"
+expect_decision "待驗證期間 commit 訊息提到 git merge 放行" allow "$(bgj 'git commit -m "docs: git merge 說明"')"
+expect_decision "--abort 之後鏈上真的合併仍擋（逐段判斷）" deny "$(bgj 'git merge --abort && git rebase main')"
+
+# ---- #8 / #16 真的 repo：reflog 判斷合併有沒有發生、合併帶回文件債 ----
+GR2="$SANDBOX/merge-repo"; rm -rf "$GR2"; mkdir -p "$GR2"
+gr2() { git -C "$GR2" -c user.email=t@t -c user.name=t "$@" >/dev/null 2>&1; }
+gr2 init -q -b main; echo a > "$GR2/README.md"; gr2 add -A; gr2 commit -qm base
+gr2 checkout -q -b feat; mkdir -p "$GR2/src/api" "$GR2/src/ui"
+echo x > "$GR2/src/api/users.ts"; echo y > "$GR2/src/ui/button.css"; echo t > "$GR2/src/api/users.test.ts"
+gr2 add -A; gr2 commit -qm feat; gr2 checkout -q main
+gr2 merge --no-ff -m "merge: feat" feat
+pbr() { # <event: ok|fail> <command> [ENV=VAL…] —— 帶 cwd 的真實形狀（不關 reflog 檢查）
+    local ev="$1" c="$2"; shift 2
+    if [ "$ev" = ok ]; then
+        run post-bash.sh "$(jq -nc --arg d "$GR2" --arg c "$c" '{hook_event_name:"PostToolUse",tool_name:"Bash",cwd:$d,tool_input:{command:$c},tool_response:{stdout:"",stderr:""}}')" "$@"
+    else
+        run post-bash.sh "$(jq -nc --arg d "$GR2" --arg c "$c" '{hook_event_name:"PostToolUseFailure",tool_name:"Bash",cwd:$d,tool_input:{command:$c},error:"Exit code 1"}')" "$@"
+    fi
+}
+DI_F="$SANDBOX/.claude/taskmaster-data/.doc-impact"
+reset
+OUT16=$(pbr ok 'git merge --no-ff -m "merge: feat" feat')
+mp_has "真的合併成功 → 記待驗證" '[merge] feat'
+if grep -qxF 'src/api/users.ts' "$DI_F" 2>/dev/null; then ok "合併帶進的 API 檔補進 .doc-impact"
+else ng "合併帶進的 API 檔補進 .doc-impact" "src/api/users.ts" "$(cat "$DI_F" 2>/dev/null)"; fi
+if grep -qE 'button\.css|users\.test\.ts|README' "$DI_F" 2>/dev/null; then
+    ng "非文件對象（樣式、測試、README）不進 .doc-impact" "只有 users.ts" "$(cat "$DI_F")"
+else ok "非文件對象（樣式、測試、README）不進 .doc-impact"; fi
+expect_contains "合併成功訊息提到補進的文件債" "已補進" "$OUT16"
+reset; pbr ok 'git merge --no-ff -m "merge: feat" feat' DOC_SYNC_GATE=off >/dev/null
+[ -s "$DI_F" ] && ng "DOC_SYNC_GATE=off 時合併不補 .doc-impact" "空" "$(cat "$DI_F")" \
+               || ok "DOC_SYNC_GATE=off 時合併不補 .doc-impact"
+# 合併之後又有別的 commit → reflog 最新一筆不是合併 → 這次失敗的 merge 沒發生
+gr2 commit -q --allow-empty -m later
+reset; pbr fail 'git merge --no-ff no-such-branch' >/dev/null
+mp_empty "失敗且 reflog 最新不是合併 → 不記（分支名打錯）"
+# 成功事件不查 reflog（2026-10-21）：查了會連 merge --squash／--no-commit 一起濾掉（見 #18）。
+# 代價是這種「; 吃掉失敗」的形狀會多記一筆——多跑一次 /verify，方向偏多記。
+reset; pbr ok 'git merge --no-ff no-such-branch; echo done' >/dev/null
+mp_has "整條成功（; 吃掉失敗）→ 照舊記（成功事件不查 reflog）" '[merge] no-such-branch'
+reset; pbr fail 'git merge --no-ff no-such-branch' MERGE_REFLOG_CHECK=off >/dev/null
+mp_has "MERGE_REFLOG_CHECK=off 恢復一律記" '[merge] no-such-branch'
+# 合併真的成功、是鏈在後面的指令失敗 → reflog 證實 → 記，且訊息講清楚
+gr2 checkout -q -b feat2; echo z > "$GR2/src/api/orders.ts"; gr2 add -A; gr2 commit -qm feat2; gr2 checkout -q main
+gr2 merge --no-ff -m "merge: feat2" feat2
+reset; OUT8=$(pbr fail 'git merge --no-ff -m "merge: feat2" feat2 && false')
+mp_has "失敗事件但 reflog 證實合併已發生 → 記" '[merge] feat2'
+expect_contains "訊息說明合併本身已完成" "合併本身已經完成" "$OUT8"
+# ---- #18 merge --squash 成功不動 HEAD、不留合併類 reflog，仍要記（2026-10-21 審查 M2）----
+gr2 checkout -q -b feat3; echo s > "$GR2/src/api/squash.ts"; gr2 add -A; gr2 commit -qm feat3; gr2 checkout -q main
+gr2 merge --squash feat3
+reset; pbr ok 'git merge --squash feat3' >/dev/null
+mp_has "merge --squash 成功（reflog 最新是 checkout）→ 仍記待驗證" '[merge] feat3'
+if grep -qxF 'src/api/squash.ts' "$DI_F" 2>/dev/null; then ok "merge --squash 帶進的 API 檔補進 .doc-impact"
+else ng "merge --squash 帶進的 API 檔補進 .doc-impact" "src/api/squash.ts" "$(cat "$DI_F" 2>/dev/null)"; fi
+# ---- #19 reflog 濾掉的失敗 merge 仍進連續失敗計數（2026-10-21 審查 M3：曾整支 exit 0）----
+gr2 commit -qm squashed; gr2 commit -q --allow-empty -m later2
+reset; pbr fail 'git merge --no-ff no-such-branch' >/dev/null
+mp_empty "（前提）失敗且 reflog 最新不是合併 → 不記"
+expect_eq "被濾掉的失敗 merge 仍計入 .bash-fail-streak" "1	git merge --no-ff no-such-branch" \
+    "$(cat "$SANDBOX/.claude/taskmaster-data/.bash-fail-streak" 2>/dev/null | tr -d '\r')"
+rm -rf "$GR2"
+
+# ---- #11 報告稽核：agent 還沒結束就不催；refactor-cleaner 改成提醒落檔 ----
+EXP="$SANDBOX/.claude/taskmaster-data/.report-expectations.jsonl"
+exp_line() { # <agent> <area> <agent_id> <幾秒前>
+    jq -nc --arg a "$1" --arg ar "$2" --arg id "$3" --argjson ep "$(( $(date +%s) - $4 ))" \
+        '{ts:"x",epoch:$ep,agent:$a,area:$ar,agent_id:$id,notified:0}' >> "$EXP"
+}
+cre() { bash "$HOOK_DIR/lib/check-report-expectations.sh" "$SANDBOX/.claude" "$SANDBOX/.claude" 2>/dev/null; }
+reset; mkdir -p "$SANDBOX/.claude/logs"; exp_line ui-builder quality agX 600
+st2 agX ui-builder
+expect_empty "agent 還沒收到 SubagentStop → 先不催報告" "$(cre)"
+expect_contains "還在跑的期望原樣留著（記下 running_seen）" "running_seen" "$(cat "$EXP")"
+jq -nc --arg ts "$(NOW_TS)" '{timestamp:$ts,event:"agent_complete",agent_id:"agX"}' >> "$AGL"
+expect_contains "結束之後才催補寫" "ui-builder" "$(cre)"
+reset; mkdir -p "$SANDBOX/.claude/logs"; exp_line ui-builder quality "" 600
+expect_contains "沒有 agent_id 的期望照舊只看時間" "ui-builder" "$(cre)"
+reset; mkdir -p "$SANDBOX/.claude/logs"; exp_line refactor-cleaner quality "" 600
+O11=$(cre)
+expect_contains "refactor-cleaner 沒檔案 → 提醒主模型從回應落檔" "最終回應" "$O11"
+case "$O11" in *"完成後沒寫報告"*) ng "refactor-cleaner 不被當成缺報告" "不含缺漏措辭" "$O11" ;;
+               *) ok "refactor-cleaner 不被當成缺報告" ;; esac
+# post-agent-report 記期望時一起記 agent_id
+reset; mkdir -p "$SANDBOX/.claude/logs"
+run post-agent-report.sh "$(jq -nc --arg d "$SANDBOX" '{cwd:$d,tool_name:"Agent",tool_input:{subagent_type:"ui-builder"},tool_response:{isAsync:true,status:"async_launched",agentId:"agY"}}')" >/dev/null
+expect_eq "期望帶 agent_id" "agY" "$(jq -r '.agent_id' "$EXP" 2>/dev/null)"
+
+# ---- #13 坑閘門的 files: 樣式不被 glob 展開 ----
+reset; mkdir -p "$SANDBOX/.claude/context/learned" "$SANDBOX/g13/src/x"; : > "$SANDBOX/g13/src/x/real.ts"
+printf -- '---\ntitle: 星號樣式\nfiles: ["src/*/*.ts"]\nguard: g\n---\n' > "$SANDBOX/.claude/context/learned/glob.md"
+echo standard > "$MODE_FILE"
+expect_decision "樣式在 cwd 有同名檔時不被展開（仍命中坑閘門）" deny \
+    "$(cd "$SANDBOX/g13" && run pre-tool-use.sh "$(w "$SANDBOX/src/other/b.ts")")"
+rm -rf "$SANDBOX/g13"
+
+# ---- #14 pending handoff 也從 UserPromptSubmit 注入 ----
+reset; mk_handoff "h14.md" pending high
+expect_contains "使用者下一句話時注入 pending 交接" "planner → ui-builder" "$(run user-prompt-submit.sh "$(p '今天天氣如何')")"
+expect_contains "斜線指令也注入（交接是既成事實）" "待處理 agent 交接" "$(run user-prompt-submit.sh "$(p '/task-next')")"
+expect_contains "agent 交回訊息也注入（接力的時點）" "待處理 agent 交接" "$(run user-prompt-submit.sh "$(p "$HANDBACK")")"
+expect_eq "格式與 post-agent-report 一致" \
+    "$(run post-agent-report.sh '{"tool_name":"Agent"}' | jq -r '.hookSpecificOutput.additionalContext' | tr -d '\r')" \
+    "$(run user-prompt-submit.sh "$(p '/task-next')" | tr -d '\r')"
+reset; mk_handoff "h14.md" completed high
+expect_empty "沒有 pending 時不注入" "$(run user-prompt-submit.sh "$(p '/task-next')")"
+reset; for i in 1 2 3 4 5 6 7; do mk_handoff "h$i.md" pending high; done
+expect_contains "上限 5 筆" "偵測到 5 個" "$(run user-prompt-submit.sh "$(p '/task-next')")"
+
+# ---- #15 跨 session 接續 ----
+reset; echo "13.2" > "$SANDBOX/.claude/taskmaster-data/.current-task"
+mkdir -p "$PL"; printf -- '---\nmode: critical\n---\n' > "$PL/13.2-x.md"
+mkdir -p "$SANDBOX/.claude/sessions"; : > "$SANDBOX/.claude/sessions/2026-10-20-a.md"
+S15=$(run session-start.sh '{}' | jq -r '.hookSpecificOutput.additionalContext')
+expect_contains "開場注入進行中任務與 mode（mode 取自 plan）" "進行中任務 \`13.2\`（mode critical）" "$S15"
+expect_contains "附最新 session 存檔路徑" ".claude/sessions/2026-10-20-a.md" "$S15"
+reset
+case "$(run session-start.sh '{}')" in *"進行中任務"*) ng "沒有 .current-task 不注入" "不含" "含" ;; *) ok "沒有 .current-task 不注入" ;; esac
+reset; mkdir -p "$SANDBOX/.claude/taskmaster-data"; echo x > "$SANDBOX/.claude/taskmaster-data/.learned-candidates"
+expect_contains "踩坑候選改成收尾時處理" "收尾時處理" "$(run session-start.sh '{}')"
+
+# ---- #17 Windows 反斜線路徑的正規化 ----
+reset
+expect_decision "反斜線路徑的 .claude/** 仍放行" allow \
+    "$(run pre-tool-use.sh "$(jq -nc --arg f 'C:\p\.claude\hooks\x.sh' '{tool_name:"Write",tool_input:{file_path:$f}}')")"
+expect_decision "反斜線路徑的程式碼檔仍擋（未判級）" deny \
+    "$(run pre-tool-use.sh "$(jq -nc --arg f 'C:\p\src\a.ts' '{tool_name:"Write",tool_input:{file_path:$f}}')")"
+
+# ---- #20 branch -D 的分支名不是字面值 → 退回看 HEAD（2026-10-21 審查 H1）----
+# cmd_segments 把引號內容清成 `""`；`$B`、`$(…)` 也不是分支名。曾經「查不到就當不存在」→ 全部放行。
+BD="$SANDBOX/bd-repo"; rm -rf "$BD"
+git -c init.defaultBranch=main init -q "$BD" >/dev/null 2>&1
+bdq() { git -C "$BD" -c user.email=t@t -c user.name=t "$@" >/dev/null 2>&1; }
+bdq commit --allow-empty -m c1; bdq branch feat/q
+reset
+expect_decision "branch -D \"feat/q\"（雙引號）→ 擋" deny "$(gbo 'git branch -D "feat/q"' "$BD")"
+expect_decision "branch -D 'feat/q'（單引號）→ 擋" deny "$(gbo "git branch -D 'feat/q'" "$BD")"
+expect_decision "branch -D \$B（變數）→ 擋" deny "$(gbo 'B=feat/q; git branch -D $B' "$BD")"
+expect_decision "branch -D \$(…)（指令替換）→ 擋" deny "$(gbo 'git branch -D $(git branch --list "feat/*")' "$BD")"
+expect_decision "字面且不存在的分支 → 仍放行" allow "$(gbo 'git branch -D no-such' "$BD")"
+expect_decision "字面且存在、tip 沒 tag → 擋" deny "$(gbo 'git branch -D feat/q' "$BD")"
+bdq tag backup/feat-q feat/q; bdq commit --allow-empty -m c2
+expect_decision "字面且存在、tip 有 tag（HEAD 沒有）→ 放行" allow "$(gbo 'git branch -D feat/q' "$BD")"
+expect_decision "引號形式退回看 HEAD：HEAD 沒 tag → 擋（即使 tip 有）" deny "$(gbo 'git branch -D "feat/q"' "$BD")"
+bdq tag backup/main-head
+expect_decision "引號形式退回看 HEAD：HEAD 有 tag → 放行" allow "$(gbo 'git branch -D "feat/q"' "$BD")"
+rm -rf "$BD"
+
+# ---- #21 文件影響的測試排除錨定在目錄／檔名邊界（2026-10-21 審查 M6）----
+( source "$HOOK_DIR/lib/doc-impact.sh"
+  for p in src/api/latest/routes.ts src/contest/api/x.ts src/inspector/routes/a.ts src/api/specification/schema.json; do
+      doc_bearing "$p" && echo "IN $p" || echo "OUT $p"
+  done
+  for p in src/api/routes.test.ts src/api/routes.spec.ts tests/api/x.py test/api/x.py src/__tests__/api/x.ts \
+           spec/api/x.rb src/api/test_users.py src/api/users_test.go src/api/fixtures/x.json; do
+      doc_bearing "$p" && echo "IN $p" || echo "OUT $p"
+  done ) > "$SANDBOX/di21.txt" 2>/dev/null
+for p in src/api/latest/routes.ts src/contest/api/x.ts src/inspector/routes/a.ts src/api/specification/schema.json; do
+    grep -qxF "IN $p" "$SANDBOX/di21.txt" && ok "路徑含 test/spec 子字串仍是文件對象：$p" \
+        || ng "路徑含 test/spec 子字串仍是文件對象：$p" "IN" "$(grep -F " $p" "$SANDBOX/di21.txt")"
+done
+for p in src/api/routes.test.ts src/api/routes.spec.ts tests/api/x.py test/api/x.py src/__tests__/api/x.ts \
+         spec/api/x.rb src/api/test_users.py src/api/users_test.go src/api/fixtures/x.json; do
+    grep -qxF "OUT $p" "$SANDBOX/di21.txt" && ok "測試檔／目錄仍排除：$p" \
+        || ng "測試檔／目錄仍排除：$p" "OUT" "$(grep -F " $p" "$SANDBOX/di21.txt")"
+done
+rm -f "$SANDBOX/di21.txt"
+reset
+expect_contains "post-write：src/api/latest/routes.ts 觸發文件影響提醒" "文件影響提醒" \
+    "$(run post-write.sh "$(w "$SANDBOX/src/api/latest/routes.ts")")"
 
 # =========================================================================
 section "全體 hooks — 語法與健壯性"
