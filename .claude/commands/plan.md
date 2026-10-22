@@ -34,6 +34,19 @@ planner agent：
 4. **評估複雜度** — 高/中/低，給出預估時數
 5. **呈現草案** — 等使用者明確確認
 
+### 2.5 確認流程（planner 派兩次）
+
+planner 沒有 `AskUserQuestion`，所以確認由主模型做，**planner 會被派兩次**：
+
+1. **第一次派**：prompt 寫明「只回草案，不寫檔」。planner 回 `NEEDS_CONTEXT`，
+   附草案全文與待確認事項（含你建議的預設答案）
+2. **主模型用 `AskUserQuestion` 確認**（一次一題，遵守 `interactive-qa.md`）
+3. **第二次派**：prompt 開頭明寫以下其一，並附上使用者的修改意見
+   - 「已確認，寫入」——照草案（含修改）建立新 plan 檔
+   - 「以現有 plan 為基線修改」——用 `Edit` 改既有 plan 檔，不整份覆寫
+
+沒有第二次派工的那句話，planner 不會寫檔——這是「確認前不污染 plans/」的機制本身。
+
 ### 3. 持久化（使用者確認後）
 
 確認後 planner 自動：
@@ -44,6 +57,10 @@ planner agent：
 3. **更新 WBS**：若綁 WBS 任務，在該任務「連結」欄加入 `[計畫](plans/<id>-<slug>.md)`
    （規則見 `plan-format` skill 的「與 WBS 的雙向同步」）
 4. **顯示摘要**：列出計畫路徑與下一步建議
+
+**`/plan` 只寫計畫，不開工**：不改 WBS 的任務狀態、不寫 `.current-task`。
+「先規劃、之後再做」的任務會維持 `⏳ 待處理`。標進行中是 `/tdd` 真正開始實作時的事
+（見 `commands/tdd.md`「偵測當前任務與計畫」）。
 
 ### 4. 下一步提示
 
@@ -76,11 +93,9 @@ planner agent：
 
 ## 何時不該用 /plan
 
-參見 `plan-format` skill 的「何時不該用 /plan」章節。快速判斷：
-
-- 單檔案、< 30 分鐘 → 直接做
-- 跨 ≥ 2 檔案、預估 ≥ 1h、或有非 trivial 風險 → 用 `/plan`
+門檻見 `plan-format` skill 的「何時不該用 /plan」（唯一來源，勿在此重述）。
 
 ## 重要提醒
 
-**關鍵**：planner agent **不會**在使用者明確確認前寫入檔案（不會污染 plans/）。
+**關鍵**：planner agent **不會**在使用者明確確認前寫入檔案（不會污染 plans/）——
+機制見上方「2.5 確認流程」。

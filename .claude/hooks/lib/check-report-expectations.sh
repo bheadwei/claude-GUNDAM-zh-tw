@@ -44,20 +44,46 @@ log() { echo "[$TS] $*" >> "$LOG_FILE" 2>/dev/null || true; }
 
 NL=$'\n'
 MISSING=""
+FROM_RESPONSE=""
 KEPT=""
+
+# ---- 「這個 agent 真的結束了嗎」（2026-10-20 補）----
+#
+# 以前只看「啟動後過了多久」：過了寬限期（120 秒）就去找報告，找不到就催補寫。
+# 而 agent 常跑幾十分鐘（見過 44 分鐘），於是**還在工作的 agent** 被催「補寫報告」，
+# 主模型照做的話會自己寫一份假報告、或去打擾一個沒做完的 agent。
+# 現在期望裡帶 agent_id（post-agent-report.sh 記），agent-activity.jsonl 裡還沒有它的
+# agent_complete（SubagentStop 寫）就**先不催**、原樣留著。
+# 沒有 agent_id 的期望（同步完成、或升級前的舊紀錄）、或 jsonl 讀不到時 → 照舊只看時間。
+#
+# 還在跑的期望不能永遠留著：當機的 agent 不會有 SubagentStop。超過
+# REPORT_INFLIGHT_MAX_SECONDS（預設 14400 = 4h）就放棄追蹤。
+# 結束之後的 DEADLINE 從「最後一次看到它還在跑」起算（running_seen），
+# 否則跑了 40 分鐘的 agent 一結束就直接超過 30 分鐘的期限，連催都沒催就被放棄。
+INFLIGHT_MAX="${REPORT_INFLIGHT_MAX_SECONDS:-14400}"
+JSONL="$MAIN_CLAUDE/logs/agent-activity.jsonl"
+DONE_IDS=""; DONE_LOADED=0
+load_done_ids() {
+    [ "$DONE_LOADED" -eq 1 ] && return 0
+    DONE_LOADED=1
+    [ -f "$JSONL" ] || { DONE_IDS="__unreadable__"; return 0; }
+    # 逐行容錯（-R + fromjson?），理由同 lib/agent-inflight.sh：一行壞掉不能讓整份讀不到
+    DONE_IDS=" $(jq -Rrn '[inputs | fromjson? | objects | select(.event == "agent_complete") | .agent_id // empty] | unique | join(" ")' "$JSONL" 2>/dev/null | tr -d '\r') "
+}
 
 while IFS= read -r line; do
     [ -n "$line" ] || continue
 
-    agent=$(echo "$line" | jq -r '.agent // ""'    2>/dev/null) || agent=""
-    area=$(echo  "$line" | jq -r '.area // ""'     2>/dev/null) || area=""
-    epoch=$(echo "$line" | jq -r '.epoch // 0'     2>/dev/null) || epoch=0
-    notified=$(echo "$line" | jq -r '.notified // 0' 2>/dev/null) || notified=0
+    agent=""; area=""; epoch=0; notified=0; aid=""; rseen=0
+    _f=$(printf '%s' "$line" | jq -r '@sh "agent=\(.agent // "") area=\(.area // "") epoch=\(.epoch // 0) notified=\(.notified // 0) aid=\(.agent_id // "") rseen=\(.running_seen // 0)"' 2>/dev/null) || _f=""
+    _f="${_f//$'\r'/}"
+    [ -n "$_f" ] && eval "$_f"
 
     # 壞行直接丟掉，不讓它卡住整個檔案
     if [ -z "$agent" ] || [ -z "$area" ] || ! [ "$epoch" -gt 0 ] 2>/dev/null; then
         continue
     fi
+    case "$rseen" in ''|*[!0-9]*) rseen=0 ;; esac
 
     age=$(( NOW - epoch ))
 
@@ -66,6 +92,26 @@ while IFS= read -r line; do
         KEPT="${KEPT}${line}${NL}"
         continue
     fi
+
+    # 還在跑 → 先不催（見上）
+    if [ -n "$aid" ]; then
+        load_done_ids
+        if [ "$DONE_IDS" != "__unreadable__" ]; then
+            case "$DONE_IDS" in
+                *" $aid "*) ;;
+                *)
+                    if [ "$age" -ge "$INFLIGHT_MAX" ]; then
+                        log "WARN: $agent（$aid）逾 ${age}s 仍未收到結束事件 — 放棄追蹤報告"
+                    else
+                        KEPT="${KEPT}$(printf '%s' "$line" | jq -c --argjson n "$NOW" '.running_seen = $n' 2>/dev/null || echo "$line")${NL}"
+                    fi
+                    continue ;;
+            esac
+        fi
+    fi
+    # DEADLINE 從最後一次看到它還在跑起算
+    dage=$age
+    [ "$rseen" -gt 0 ] && dage=$(( NOW - rseen ))
 
     # 找「這次啟動之後才出現」的報告：-newermt 比 -mmin 精確，
     # 而且避免把 agent 上一輪的舊報告誤認為這次的產出
@@ -81,12 +127,17 @@ while IFS= read -r line; do
         continue
     fi
 
-    if [ "$age" -ge "$DEADLINE" ]; then
-        log "WARN: $agent 逾 ${age}s 仍無報告於 context/$area/ — 放棄追蹤"
+    if [ "$dage" -ge "$DEADLINE" ]; then
+        log "WARN: $agent 逾 ${dage}s 仍無報告於 context/$area/ — 放棄追蹤"
         continue
     fi
 
-    if [ "$notified" = "0" ]; then
+    if [ "$notified" = "0" ] && [ "$agent" = "refactor-cleaner" ]; then
+        # 它跑在自己的 worktree、寫不回主 checkout，所以報告與 handoff 全文放在**回應**裡，
+        # 由主模型落檔（agents/refactor-cleaner.md）。沒有檔案不是它漏寫，是還沒人落檔。
+        FROM_RESPONSE="${FROM_RESPONSE}${NL}  • **${agent}** → 把它最終回應裡的報告落檔到 \`.claude/context/${area}/${agent}-{YYYY-MM-DD-HHMM}.md\`；回應裡若有 handoff，一併寫進 \`.claude/coordination/handoffs/\`"
+        KEPT="${KEPT}$(echo "$line" | jq -c '.notified = 1' 2>/dev/null || echo "$line")${NL}"
+    elif [ "$notified" = "0" ]; then
         MISSING="${MISSING}${NL}  • **${agent}** → 應寫入 \`.claude/context/${area}/${agent}-{YYYY-MM-DD-HHMM}.md\`（已啟動 ${age}s）"
         KEPT="${KEPT}$(echo "$line" | jq -c '.notified = 1' 2>/dev/null || echo "$line")${NL}"
     else
@@ -100,13 +151,25 @@ if printf '%s' "$KEPT" > "$tmp" 2>/dev/null; then
     mv -f "$tmp" "$EXPECT_FILE" 2>/dev/null || rm -f "$tmp" 2>/dev/null
 fi
 
-[ -n "$MISSING" ] || exit 0
+[ -n "$MISSING" ] || [ -n "$FROM_RESPONSE" ] || exit 0
 
+if [ -n "$MISSING" ]; then
 cat <<EOF
 📋 有 agent 完成後沒寫報告（延後稽核；非同步啟動的 agent 在 PostToolUse 當下還沒動工，所以改在這裡查）：${MISSING}
 
 報告是跨 session 的唯一記憶——下一棒 agent 和未來的你都靠它。若該 agent 已結束，**現在補寫**（格式見 \`.claude/context/_REPORT_TEMPLATE.md\`）；若它仍在背景執行，忽略本訊息即可。
 （關閉稽核：環境變數 REPORT_AUDIT=off）
 EOF
+fi
+
+if [ -n "$FROM_RESPONSE" ]; then
+    [ -n "$MISSING" ] && echo
+cat <<EOF
+📥 這些 agent 跑在自己的 worktree，報告寫不回主 checkout，**全文在它們的最終回應裡**——由你落檔：${FROM_RESPONSE}
+
+照回應原文寫，不要重新摘要；落檔後 handoff 才會被接力機制看到。
+（關閉稽核：環境變數 REPORT_AUDIT=off）
+EOF
+fi
 
 exit 0

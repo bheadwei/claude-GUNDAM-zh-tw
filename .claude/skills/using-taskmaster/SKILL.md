@@ -39,7 +39,8 @@ description: Use when starting any conversation in a TaskMaster project — esta
 | 建置失敗、`tsc`／型別／import 錯誤 | **build-error-resolver**（終端節點，修完即止） |
 | 合併出現衝突（merge／cherry-pick／rebase 停在衝突） | **conflict-resolver**（讀兩邊 plan 與報告判意圖；設計決策會 abort 並回報） |
 | 重構、清死碼、整併 | refactor-cleaner → code-quality-specialist →（它回報**某條有風險的路徑完全沒測試**時）test-automation-engineer |
-| 前端頁面／元件／設計稿 | 先載入 `ui-style-compliance` skill → **ui-builder** →（關鍵流程）e2e-validation-specialist |
+| 前端頁面／元件 | 先載入 `ui-style-compliance` skill → **ui-builder** →（關鍵流程）e2e-validation-specialist |
+| Pencil 設計稿（`.pen`） | 不派 agent：主模型載入 `ui-style-compliance` 自己做 |
 | **整理／更新／同步文件**，描述的對象是**程式碼**：codemap、API 文檔、技術 README | **documentation-specialist** |
 | **整理／更新／同步文件**，描述的對象是 **`.claude/` 本身**：skill／rule／agent 定義／hook／模板自己的 README 與計數 | **skill-curator** |
 | PRD／ADR／設計文檔等流程模板 | **workflow-template-manager** |
@@ -50,18 +51,11 @@ description: Use when starting any conversation in a TaskMaster project — esta
 | E2E、關鍵使用者流程驗證 | e2e-validation-specialist |
 | 安全稽核、秘密洩漏、OWASP | security-infrastructure-auditor |
 
-> **「明確根因」＝ 你能說出「在 X 檔案 Y 行，當 Z 條件成立時會發生 W」。** 說不出這句話就是未確認，派 `debug-investigator`——判準不夠硬就會被「我覺得根因很明確」這種恆為真的句子通過（見 `context/learned/2026-09-16-concurrent-read-write-not-file-overlap.md`）。`quick` 原則上不派 agent，這兩列用在 standard/critical。
+> **「明確根因」＝ 你能說出「在 X 檔案 Y 行，當 Z 條件成立時會發生 W」。** 說不出這句話就是未確認，派 `debug-investigator`——判準不夠硬就會被「我覺得根因很明確」這種恆為真的句子通過（見 `context/learned/2026-09-16-concurrent-read-write-not-file-overlap.md`）。`quick` 下不做這個根因判準，直接依上方那列派 debug-investigator。
 
 都不適配才退回 Claude Code 內建的 `general-purpose`。**「我自己做比較快」不是退回的理由。**
 
-## 改到 API／schema／對外介面 → 文件債已經開始累積
-
-`post-write.sh` 會在你改到「文件描述的對象」（API／路由／schema／migration／
-對外 index／CLI）時記進 `.claude/taskmaster-data/.doc-impact`，並在本任務第一次命中時
-提醒你一次。**不要停下來處理**，繼續實作；`/verify` 在標記 WBS ✅ 前會擋下來要求處理。
-
-收尾時的正解是**委派 `documentation-specialist` 一次處理完整份清單**，不是自己一個一個
-檔案改。新需求與客戶 CR 最常見的失敗就是程式寫出來了、文件沒跟上。
+改到 API／schema／對外介面時的文件債：`post-write.sh` 命中當下會提示，處理程序見 `/verify` 的「文件同步關卡」。
 
 ## 動工前必讀：這個坑踩過沒有
 
@@ -86,16 +80,7 @@ description: Use when starting any conversation in a TaskMaster project — esta
 | 「反正我做完會自己檢查」 | 自檢不等於 code-quality-specialist 的檢查。 |
 | 「hook 沒提示我，應該不用派」 | hook 的關鍵字表不完整。**沒提示不代表不用派。** |
 
-## 執行多階段計畫時：agent 不只是顧問
-
-`standard`/`critical` 且 plan 有 ≥2 階段時，**載入 `subagent-execution` skill**——
-它把每個階段交給一個全新的 implementer subagent 實作，帶階段審查、有界修復迴圈、
-以及能撐過 context 壓縮的帳本。
-
-不要自己一路把 4 個階段寫完：長任務裡你會慢慢偏離 plan，而且沒有任何紀錄能讓人
-（包括下一個 session 的你）看出是從哪一步開始偏的。
-
-`quick` 模式不適用——開 subagent 的開銷大於收益。
+多階段 plan 的執行方式：見 `/tdd` 的「選執行方式」（會載入 `subagent-execution` skill）。
 
 ## agent 回來之後：照狀態碼分流
 

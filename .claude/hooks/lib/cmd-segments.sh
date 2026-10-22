@@ -41,8 +41,14 @@
 #   source "$(dirname "${BASH_SOURCE[0]}")/lib/cmd-segments.sh" 2>/dev/null || true
 #   declare -F cmd_segments >/dev/null 2>&1 || return 0      # 缺檔就放行
 #   segs=$(cmd_segments "$CMD")
+#   segs=${CMD_SEGS-$(cmd_segments "$cmd")}                   # 閘門 lib 的寫法：見下
 #   [ "$(cmd_git_subcmd "$seg")" = rebase ]                   # 子指令比對用這個
 #   cmd_match "$seg" '[[:space:]]--hard([[:space:]]|$)'        # 旗標比對用這個
+#
+# CMD_SEGS：pre-tool-use.sh 只切**一次**、放進這個變數，四道閘門 lib 都用
+# `${CMD_SEGS-$(cmd_segments "$cmd")}` 取（變數有設就用，連空字串也算；lib 單獨跑時自己切）。
+# 切一次要開 6 個行程，在 Windows 上約 1 秒；四道各切一次曾讓 `git checkout -b`
+# 跑到 12～15 秒，超過 hook 的 timeout——而超時等於放行。
 
 # cmd_match <字串> <ERE> —— 前後補一個空白再比對
 # 不用 `[[ =~ ]]` 的 \b：不同 bash／grep 實作對它的支援不一致。
@@ -51,8 +57,14 @@
 #
 # 注意：它看的是**整段任何位置**。拿來判斷子指令會把 `git log --grep merge`
 # 當成 merge——判斷子指令請用 cmd_git_subcmd。
+#
+# 用 bash 內建的 `[[ =~ ]]`（POSIX ERE，與 grep -E 同一套語法）而不是開 grep：
+# 這台 Windows 機器開一個行程要 ~170ms，git-backup-gate 一段指令最多比對 8 次，
+# 光這裡就吃掉 1 秒多，而 pre-tool-use 的 timeout 是硬上限、超時等於閘門放行。
+# 輸入一律是單行的指令段（cmd_segments 的輸出），所以 `$` 只會對到段尾。
 cmd_match() {
-    printf '%s' " $1 " | grep -qE "$2"
+    local s=" $1 " re="$2"
+    [[ $s =~ $re ]]
 }
 
 # cmd_strip_heredoc —— stdin → stdout，拿掉 heredoc 內文與結束行，開頭那行保留

@@ -65,8 +65,10 @@ resolve_roots() {
     [ -n "$cwd" ] || { WORK_CLAUDE="$WORK_ROOT/.claude"; return 0; }
 
     local norm main_norm
-    norm=$(printf '%s' "$cwd" | tr '\\' '/')
-    main_norm=$(printf '%s' "$MAIN_ROOT" | tr '\\' '/')
+    # 內建替換，不開 tr 行程：每支 hook 每次都跑到這裡，Windows 上一個行程 ~170ms。
+    # 樣式寫成 '\'：在雙引號裡寫 \\ 不會被當成反斜線（bash 5.2 實測整串原樣不動）。
+    norm="${cwd//'\'//}"
+    main_norm="${MAIN_ROOT//'\'//}"
 
     # 往上找 .git（linked worktree 的 .git 是**檔案**，主 checkout 是目錄）
     local d="$norm" found=""

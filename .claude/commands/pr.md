@@ -36,10 +36,16 @@ git diff "$BASE"...HEAD                  # 實際內容
 
 - **跑 `/verify pre-pr`**（Recommended）— 建置/型別/lint/測試/安全掃描
 - **跑完整把關鏈** — code-quality-specialist → security-infrastructure-auditor →
-  e2e-validation-specialist（見 `agent-orchestration.md` 的「PR 前把關」）
+  e2e-validation-specialist（見 `using-taskmaster` skill 路由表的「開 PR 前把關」列）
 - **跳過，直接開** — 適合文件變更或已經驗過
 
-任務模式為 `critical` 時，**把關鏈不可跳過**——直接執行，不問。
+**critical 時把關鏈不可跳過**——直接執行，不問。判定 critical 的條件（任一成立）：
+
+- 本分支涵蓋的任一 plan frontmatter 為 `mode: critical`——**含 `plans/archive/`**
+  （`/verify` 完成時會把 plan 歸檔、清掉模式檔，所以到 `/pr` 時通常只剩歸檔的那份）。
+  「涵蓋」＝ plan 檔本身在 `git diff "$BASE"...HEAD --name-only` 裡，或它的 `wbs_task`
+  出現在本分支的 commit 訊息中
+- `.claude/taskmaster-data/.current-task-mode` 為 `critical`
 
 檢查失敗 → 停下回報，不要帶著紅燈開 PR。
 
@@ -112,5 +118,5 @@ gh pr create --base "$BASE" --title "<標題>" --body "<內容>"
 ## 相關
 
 - `.claude/rules/coding-style.md` — commit message 格式
-- `.claude/rules/agent-orchestration.md` — PR 前把關鏈
+- `using-taskmaster` skill 路由表「開 PR 前把關」列 — 把關鏈的組成（唯一來源）
 - `/verify pre-pr` — 完整檢查含安全掃描

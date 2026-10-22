@@ -218,7 +218,7 @@ IA snippet 格式（最小模式）：
 
 #### 5.2 Plan 持久化（若複雜）
 
-若此頁預估 ≥ 1h 且跨 ≥ 2 檔案，詢問使用者是否要用 `/plan --adhoc` 建立實作計畫（寫入 `plans/adhoc-YYYY-MM-DD-ui-<page>.md`），以便後續 `/tdd` 接續。
+若此頁達 `/plan` 門檻（唯一來源：`plan-format` skill「何時不該用 `/plan`」），詢問使用者是否要用 `/plan --adhoc` 建立實作計畫（寫入 `plans/adhoc-YYYY-MM-DD-ui-<page>.md`），以便後續 `/tdd` 接續。
 
 ### 6. Q&A 記錄
 

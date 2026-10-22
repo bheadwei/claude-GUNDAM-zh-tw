@@ -13,7 +13,7 @@ description: 實作計畫（plan）的檔案格式（含「驗收」欄要寫成
 
 | 欄位 | 唯一來源 | 說明 |
 |---|---|---|
-| 任務狀態（⏳/🔄/✅） | **WBS** | `/task-next` 更新進行中，`/verify` 或使用者確認後標完成 |
+| 任務狀態（⏳/🔄/✅） | **WBS** | `/task-next` 或 `/tdd` 開工時更新進行中（`/plan` 不改），`/verify` 或使用者確認後標完成 |
 | 優先級、依賴任務、總預估 | **WBS** | 專案 backlog 視角 |
 | 階段拆解、風險、驗收標準、實作細節 | **Plan 檔** | 單任務實作藍圖 |
 | 單階段狀態（⏳/🔄/✅） | **Plan 檔** | `/tdd` 每完成一階段更新 |
@@ -137,7 +137,7 @@ Plan 獨有的技術層面依賴，非 WBS 的任務依賴：
 
 - [ ] 所有階段狀態為 ✅
 - [ ] 測試覆蓋率達門檻（見 `testing-standards` skill）
-- [ ] `/code-review` 無 CRITICAL/HIGH 問題
+- [ ] 階段審查無未解的 CRITICAL/HIGH（審查節奏見 `rules/task-mode.md`）
 - [ ] 已更新 WBS 任務為 ✅
 ```
 
@@ -220,7 +220,7 @@ WBS 版面與連結欄的完整規則見 `.claude/templates/wbs.template.md`（�
 
 ```
 想加功能  →  /task-add   （追加 WBS 行：自動拆解、接編號、算依賴）
-          →  /plan <id>  （只在達門檻時才產：跨 ≥2 檔 / ≥1h / critical）
+          →  /plan <id>  （只在達門檻時才產，門檻見下方「何時不該用 /plan」）
 ```
 
 `/task-next` 在 WBS 待辦清空時、`/verify` 在 ad-hoc plan 完成時，都會主動提起 `/task-add`。
@@ -233,5 +233,10 @@ WBS 版面與連結欄的完整規則見 `.claude/templates/wbs.template.md`（�
 - 已在 WBS 且極簡單的任務（例：更新一個常數）
 - 探索性實驗、還不確定方向 — 主模型先用 `AskUserQuestion` 討論
 
-**`/plan` 門檻**：跨 ≥ 2 檔案、預估 ≥ 1h、或有非 trivial 風險。
-`critical` 模式一律需要 plan（見 `rules/task-mode.md`）。
+**`/plan` 門檻（唯一來源，其他檔案只寫指標）**：
+
+| 任務模式 | 要不要 plan |
+|---|---|
+| `quick` | 不用 |
+| `standard` | 依門檻：跨 ≥ 2 檔案、預估 ≥ 1h、或有非 trivial 風險 → 要；否則直接做 |
+| `critical` | 一律要，沒有 plan 不進 `/tdd` |

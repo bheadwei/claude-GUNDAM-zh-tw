@@ -41,10 +41,14 @@ description: Use when running work in parallel across git worktrees — creating
 |---|---|
 | `taskmaster-data/.current-task` | `context/learned/` — 踩過的坑是跨任務共享知識 |
 | `taskmaster-data/.current-task-mode` | `context/decisions/` — ADR |
-| `taskmaster-data/.doc-impact`＋`.doc-impact-notified` | `context/<area>/` — agent 報告 |
+| `taskmaster-data/.doc-impact`＋`.doc-impact-notified`（註） | `context/<area>/` — agent 報告 |
 | `taskmaster-data/.pitfall-seen` | `coordination/handoffs/` — agent 交接 |
 | `taskmaster-data/.report-expectations.jsonl` | `taskmaster-data/.suggest-mode` — 專案級設定 |
 | | `logs/`＋`timelog.jsonl` — 集中一處才查得到 |
+
+註：`.doc-impact` 跟著 worktree，所以 worktree 累積的文件債**不會自己回到主 checkout**。
+合併時由 hook 把它併進主 checkout 的 `.doc-impact`，主 checkout 的 `/verify`「文件同步關卡」
+才看得到；實作在 hook 那側（唯一來源），不要靠手動搬。
 
 **`wbs.md` 與 `plans/` 不在上表**——它們是 git 追蹤的檔案，worktree 會自然帶一份、
 改動由 git 合併，不需要 hook 介入選 root。這也是為什麼 `.gitignore` 必須讓它們進版控：
@@ -157,6 +161,11 @@ uv sync --all-packages                            # 重建，不要只 uv sync
 2. **一個 session 派多個隔離 subagent** —— `Agent` 工具帶 `isolation: "worktree"`。
    context 集中在你這邊，但你要自己協調
 
+**進 worktree 的第一步：寫 `.current-task`**（值是該任務的 WBS id 或 ad-hoc plan 檔名主幹）。
+它跟著 worktree（見上表），worktree 一開出來是空的——沒寫的話 `/tdd` 找不到 plan、
+`/verify` 對不到驗收標準。模式檔不用手寫：hook 會從 plan 的 `mode:` 還原。
+派法 2 的話，把這一步寫進派工 prompt 的開頭。
+
 ### 派工前務必做的一件事
 
 **先 commit，再開 worktree。** 對象不只共用定義——凡是 agent 進去就得用到的東西
@@ -234,7 +243,7 @@ git merge --no-ff worktree-<name>
 **最後一個合併之後**，`/verify` 會多做一件事：載入 `spec-convergence` 跑收斂檢查。
 理由是平行開發最容易踩的不是「漏做」而是**範圍蔓延** —— 三個 agent 各自多做了一點
 「順手的改善」，單獨看都合理，合起來就偏離當初講好的範圍。
-完整關卡定義見 `.claude/commands/verify.md` 的「0a. 合併驗證關卡」。
+完整關卡定義見 `.claude/commands/verify.md` 的「合併驗證關卡（不論有沒有進行中任務）」。
 
 **順序**：先合**獨立**的功能，再合**依賴它們**的。例如 search 與 cart 先合、
 用到 `CartItem` 的 order-email 後合——這樣基礎型別已經在 main 了。

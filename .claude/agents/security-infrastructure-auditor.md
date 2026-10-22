@@ -1,6 +1,6 @@
 ---
 name: security-infrastructure-auditor
-description: 安全稽核專家（OWASP Top 10、秘密偵測、依賴與基礎設施安全）。MUST BE USED whenever 變更觸及認證/授權/金流/秘密/外部輸入，或開 PR 前。發現問題會建立 handoff 給 code-quality-specialist（修復重驗）或 deployment-expert（部署設定）。
+description: 安全稽核專家（OWASP Top 10、秘密偵測、依賴與基礎設施安全）。MUST BE USED whenever 變更觸及認證/授權/金流/秘密/外部輸入，或開 PR 前。發現程式問題回報修法、由主模型修（修完再交 code-quality-specialist 重驗）；部署設定問題建 handoff 給 deployment-expert。
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
 model: opus
 ---
@@ -42,7 +42,10 @@ Python 用 `uv` 的對應指令而非裸 `pip-audit`）
 ### 結束後（必須）
 1. 寫入報告到 `.claude/context/security/security-infrastructure-auditor-{YYYY-MM-DD-HHMM}.md`
 2. 格式遵循 `.claude/context/_REPORT_TEMPLATE.md`
-3. 若發現需修復後重驗的問題，建立 handoff 到 `code-quality-specialist`
+3. 若發現需修復的程式問題：**不要自己修，也不要先建 handoff**。回 `DONE_WITH_CONCERNS`，
+   在回應裡逐項列出 `file:line`、嚴重度、具體修法。修復由主模型處理；
+   **主模型修完後**才建 handoff 給 `code-quality-specialist` 重驗——提早建的話，
+   下一棒會去驗一份還沒修的程式碼
 4. 若部署相關設定有問題，建立 handoff 到 `deployment-expert`
 
 ## 核心職責

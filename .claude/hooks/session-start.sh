@@ -173,7 +173,7 @@ if [ "${CURATION_REMINDERS:-on}" != "off" ]; then
     _CAND="$_DATA/.learned-candidates"
     if [ -s "$_CAND" ]; then
         _N=$(grep -c . "$_CAND" 2>/dev/null || echo 0)
-        note "🧠 有 ${_N} 筆「踩過的坑」候選還沒寫進 \`.claude/context/learned/\`（清單在 \`taskmaster-data/.learned-candidates\`）。這些是連續失敗後才解掉的問題——同一個坑不該踩第二次。**現在就處理掉**：讀清單、逐筆判斷值不值得留，值得的用 \`/learn\` 寫進 \`learned/\`，不值得的直接從清單刪。處理完清空該檔。"
+        note "🧠 有 ${_N} 筆「踩過的坑」候選還沒寫進 \`.claude/context/learned/\`（清單在 \`taskmaster-data/.learned-candidates\`）。這些是連續失敗後才解掉的問題——同一個坑不該踩第二次。**收尾時處理**（手上的任務做完、或 `/verify` 之前；不要為此打斷使用者剛交代的事）：讀清單、逐筆判斷值不值得留，值得的用 \`/learn\` 寫進 \`learned/\`，不值得的直接從清單刪。處理完清空該檔。"
     fi
 
     # ②③ 只在模板 repo 出現
@@ -283,6 +283,42 @@ date '+%H:%M' > "$TIMELOG_DIR/.session-start" 2>/dev/null
 # 否則第二個 session 就不會再提醒同一個檔案的坑。
 rm -f "$TIMELOG_DIR/.pitfall-seen" 2>/dev/null
 rm -f "$WORK_CLAUDE/taskmaster-data/.pitfall-seen" 2>/dev/null
+
+# ============================================================================
+# 跨 session 接續：上次有沒有做到一半的任務
+#
+# `.current-task` 只有 /task-next、/plan 寫、/verify 清，所以它存在＝任務還沒驗收。
+# 新 session 不提的話，模型會從使用者的第一句話重新開始，而不是接著做——
+# 已判過的級、寫好的 plan、做到哪一階段全部要重新來。判斷得出時機的事，由這裡提出。
+# 契約（與 pre-tool-use.sh 的 plan 還原同一份）：值是 WBS id 或 ad-hoc plan 檔名主幹；
+# plan 是 plans/<值>.md 或 plans/<值>-*.md 的第一個；mode 先看模式檔、沒有再看 plan 的 `mode:`。
+# 都在當前 checkout（WORK_CLAUDE）：worktree 裡接續的是 worktree 自己那件事。
+# ============================================================================
+_CT_DATA="$WORK_CLAUDE/taskmaster-data"
+_CT=""
+[ -f "$_CT_DATA/.current-task" ] && _CT=$(tr -d '[:space:]' < "$_CT_DATA/.current-task" 2>/dev/null)
+if [ -n "$_CT" ]; then
+    _CT_MODE=""
+    [ -f "$_CT_DATA/.current-task-mode" ] && _CT_MODE=$(tr -d '[:space:]' < "$_CT_DATA/.current-task-mode" 2>/dev/null)
+    if [ -z "$_CT_MODE" ]; then
+        _CT_PLAN=""
+        if [ -f "$_CT_DATA/plans/$_CT.md" ]; then
+            _CT_PLAN="$_CT_DATA/plans/$_CT.md"
+        else
+            for _p in "$_CT_DATA/plans/$_CT"-*.md; do [ -f "$_p" ] && { _CT_PLAN="$_p"; break; }; done
+        fi
+        [ -n "$_CT_PLAN" ] && _CT_MODE=$(awk '
+            NR==1 && $0 !~ /^---/ { exit }
+            /^---[[:space:]]*$/ { fm++; if (fm==2) exit; next }
+            fm==1 && /^mode:/ { sub(/^mode:[[:space:]]*/, ""); gsub(/["\047\r[:space:]]/, ""); print; exit }
+        ' "$_CT_PLAN" 2>/dev/null)
+    fi
+    [ -n "$_CT_MODE" ] || _CT_MODE="未判級"
+    _CT_SESS=$(ls -t "$CLAUDE_DIR/sessions/"*.md 2>/dev/null | head -1)
+    _CT_NOTE="▶️ 進行中任務 \`$_CT\`（mode $_CT_MODE），用 \`/tdd\` 接續——不要從頭重做，也不要重新判級。"
+    [ -n "$_CT_SESS" ] && _CT_NOTE="$_CT_NOTE 上次的存檔：\`${_CT_SESS#"$PROJECT_ROOT"/}\`（先讀它再動手）。"
+    note "$_CT_NOTE"
+fi
 
 # 檢查是否存在 CLAUDE_TEMPLATE.md
 if [ -f "$PROJECT_ROOT/CLAUDE_TEMPLATE.md" ]; then

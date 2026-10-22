@@ -104,12 +104,12 @@
         ]
       },
       {
-        "matcher": "Write|Edit|MultiEdit|Bash",
+        "matcher": "Write|Edit|MultiEdit|Bash|PowerShell",
         "hooks": [
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-tool-use.sh\"",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       }
@@ -141,7 +141,7 @@
         ]
       },
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",
@@ -152,7 +152,7 @@
     ],
     "PostToolUseFailure": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|PowerShell",
         "hooks": [
           {
             "type": "command",

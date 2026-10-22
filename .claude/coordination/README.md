@@ -32,6 +32,13 @@ coordination/
 
 | 從 | 到 | 觸發 |
 |:---|:---|:---|
-| code-quality-specialist | test-automation-engineer | 發現需要補強測試 |
-| test-automation-engineer | e2e-validation-specialist | 單元測試完成，需 E2E 驗證 |
-| security-infrastructure-auditor | deployment-expert | 安全檢查完成 |
+| architect | planner | ADR 定案，需落地為實作計畫 |
+| code-quality-specialist | test-automation-engineer | 某條有風險的路徑完全沒有測試 |
+| refactor-cleaner | code-quality-specialist | 清理完成，確認無回歸、無孤兒引用（refactor-cleaner 在 worktree 寫不到主 checkout，由**主模型落檔**） |
+| ui-builder | e2e-validation-specialist | 關鍵使用者流程需 E2E 驗證 |
+| debug-investigator | code-quality-specialist ／ security-infrastructure-auditor | 修復後複查；critical（金流／認證）的 bug 另交 security |
+| security-infrastructure-auditor | code-quality-specialist | **主模型修完**安全問題後重驗 |
+| security-infrastructure-auditor | deployment-expert | 部署設定有問題 |
+
+`test-automation-engineer` 是終端節點，補完測試不再往下交接。完整分類見
+`.claude/rules/agent-orchestration.md` 的「哪些 agent 實作了接力」（唯一來源）。

@@ -14,6 +14,9 @@
 #   結果是 in-flight 永遠算 0，閘門從裝上去那天就沒攔過任何一次。
 #   真正的完成時機只有 SubagentStop 拿得到（它對非同步／背景 subagent 也會觸發）。
 #
+# agent_start 帶 `isolation`（派工參數的值，沒帶就是空字串）：帶 worktree／remote 的
+# agent 有自己的 checkout，lib/agent-inflight.sh 不把它算進 in-flight。
+#
 # 為什麼 agent_start 改在 PostToolUse 寫：`agentId` 只存在於 PostToolUse 的
 # tool_response 裡，PreToolUse 拿不到。要和 SubagentStop 對得上就只能在這裡寫。
 #
@@ -153,6 +156,7 @@ case "$EVENT" in
             session_id: (.session_id // "unknown"),
             tool_use_id: (.tool_use_id // "unknown"),
             agent_id: $aid,
+            isolation: (.tool_input.isolation // ""),
             prompt: (.tool_input.prompt // "N/A")
         }' >> "$LOG_JSONL" 2>/dev/null || true
 

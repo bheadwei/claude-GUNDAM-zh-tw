@@ -4,7 +4,7 @@ description: 以測試驅動方式執行實作，會自動載入當前任務的 
 
 # TDD 指令
 
-照 **`tdd-workflow` skill** 執行測試驅動開發，並**自動載入當前 WBS 任務的 plan 檔**（若存在）按階段推進。
+照 **`tdd-workflow` skill** 執行測試驅動開發，並**自動載入當前任務（WBS 或 ad-hoc）的 plan 檔**（若存在）按階段推進。
 
 **先載入 `tdd-workflow` skill**——依程式性質決定多嚴格、從驗收條件推出測試、
 GREEN 過不了修實作不改測試，都在那裡（唯一來源，本檔不重述）。
@@ -31,7 +31,7 @@ GREEN 過不了修實作不改測試，都在那裡（唯一來源，本檔不�
 
 - **`quick`** → Fast Lane（見下方）
 - **`standard`** → 下方流程
-- **`critical`** → 下方流程，判成 critical 的那段程式一律先寫測試；每階段完成後跑 `/code-review`
+- **`critical`** → 下方流程，判成 critical 的那段程式一律先寫測試
 
 ### Fast Lane（quick 模式）
 
@@ -44,9 +44,11 @@ GREEN 過不了修實作不改測試，都在那裡（唯一來源，本檔不�
 
 ### 1. 偵測當前任務與計畫
 
-1. 讀 `.claude/taskmaster-data/.current-task`，取得當前 WBS 任務 ID（例如 `2.1`）
-2. 在 `.claude/taskmaster-data/plans/` 中尋找 `<id>-*.md`
-3. 若找到 → 顯示計畫摘要，用 `AskUserQuestion` 問：
+1. 讀 `.claude/taskmaster-data/.current-task`，取得當前值——WBS 任務 ID（例 `2.1`）
+   或 ad-hoc plan 的檔名主幹（例 `adhoc-2026-10-20-fix-login`）
+2. 在 `.claude/taskmaster-data/plans/` 中尋找 `<值>.md` 或 `<值>-*.md`（不含 `archive/`）
+3. 若找到且 frontmatter `current_phase` 為 `0`（還沒開始）→ **不問**，直接從階段 1 開始
+4. 若找到且已有進度 → 顯示計畫摘要，用 `AskUserQuestion` 問：
 
    ```
    偵測到計畫：2.1-auth-middleware.md
@@ -59,9 +61,25 @@ GREEN 過不了修實作不改測試，都在那裡（唯一來源，本檔不�
      忽略計畫，自由 TDD
    ```
 
-4. 若**找不到計畫**但當前任務門檻達標（≥ 2 檔案 或 ≥ 1h 預估）→ 用 `AskUserQuestion` 問
-   要先 `/plan <id>`（Recommended）還是直接開始
-5. 若**無當前任務** → ad-hoc：先用一兩句話寫下「做完時哪些行為成立」當驗收條件，不讀計畫檔
+5. 若**找不到計畫**：
+   - `critical` → **不問**，停下來要求先跑 `/plan <id>`（`critical` 一律要 plan）
+   - `standard` 且達 `plan-format` skill「何時不該用 /plan」的門檻（唯一來源）→
+     用 `AskUserQuestion` 問要先 `/plan <id>`（Recommended）還是直接開始
+6. 若**無當前任務**（`.current-task` 不存在）→ 先找 `plans/` 裡 `status: "⏳ 未開始"` 的 plan
+   （`/plan` 只寫計畫、不開工，所以剛規劃完的任務會在這裡）：
+   - 有 → 用 `AskUserQuestion` 列出讓使用者選要開始哪一份（最近建立的放第一個並標 Recommended），
+     另附「不用 plan，直接做」選項。選定後照下方「開工時標進行中」做，再回到第 3 點
+   - 沒有，或選了「直接做」→ `critical` 同第 5 點，要求先 `/plan --adhoc`；
+     其他模式先用一兩句話寫下「做完時哪些行為成立」當驗收條件
+
+**開工時標進行中**（從階段 1 開始實作的那一刻，只做一次；接續既有進度時略過）：
+
+- **WBS 任務** → 照 `/task-next` 的「狀態同步」節做（唯一來源，勿在此重述），
+  第 6 步的模式取 plan frontmatter 的 `mode:`；已是 `🔄 進行中` 且 `.current-task` 已是這個 id 就略過
+- **ad-hoc** → 把 plan 檔名主幹（例 `adhoc-2026-10-20-fix-login`）寫進 `.claude/taskmaster-data/.current-task`
+- 兩者都把 plan frontmatter 的 `status` 改成 `"🔄 進行中"`
+
+沒有這一步，`/verify` 不會比對這份 plan 的驗收標準，模式檔過期時 hook 也無從由 plan 還原。
 
 ### 2. 選執行方式（僅當 plan 有 ≥2 階段 且模式為 `standard`／`critical`）
 
@@ -101,7 +119,8 @@ GREEN 過不了修實作不改測試，都在那裡（唯一來源，本檔不�
    - 最後一個階段 → `status: "✅ 完成"`，提示使用者執行 `/verify`
    - 同步更新 `plans/INDEX.md`
 4. standard／critical → 委派 `code-quality-specialist` 審這個階段的 diff
-   （`git diff <階段起點>..HEAD`，不是整個 repo）；critical 加 `security-infrastructure-auditor`
+   （`git diff <階段起點>..HEAD`，不是整個 repo）。誰審、critical 加誰見
+   `rules/task-mode.md` 的「審查節奏」（唯一來源）
 
 整套測試不在這裡跑——那是 `/verify` 的事。
 
@@ -118,6 +137,6 @@ GREEN 過不了修實作不改測試，都在那裡（唯一來源，本檔不�
 /plan             規劃並寫入 plans/<id>-<slug>.md
 /tdd              自動載入當前 plan，按階段推進
 /build-fix        建置錯誤修復
-/code-review      程式碼審查
+/code-review      程式碼審查（Claude Code 內建，需要時手動跑，不是流程固定一棒）
 /verify           整套測試與整體驗收標準 → 標 WBS 為 ✅
 ```

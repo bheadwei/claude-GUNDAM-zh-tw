@@ -143,6 +143,7 @@ finish_with() { # [文件影響提醒] —— 與 UI_MSG 合併後輸出一則 a
 #
 # 長度以 codepoint 計（jq 的 length），所以中文一字算一，不受 Git Bash 位元組計數影響。
 # 連結只算顯示文字，`](目標)` 不計——長路徑本來就該放在連結裡。
+# 「任務」欄不檢查：名稱縮短後一眼看不出是哪件事，比一列折行更難讀。
 # 每次寫入最多一則訊息。去處對照是範本第 4 節的簡短版，改範本那張表時同步這裡。
 #
 # 逃生門：WBS_CELL_CHECK=off（門檻 WBS_CELL_MAX，預設 40）
@@ -168,6 +169,7 @@ case "$NORM" in
                         | ($l | cells) as $c
                         | .hits += [ range(0; $c | length) as $i
                                      | ($c[$i] | visible) as $v
+                                     | select(($h[$i] // "") != "任務")
                                      | select(($v | length) > $max)
                                      | {id: $c[0], col: ($h[$i] // "第\($i + 1)欄"), len: ($v | length)} ]
                       else . end)
@@ -237,38 +239,16 @@ fi
 
 [ "${DOC_SYNC_GATE:-on}" = "off" ] && finish_with ""
 
-# 先排除：模板自身、依賴、建置產物、文件本身、測試
-case "$REL" in
-    .claude/*|*/.claude/*) finish_with "" ;;
-    docs/*|*/docs/*) finish_with "" ;;
-    node_modules/*|*/node_modules/*|.venv/*|*/.venv/*|venv/*|*/venv/*) finish_with "" ;;
-    dist/*|*/dist/*|build/*|*/build/*|.next/*|*/.next/*|target/*|*/target/*) finish_with "" ;;
-    .git/*|*/.git/*) finish_with "" ;;
-    *test*|*spec*|*__tests__*|*fixtures*) finish_with "" ;;
-esac
+# 「文件會描述的檔案」的判斷規則在 lib/doc-impact.sh（唯一來源）：post-bash.sh 在合併
+# 成功後也要用同一套規則把 worktree 帶回來的文件債補進清單。缺 lib 就不偵測（軟降級）。
+source "$(dirname "${BASH_SOURCE[0]}")/lib/doc-impact.sh" 2>/dev/null || true
+declare -F doc_bearing >/dev/null 2>&1 || finish_with ""
+doc_bearing "$REL" || finish_with ""
 
-# 文件會描述的檔案 —— 改到這些，文件就有機會過期
-DOC_BEARING=0
-case "$REL" in
-    */api/*|api/*|*/routes/*|routes/*|*/router/*|*/controllers/*|*/handlers/*|*/endpoints/*)
-        DOC_BEARING=1 ;;
-    *openapi*|*swagger*|*.proto|*.graphql|*schema.*|*/schema/*|*/schemas/*)
-        DOC_BEARING=1 ;;
-    */migrations/*|*/models/*|*/entities/*|*/dto/*)
-        DOC_BEARING=1 ;;
-    */index.ts|*/index.js|*/index.tsx|*.d.ts|*/public-api.ts)
-        DOC_BEARING=1 ;;
-    */cli/*|*/commands/*|.env.example)
-        DOC_BEARING=1 ;;
-esac
-[ "$DOC_BEARING" -eq 0 ] && finish_with ""
-
-mkdir -p "$DATA_DIR" 2>/dev/null || true
-IMPACT_FILE="$DATA_DIR/.doc-impact"
 NOTIFIED="$DATA_DIR/.doc-impact-notified"
 
 # 去重後累積（/verify 會讀這份清單）
-grep -qxF "$REL" "$IMPACT_FILE" 2>/dev/null || echo "$REL" >> "$IMPACT_FILE" 2>/dev/null || true
+doc_impact_add "$DATA_DIR" "$REL" || true
 
 # 本任務只提醒一次，避免每次寫檔都吵
 [ -f "$NOTIFIED" ] && finish_with ""

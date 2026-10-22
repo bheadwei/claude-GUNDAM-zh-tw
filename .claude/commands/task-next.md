@@ -65,16 +65,12 @@ description: 從 WBS 取得下一個任務建議，分析優先級和依賴關�
   計畫狀態: 🔄 進行中（階段 2/4） — plans/2.1-auth-middleware.md
   建議下一步: /tdd  （自動接續階段 2）
   ```
-- **無計畫檔** 且任務預估 ≥ 1h 或 跨 ≥ 2 檔案 → 顯示：
+- **無計畫檔** → 顯示：
   ```
   計畫狀態: ⚪ 尚無計畫
-  建議下一步: /plan [任務ID]  （建立實作藍圖）
   ```
-- **無計畫檔** 但任務簡單（< 1h 且單檔案） → 顯示：
-  ```
-  計畫狀態: ⚪ 尚無計畫（任務簡單，可直接進入）
-  建議下一步: /tdd  （ad-hoc TDD）
-  ```
+  要不要先 `/plan` 取決於任務模式，所以**這裡不給建議**——等使用者選完模式，
+  照下方「選完模式後：要不要先 /plan」給
 
 然後**必須使用 `AskUserQuestion`** 詢問使用者動作（遵守 `.claude/rules/interactive-qa.md`）：
 
@@ -119,9 +115,14 @@ description: 從 WBS 取得下一個任務建議，分析優先級和依賴關�
 
 - `quick` — 直接寫，跳過 plan/TDD，僅 `/verify quick`（適合 ≤ 2 個檔、沒動 API／schema 的修改；判準見 `rules/task-mode.md`）
 - `standard` — 走 plan → tdd → verify 完整流程（適合 1-4h 新功能/重構）
-- `critical` — standard + 關鍵模組最嚴的覆蓋門檻（見 `testing-standards`）+ review-code（金流/認證授權邏輯/安全）
+- `critical` — standard + 關鍵模組最嚴的覆蓋門檻（見 `testing-standards`）+ 每階段加安全審查、`/pr` 把關鏈不可跳過（金流/認證授權邏輯/安全；審查節奏見 `rules/task-mode.md`）
 
-使用者選定後，將模式字串寫入 `.claude/taskmaster-data/.current-task-mode`。
+模式的寫入在下方「狀態同步」第 6 步（唯一一處）。
+
+### 選完模式後：要不要先 /plan
+
+已有計畫檔 → 建議 `/tdd`（自動接續）。沒有計畫檔 → 依 `plan-format` skill 的
+「何時不該用 /plan」門檻表（唯一來源）對照剛選的模式，決定建議 `/plan <id>` 或直接實作。
 
 ### 架構決策分流（條件式，非每次都問）
 
@@ -161,6 +162,7 @@ description: 從 WBS 取得下一個任務建議，分析優先級和依賴關�
 ## 狀態同步
 
 當使用者選擇開始任務時：
+0. **分支檢查**：照 `.claude/rules/git-workflow.md` 第 1 條（唯一來源）；命中它列的任一種情況就先停下問使用者
 1. 讀取 `.claude/taskmaster-data/wbs.md`
 2. 將選中的任務狀態更新為 `🔄 進行中`
 3. 重算「現況」區與總進度（規則見 `.claude/templates/wbs.template.md` 第 3 節），更新「最後更新」日期

@@ -17,8 +17,10 @@
 
 ## 自動清理
 
-每個 area 只保留最新 5 份報告，舊的歸檔到 `<area>/_archive/`。
-執行 `bash .claude/scripts/context-gc.sh` 觸發 GC。
+`bash .claude/scripts/context-gc.sh`（先加 `--dry-run` 看會動哪些）：每個 area 內**依 agent 分組**
+（檔名 `<agent>-YYYY-MM-DD-….md`），每組保留最新 5 份（依 mtime），舊的歸檔到 `<area>/_archive/`，不刪除。
+**`decisions/`、`learned/` 不清**——ADR、`FIXED-LOG.md`、踩坑紀錄是長期知識，不是「最新幾份」的報告。
+規則細節以腳本檔頭為準。
 
 ## 目錄結構
 
