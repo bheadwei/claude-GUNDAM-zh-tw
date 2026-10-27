@@ -2615,6 +2615,59 @@ echo off > "$SM_FILE"
 expect_eq ".suggest-mode=off 刪程式碼仍 ask"         ask   "$(rmd 'rm src/x')"
 expect_eq ".suggest-mode=off 刪狀態檔仍 allow"       allow "$(rmd "rm $TD/.a")"
 rm -f "$SM_FILE"
+# scratchpad 暫存區：Claude Code 給每個 session 的暫存目錄，可帶 -rf。
+# 2026-10-27 使用者回報：agent 在 scratchpad 組乾淨副本跑比對，`rm -rf $S` 每次都要人按
+SP=/tmp/claude-0/-root-Projects-x/340c7bf6-7409-45d6-b9c4-648eb75579e2/scratchpad
+SPW=C:/Users/U/AppData/Local/Temp/claude/D-----x/38423b36-a9a7-4bb6-b1da-62a819c8f65c/scratchpad
+expect_eq "scratchpad：rm -rf 子目錄 → allow"           allow "$(rmd "rm -rf $SP/base")"
+expect_eq "scratchpad：rm -rf 整個 scratchpad → allow"   allow "$(rmd "rm -rf $SP")"
+expect_eq "scratchpad：Windows 路徑（含短檔名 ~1）→ allow" allow "$(rmd "rm -rf ${SPW/\/U\//\/KUANWE~1\/}/base")"
+expect_eq "scratchpad：S=字面值 後 rm -rf \$S → allow"   allow "$(rmd "S=$SP/base && rm -rf \$S")"
+expect_eq "scratchpad：\"\$S\" 與 \${S}/子路徑 → allow"  allow "$(rmd "S=$SP/base; rm -rf \"\$S\" \${S}/sub")"
+expect_eq "scratchpad：使用者回報的整條（混了 git archive／pytest）→ 不表態" none \
+    "$(rmd "S=$SP/base && rm -rf \$S && mkdir -p \$S && git archive 7357ec0 backend | tar -x -C \$S && (cd \$S && python -m pytest -q 2>&1 | tail -30)")"
+expect_eq "只到 claude-<uid> 那層 → ask"                 ask   "$(rmd "rm -rf /tmp/claude-0")"
+expect_eq "只到專案那層 → ask"                           ask   "$(rmd "rm -rf /tmp/claude-0/-root-Projects-x")"
+expect_eq "一般 /tmp 目錄 → ask"                         ask   "$(rmd "rm -rf /tmp/foo")"
+expect_eq "從 scratchpad 用 .. 跳出去 → ask"             ask   "$(rmd "rm -rf $SP/../../x")"
+expect_eq "\$S/.. 跳出去 → ask"                          ask   "$(rmd "S=$SP/base && rm -rf \$S/../../..")"
+expect_eq "S 設了兩次 → ask"                             ask   "$(rmd "S=$SP/base && S=/root/Projects && rm -rf \$S")"
+expect_eq "S=\$(…) → ask"                                ask   "$(rmd 'S=$(pwd) && rm -rf $S')"
+expect_eq "export S=… → ask"                             ask   "$(rmd "export S=$SP/base && rm -rf \$S")"
+expect_eq "沒設過的 \$S → ask"                           ask   "$(rmd 'rm -rf $S')"
+expect_eq "\$S/* 萬用字元 → ask"                         ask   "$(rmd "S=$SP/base && rm -rf \$S/*")"
+expect_eq "值含空白 → ask"                               ask   "$(rmd "S=\"$SP/base x\" && rm -rf \$S")"
+expect_eq "scratchpad 與程式碼一起刪 → ask"              ask   "$(rmd "S=$SP/base && rm -rf \$S src")"
+expect_eq "狀態檔帶 -rf → ask（-r 只給暫存區）"          ask   "$(rmd "rm -rf $TD/.a")"
+expect_eq "~/ 開頭 → ask"                                ask   "$(rmd 'rm -rf ~/x')"
+# 審查 2026-10-27-1330 的兩個 HIGH：相對路徑不得吃 scratchpad、特殊變數讓 $S 不能信
+expect_eq "cd 到 scratchpad 失敗後 rm -rf 相對路徑 → ask" ask "$(rmd "cd $SP/nonexist; rm -rf src")"
+expect_eq "子 shell 裡 cd 之後 rm -rf 相對路徑 → ask"      ask "$(rmd "(cd $SP/b); rm -rf src")"
+expect_eq "cd 到 scratchpad 再 rm -rf 相對路徑 → ask"      ask "$(rmd "cd $SP && rm -rf base")"
+expect_eq "S= 之後設 IFS → ask"                           ask "$(rmd "S=$SP/b; IFS=/; rm -rf \$S")"
+expect_eq "先設 IFS 再 S= → ask"                           ask "$(rmd "IFS=/; S=$SP/b; rm -rf \$S")"
+expect_eq "子 shell 裡的 S= → ask"                         ask "$(rmd "(S=$SP/b); rm -rf \$S")"
+expect_eq "條件式的 S=（false && S=…）→ ask"               ask "$(rmd "false && S=$SP/b; rm -rf \$S")"
+expect_eq "S= 前面已有其他指令 → ask"                     ask "$(rmd "ls; S=$SP/b; rm -rf \$S")"
+expect_eq "開頭連設兩個變數 → allow"                       allow "$(rmd "S=$SP/b; T=$SP/c; rm -rf \$S \$T")"
+# symlink：scratchpad 裡指到專案的連結，刪連結底下的東西 → ask；刪連結本身 → allow（rm 不跟隨）
+# Git Bash 的 ln -s 預設是複製，建不出真的 symlink 就跳過
+SPL=/tmp/claude-$$/p/s1/scratchpad
+mkdir -p "$SPL" "$SANDBOX/src"
+if ln -s "$SANDBOX" "$SPL/link" 2>/dev/null && [ -L "$SPL/link" ]; then
+    expect_eq "scratchpad 裡 symlink 底下的目錄 → ask"     ask   "$(rmd "rm -rf $SPL/link/src")"
+    expect_eq "scratchpad 裡 symlink 本身 → allow"         allow "$(rmd "rm -rf $SPL/link")"
+fi
+rm -rf "/tmp/claude-$$"
+# 容器與套件管理的 rm 子指令：舊的 Bash(rm:*) 不會問，字數規則也不能誤問
+# 2026-10-27 使用者回報：`podman rm -f tmp-725-host …` 被當成看不懂的 rm
+expect_eq "podman rm -f 容器（使用者回報的整條）→ 不表態" none "$(rmd 'podman rm -f tmp-725-host tmp-725-prod; podman ps -a | grep tmp-725; echo "grep_exit=$?"')"
+expect_eq "docker container rm／image rm → 不表態"        none  "$(rmd 'docker container rm web && docker image rm nginx')"
+expect_eq "podman --remote rm → 不表態"                  none  "$(rmd 'podman --remote rm -f x')"
+expect_eq "npm rm／pnpm rm 套件 → 不表態"                none  "$(rmd 'npm rm lodash && pnpm rm -D vitest')"
+expect_eq "podman volume rm（資料庫資料）→ ask"          ask   "$(rmd 'podman volume rm pgdata')"
+expect_eq "docker volume rm → ask"                       ask   "$(rmd 'docker volume rm db_data')"
+expect_eq "docker rm 後面接 rm -rf src → ask"            ask   "$(rmd 'docker rm -f web && rm -rf src')"
 expect_eq "settings.json 已沒有 rm 的 ask 規則"       "" "$(jq -r '.permissions.ask // [] | map(select(startswith("Bash(rm"))) | .[]' "$HOOK_DIR/../settings.json")"
 
 # =========================================================================
