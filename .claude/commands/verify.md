@@ -246,7 +246,7 @@ Ready for PR: [YES/NO]
 ```
 
 - **補登為已完成**（Recommended）— 追加一行到 `wbs.md` 的當前里程碑節，狀態直接標 `✅ MM-DD`，
-  連結欄填 `[計畫](plans/archive/<filename>)`，並重算「現況」區（版面見 `.claude/templates/wbs.template.md`）
+  負責欄填 `—`、連結欄填 `[計畫](plans/archive/<filename>)`，並重算「現況」區（版面見 `.claude/templates/wbs.template.md`）
 - **不用，這是一次性的** — 不動 WBS
 - **補登並順便加後續任務** — 補登後接 `/task-add` 流程
 
