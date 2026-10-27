@@ -13,7 +13,9 @@
 #      branch-switch-gate（站在 topic 分支上不得直接開新分支）、
 #      merge-noff-gate（合併本地 topic 分支必須帶 --no-ff）、
 #      git-backup-gate（destructive 操作前 HEAD 必須有 backup/* tag 指著）
-#   6. 輕量 log
+#   6. rm 權限（Bash）—— 只刪 hook 狀態檔 → allow，其他 rm → ask（lib/rm-state-gate.sh；
+#      取代 settings.json 的 `ask: Bash(rm:*)`，理由見該檔檔頭）
+#   7. 輕量 log
 #
 # 逃生門（任一成立即完全不攔）：
 #   - .suggest-mode 內容為 off
@@ -27,6 +29,7 @@
 #   MERGE_NOFF_GATE=off  只關 --no-ff 閘門
 #   GIT_BACKUP_GATE=off  只關 backup tag 閘門
 #   BRANCH_SWITCH_GATE=off  只關分支切換閘門
+#   RM_STATE_GATE=off    只關 rm 權限判斷（rm 改走 Claude Code 原本的流程）
 
 set -u
 
@@ -62,22 +65,34 @@ if ! command -v jq >/dev/null 2>&1; then
     exit 0
 fi
 
-# 一次 jq 取三個欄位。用 `@sh` 而不是 `@tsv`：指令常是多行（heredoc），@tsv 會把換行
+# 一次 jq 取四個欄位。用 `@sh` 而不是 `@tsv`：指令常是多行（heredoc），@tsv 會把換行
 # 轉義成 `\n`，還得再還原一次；@sh 產生的是可直接 eval 的單引號字串，內容原樣保留。
 # Git Bash 的 jq 會把輸出（含字串內的換行）寫成 CRLF，所以 eval 前先把 \r 全拿掉——
 # 以前三次 `$(jq -r …)` 拿到的指令本來就帶著這些 \r，拿掉不會改變任何閘門的判斷。
 # 為什麼要省這兩次 jq：這台機器開一個行程 ~170ms，而本 hook 的 timeout 是硬上限，
 # **超時等於放行**（見 settings.json 的 timeout 與本檔「Bash：git 閘門」段）。
-TOOL_NAME="unknown"; FILE_PATH=""; COMMAND=""
-_fields=$(printf '%s' "$INPUT" | jq -r '@sh "TOOL_NAME=\(.tool_name // "unknown") FILE_PATH=\(.tool_input.file_path // "") COMMAND=\(.tool_input.command // "")"' 2>/dev/null) || _fields=""
+TOOL_NAME="unknown"; FILE_PATH=""; COMMAND=""; CWD=""
+_fields=$(printf '%s' "$INPUT" | jq -r '@sh "TOOL_NAME=\(.tool_name // "unknown") FILE_PATH=\(.tool_input.file_path // "") COMMAND=\(.tool_input.command // "") CWD=\(.cwd // "")"' 2>/dev/null) || _fields=""
 _fields="${_fields//$'\r'/}"
 [ -n "$_fields" ] && eval "$_fields"
 unset _fields
 
 log "$TOOL_NAME ${FILE_PATH:-${COMMAND:0:60}}"
 
+# rm 權限（lib/rm-state-gate.sh）。逃生門出口也要先跑它：它取代的是 settings.json 的
+# ask 規則，那條規則不受 TASKMODE_GATE／.suggest-mode 影響——為了關建議注入跑
+# `/suggest-mode off`，不該順便關掉刪程式碼前的確認。它自己的開關是 RM_STATE_GATE。
+rm_gate() {
+    [ "$TOOL_NAME" = "Bash" ] && [ -n "$COMMAND" ] || return 0
+    declare -F cmd_strip_heredoc >/dev/null 2>&1 || source "$HOOK_HOME/lib/cmd-segments.sh" 2>/dev/null || true
+    source "$HOOK_HOME/lib/rm-state-gate.sh" 2>/dev/null || true
+    if declare -F rm_state_gate >/dev/null 2>&1; then
+        rm_state_gate "$COMMAND" "$CWD" "$WORK_ROOT" "$MAIN_ROOT"
+    fi
+}
+
 # ---------- 逃生門 ----------
-[ "${TASKMODE_GATE:-on}" = "off" ] && exit 0
+[ "${TASKMODE_GATE:-on}" = "off" ] && { rm_gate; exit 0; }
 
 SUGGEST_MODE="medium"
 # 讀主 checkout：/suggest-mode 是專案級設定，不該每個 worktree 各設一次
@@ -88,7 +103,7 @@ for smf in "$MAIN_CLAUDE/taskmaster-data/.suggest-mode" "$DATA_DIR/.suggest-mode
         break
     fi
 done
-[ "$SUGGEST_MODE" = "off" ] && exit 0
+[ "$SUGGEST_MODE" = "off" ] && { rm_gate; exit 0; }
 
 # 輸出 deny 決策（reason 會回饋給主模型，讓它自我修正後重試）
 deny() {
@@ -193,6 +208,10 @@ if [ "$IS_SHELL" -eq 1 ] && [ -n "$COMMAND" ]; then
             git_backup_gate "$COMMAND" "$WORK_ROOT"
         fi
     fi
+
+    # rm 權限排在 git 閘門之後：同一條指令裡的 git 問題該先被 deny 講清楚，
+    # 輪不到這裡回 allow／ask
+    rm_gate
 fi
 
 # 非 Write/Edit → 到此為止
