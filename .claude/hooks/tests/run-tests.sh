@@ -2550,6 +2550,74 @@ expect_contains "post-write：src/api/latest/routes.ts 觸發文件影響提醒"
     "$(run post-write.sh "$(w "$SANDBOX/src/api/latest/routes.ts")")"
 
 # =========================================================================
+section "pre-tool-use.sh — rm 權限（lib/rm-state-gate.sh）"
+# =========================================================================
+# 取代 settings.json 的 ask: Bash(rm:*)。三種結果：allow（只刪狀態檔）、ask（其他 rm）、
+# none（只刪狀態檔但混了別的指令，交回 Claude Code 原本的流程）
+reset
+# rmd <指令> [cwd] [tool] [ENV=VAL ...] —— 印出 allow／ask／none
+rmd() {
+    local c="$1" cwd="${2-$SANDBOX}" tool="${3:-Bash}" out
+    shift $(( $# < 3 ? $# : 3 ))
+    out=$(run pre-tool-use.sh "$(jq -nc --arg c "$c" --arg cwd "$cwd" --arg t "$tool" '{cwd:$cwd,tool_name:$t,tool_input:{command:$c}}')" "$@")
+    [ -n "$out" ] && echo "$out" | jq -r '.hookSpecificOutput.permissionDecision // "none"' || echo none
+}
+TD=.claude/taskmaster-data
+expect_eq "只刪狀態檔（相對路徑）→ allow"            allow "$(rmd "rm $TD/.merge-pending")"
+expect_eq "只刪狀態檔（絕對路徑、-f、多個）→ allow"  allow "$(rmd "rm -f \"$SANDBOX/$TD/.doc-impact\" $TD/.doc-impact-notified")"
+expect_eq "先 cd 到專案根再刪 → allow"               allow "$(rmd "cd \"$SANDBOX\" && rm $TD/.pitfall-seen" /elsewhere)"
+expect_eq "cwd 在子目錄、用 ../ 相對路徑 → ask"      ask   "$(rmd "rm ../$TD/.merge-pending" "$SANDBOX/src")"
+if command -v cygpath >/dev/null 2>&1; then
+    expect_eq "Windows 形式的絕對路徑 → allow"       allow "$(rmd "rm \"$(cygpath -m "$SANDBOX")/$TD/.merge-pending\"")"
+fi
+# 2026-10-27 使用者回報的那條：/verify 清合併閘門時串了 echo 與 git status
+expect_eq "只刪狀態檔但串了其他指令 → 不表態"         none  "$(rmd "cd \"$SANDBOX\" && rm $TD/.merge-pending && echo \"[\$(date '+%Y-%m-%d')] cleared\" >> .claude/logs/hooks.log && git status -sb | head -1")"
+expect_eq "刪程式碼 → ask"                            ask   "$(rmd "rm src/app.py")"
+expect_eq "刪資料庫檔 → ask"                          ask   "$(rmd "rm -f data/app.db")"
+expect_eq "狀態檔與程式碼一起刪 → ask"                ask   "$(rmd "rm $TD/.a && rm db.sqlite")"
+expect_eq "狀態檔與程式碼在同一個 rm → ask"           ask   "$(rmd "rm $TD/.a src/x.ts")"
+expect_eq "-r 刪整個目錄 → ask"                       ask   "$(rmd "rm -rf $TD")"
+expect_eq "用 .. 跳出 taskmaster-data → ask"          ask   "$(rmd "rm $TD/.x/../../../src/a.py")"
+expect_eq "萬用字元 → ask"                            ask   "$(rmd "rm $TD/.*")"
+expect_eq "變數 → ask"                                ask   "$(rmd 'rm "$F"')"
+expect_eq "指令替換 → ask"                            ask   "$(rmd 'rm $(cat list.txt)')"
+expect_eq "taskmaster-data 底下不是 . 開頭的檔 → ask" ask   "$(rmd "rm $TD/wbs.md")"
+expect_eq "不知道 cwd 的相對路徑 → ask"               ask   "$(rmd "rm $TD/.merge-pending" "")"
+expect_eq "cd 到變數之後的相對路徑 → ask"             ask   "$(rmd "cd \$D && rm $TD/.merge-pending")"
+expect_eq "heredoc 餵給 bash 的 rm → ask"             ask   "$(rmd $'bash <<EOF\nrm -rf src\nEOF')"
+expect_eq "commit 訊息提到 rm → ask（寧可多問）"     ask   "$(rmd 'git commit -m "rm the old file"')"
+expect_eq "echo 的參數有 rm → ask（寧可多問）"        ask   "$(rmd 'echo rm is fine')"
+expect_eq "沒有 rm → 不表態"                          none  "$(rmd 'ls -la')"
+expect_eq "RM_STATE_GATE=off → 不表態"               none  "$(rmd 'rm src/a.py' "$SANDBOX" Bash RM_STATE_GATE=off)"
+expect_eq "PowerShell 不管 → 不表態"                  none  "$(rmd 'rm src/a.py' "$SANDBOX" PowerShell)"
+expect_eq "rm 狀態檔 > 程式碼檔 → ask（會清空 src）"   ask   "$(rmd "rm $TD/.a > src/main.py")"
+expect_eq "rm 狀態檔 >> 程式碼檔 → ask"               ask   "$(rmd "rm $TD/.a >> src/main.py")"
+expect_eq "rm 狀態檔 1> 程式碼檔 → ask"               ask   "$(rmd "rm $TD/.a 1> src/main.py")"
+expect_eq "rm 狀態檔 >src/x（黏著）→ ask"             ask   "$(rmd "rm $TD/.a >src/main.py")"
+expect_eq "rm 狀態檔 2>/dev/null → allow"             allow "$(rmd "rm -f $TD/.a 2>/dev/null")"
+expect_eq "rm 狀態檔 2>&1 → allow"                    allow "$(rmd "rm -f $TD/.a 2>&1")"
+expect_eq "cd . > src/x 再 rm 狀態檔 → 不是 allow"   none  "$(rmd "cd . > src/main.py; rm $TD/.a")"
+expect_eq "rm 在 \$() 裡 → ask"                       ask   "$(rmd 'echo "$(rm src/x)"')"
+expect_eq "rm 在反引號裡 → ask"                       ask   "$(rmd 'echo `rm src/x`')"
+expect_eq "rm 在 { } 裡 → ask"                        ask   "$(rmd '{ rm src/x; }')"
+expect_eq "rm 在 then 後 → ask"                       ask   "$(rmd 'if true; then rm src/x; fi')"
+expect_eq "rm 在 do 後 → ask"                         ask   "$(rmd 'for f in a; do rm src/x; done')"
+expect_eq "\\rm → ask"                                ask   "$(rmd '\rm src/x')"
+expect_eq "command rm → ask"                          ask   "$(rmd 'command rm src/x')"
+expect_eq "VAR=1 rm → ask"                            ask   "$(rmd 'VAR=1 rm src/x')"
+expect_eq "bash -c 'rm …' → ask"                      ask   "$(rmd "bash -c 'rm src/x'")"
+expect_eq "/bin/rm → ask"                             ask   "$(rmd '/bin/rm src/x')"
+expect_eq "git rm --cached → 不表態"                  none  "$(rmd 'git rm --cached src/x')"
+expect_eq "git -C . rm -q 串 git status → 不表態"     none  "$(rmd 'git -C . rm -q src/x && git status')"
+expect_eq "TASKMODE_GATE=off 刪程式碼仍 ask"         ask   "$(rmd 'rm src/x' "$SANDBOX" Bash TASKMODE_GATE=off)"
+expect_eq "TASKMODE_GATE=off 刪狀態檔仍 allow"       allow "$(rmd "rm $TD/.a" "$SANDBOX" Bash TASKMODE_GATE=off)"
+echo off > "$SM_FILE"
+expect_eq ".suggest-mode=off 刪程式碼仍 ask"         ask   "$(rmd 'rm src/x')"
+expect_eq ".suggest-mode=off 刪狀態檔仍 allow"       allow "$(rmd "rm $TD/.a")"
+rm -f "$SM_FILE"
+expect_eq "settings.json 已沒有 rm 的 ask 規則"       "" "$(jq -r '.permissions.ask // [] | map(select(startswith("Bash(rm"))) | .[]' "$HOOK_DIR/../settings.json")"
+
+# =========================================================================
 section "全體 hooks — 語法與健壯性"
 # =========================================================================
 for h in "$HOOK_DIR"/*.sh; do

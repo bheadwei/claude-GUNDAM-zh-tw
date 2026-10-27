@@ -48,9 +48,6 @@
     ],
     "deny": [
       "Bash(sudo:*)"
-    ],
-    "ask": [
-      "Bash(rm:*)"
     ]
   },
   "statusLine": {
