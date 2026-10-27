@@ -729,6 +729,29 @@ expect_empty "WBS 長度提醒逃生門 WBS_CELL_CHECK=off" "$(run post-write.sh
 if [ -f "$SANDBOX/.claude/taskmaster-data/wbs-history.log" ]; then ok "WBS 長度提醒關閉時仍記歷史"
 else ng "WBS 長度提醒關閉時仍記歷史" "有 wbs-history.log" "（無）"; fi
 
+# 8 欄版面（預估與連結之間有「負責」）：欄名依表頭取，不能依位置
+wbs_doc8() {   # $1 = 「狀態」格，$2 = 「負責」格，$3 = 「連結」格
+    printf '%s\n' "# WBS — 測試" "" "## 現況" "" \
+        "| 里程碑 | 進度 | 狀態 | 目標日 |" "|---|---|---|---|" "| M1 測試 | ░░░░░ 0/1 | 🔄 進行中 | 11-15 |" "" \
+        "## M1 測試" "" \
+        "| # | 任務 | 狀態 | 優先 | 依賴 | 預估 | 負責 | 連結 |" "|---|---|---|---|---|---|---|---|" \
+        "| 13.1 | 地端 rerank 拒答門檻 | $1 | 高 | — | 4h | $2 | $3 |" > "$WBS_F"
+}
+
+reset; wbs_doc8 "🔄 進行中" "$LONG_ZH" "—"
+WBS_OUT=$(run post-write.sh "$(w "$WBS_F")")
+expect_contains     "WBS 8 欄：超長負責格標「負責」"     "13.1 的「負責」" "$WBS_OUT"
+expect_not_contains "WBS 8 欄：超長負責格不誤標成「連結」" "13.1 的「連結」" "$WBS_OUT"
+
+reset; wbs_doc8 "🔄 進行中" "alice" "—"
+expect_empty "WBS 8 欄：短負責格不提醒" "$(run post-write.sh "$(w "$WBS_F")")"
+
+reset; wbs_doc8 "$LONG_ZH" "alice" "—"
+expect_contains "WBS 8 欄：超長狀態格仍標「狀態」" "13.1 的「狀態」" "$(run post-write.sh "$(w "$WBS_F")")"
+
+reset; wbs_doc8 "🔄 進行中" "alice" "$LONG_LINK"
+expect_empty "WBS 8 欄：長連結網址不誤報" "$(run post-write.sh "$(w "$WBS_F")")"
+
 # 舊版面（沒有「現況」區）要順帶指向 /task-status 的轉換
 reset
 printf '%s\n' "# WBS" "| # | 任務 | 狀態 | 優先級 | 依賴 | 預估 | Plan | 備註 |" "|---|---|---|---|---|---|---|---|" \

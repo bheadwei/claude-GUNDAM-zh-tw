@@ -147,14 +147,14 @@
 
 | 內容 | 唯一來源 |
 |---|---|
-| 任務列、狀態、優先、依賴、預估、進度、風險與阻塞 | **`wbs.md`**（版面：`.claude/templates/wbs.template.md`） |
+| 任務列、狀態、優先、依賴、預估、負責、進度、風險與阻塞 | **`wbs.md`**（版面：`.claude/templates/wbs.template.md`） |
 | 階段拆解、驗收標準、實作細節、帶給下一任務的疑慮 | **Plan 檔**（`plan-format` skill） |
 | Appetite（投入上限）、Problem/Solution 脈絡、里程碑交付物 | **本文件** |
 
-### WBS 任務列範例（連結欄）
+### WBS 任務列範例（負責欄、連結欄）
 
 ```markdown
-| 2.1 | 建立 auth middleware | 🔄 進行中 | 高 | 1.3 | 4h | [計畫](plans/2.1-auth-middleware.md) |
+| 2.1 | 建立 auth middleware | 🔄 進行中 | 高 | 1.3 | 4h | alice | [計畫](plans/2.1-auth-middleware.md) |
 ```
 
-每格只寫一行；驗證數據、選型理由、阻塞原因該搬去哪，見 `.claude/templates/wbs.template.md` 第 4 節。
+「負責」只寫一個小寫人名，未指派 `—`。每格只寫一行；驗證數據、選型理由、阻塞原因該搬去哪，見 `.claude/templates/wbs.template.md` 第 4 節。
