@@ -1,6 +1,6 @@
 ---
 name: worktree-orchestration
-description: Use when running work in parallel across git worktrees — creating isolated checkouts, dispatching agents into them, merging back in dependency order, and cleaning up. Also the reference for which state files follow a worktree and which stay in the main checkout. Load before /task-next 的平行開發、/worktree、or dispatching an agent with isolation worktree.
+description: Use when running work in parallel across git worktrees — creating isolated checkouts, dispatching agents into them, merging back in dependency order, and cleaning up. Also the reference for which state files follow a worktree and which stay in the main checkout, and for parallel lines that share a local database, fixed ports, timing-sensitive tests or CPU（「幾條線同時跑測試」「共用同一台 DB」「要不要加個鎖排隊」）. Load before /task-next 的平行開發、/worktree、or dispatching an agent with isolation worktree.
 ---
 
 # Worktree 編排
@@ -149,6 +149,38 @@ uv sync --all-packages                            # 重建，不要只 uv sync
 - 驗收條件是**不帶 `PYTHONPATH`** 也載得到 worktree 自己的檔案
   （`python -c "import <pkg>; print(<pkg>.__file__)"` 要指向 worktree）。
   成本：一份新 venv 約 484MB（實測）。
+
+### 共用的執行資源：worktree 隔離不到的東西
+
+worktree 隔離的是**檔案**。下面這些每條線看到的都是**同一份**，開幾條線就有幾條在搶。
+沒開 worktree 但同時在跑的 agent（例如並行的 `debug-investigator`）也算一條線。
+
+| 資源 | 撞在一起會怎樣 | 派工前怎麼分 |
+|---|---|---|
+| 本機單一資料庫／容器 | 一條線的 migration、truncate、fixture 寫入讓另一條線的測試間歇失敗，看起來像 flaky | 每條線用**自己的 scratch database（或 schema）**，名稱帶 worktree 名，連線字串由環境變數給。建不了第二個庫 → 這幾條線**不平行跑整合測試**：各線只跑單元層，整合測試合併後跑 |
+| 固定 port（dev server、mock 服務、測試容器） | 第二條線起不來（address in use），或更糟：**連到別條線的 server**，測到別人的程式碼 | 用 port 0／隨機 port，或每條線一個固定偏移。port 寫死在專案裡 → 同時只能有一條線起 server |
+| 要求機器空閒的計時／效能測試（如 pytest marker `serial_timing`、benchmark） | 有別的線在跑就必然不穩——它要的是「整台機器空閒」，平行本身就違反它的前提 | **不在各線的每一輪跑**。各線排除它（例：`-m "not serial_timing"`），集中到全部合併後的那次 `/verify`，那時只剩一條線 |
+| CPU 本身 | N 條線各自開滿 worker ＝ N 倍超額，每條都變慢，總時間不比循序短 | 先照 `testing-standards`「執行測試」每輪只跑相關測試檔——這比任何排程都省。還要平行時，每條線的 worker 數約為核心數 ÷ 線數 |
+
+**派工前的判斷**：列出這幾條線的測試會碰到上表哪幾項。每項都能「一線一份」→ 照常平行；
+有一項只能共用、又分不開 → **用到它的那一段改循序**，不要靠排隊硬擠。
+判斷結果（各線的 DB 名、port、要排除的 marker）**寫進派工 prompt**——subagent 不知道別條線存在，
+不會自己想到要避開。
+
+#### 不要自己寫鎖
+
+直覺解法是用 `flock` 之類做一組共用鎖／獨占鎖（讀寫鎖）。**不要。**
+自製讀寫鎖的典型坑是**獨占請求餓死**：只要共用請求持續進來，共用持有者一棒接一棒、從不全空，
+獨占請求就永遠等不到那一刻。實際事故（另一個用本模板開發的專案）：4 條平行線加 1 個除錯 agent
+共用一台 SQL Server，計時測試要獨占，被擋了 23 分鐘，期間機器 load 只有 2.4——
+資源根本沒在忙，是鎖的語意讓它排不到。
+
+真的需要排隊時，依序選最簡單的那個：
+
+1. **把獨占工作移出平行時段**——計時測試合併後跑一次（見上表）。不需要任何鎖
+2. **由主模型序列化**——用到該資源的步驟不平行派，一條線做完再派下一條
+3. **只用一把互斥鎖，不分共用／獨占**——所有用到該資源的指令都拿同一把。等於循序，
+   但沒有「共用持有者接力」這個結構，不會出現上面那種餓死
 
 ---
 
@@ -306,6 +338,7 @@ git worktree prune                                 # 清掉目錄已消失的紀
 - ❌ 把 `.claude/worktrees/` 從 `.gitignore` 移出來（`.worktreeinclude` 帶進去的秘密會進版控）
 - ❌ 忘記 worktree 要自己裝依賴，然後以為是程式壞了
 - ❌ 沒有 plan／`files:` 就硬開平行
+- ❌ 平行線共用本機 DB／固定 port／計時測試，派工前沒分好；或自己寫讀寫鎖來排隊
 
 ## 相關
 

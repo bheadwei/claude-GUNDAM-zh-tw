@@ -112,9 +112,15 @@ Fix: 移至環境變數並加入 .gitignore
 
 ## 批准標準
 
-- **通過**: 無 CRITICAL 或 HIGH 問題
-- **警告**: 僅有 HIGH 問題（可謹慎合併）
+- **通過**: 無 CRITICAL 或 HIGH 問題（MEDIUM／LOW 照列，記為技術債，**不需要再審一輪**）
+- **警告**: 有 HIGH、無 CRITICAL -- 合併前應修。在 `subagent-execution` 的階段審查裡與「阻擋」同樣進修復迴圈
 - **阻擋**: 發現 CRITICAL 問題 -- 必須在合併前修復
+
+主模型怎麼依這三種結論分流，唯一來源是 `.claude/skills/subagent-execution/reviewer-prompt.md`
+的「主模型收到審查結果之後」。
+
+**被派來做複審時**（prompt 寫明「第 N 輪複審」並附上一輪清單）：只確認那幾項是否修好，
+範圍限於修復的 diff，只報這段 diff 引入的新 CRITICAL／HIGH。**不要**重新全面審查、不要報新的 MEDIUM／LOW。
 
 ---
 
