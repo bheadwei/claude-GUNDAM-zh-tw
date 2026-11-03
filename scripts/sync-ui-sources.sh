@@ -228,7 +228,7 @@ if [ "$MODE" = "import" ]; then
     echo ""
     echo "下一步（漏了 /ui-style 選不到它，check-counts 會擋）："
     echo "  1. CATALOG.md 加兩處：分類清單一行（附繁中一句話說明）＋底部分類索引"
-    echo "  2. 跑 bash scripts/check-counts.sh 確認配色、字型段落抽得到"
+    echo "  2. 跑 bash .claude/scripts/check-counts.sh 確認配色、字型段落抽得到"
     exit 0
 fi
 
@@ -379,7 +379,7 @@ echo ""
 if [ "$MODE" = "apply" ]; then
     echo "✅ --apply 完成，寫入 ${#APPLIED[@]} 項："
     for a in ${APPLIED[@]+"${APPLIED[@]}"}; do echo "  - $a"; done
-    echo "   跑 bash scripts/check-counts.sh 確認新內容的配色、字型段落抽得到"
+    echo "   跑 bash .claude/scripts/check-counts.sh 確認新內容的配色、字型段落抽得到"
 else
     echo "（預覽模式，沒有寫入任何檔。確認後加 --apply）"
 fi

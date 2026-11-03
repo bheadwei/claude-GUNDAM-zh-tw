@@ -28,8 +28,8 @@ powershell -ExecutionPolicy Bypass -File scripts\copy-template.ps1 D:\projects\m
 ```
 
 複製腳本會自動排除 `settings.local.json`、`taskmaster-data/`、`logs/`、`sessions/`、
-`context/`、`coordination/`、`workshop/` 與本 repo 的 `CLAUDE.md`——手動 `cp -r` 會把這些
-專案專屬資料一起帶走，造成新專案被舊資料污染。
+`context/`、`coordination/`、`workshop/`、根目錄 `scripts/`（模板自己的維護腳本）與本 repo 的
+`CLAUDE.md`——手動 `cp -r` 會把這些專案專屬資料一起帶走，造成新專案被舊資料污染。
 
 ```bash
 cd /path/to/new-project
@@ -62,7 +62,10 @@ bash scripts/update-template.sh /path/to/project             # 實跑（自動�
 |---|---|---|
 | SYNC | `agents/ commands/ rules/ skills/ hooks/ guides/ templates/ ui/ scripts/` | 覆寫（加 `--prune` 才刪除多出來的舊檔） |
 | MERGE | `context/ coordination/` | 只補骨架，**永不刪除**既有報告與交接 |
-| PRESERVE | `taskmaster-data/ sessions/ logs/ qa-history/ settings.local.json` + 專案自己的 `CLAUDE.md` | 完全不碰 |
+| PRESERVE | `taskmaster-data/ sessions/ logs/ qa-history/ settings.local.json` + 專案自己的 `CLAUDE.md`、根目錄 `scripts/`、`.mcp.json.*.example` | 完全不碰 |
+
+上表 SYNC 的 `scripts/` 是 `.claude/scripts/`。根目錄 `scripts/` 與 `.mcp.json.*.example` **不同步也不刪**——
+舊版同步過去的 `scripts/update-template.*`、`copy-template.*`、`check-counts.sh` 與 mcp 範例若用不到，手動刪掉即可。
 
 可選參數：`--prune`（清掉目標多出來的模板舊檔）、`--claude-only`（只更新 `.claude/`）、
 `--no-backup`。PowerShell 版本為 `scripts\update-template.ps1 -Destination <path> -DryRun`。
@@ -77,10 +80,9 @@ bash scripts/update-template.sh /path/to/project             # 實跑（自動�
 ```
 claude_v2026/
 ├── CLAUDE.md                         # 模板本身的開發須知（不複製到新專案）
-├── CLAUDE_TEMPLATE.md                # 專案初始化哨兵（init 後自動刪除）
 ├── .mcp.json.windows.example         # MCP 範本（Windows）
 ├── .mcp.json.linux.example           # MCP 範本（Linux / macOS）
-├── scripts/                          # copy-template / update-template（.sh + .ps1）
+├── scripts/                          # copy-template / update-template（.sh + .ps1）、sync-ui-sources（不帶到專案）
 └── .claude/
     ├── README.md                     # 配置目錄詳細說明
     ├── settings.json                 # 主設定（權限、StatusLine、Hooks）
@@ -90,8 +92,8 @@ claude_v2026/
     ├── agents/       (15 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
     ├── skills/       (28 個)         # 按需載入（不佔常駐 context）
-    ├── hooks/                        # Hook 腳本 + lib/ + 793 案例回歸測試
-    ├── scripts/                      # context-gc.sh（報告輪替）
+    ├── hooks/                        # Hook 腳本 + lib/ + 807 案例回歸測試
+    ├── scripts/                      # context-gc.sh（報告輪替）、check-counts.sh（文件計數一致性）
     ├── ui/           (104 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │
     ├── guides/                       # 參考文件（不自動載入）

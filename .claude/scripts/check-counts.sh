@@ -8,14 +8,14 @@
 # skills 12→13→14→15、commands 25→28→29）——那是完全可以自動化的檢查。
 #
 # 用法：
-#   bash scripts/check-counts.sh              # 只檢查靜態計數
-#   bash scripts/check-counts.sh --tests 137  # 連測試案例數一起檢查
+#   bash .claude/scripts/check-counts.sh              # 只檢查靜態計數
+#   bash .claude/scripts/check-counts.sh --tests 137  # 連測試案例數一起檢查
 #
 # 退出碼：0 = 一致，1 = 有 drift（可直接掛 CI）
 
 set -uo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT" || exit 1
 
 TESTS_ACTUAL=""

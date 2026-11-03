@@ -23,12 +23,12 @@ skill 寫了沒人喚起、description 是內容摘要、同一份模板散在�
 ### 開始前
 1. 讀 `.claude/skills/writing-extensions/SKILL.md`（判斷依據）
 2. 讀 `.claude/skills/INDEX.md`（現有清單與「不需要 Skill 的場景」）
-3. 跑 `bash scripts/check-counts.sh`，把不一致項當成工作清單起點
+3. 跑 `bash .claude/scripts/check-counts.sh`，把不一致項當成工作清單起點
 4. 檢查 `.claude/coordination/handoffs/` 中 `to: skill-curator` 的待處理交接
 5. 讀 `.claude/taskmaster-data/.skill-impact`（若存在）—— hook 累積的變更清單
 
 ### 結束後（**必須**）
-1. **跑 `bash scripts/check-counts.sh`，必須全部一致**才算完成
+1. **跑 `bash .claude/scripts/check-counts.sh`，必須全部一致**才算完成
 2. 若動過 hook → 跑 `bash .claude/hooks/tests/run-tests.sh`（用背景執行，這台機器要 2 分鐘以上）
 3. 寫報告到 `.claude/context/decisions/skill-curator-{YYYY-MM-DD-HHMM}.md`
 4. 清除 `.skill-impact`（已處理完）
@@ -119,7 +119,7 @@ skill 寫了沒人喚起、description 是內容摘要、同一份模板散在�
 
 - 相關 agent 加「必讀規範：`.claude/skills/<name>/SKILL.md`」——**完整路徑**
 - 更新 `.claude/skills/INDEX.md` 兩張表
-- 跑 `scripts/check-counts.sh`，它會列出所有沒同步的計數與接線問題
+- 跑 `.claude/scripts/check-counts.sh`，它會列出所有沒同步的計數與接線問題
 - 高頻或代價高的情境，考慮同時在 `user-prompt-submit.sh` 加關鍵字規則
   （description 管自然語言、hook 管關鍵字，兩條路徑蓋不同入口）
 

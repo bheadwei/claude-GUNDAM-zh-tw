@@ -31,8 +31,9 @@ tree_sum() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum) 
 new_sandbox() {
     local sb up uppath
     sb="$(mktemp -d "$TMP_ALL/sb.XXXX")"
-    mkdir -p "$sb/scripts" "$sb/.claude"
-    cp "$SCRIPT" "$REPO/scripts/check-counts.sh" "$sb/scripts/"
+    mkdir -p "$sb/scripts" "$sb/.claude/scripts"
+    cp "$SCRIPT" "$sb/scripts/"
+    cp "$REPO/.claude/scripts/check-counts.sh" "$sb/.claude/scripts/"
     cp -r "$REPO/.claude/ui" "$sb/.claude/ui"
     up="$sb/upstream/voltagent"
     mkdir -p "$up"
@@ -192,7 +193,7 @@ check "language 依內容判成 ja" '[ "$(jq -r .language "$SB/.claude/ui/jp-tes
 check "提醒去 CATALOG.md 加兩處" 'printf "%s\n" "$OUT" | grep -q "CATALOG.md 加兩處"' "$OUT"
 check "提醒授權檔缺" 'printf "%s\n" "$OUT" | grep -q "授權檔缺"' "$OUT"
 check "CATALOG.md 沒被腳本改（留給人寫繁中說明）" 'cmp -s "$SB/.claude/ui/CATALOG.md" "$REPO/.claude/ui/CATALOG.md"'
-CC="$(bash "$SB/scripts/check-counts.sh" 2>&1)"
+CC="$(bash "$SB/.claude/scripts/check-counts.sh" 2>&1)"
 check "check-counts 出現 ✗ 未列入 CATALOG.md：jp-testtea" 'printf "%s\n" "$CC" | grep -q "未列入 CATALOG.md：jp-testtea"' "$CC"
 run "$SB"
 check "剛匯入的不會出現在「本地已修改」" '! section "本地已修改" | grep -q "jp-testtea"' "$OUT"
@@ -213,40 +214,60 @@ OUT="$(PATH="${NOGH_PATH%:}" bash "$SB/scripts/sync-ui-sources.sh" 2>&1)"; RC=$?
 check "exit 2" '[ "$RC" -eq 2 ]' "$OUT"
 check "訊息含「需要 gh」" 'printf "%s\n" "$OUT" | grep -q "需要 gh"' "$OUT"
 
-echo "▶ 12. 新專案不帶同步腳本（copy／update 四份）"
+echo "▶ 12. 新專案不帶模板的根目錄 scripts/（copy／update 四份）"
 NORSYNC_PATH="$(printf '%s\n' "$PATH" | tr ':' '\n' | while IFS= read -r p; do
     [ -x "$p/rsync" ] || [ -x "$p/rsync.exe" ] || printf '%s:' "$p"; done)"
 NORSYNC_PATH="${NORSYNC_PATH%:}"
-assert_dest() {  # $1=標籤 $2=目標（check 用 eval，所以先存進 DT）
+assert_dest() {  # $1=標籤 $2=目標 $3=copy|update（check 用 eval，所以先存進 DT）
     DT="$2"
     check "$1：沒有 scripts/sync-ui-sources*" '! ls "$DT"/scripts/sync-ui-sources* >/dev/null 2>&1'
+    check "$1：沒有 scripts/check-counts.sh" '[ ! -e "$DT/scripts/check-counts.sh" ]'
+    check "$1：沒有 scripts/copy-template.* 與 update-template.*"         '! ls "$DT"/scripts/copy-template.* "$DT"/scripts/update-template.* >/dev/null 2>&1'
+    check "$1：有 .claude/scripts/check-counts.sh" '[ -f "$DT/.claude/scripts/check-counts.sh" ]'
+    check "$1：有 .claude/scripts/context-gc.sh（根目錄排除沒誤傷 .claude/scripts/）" '[ -f "$DT/.claude/scripts/context-gc.sh" ]'
     check "$1：有 .claude/ui/_licenses/" '[ -f "$DT/.claude/ui/_licenses/voltagent-awesome-design-md.txt" ]'
-    check "$1：其他 scripts 照常帶過去" '[ -f "$DT/scripts/check-counts.sh" ]'
+    # CLAUDE_TEMPLATE.md 哨兵已廢除（初始化狀態改看 taskmaster-data/project.json）
+    check "$1：沒有 CLAUDE_TEMPLATE.md" '[ ! -e "$DT/CLAUDE_TEMPLATE.md" ]'
+    if [ "$3" = "copy" ]; then
+        # 開新專案要靠範例建 .mcp.json（完成訊息與 README 都叫使用者 cp 它）
+        check "$1：有 .mcp.json.*.example" '[ -f "$DT/.mcp.json.windows.example" ] && [ -f "$DT/.mcp.json.linux.example" ]'
+    else
+        check "$1：沒有 .mcp.json.*.example" '! ls "$DT"/.mcp.json.*.example >/dev/null 2>&1'
+        check "$1：專案自己的 scripts/ 原封不動" '[ "$(cat "$DT/scripts/mine.sh" 2>/dev/null)" = "mine" ]'
+        check "$1：根目錄同步清單仍有作用（.gitattributes 有到）" '[ -f "$DT/.gitattributes" ]'
+    fi
+}
+new_update_target() {  # 模擬既有專案：有自己的 scripts/
+    mkdir -p "$1/.claude" "$1/scripts"
+    echo mine > "$1/scripts/mine.sh"
 }
 D="$TMP_ALL/copy-sh"
 bash "$REPO/scripts/copy-template.sh" "$D" >/dev/null 2>&1 </dev/null
-assert_dest "copy-template.sh" "$D"
+assert_dest "copy-template.sh" "$D" copy
 D="$TMP_ALL/copy-sh-norsync"
 PATH="$NORSYNC_PATH" bash "$REPO/scripts/copy-template.sh" "$D" >/dev/null 2>&1 </dev/null
-assert_dest "copy-template.sh（沒有 rsync）" "$D"
+assert_dest "copy-template.sh（沒有 rsync）" "$D" copy
 
-D="$TMP_ALL/update-sh"; mkdir -p "$D/.claude" "$D/scripts"
-echo old > "$D/scripts/sync-ui-sources.sh"   # 模擬舊版 update 漏過去的
+D="$TMP_ALL/update-sh"; new_update_target "$D"
 bash "$REPO/scripts/update-template.sh" "$D" --no-backup >/dev/null 2>&1 </dev/null
-assert_dest "update-template.sh" "$D"
-D="$TMP_ALL/update-sh-norsync"; mkdir -p "$D/.claude" "$D/scripts"
-echo old > "$D/scripts/sync-ui-sources.sh"
+assert_dest "update-template.sh" "$D" update
+D="$TMP_ALL/update-sh-norsync"; new_update_target "$D"
 PATH="$NORSYNC_PATH" bash "$REPO/scripts/update-template.sh" "$D" --no-backup >/dev/null 2>&1 </dev/null
-assert_dest "update-template.sh（沒有 rsync）" "$D"
+assert_dest "update-template.sh（沒有 rsync）" "$D" update
+# --claude-only 走「跳過根目錄檔案」那條分支（set -u 下展開 SYNC_ROOT_FILES）
+D="$TMP_ALL/update-sh-claude-only"; new_update_target "$D"
+OUT="$(bash "$REPO/scripts/update-template.sh" "$D" --no-backup --claude-only 2>&1 </dev/null)"; RC=$?
+check "update-template.sh --claude-only：exit 0" '[ "$RC" -eq 0 ]' "$OUT"
+check "update-template.sh --claude-only：不碰根目錄檔案" '[ ! -e "$D/.gitattributes" ] && [ ! -e "$D/CLAUDE_TEMPLATE.md" ]'
+check "update-template.sh：結尾提示 CLAUDE_TEMPLATE.md 已廢除" 'printf "%s\n" "$OUT" | grep -q "CLAUDE_TEMPLATE.md 已廢除"' "$OUT"
 
 if command -v powershell.exe >/dev/null 2>&1 && command -v cygpath >/dev/null 2>&1; then
     D="$TMP_ALL/copy-ps1"
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$REPO/scripts/copy-template.ps1")" "$(cygpath -w "$D")" >/dev/null 2>&1 </dev/null
-    assert_dest "copy-template.ps1" "$D"
-    D="$TMP_ALL/update-ps1"; mkdir -p "$D/.claude" "$D/scripts"
-    echo old > "$D/scripts/sync-ui-sources.sh"
+    assert_dest "copy-template.ps1" "$D" copy
+    D="$TMP_ALL/update-ps1"; new_update_target "$D"
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$REPO/scripts/update-template.ps1")" "$(cygpath -w "$D")" -NoBackup >/dev/null 2>&1 </dev/null
-    assert_dest "update-template.ps1" "$D"
+    assert_dest "update-template.ps1" "$D" update
 else
     echo "  - 略過 ps1（沒有 powershell.exe）"
 fi

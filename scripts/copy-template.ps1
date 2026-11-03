@@ -77,11 +77,7 @@ $excludeFiles = @(
     'Thumbs.db',
     '*.pyc',
     '*.tmp',
-    '*.bak',
-    # 模板維護者工具（scripts/sync-ui-sources.sh 與其測試），在新專案沒有意義。
-    # 四份 copy／update 腳本要一致：copy-template.sh 的 EXCLUDES、update-template.{sh,ps1}
-    'sync-ui-sources*'
-)
+    '*.bak')
 
 # ============================================================================
 # 執行複製（使用 Robocopy，Windows 原生且最快）
@@ -114,6 +110,14 @@ foreach ($dir in $excludeDirs) {
     $robocopyArgs += '/XD'
     $robocopyArgs += $dir
 }
+
+# 根目錄 scripts\：模板自己的 copy／update／sync-ui-sources 維護腳本，新專案用不到，
+# 而且專案會有自己的 scripts\。用完整路徑錨定在根目錄——/XD 只給名稱 'scripts'
+# 會連 .claude\scripts\（context-gc、check-counts）一起排掉。
+# session-start.sh 靠「scripts/sync-ui-sources.sh 在不在」判斷是不是模板 repo。
+# copy-template.sh 的 EXCLUDES（"/scripts/"）要一致
+$robocopyArgs += '/XD'
+$robocopyArgs += (Join-Path $sourcePath 'scripts')
 
 foreach ($file in $excludeFiles) {
     $robocopyArgs += '/XF'
