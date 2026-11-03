@@ -235,7 +235,6 @@ Package Manager：[bun/pnpm/npm 或 未設定（首次 Node 指令時詢問）]
    - **禁止使用 pip / poetry**
 6. 初始化 Git + GitHub（如選擇）
 7. 配置 Agent 協調策略
-8. **刪除根目錄的 `CLAUDE_TEMPLATE.md`**（已完成初始化任務）
 
 ### 步驟 5: 持久化 WBS（關鍵步驟）
 

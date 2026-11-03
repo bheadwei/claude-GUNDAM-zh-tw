@@ -159,6 +159,19 @@ if ! command -v jq >/dev/null 2>&1; then
 fi
 
 # ============================================================================
+# 這是不是模板 repo 本身
+#
+# 用在兩處：擴充維護提醒②③只在模板 repo 出現、init 提示不在模板 repo 出現。
+# 判斷依據：`scripts/sync-ui-sources.sh` 在不在。copy-template.{sh,ps1} 排除整個
+# 根目錄 scripts/（含 cp 退路），update-template.{sh,ps1} 不碰根目錄 scripts/，所以新專案一定沒有。
+# 不用 CLAUDE.md、`.git` 的 remote、目錄名這類特徵：前者新專案也會有（/task-init 產生），
+# 後兩者使用者可以任意改。**改那四份腳本的排除清單時，這裡會跟著失準。**
+# 放在 CURATION_REMINDERS 逃生門外面：關掉維護提醒不該讓模板 repo 冒出 init 提示。
+# ============================================================================
+_IS_TEMPLATE_REPO=0
+[ -f "$PROJECT_ROOT/scripts/sync-ui-sources.sh" ] && _IS_TEMPLATE_REPO=1
+
+# ============================================================================
 # 待收割的擴充維護工作
 #
 # 這兩件事都靠使用者「記得下指令」就會無限延後——而它們的時機機器判斷得出來，
@@ -176,19 +189,12 @@ if [ "${CURATION_REMINDERS:-on}" != "off" ]; then
         note "🧠 有 ${_N} 筆「踩過的坑」候選還沒寫進 \`.claude/context/learned/\`（清單在 \`taskmaster-data/.learned-candidates\`）。這些是連續失敗後才解掉的問題——同一個坑不該踩第二次。**收尾時處理**（手上的任務做完、或 `/verify` 之前；不要為此打斷使用者剛交代的事）：讀清單、逐筆判斷值不值得留，值得的用 \`/learn\` 寫進 \`learned/\`，不值得的直接從清單刪。處理完清空該檔。"
     fi
 
-    # ②③ 只在模板 repo 出現
+    # ②③ 只在模板 repo 出現（判斷見上方 _IS_TEMPLATE_REPO）
     #
     # 維護 `.claude/ui/` 是模板維護者的事。用模板開出來的專案拿到的是一份快照，
     # 在那裡提醒「素材庫該更新了」只會叫使用者去改一份下次 update-template 就被蓋掉的東西
     # ——而且 copy-template 不帶 taskmaster-data/，`.ui-catalog-refreshed` 必定不存在，
     # 等於每個新專案的每個 session 都會被提醒一次。
-    #
-    # 判斷依據：`scripts/sync-ui-sources.sh` 在不在。copy-template.{sh,ps1} 與
-    # update-template.{sh,ps1} 四份都排除它（含 cp 退路），所以新專案一定沒有。
-    # 不用 CLAUDE.md、`.git` 的 remote、目錄名這類特徵：前者新專案也會有（/task-init 產生），
-    # 後兩者使用者可以任意改。**改那四份腳本的排除清單時，這裡會跟著失準。**
-    _IS_TEMPLATE_REPO=0
-    [ -f "$PROJECT_ROOT/scripts/sync-ui-sources.sh" ] && _IS_TEMPLATE_REPO=1
 
     # ② 設計走向太久沒跟上
     #    90 天：設計走向與瀏覽器支援度大約這個週期會有實質變化。
@@ -320,61 +326,65 @@ if [ -n "$_CT" ]; then
     note "$_CT_NOTE"
 fi
 
-# 檢查是否存在 CLAUDE_TEMPLATE.md
-if [ -f "$PROJECT_ROOT/CLAUDE_TEMPLATE.md" ]; then
-    log "📄 偵測到 CLAUDE_TEMPLATE.md"
-
-    # 檢查是否已經初始化過
-    if [ ! -f "$CLAUDE_DIR/taskmaster-data/project.json" ]; then
-        log "🚀 準備自動觸發 TaskMaster 初始化"
-
-        # 顯示提示訊息（Jobs 式極簡設計）
-        banner ""
-        banner "\033[1;37m╭─────────────────────────────────────────────────────────────╮\033[0m"
-        banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-        banner "\033[1;37m│\033[0m     \033[1;97m🚀 TaskMaster Ready\033[0m                                  \033[1;37m│\033[0m"
-        banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-        banner "\033[1;37m│\033[0m     \033[0;90mTemplate detected. Start with:\033[0m                      \033[1;37m│\033[0m"
-        banner "\033[1;37m│\033[0m     \033[1;36m/task-init [project-name]\033[0m                           \033[1;37m│\033[0m"
-        banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-        banner "\033[1;37m├─────────────────────────────────────────────────────────────┤\033[0m"
-        banner "\033[1;37m│\033[0m \033[1;97mWorkflow\033[0m                                                   \033[1;37m│\033[0m"
-        banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-        banner "\033[1;37m│\033[0m   \033[1;32m①\033[0m  \033[0;37mCollect requirements\033[0m           \033[0;90m→ Human review\033[0m    \033[1;37m│\033[0m"
-        banner "\033[1;37m│\033[0m   \033[1;33m②\033[0m  \033[0;37mGenerate project docs\033[0m          \033[0;90m→ Quality gate\033[0m    \033[1;37m│\033[0m"
-        banner "\033[1;37m│\033[0m   \033[1;36m③\033[0m  \033[0;37mStart development\033[0m              \033[0;90m→ After approval\033[0m  \033[1;37m│\033[0m"
-        banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-        banner "\033[1;37m╰─────────────────────────────────────────────────────────────╯\033[0m"
-        banner ""
-
-        note "📄 這是尚未初始化的 TaskMaster 專案。使用者若還沒說要做什麼，請引導他跑 \`/task-init\`。"
-
-        finish
-    else
-        log "ℹ️ TaskMaster 已初始化"
-
-        # 檢查是否有現有 WBS 檔案，提示恢復
-        if [ -f "$CLAUDE_DIR/taskmaster-data/wbs.md" ]; then
-            log "📋 偵測到現有 WBS 任務清單"
-
-            banner ""
-            banner "\033[1;37m╭─────────────────────────────────────────────────────────────╮\033[0m"
-            banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-            banner "\033[1;37m│\033[0m     \033[1;97m📋 WBS 任務清單已載入\033[0m                              \033[1;37m│\033[0m"
-            banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-            banner "\033[1;37m│\033[0m     \033[0;90mResume with:\033[0m                                        \033[1;37m│\033[0m"
-            banner "\033[1;37m│\033[0m     \033[1;36m/task-status\033[0m  查看進度                              \033[1;37m│\033[0m"
-            banner "\033[1;37m│\033[0m     \033[1;36m/task-next\033[0m    取得下一個任務                        \033[1;37m│\033[0m"
-            banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
-            banner "\033[1;37m╰─────────────────────────────────────────────────────────────╯\033[0m"
-            banner ""
-
-            note "📋 本專案已有 WBS。使用者若要繼續開發，用 \`/task-next\` 取任務，不要憑印象猜下一步。"
-        fi
-
+# ============================================================================
+# 專案初始化狀態：只看 taskmaster-data/project.json
+#
+# 曾經用根目錄的 CLAUDE_TEMPLATE.md 當哨兵，但 /task-init 完成時會刪掉它，
+# 導致「已初始化且有 WBS」那段永遠走不到；模板 repo 本身也被誤判成「未初始化的專案」。
+# project.json 由 /task-init 寫入，存在＝已初始化，不需要第二個訊號。
+# ============================================================================
+_TM_DATA="$CLAUDE_DIR/taskmaster-data"
+if [ ! -f "$_TM_DATA/project.json" ]; then
+    if [ "$_IS_TEMPLATE_REPO" -eq 1 ]; then
+        log "ℹ️ 模板 repo 本身，不顯示 init 提示"
         finish
     fi
-else
-    log "ℹ️ 未偵測到 CLAUDE_TEMPLATE.md，TaskMaster 待命中"
+
+    log "🚀 尚未初始化（無 project.json），提示 /task-init"
+
+    # 顯示提示訊息（Jobs 式極簡設計）
+    banner ""
+    banner "\033[1;37m╭─────────────────────────────────────────────────────────────╮\033[0m"
+    banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m     \033[1;97m🚀 TaskMaster Ready\033[0m                                  \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m     \033[0;90mTemplate detected. Start with:\033[0m                      \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m     \033[1;36m/task-init [project-name]\033[0m                           \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+    banner "\033[1;37m├─────────────────────────────────────────────────────────────┤\033[0m"
+    banner "\033[1;37m│\033[0m \033[1;97mWorkflow\033[0m                                                   \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m   \033[1;32m①\033[0m  \033[0;37mCollect requirements\033[0m           \033[0;90m→ Human review\033[0m    \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m   \033[1;33m②\033[0m  \033[0;37mGenerate project docs\033[0m          \033[0;90m→ Quality gate\033[0m    \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m   \033[1;36m③\033[0m  \033[0;37mStart development\033[0m              \033[0;90m→ After approval\033[0m  \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+    banner "\033[1;37m╰─────────────────────────────────────────────────────────────╯\033[0m"
+    banner ""
+
+    note "📄 這是尚未初始化的 TaskMaster 專案。使用者若還沒說要做什麼，請引導他跑 \`/task-init\`。"
+
     finish
 fi
+
+log "ℹ️ TaskMaster 已初始化"
+
+# 有 WBS 就提示接續
+if [ -f "$_TM_DATA/wbs.md" ]; then
+    log "📋 偵測到現有 WBS 任務清單"
+
+    banner ""
+    banner "\033[1;37m╭─────────────────────────────────────────────────────────────╮\033[0m"
+    banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m     \033[1;97m📋 WBS 任務清單已載入\033[0m                              \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m     \033[0;90mResume with:\033[0m                                        \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m     \033[1;36m/task-status\033[0m  查看進度                              \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m     \033[1;36m/task-next\033[0m    取得下一個任務                        \033[1;37m│\033[0m"
+    banner "\033[1;37m│\033[0m                                                             \033[1;37m│\033[0m"
+    banner "\033[1;37m╰─────────────────────────────────────────────────────────────╯\033[0m"
+    banner ""
+
+    note "📋 本專案已有 WBS。使用者若要繼續開發，用 \`/task-next\` 取任務，不要憑印象猜下一步。"
+fi
+
+finish

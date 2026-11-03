@@ -19,7 +19,7 @@ param(
     [switch]$DryRun,      # 只列出將變更的內容，不實際寫入
     [switch]$Prune,       # 對 SYNC 目錄使用 /MIR，刪除目標多出來的檔（預設僅新增/覆蓋）
     [switch]$NoBackup,    # 略過備份（預設會先把目標 .claude 壓成 zip）
-    [switch]$ClaudeOnly   # 只更新 .claude\，跳過根目錄的 scripts/ 與根層檔案（保留專案自己的 CLAUDE.md/.gitignore/.gitattributes 等）
+    [switch]$ClaudeOnly   # 只更新 .claude\，跳過根層檔案（.gitattributes）
 )
 
 $ErrorActionPreference = 'Stop'
@@ -40,12 +40,11 @@ $syncClaudeFiles = @(
     'statusline.sh', 'statusline-debug.sh',
     'settings.json', 'README.md'
 )
-$syncRootDirs  = @('scripts')   # 倉庫根目錄下的輔助腳本（含本腳本自己）
-# 根目錄 scripts\ 裡只給模板維護者用的檔案：不同步過去，目標端舊版留下的也刪掉
-# （session-start.sh 靠「scripts/sync-ui-sources.sh 在不在」判斷是不是模板 repo）。
-# 四份 copy／update 腳本要一致
-$rootScriptsExclude = 'sync-ui-sources*'
-$syncRootFiles = @('.mcp.json.linux.example', '.mcp.json.windows.example', 'CLAUDE_TEMPLATE.md', '.gitattributes')
+# 根目錄的 scripts\ 與 .mcp.json.*.example 刻意不同步：專案有自己的 scripts\，
+# 模板的維護腳本混進去只會讓使用者每次手動刪；mcp 範例只在開新專案時有用（copy-template 帶）。
+# 目標端已經有的也不刪——可能是使用者自己的檔案。update-template.sh 要一致
+# CLAUDE_TEMPLATE.md 已廢除（初始化狀態改看 taskmaster-data/project.json），不再同步
+$syncRootFiles = @('.gitattributes')
 # SEED：只在目標「不存在」時建立，永不覆寫（專案會自己加規則，且根目錄檔案沒備份）
 $seedRootFiles = @('.worktreeinclude')
 
@@ -98,7 +97,7 @@ if (-not $DryRun -and -not $NoBackup -and (Test-Path (Join-Path $destPath '.clau
 # ============================================================================
 
 function Invoke-Sync {
-    param([string]$Src, [string]$Dst, [switch]$Mirror, [switch]$AdditiveOnly, [string]$ExcludeTop = '')
+    param([string]$Src, [string]$Dst, [switch]$Mirror, [switch]$AdditiveOnly)
 
     if (-not (Test-Path $Src)) { return }   # 模板沒有就跳過
     New-Item -ItemType Directory -Path $Dst -Force | Out-Null
@@ -106,16 +105,11 @@ function Invoke-Sync {
     $rc = @($Src.TrimEnd('\'), $Dst.TrimEnd('\'), '/E', '/R:1', '/W:1', '/NP', '/NDL', '/NFL', '/NJH', '/NJS')
     if ($Mirror -and -not $AdditiveOnly) { $rc += '/PURGE' }   # /E + /PURGE = /MIR 效果
     if ($DryRun) { $rc += '/L' }
-    if ($ExcludeTop) { $rc += '/XF'; $rc += $ExcludeTop }
 
     & robocopy @rc | Out-Null
     if ($LASTEXITCODE -ge 8) {
         Write-Host "❌ robocopy 失敗 ($Src) exit=$LASTEXITCODE" -ForegroundColor Red
         exit 1
-    }
-    # 與 update-template.sh 一致：目標端第一層若有舊版漏過去的，也刪掉
-    if ($ExcludeTop -and -not $DryRun) {
-        Get-ChildItem -Path $Dst -File -Filter $ExcludeTop -ErrorAction SilentlyContinue | Remove-Item -Force
     }
 }
 
@@ -143,14 +137,6 @@ Write-Host ""
 Write-Host "▶ SYNC 模板目錄..." -ForegroundColor Green
 foreach ($d in $syncClaudeDirs) {
     Invoke-Sync (Join-Path $source ".claude\$d") (Join-Path $destPath ".claude\$d") -Mirror:$Prune
-}
-if (-not $ClaudeOnly) {
-    foreach ($d in $syncRootDirs) {
-        $excl = if ($d -eq 'scripts') { $rootScriptsExclude } else { '' }
-        Invoke-Sync (Join-Path $source $d) (Join-Path $destPath $d) -Mirror:$Prune -ExcludeTop $excl
-    }
-} else {
-    Write-Host "   ⏭  跳過根目錄目錄: $($syncRootDirs -join ', ')" -ForegroundColor DarkGray
 }
 
 Write-Host "▶ SYNC 模板檔案..." -ForegroundColor Green
@@ -226,9 +212,16 @@ if ($DryRun) {
 Write-Host ""
 Write-Host "🔒 以下專案紀錄完全未被更動：" -ForegroundColor Yellow
 foreach ($p in $preserveNote) { Write-Host "     - $p" }
+Write-Host "     - (root) scripts/、.mcp.json.*.example（模板不再同步這兩者）"
 if ($ClaudeOnly) {
-    Write-Host "     - (root) scripts/ 及所有根層檔案（CLAUDE.md / .gitignore / .gitattributes / .mcp.json.* 等）" -ForegroundColor Yellow
+    Write-Host "     - (root) 所有根層檔案（CLAUDE.md / .gitignore / .gitattributes 等）" -ForegroundColor Yellow
 }
+Write-Host ""
+Write-Host "🧹 舊版同步過來的 scripts/update-template.*、copy-template.*、check-counts.sh" -ForegroundColor Cyan
+Write-Host "   與 .mcp.json.*.example 若不需要可手動刪除（本腳本不會刪，避免誤刪專案自己的檔案）"
+Write-Host "   （check-counts.sh 已搬到 .claude/scripts/，會隨 .claude/ 一起同步）"
+Write-Host "🧹 根目錄的 CLAUDE_TEMPLATE.md 已廢除，可直接刪除" -ForegroundColor Cyan
+Write-Host "   （初始化狀態改看 .claude/taskmaster-data/project.json，留著它不會再有任何作用）"
 Write-Host ""
 if (-not $DryRun -and -not $NoBackup) {
     Write-Host "🛟 如需還原：解壓 .claude-backups\ 內最新的 zip 覆蓋回 .claude\" -ForegroundColor Cyan

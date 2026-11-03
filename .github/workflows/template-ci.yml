@@ -110,7 +110,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 比對文件計數 vs 檔案系統
-        run: bash scripts/check-counts.sh --tests "${{ needs.hooks.outputs.cases }}"
+        run: bash .claude/scripts/check-counts.sh --tests "${{ needs.hooks.outputs.cases }}"
 
   templating:
     name: copy-template / update-template 沙箱實跑

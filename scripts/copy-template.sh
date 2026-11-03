@@ -95,11 +95,12 @@ EXCLUDES=(
     # 模板自身的 CI（專案的 CI 是專案自己的事；想沿用手動複製即可）
     ".github/"
 
-    # 模板維護者工具：同步 .claude/ui/ 的上游風格庫，在新專案沒有意義
-    # （session-start.sh 也靠「這支在不在」判斷是不是模板 repo）。
-    # 四份 copy／update 腳本要一致：copy-template.ps1 的 $excludeFiles、
-    # update-template.{sh,ps1} 的 scripts/ 同步排除
-    "scripts/sync-ui-sources*"
+    # 根目錄 scripts/：模板自己的 copy／update／sync-ui-sources 維護腳本，新專案用不到，
+    # 而且專案會有自己的 scripts/，混在一起只能手動刪。開頭的 / 錨定在根目錄——
+    # 不錨定會連 .claude/scripts/（context-gc、check-counts）一起排掉。
+    # session-start.sh 靠「scripts/sync-ui-sources.sh 在不在」判斷是不是模板 repo，
+    # 這條排除讓新專案一定判成「不是」。copy-template.ps1 的 $excludeDirs 要一致
+    "/scripts/"
 )
 
 # ============================================================================
@@ -125,7 +126,10 @@ else
 
     for pattern in "${EXCLUDES[@]}"; do
         p="${pattern%/}"                    # 去掉結尾斜線：find -path 比對的路徑不帶結尾 /
-        if [[ "$p" == */* ]]; then
+        if [[ "$p" == /* ]]; then
+            # 開頭 / = 只錨定根目錄（與 rsync 語意一致）
+            rm -rf "${DEST:?}$p"
+        elif [[ "$p" == */* ]]; then
             # 含路徑的樣式：比對 DEST 下的相對路徑
             find "$DEST" -path "$DEST/$p" -prune -exec rm -rf {} + 2>/dev/null || true
         else

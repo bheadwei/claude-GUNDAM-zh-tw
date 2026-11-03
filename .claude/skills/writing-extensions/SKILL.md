@@ -115,7 +115,7 @@ skill 的代價是「要被喚起才載入」，而喚起的唯一依據是 `des
 
 ## 第三個問題：怎麼知道它真的生效
 
-**這是這個模板最薄弱的一環。** 737 個 hook 測試證明的是閘門邏輯正確，
+**這是這個模板最薄弱的一環。** 739 個 hook 測試證明的是閘門邏輯正確，
 **完全測不到「模型會不會照做」**。
 
 2026-09-09 第一輪實跑證實了這件事的重要性：文件維護路由（`documentation-specialist`）
@@ -165,5 +165,5 @@ hook 可以用 `run-tests.sh` 釘住。rule／skill／command 不行——它們
 - `.claude/skills/INDEX.md` — 現有 skill 與「不需要 Skill 的場景」
 - `.claude/rules/agent-orchestration.md` — 五層的協作方式
 - `.claude/tests/skill-compliance/README.md` — 壓力測試怎麼跑
-- `scripts/check-counts.sh` — 新增後跑一次，它會列出所有沒同步的計數
+- `.claude/scripts/check-counts.sh` — 新增後跑一次，它會列出所有沒同步的計數
 - `CLAUDE.md` 的「改動時的連帶檢查」 — 每種新增各要同步哪些檔案

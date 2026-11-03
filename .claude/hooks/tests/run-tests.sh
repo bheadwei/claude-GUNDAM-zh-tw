@@ -946,7 +946,7 @@ expect_contains "注入含坑目錄指示"                 "context/learned"   "
 section "session-start.sh — 風格庫提醒只在模板 repo 出現"
 # =========================================================================
 #
-# 判斷依據是 scripts/sync-ui-sources.sh 在不在（四份 copy／update 腳本都排除它）。
+# 判斷依據是 scripts/sync-ui-sources.sh 在不在（copy-template 排除整個根目錄 scripts/、update-template 不碰它）。
 # 新專案拿到的 .claude/ui/ 是快照、也沒有 taskmaster-data/，以前每個 session 都會被叫去「更新素材庫」。
 ss_ctx() { run session-start.sh '{}' | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null; }
 days_ago() { jq -nr --argjson d "$1" '(now - $d * 86400) | strftime("%Y-%m-%d")'; }
@@ -982,6 +982,42 @@ reset; ss_clean; ss_template; ss_sources "$(days_ago 10)"; : > "$SANDBOX/.claude
 expect_not_contains "模板 repo、設計走向剛更新 → 不提醒"       "設計走向"   "$(ss_ctx)"
 reset; ss_clean
 
+# =========================================================================
+section "session-start.sh — 初始化狀態只看 project.json"
+# =========================================================================
+# 舊做法以根目錄 CLAUDE_TEMPLATE.md 當哨兵，但 /task-init 完成時會刪它 →
+# 「已初始化且有 WBS」那段永遠走不到；模板 repo 本身也被當成未初始化的專案。
+ss_init() { : > "$SANDBOX/.claude/taskmaster-data/project.json"; }
+ss_wbs()  { echo "# WBS" > "$SANDBOX/.claude/taskmaster-data/wbs.md"; }
+rm -f "$SANDBOX/CLAUDE_TEMPLATE.md"
+
+reset; ss_clean
+out=$(ss_ctx)
+expect_contains     "沒有 project.json → 提示 /task-init"          "/task-init" "$out"
+expect_not_contains "沒有 project.json → 不提 WBS 接續"           "/task-next" "$out"
+
+reset; ss_clean; ss_init; ss_wbs
+out=$(ss_ctx)
+expect_contains     "有 project.json＋wbs.md、沒有哨兵檔 → 提示 /task-next 接續" "/task-next" "$out"
+expect_not_contains "已初始化 → 不再提示 /task-init"                         "/task-init" "$out"
+
+reset; ss_clean; ss_init
+out=$(ss_ctx)
+expect_not_contains "有 project.json、沒有 wbs.md → 不提 /task-init"  "/task-init" "$out"
+expect_not_contains "有 project.json、沒有 wbs.md → 不提 /task-next"  "/task-next" "$out"
+
+# 舊專案 update 前留下的哨兵檔不再有作用：有 WBS 照樣提示接續
+reset; ss_clean; ss_init; ss_wbs; : > "$SANDBOX/CLAUDE_TEMPLATE.md"
+expect_contains "殘留的 CLAUDE_TEMPLATE.md 不影響 WBS 接續提示" "/task-next" "$(ss_ctx)"
+rm -f "$SANDBOX/CLAUDE_TEMPLATE.md"
+
+reset; ss_clean; ss_template
+expect_not_contains "模板 repo 本身（沒有 project.json）→ 不提示 /task-init" "/task-init" "$(ss_ctx)"
+# 判斷放在 CURATION_REMINDERS 逃生門外：關掉維護提醒不該讓 init 提示冒出來
+expect_not_contains "模板 repo、CURATION_REMINDERS=off → 仍不提示 /task-init" "/task-init" \
+    "$(run session-start.sh '{}' CURATION_REMINDERS=off | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null)"
+reset; ss_clean
+
 # 真的用 copy-template.sh 建一個新專案再開 session：上面的沙箱只證明「條件寫對了」，
 # 這組證明「新專案真的不滿足那個條件」——排除清單哪天漏了，這裡會紅
 NEWPROJ=$(mktemp -d)
@@ -993,6 +1029,12 @@ else
 fi
 [ ! -e "$NEWPROJ/app/scripts/sync-ui-sources.sh" ] && ok "新專案沒有 scripts/sync-ui-sources.sh" \
     || ng "新專案沒有 scripts/sync-ui-sources.sh" "不存在" "存在"
+# 根目錄 scripts/ 整個不帶（專案有自己的 scripts/），但錨定要對：.claude/scripts/ 必須還在
+[ ! -e "$NEWPROJ/app/scripts/check-counts.sh" ] && ok "新專案沒有根目錄 scripts/check-counts.sh" \
+    || ng "新專案沒有根目錄 scripts/check-counts.sh" "不存在" "存在"
+[ -f "$NEWPROJ/app/.claude/scripts/check-counts.sh" ] && ok "新專案有 .claude/scripts/check-counts.sh（排除沒誤傷 .claude/scripts/）" \
+    || ng "新專案有 .claude/scripts/check-counts.sh（排除沒誤傷 .claude/scripts/）" "存在" "不存在"
+[ ! -e "$NEWPROJ/app/CLAUDE_TEMPLATE.md" ] && ok "新專案沒有 CLAUDE_TEMPLATE.md（哨兵已廢除）"     || ng "新專案沒有 CLAUDE_TEMPLATE.md（哨兵已廢除）" "不存在" "存在"
 # 換成一定過期的來源資料：真實的 _sources.json 哪天全部剛同步過，下面的反向測試就會變成空跑
 printf '{"sources":[{"id":"voltagent","repo":"VoltAgent/awesome-design-md","last_synced":null}]}\n' \
     > "$NEWPROJ/app/.claude/ui/_sources.json" 2>/dev/null
@@ -1001,10 +1043,12 @@ np_ctx=$(printf '{}' | env CLAUDE_PROJECT_DIR="$NEWPROJ/app" bash "$NEWPROJ/app/
 expect_contains     "新專案的 session-start 正常注入"          "using-taskmaster"   "$np_ctx"
 expect_not_contains "新專案不出現同步提醒"                     "sync-ui-sources.sh" "$np_ctx"
 expect_not_contains "新專案不出現設計走向提醒"                 "設計走向"           "$np_ctx"
-: > "$NEWPROJ/app/scripts/sync-ui-sources.sh"
+expect_contains     "新專案（還沒 project.json）出現 /task-init 提示" "/task-init"   "$np_ctx"
+mkdir -p "$NEWPROJ/app/scripts" && : > "$NEWPROJ/app/scripts/sync-ui-sources.sh"
 np_ctx=$(printf '{}' | env CLAUDE_PROJECT_DIR="$NEWPROJ/app" bash "$NEWPROJ/app/.claude/hooks/session-start.sh" 2>/dev/null \
     | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null)
 expect_contains "對照組：同一個新專案補上那支腳本 → 提醒出現（證明上面不是空跑）" "sync-ui-sources.sh" "$np_ctx"
+expect_not_contains "對照組：補上那支腳本就判成模板 repo → /task-init 提示消失" "/task-init" "$np_ctx"
 rm -rf "$NEWPROJ"
 
 # =========================================================================

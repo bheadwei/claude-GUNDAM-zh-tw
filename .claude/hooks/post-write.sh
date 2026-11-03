@@ -229,7 +229,7 @@ if [ "${SKILL_CURATOR_GATE:-on}" != "off" ]; then
             jq -n --arg f "$REL" '{
               hookSpecificOutput: {
                 hookEventName: "PostToolUse",
-                additionalContext: ("🧩 擴充維護提醒：你剛改了 `" + $f + "`。\n\n改動 `.claude/` 底下的擴充有三件事會**安靜失效**（不會報錯）：接線沒接上（agent 拿不到 `Skill` 工具，只認完整路徑）、`INDEX.md` 沒同步、description 是內容摘要所以永遠不會被喚起。\n\n變更清單累積在 `.claude/taskmaster-data/.skill-impact`。現在不用停下來，繼續做即可；**收尾時委派 `skill-curator`**（`subagent_type: \"skill-curator\"`）一次處理完並跑 `scripts/check-counts.sh`。\n（本任務只提醒這一次。關閉：SKILL_CURATOR_GATE=off）")
+                additionalContext: ("🧩 擴充維護提醒：你剛改了 `" + $f + "`。\n\n改動 `.claude/` 底下的擴充有三件事會**安靜失效**（不會報錯）：接線沒接上（agent 拿不到 `Skill` 工具，只認完整路徑）、`INDEX.md` 沒同步、description 是內容摘要所以永遠不會被喚起。\n\n變更清單累積在 `.claude/taskmaster-data/.skill-impact`。現在不用停下來，繼續做即可；**收尾時委派 `skill-curator`**（`subagent_type: \"skill-curator\"`）一次處理完並跑 `.claude/scripts/check-counts.sh`。\n（本任務只提醒這一次。關閉：SKILL_CURATOR_GATE=off）")
               }
             }' 2>/dev/null || true
             exit 0
