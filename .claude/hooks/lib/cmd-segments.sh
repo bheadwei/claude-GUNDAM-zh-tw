@@ -161,15 +161,22 @@ function git_sub_index(   i) {
     return i
 }'
 
-# cmd_segments <整條指令> —— 取出「以 git 開頭的指令段」（一行一段）
-# 輸出的每一段已經拿掉 git 的全域選項（`-C <路徑>`、`--git-dir <路徑>`、`-c <k=v>`、`--no-pager`…），
-# 所以第二個字一定是子指令：`git -C /x merge y` → `git merge y`。字與字之間正規化成一個空白。
-cmd_segments() {
+# cmd_split <整條指令> —— 切成「真的會被執行的指令段」（一行一段，不限 git）
+# heredoc 內文拿掉、引號內容清空、引號外註解拿掉、開頭的 `(`／`{` 與空白去掉。
+# git 閘門走下面的 cmd_segments；要看非 git 指令（例：full-suite-gate 看測試指令）走這個。
+cmd_split() {
     printf '%s\n' "$1" \
         | cmd_strip_heredoc \
         | cmd_mask_quotes \
         | sed -e 's/&&/\n/g' -e 's/||/\n/g' -e 's/[;|]/\n/g' \
-        | sed -e 's/^[[:space:]]*[({][[:space:]]*//' -e 's/^[[:space:]]*//' \
+        | sed -e 's/^[[:space:]]*[({][[:space:]]*//' -e 's/^[[:space:]]*//'
+}
+
+# cmd_segments <整條指令> —— 取出「以 git 開頭的指令段」（一行一段）
+# 輸出的每一段已經拿掉 git 的全域選項（`-C <路徑>`、`--git-dir <路徑>`、`-c <k=v>`、`--no-pager`…），
+# 所以第二個字一定是子指令：`git -C /x merge y` → `git merge y`。字與字之間正規化成一個空白。
+cmd_segments() {
+    cmd_split "$1" \
         | grep -E '^git[[:space:]]' \
         | awk "$_CMD_GIT_SUBCMD_AWK"'
         {

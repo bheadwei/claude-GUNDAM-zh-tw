@@ -35,6 +35,12 @@ description: Use when writing or fixing tests, about to run a test command, deci
 | 影響面對不到特定測試檔的批次變更（依賴升級 `/deps`、刪死碼 `/refactor-clean`） | 開始前跑一次整套當基準，之後**每批**跑一次整套 | 每個項目各跑一次整套 |
 | 任何時候 | 只回報結果摘要（見下） | 把整份測試輸出讀進 context |
 
+**第一列在 worktree 裡由 hook 強制**（`.claude/hooks/lib/full-suite-gate.sh`）：沒帶測試路徑、
+也沒有 `::`／`-k`／`-t` 這類篩選的 pytest／vitest／jest／`npm test` 會被擋一次，重試同一條即放行。
+整套是正當的（上表第三、四列：`/verify`、`/deps`、`/refactor-clean` 的基準與每批）→
+指令尾端加註解 `# full-suite`（例：`uv run pytest -q  # full-suite`），閘門不攔。
+主 checkout 不擋。逃生門：`FULL_SUITE_GATE=off`
+
 ### 只跑相關的測試檔
 
 套件管理器與測試指令讀 `.claude/taskmaster-data/package-manager.json`／專案設定，**不要自選**。

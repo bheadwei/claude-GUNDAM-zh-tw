@@ -13,9 +13,11 @@
 #      branch-switch-gate（站在 topic 分支上不得直接開新分支）、
 #      merge-noff-gate（合併本地 topic 分支必須帶 --no-ff）、
 #      git-backup-gate（destructive 操作前 HEAD 必須有 backup/* tag 指著）
-#   6. rm 權限（Bash）—— 只刪 hook 狀態檔 → allow，其他 rm → ask（lib/rm-state-gate.sh；
+#   6. 整套測試閘門（Bash／PowerShell，只在 worktree）—— 沒帶路徑的 pytest／vitest／jest
+#      擋一次，指向 testing-standards「執行測試」（lib/full-suite-gate.sh）
+#   7. rm 權限（Bash）—— 只刪 hook 狀態檔 → allow，其他 rm → ask（lib/rm-state-gate.sh；
 #      取代 settings.json 的 `ask: Bash(rm:*)`，理由見該檔檔頭）
-#   7. 輕量 log
+#   8. 輕量 log
 #
 # 逃生門（任一成立即完全不攔）：
 #   - .suggest-mode 內容為 off
@@ -29,6 +31,7 @@
 #   MERGE_NOFF_GATE=off  只關 --no-ff 閘門
 #   GIT_BACKUP_GATE=off  只關 backup tag 閘門
 #   BRANCH_SWITCH_GATE=off  只關分支切換閘門
+#   FULL_SUITE_GATE=off  只關整套測試閘門
 #   RM_STATE_GATE=off    只關 rm 權限判斷（rm 改走 Claude Code 原本的流程）
 
 set -u
@@ -209,7 +212,17 @@ if [ "$IS_SHELL" -eq 1 ] && [ -n "$COMMAND" ]; then
         fi
     fi
 
-    # rm 權限排在 git 閘門之後：同一條指令裡的 git 問題該先被 deny 講清楚，
+    # 整套測試閘門：worktree 裡沒帶路徑的 pytest／vitest／jest 擋一次。
+    # 主 checkout 不 source（零成本）；理由與判準見 lib/full-suite-gate.sh 檔頭。
+    # 排在 git 閘門之後：`git rebase … && pytest` 這種串接該先講 git 那件事。
+    if [ "${IN_WORKTREE:-0}" = 1 ]; then
+        source "$HOOK_HOME/lib/full-suite-gate.sh" 2>/dev/null || true
+        if declare -F full_suite_gate >/dev/null 2>&1; then
+            full_suite_gate "$COMMAND" "$IN_WORKTREE" "$DATA_DIR"
+        fi
+    fi
+
+    # rm 權限排在 git 閘門與整套測試閘門之後：同一條指令裡的這些問題該先被 deny 講清楚，
     # 輪不到這裡回 allow／ask
     rm_gate
 fi
