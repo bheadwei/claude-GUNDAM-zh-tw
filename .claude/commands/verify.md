@@ -21,7 +21,9 @@ description: 對當前程式碼庫狀態執行全面驗證檢查。
 - 報告警告和錯誤
 
 ### 4. 測試套件
-- 執行所有測試（`quick` profile 例外：只跑這次改到的測試檔，見「參數」）
+- 執行所有測試（`quick` profile 例外：只跑這次改到的測試檔，見「參數」）。
+  整套指令尾端加註解 `# full-suite`（例：`uv run pytest -q  # full-suite`）——
+  worktree 裡沒帶路徑的測試指令會被 `full-suite-gate` 擋一次，這個註解是 `/verify` 的合法出口
 - 報告通過/失敗數量，失敗只附摘要——不要把整份輸出讀進來（格式見 `testing-standards` skill 的「執行測試」）
 - 報告覆蓋率：只對照**這次改到的檔**（門檻見 `testing-standards` skill）
 

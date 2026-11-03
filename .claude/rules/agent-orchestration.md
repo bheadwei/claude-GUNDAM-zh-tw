@@ -74,6 +74,8 @@ documentation-specialist、workflow-template-manager、test-automation-engineer�
 - **而 worktree 的隔離只到檔案層**：`symlinkDirectories` 若含環境目錄或建置產物，
   agent 會靜默**執行到**另一條線的程式碼。判準見 `worktree-orchestration` skill
   的 `symlinkDirectories` 節（唯一來源）
+- **執行資源（本機 DB、固定 port、計時測試、CPU）完全不在隔離範圍**：派工前怎麼分、為什麼不要自己寫鎖，
+  見 `worktree-orchestration` skill 的「共用的執行資源」節（唯一來源）
 - **強制者是 `.claude/hooks/pre-agent-gate.sh`**（唯一來源，理由與事故都在它的訊息裡，
   勿在此重述）。上面這條它驗得出來，而且在這個情境下不採 deny-once
 - **閘門承認的例外**：唯讀 agent 名單（被派時放行、在跑時不計入併行寫入者），以及 agent

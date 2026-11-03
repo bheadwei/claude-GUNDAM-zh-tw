@@ -84,3 +84,20 @@ NON_BLOCKING 觀察：
 | 只有 NON_BLOCKING | 記進帳本當技術債，繼續。**不要**為了清乾淨而多跑一輪 |
 | 回報「規格缺陷」 | **你裁決**：改 plan 還是照原樣做。裁決記進帳本，帶著裁決重新派工 |
 | BLOCKING 與 plan 文字衝突 | 同上，你裁決。不要讓 implementer 去猜該聽誰 |
+
+### `code-quality-specialist` 的嚴重度怎麼套上表（唯一來源）
+
+它回的是 CRITICAL／HIGH／MEDIUM／LOW，不是 BLOCKING。對應固定如下，**不要每輪重新判斷**：
+
+| 嚴重度 | 視同 | 做什麼 |
+|---|---|---|
+| CRITICAL、HIGH | `BLOCKING` | 進修復迴圈 |
+| 只剩 MEDIUM、LOW | `NON_BLOCKING` | 記進帳本當技術債，進下一階段。**不加輪** |
+
+`security-infrastructure-auditor` 的發現照同一張表對應。
+
+**複審只驗上一輪的 BLOCKING 項**，不重新全面審查。派複審時在 prompt 裡寫明：
+「這是第 N 輪複審，只確認下列項目是否修好：<上一輪的 CRITICAL／HIGH 清單>；
+範圍是修復的 diff（`git diff <上一輪審查時的 HEAD>..HEAD`），只報這段 diff 引入的新 CRITICAL／HIGH，
+不報 MEDIUM／LOW」。不寫這句，它會從頭審一遍，每輪都找得到新的 MEDIUM，迴圈就停不下來——
+這在實際專案發生過：每輪約 18 分鐘，最後靠主模型自己裁定才停。

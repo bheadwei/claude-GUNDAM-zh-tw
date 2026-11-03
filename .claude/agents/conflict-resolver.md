@@ -62,8 +62,10 @@ git status --short                        # 確認合併確實在進行中
 
 ```bash
 # 用專案設定的 package manager／uv，見必讀規範
-<pm> test          # 或 uv run pytest
+<pm> test  # full-suite      （或 uv run pytest -q  # full-suite）
 ```
+
+`# full-suite` 註解要留著：在 worktree 裡解衝突時，沒帶路徑的測試指令會被 `full-suite-gate` 擋一次。
 
 測試過 → `git add <解過的檔案>`。
 

@@ -120,7 +120,8 @@ GREEN 過不了修實作不改測試，都在那裡（唯一來源，本檔不�
    - 同步更新 `plans/INDEX.md`
 4. standard／critical → 委派 `code-quality-specialist` 審這個階段的 diff
    （`git diff <階段起點>..HEAD`，不是整個 repo）。誰審、critical 加誰見
-   `rules/task-mode.md` 的「審查節奏」（唯一來源）
+   `rules/task-mode.md` 的「審查節奏」（唯一來源）。結果怎麼分流、複審只驗什麼見
+   `subagent-execution/reviewer-prompt.md` 的「主模型收到審查結果之後」——只剩 MEDIUM／LOW 不加輪
 
 整套測試不在這裡跑——那是 `/verify` 的事。
 

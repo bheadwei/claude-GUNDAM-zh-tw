@@ -1074,6 +1074,103 @@ expect_decision "無 cwd 欄位時沿用舊行為（被擋）" deny \
     "$(run pre-tool-use.sh "$(w /p/src/api.ts)")"
 
 # =========================================================================
+section "整套測試閘門 — worktree 裡沒帶路徑的 pytest／vitest／jest 擋一次"
+# =========================================================================
+# 事故（2026-11-02，另一個專案）：4 條平行線每輪都跑整套 tests/unit（約 1.5 萬條、
+# 20～40 分鐘）。「只跑相關測試」原本只是 testing-standards 的文字規則。
+# 現在由 lib/full-suite-gate.sh 強制：只在 worktree、deny-once（消耗性）、
+# `# full-suite` 註解是 /verify、/deps、/refactor-clean 的合法出口。
+
+setup_worktree
+FS_FLAG="$WT/.claude/taskmaster-data/.full-suite-warned"
+# fs <指令> [cwd] [ENV=VAL ...] —— 預設 cwd 是 worktree
+fs() {
+    local c="$1" cwd="${2:-$WT}"; shift; [ $# -gt 0 ] && shift
+    run pre-tool-use.sh "$(jq -nc --arg c "$c" --arg cwd "$cwd" '{tool_name:"Bash",tool_input:{command:$c},cwd:$cwd}')" "$@"
+}
+# fs1：每次先清掉 deny-once 標記，測「第一次會不會擋」
+fs1() { rm -f "$FS_FLAG"; fs "$@"; }
+fs_msg() { fs1 "$1" | jq -r '.hookSpecificOutput.permissionDecisionReason'; }
+
+# ---- 要擋：沒帶路徑也沒篩選
+expect_decision "uv run pytest -q → 擋"                     deny  "$(fs1 'uv run pytest -q')"
+expect_decision "pytest（裸跑）→ 擋"                        deny  "$(fs1 'pytest')"
+expect_decision "python -m pytest → 擋"                     deny  "$(fs1 'python -m pytest -q')"
+expect_decision "tests/unit 整個測試根（事故原型）→ 擋"     deny  "$(fs1 'uv run pytest tests/unit -q 2>&1 | tail -40')"
+expect_decision "tests/ 整個測試根 → 擋"                    deny  "$(fs1 'uv run pytest tests/ -q')"
+expect_decision "vitest run → 擋"                           deny  "$(fs1 'npx vitest run')"
+expect_decision "jest --coverage → 擋"                      deny  "$(fs1 'npx jest --coverage')"
+expect_decision "npm test → 擋"                             deny  "$(fs1 'npm test')"
+expect_decision "pnpm run test → 擋"                        deny  "$(fs1 'pnpm run test')"
+expect_decision "bun test → 擋"                             deny  "$(fs1 'bun test')"
+expect_decision "串在 cd … && 後面也認得"                   deny  "$(fs1 'cd sub && uv run pytest')"
+expect_decision "timeout／環境變數前綴也認得"               deny  "$(fs1 'CI=1 timeout 600 uv run pytest -q')"
+expect_decision "--cov 的值不當成測試路徑"                  deny  "$(fs1 'uv run pytest --cov src -q')"
+expect_decision "重導向的檔名不當成測試路徑"                deny  "$(fs1 'uv run pytest -q > out.txt')"
+expect_decision "PowerShell 工具也擋"                       deny \
+    "$(rm -f "$FS_FLAG"; run pre-tool-use.sh "$(jq -nc --arg cwd "$WT" '{tool_name:"PowerShell",tool_input:{command:"uv run pytest -q"},cwd:$cwd}')")"
+
+FS_MSG=$(fs_msg 'uv run pytest -q')
+expect_contains "訊息講為什麼擋（平行搶資源）"              "N 份整套"                                  "$FS_MSG"
+expect_contains "訊息附帶路徑的指令範例"                    "uv run pytest tests/test_order.py -q"     "$FS_MSG"
+expect_contains "訊息指向 testing-standards 的完整路徑"     ".claude/skills/testing-standards/SKILL.md" "$FS_MSG"
+expect_contains "訊息給出 /verify 等的合法出口"             "# full-suite"                              "$FS_MSG"
+expect_contains "訊息寫出逃生門"                            "FULL_SUITE_GATE=off"                       "$FS_MSG"
+expect_contains "vitest 給 vitest 的範例"                   "vitest run src/order/refund.test.ts"       "$(fs_msg 'npx vitest run')"
+
+# ---- 放行：帶了路徑或篩選
+expect_decision "帶測試檔 → 放行"                           allow "$(fs1 'uv run pytest tests/test_order.py -q')"
+expect_decision "帶 :: 節點 → 放行"                         allow "$(fs1 'uv run pytest tests/test_order.py::test_refund')"
+expect_decision "帶 -k → 放行"                              allow "$(fs1 'uv run pytest -k refund -q')"
+expect_decision "範圍夠窄的目錄 → 放行"                     allow "$(fs1 'uv run pytest tests/order/ -q')"
+expect_decision "vitest 帶檔名 → 放行"                      allow "$(fs1 'pnpm vitest run src/order/a.test.ts')"
+expect_decision "jest -t → 放行"                            allow "$(fs1 'npx jest -t "refund"')"
+expect_decision "npm test -- <檔> → 放行"                   allow "$(fs1 'npm test -- src/a.test.ts')"
+expect_decision "--collect-only 不是在跑測試 → 放行"        allow "$(fs1 'uv run pytest --collect-only -q')"
+expect_decision "npm run build 不是測試 → 放行"             allow "$(fs1 'npm run build')"
+
+# ---- 不誤擋：flock／heredoc／引號內文提到 pytest
+expect_decision "flock -c \"…pytest\"（引號內）→ 放行"      allow "$(fs1 'flock -s /tmp/db.lock -c "uv run pytest"')"
+expect_decision "flock 包住的 pytest → 放行（有意的漏網）"  allow "$(fs1 'flock /tmp/db.lock uv run pytest')"
+expect_decision "heredoc 內文的 pytest → 放行"              allow "$(fs1 'cat > notes.md <<EOF
+uv run pytest -q
+npm test
+EOF')"
+expect_decision "commit 訊息提到 pytest → 放行"             allow "$(fs1 'git commit -m "test: uv run pytest 只跑相關檔"')"
+expect_decision "echo pytest → 放行"                        allow "$(fs1 'echo pytest')"
+[ -f "$FS_FLAG" ] && ng "放行的指令不寫標記" "無 .full-suite-warned" "有" || ok "放行的指令不寫標記"
+
+# ---- deny-once（消耗性）
+rm -f "$FS_FLAG"
+expect_decision "deny-once：第一次擋"                       deny  "$(fs 'uv run pytest -q')"
+[ -f "$FS_FLAG" ] && ok "deny-once 標記寫在 worktree 的 taskmaster-data" || ng "deny-once 標記寫在 worktree 的 taskmaster-data" "$FS_FLAG 存在" "不存在"
+[ -f "$SANDBOX/.claude/taskmaster-data/.full-suite-warned" ] && ng "標記沒污染主 checkout" "主 checkout 無此檔" "有" || ok "標記沒污染主 checkout"
+expect_decision "deny-once：換一條整套 → 仍擋"              deny  "$(fs 'uv run pytest')"
+expect_decision "deny-once：同一條重試 → 放行"              allow "$(fs 'uv run pytest')"
+[ -f "$FS_FLAG" ] && ng "放行後清掉標記" "標記已刪" "還在" || ok "放行後清掉標記"
+expect_decision "deny-once：下一輪同一條整套再擋一次"       deny  "$(fs 'uv run pytest')"
+rm -f "$FS_FLAG"
+expect_decision "多行指令也能重試放行（第一次）"            deny  "$(fs 'uv run pytest -q
+echo done')"
+expect_decision "多行指令也能重試放行（重試）"              allow "$(fs 'uv run pytest -q
+echo done')"
+
+# ---- 合法出口與逃生門
+expect_decision "# full-suite 註解 → 放行（/verify 等）"    allow "$(fs1 'uv run pytest -q  # full-suite')"
+expect_decision "# full-suite: 說明 → 放行"                 allow "$(fs1 'npm test  # full-suite: /deps 基準')"
+[ -f "$FS_FLAG" ] && ng "# full-suite 不寫標記" "無標記" "有" || ok "# full-suite 不寫標記"
+expect_decision "# full-suite-x 不算宣告 → 擋"              deny  "$(fs1 'uv run pytest -q  # full-suite-x')"
+expect_decision "FULL_SUITE_GATE=off → 放行"                allow "$(rm -f "$FS_FLAG"; fs 'uv run pytest -q' "$WT" FULL_SUITE_GATE=off)"
+expect_decision "TASKMODE_GATE=off 一併關掉 → 放行"         allow "$(rm -f "$FS_FLAG"; fs 'uv run pytest -q' "$WT" TASKMODE_GATE=off)"
+
+# ---- 主 checkout 不擋（事故成本來自平行；主 checkout 是 /verify 跑整套的地方）
+expect_decision "主 checkout：uv run pytest -q → 放行"      allow "$(fs 'uv run pytest -q' "$SANDBOX")"
+expect_decision "主 checkout：npm test → 放行"              allow "$(fs 'npm test' "$SANDBOX")"
+expect_decision "沒有 cwd 欄位 → 放行"                      allow "$(run pre-tool-use.sh "$(b 'uv run pytest -q')")"
+expect_decision "worktree 子目錄也認得是 worktree"          deny  "$(fs1 'uv run pytest -q' "$WT/src/deep")"
+reset
+
+# =========================================================================
 section "post-bash.sh — 踩坑偵測（連續失敗後成功）"
 # =========================================================================
 #

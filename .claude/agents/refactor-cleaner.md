@@ -75,7 +75,8 @@ deadcode ./...                              # Go 未使用程式碼
 ### 3. 安全移除
 - 只從安全項目開始
 - 一次移除一個類別：依賴 -> export -> 檔案 -> 重複
-- 每批次後執行測試
+- 每批次後執行整套測試，指令尾端加 `# full-suite`（例：`uv run pytest -q  # full-suite`）。
+  你跑在 worktree 裡，沒帶路徑的測試指令會被 `full-suite-gate` 擋一次；這個註解宣告「這是批次的整套」
 - 每批次後 commit
 
 ### 4. 合併重複
