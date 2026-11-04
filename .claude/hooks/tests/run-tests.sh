@@ -2974,8 +2974,11 @@ rm -f "$OVO/data.js"
 ov & ov & wait
 expect_eq "兩個 overview.sh 同時跑 → data.js 合法" 1 "$(ovq '.schema')"
 [ ! -e "$OVO/.lock" ] && ok "同時跑完後鎖目錄不存在" || ng "同時跑完後鎖目錄不存在" "沒有 .lock" "還在"
-rm -f "$OVO/data.js"; mkdir -p "$OVO/.lock"; echo $(( $(date +%s) - 120 )) > "$OVO/.lock/at"; ov
-expect_eq "鎖超過 60 秒 → 視為過期並接手產生" 1 "$(ovq '.schema')"
+rm -f "$OVO/data.js"; mkdir -p "$OVO/.lock"; echo $(( $(date +%s) - 300 )) > "$OVO/.lock/at"; ov
+expect_eq "鎖超過 120 秒 → 視為過期並接手產生" 1 "$(ovq '.schema')"
+# --actual 最多等 60 秒；過期門檻若不比它長，等鎖的那支會把還活著的持鎖者當成過期搶走
+expect_eq "鎖的過期門檻（LOCK_STALE_SEC）比 --actual 的等待時間（60 秒）長" 1 \
+    "$(awk -F= '/^LOCK_STALE_SEC=/ { print ($2 + 0 > 60) ? 1 : 0 }' "$OV_SRC")"
 rm -f "$OVO/data.js" "$OVO/.dirty"; mkdir -p "$OVO/.lock"; date +%s > "$OVO/.lock/at"; ov
 [ ! -e "$OVO/data.js" ] && [ -e "$OVO/.dirty" ] && ok "鎖還新 → 讓位、留下 .dirty 給持鎖者重跑" \
     || ng "鎖還新 → 讓位、留下 .dirty" "沒有 data.js、有 .dirty" "$(ls -a "$OVO")"
@@ -3137,6 +3140,23 @@ tg_outside | cmp -s - "$SANDBOX/tg-out1.md" && ok "--actual 只動標記區塊�
 out=$(bash "$TG/.claude/scripts/overview.sh" --actual "$TGD/plans/1.2-x.md" --result FAIL 2>&1); rc=$?
 expect_eq "--actual FAIL 沒帶 --reason → exit 2、不寫" "2 1" "$rc $(grep -c 'overview:actual:start' "$TGD/plans/1.2-x.md")"
 
+# 標記壞掉（只有 start、兩組、end 在 start 前）→ 一個 byte 都不動、非 0 結束、說明怎麼修。
+# 曾經只有 start 時會從 start 一路跳到檔尾，把使用者寫在後面的段落整段刪掉還回報「已寫入」。
+tg_bad_markers() {
+    local name="$1"; shift
+    tg_plan 1.2-x.md 🔄 ⏳; printf '%s\n' "$@" >> "$TGD/plans/1.2-x.md"
+    cp "$TGD/plans/1.2-x.md" "$SANDBOX/tg-bad.md"
+    out=$(bash "$TG/.claude/scripts/overview.sh" --actual "$TGD/plans/1.2-x.md" --result PASS 2>&1); rc=$?
+    cmp -s "$TGD/plans/1.2-x.md" "$SANDBOX/tg-bad.md" && [ "$rc" -ne 0 ] && [[ $out == *標記* ]] \
+        && ok "--actual 遇到$name → 不寫、非 0、訊息指出標記" \
+        || ng "--actual 遇到$name → 不寫、非 0、訊息指出標記" "plan 不變、rc≠0、訊息含「標記」" \
+              "rc=$rc 不變=$(cmp -s "$TGD/plans/1.2-x.md" "$SANDBOX/tg-bad.md" && echo 是 || echo 否) $out"
+}
+tg_bad_markers "只有 start 沒有 end" '<!-- overview:actual:start -->' '舊區塊' '' '## 使用者寫在後面的段落' '不能被刪。'
+tg_bad_markers "兩組區塊" '<!-- overview:actual:start -->' 'a' '<!-- overview:actual:end -->' '中間' \
+    '<!-- overview:actual:start -->' 'b' '<!-- overview:actual:end -->'
+tg_bad_markers "end 在 start 前" '<!-- overview:actual:end -->' '中間' '<!-- overview:actual:start -->'
+
 tg_reset; tg_plan 1.2-x.md ⏳ ⏳; echo 1.2 > "$TGD/.current-task"; tg_ov
 expect_eq "主 checkout 的 .current-task 是 1.2 → 任務 1.2 的模組 current:true" true "$(tgq '.modules[] | select(.id == "api") | .current')"
 rm -f "$TGD/.current-task"
@@ -3166,6 +3186,27 @@ expect_eq "主 checkout 與 worktree 各有 .current-task → 兩個本次都標
     "$(tgq '"\([.currents[].task] | join(" ")) \(.modules[] | select(.id == "db") | .current) \(.modules[] | select(.id == "api") | .current)"')"
 expect_eq "worktree 的改動出現在地圖的本次改動（帶來源）" "worktree:wt1 api" \
     "$(tgq '.changes[] | select(.file == "src/api/w.ts") | "\(.source) \(.module)"')"
+tg_git worktree remove --force "$TGWT"
+
+# worktree 自己的 plan（隨版控帶進來、還沒改過）跑 --actual → 來源判成 worktree:<名>、寫在 worktree 那份、再跑是原地取代
+tg_reset; tg_plan 1.2-x.md 🔄 ⏳; tg_git add -A; tg_git commit -qm plan
+TGWT="$TG/.claude/worktrees/wt2"; TGWD="$TGWT/.claude/taskmaster-data"
+tg_git worktree add -q -b wt2 "$TGWT"
+bash "$TG/.claude/scripts/overview.sh" --actual "$TGWD/plans/1.2-x.md" --result FAIL --reason "第一次" >/dev/null 2>&1; rc1=$?
+bash "$TG/.claude/scripts/overview.sh" --actual "$TGWD/plans/1.2-x.md" --result PASS >/dev/null 2>&1; rc2=$?
+expect_eq "worktree 的 plan 跑 --actual 兩次 → exit 0、data.js 取 worktree:wt2、該份只有一個區塊且是 PASS、主 checkout 那份沒被寫" \
+    "0 0 worktree:wt2 1 PASS 0" \
+    "$rc1 $rc2 $(tgp '.source') $(grep -c 'overview:actual:start' "$TGWD/plans/1.2-x.md") $(tgp '.verify.result') $(grep -c 'overview:actual:start' "$TGD/plans/1.2-x.md")"
+tg_git worktree remove --force "$TGWT"
+
+# worktree 帶著主 checkout 已歸檔的 plan 副本（版控帶進來、沒改過）→ 不進 plans[]、不被猜成本次
+tg_reset; tg_plan 1.2-x.md 🔄 ⏳; tg_git add -A; tg_git commit -qm plan
+TGWT="$TG/.claude/worktrees/wt3"
+tg_git worktree add -q -b wt3 "$TGWT"
+mkdir -p "$TGD/plans/archive"; tg_git mv "$TGD/plans/1.2-x.md" "$TGD/plans/archive/1.2-x.md"; tg_git commit -qm archive
+tg_ov
+expect_eq "worktree 裡沒改過的版控 plan 副本（主 checkout 已歸檔）→ 不進 plans[]、currents 為空" "0 0" \
+    "$(tgq '"\([.plans[] | select(.file == "plans/1.2-x.md")] | length) \(.currents | length)"')"
 tg_git worktree remove --force "$TGWT"
 
 tg_reset; tg_plan 1.2-x.md ⏳ ⏳; mkdir -p "$TGD/plans/archive"

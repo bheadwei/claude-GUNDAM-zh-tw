@@ -37,7 +37,7 @@ OVERVIEW_COL_WBS="模組"                 # wbs.template.md 任務表的模組�
 OVERVIEW_COLS_PART="id 部件 階段 檔案"  # plan-format「一眼看懂」部件表的必要欄（驗收欄選用）
 
 DRAFT_MARK='<!-- overview: draft -->'
-LOCK_STALE_SEC=60
+LOCK_STALE_SEC=120                 # 要比 --actual 的等待（60 秒）長，否則等鎖的那支會搶走還活著的鎖
 MAX_CHANGES=200
 
 ACTUAL_PLAN="" ACTUAL_RESULT="" ACTUAL_REASON="" PRINT_PATH=0
@@ -58,6 +58,21 @@ esac
 
 die_actual() { printf 'overview.sh --actual：%s\n' "$1" >&2; exit 2; }
 
+# overview:actual 標記只能是零組或一組（start、end 各一行，start 在前）。印出壞在哪，正常時不印。
+# splice_actual 與 parse_plan 都靠這個假設：只有 start 時 awk 會從 start 跳到檔尾，把後面的內容整段刪掉。
+actual_markers_bad() {
+    awk '/^<!-- overview:actual:start/ { s++; if (!sl) sl = NR }
+         /^<!-- overview:actual:end/   { e++; if (!el) el = NR }
+         END {
+             if (s == 0 && e == 0) exit
+             if (s == 1 && e == 1 && sl < el) exit
+             printf "start %d 個（第一個在第 %d 行）、end %d 個（第一個在第 %d 行）", s, sl, e, el
+         }' "$1"
+}
+markers_msg() {
+    printf 'plan 的 overview:actual 標記壞了（%s），整份沒有寫入。\n修法：打開 %s，刪掉多餘或落單的 <!-- overview:actual:start/end --> 標記行，只留一組完整的（start 在前）；或全部刪掉，讓下一次 --actual 在檔尾重寫。' "$1" "$2"
+}
+
 if [ "${OVERVIEW:-on}" = "off" ]; then
     [ -n "$ACTUAL_PLAN" ] && echo "overview.sh：OVERVIEW=off，沒有寫入「計畫 vs 實際」" >&2
     exit 0
@@ -73,6 +88,8 @@ if [ -n "$ACTUAL_PLAN" ]; then
     ACTUAL_NAME=${ACTUAL_PLAN##*/}
     case "$ACTUAL_DIR" in */.claude/taskmaster-data/plans) ;; *) die_actual "plan 要在 .claude/taskmaster-data/plans/ 底下（已歸檔的不寫）" ;; esac
     ACTUAL_PLAN="$ACTUAL_DIR/$ACTUAL_NAME"
+    bad=$(actual_markers_bad "$ACTUAL_PLAN")
+    [ -z "$bad" ] || die_actual "$(markers_msg "$bad" "$ACTUAL_PLAN")"
     WORK_ROOT="${ACTUAL_DIR%/.claude/taskmaster-data/plans}"
 else
     WORK_ROOT="${1:-$PWD}"
@@ -118,7 +135,7 @@ fi
 #
 # 每次寫 wbs／plan 都會觸發，連續寫幾次就會有幾支同時跑。拿不到鎖的那支只留下 .dirty
 # 就走，由持鎖者做完後再跑一輪——不排隊、不丟更新。--actual 例外：它要寫 plan，不能
-# 讓位，所以最多等 60 秒。當掉的前一次會留下鎖，超過 LOCK_STALE_SEC 秒視為過期並接手。
+# 讓位，所以最多等 60 秒。當掉的前一次會留下鎖，超過 LOCK_STALE_SEC（120）秒視為過期並接手。
 LOCK="$OUT/.lock"
 lock_age() {
     local at
@@ -225,14 +242,31 @@ ledger_base() {
 
 # 一個來源的 plan、帳本、.current-task、改動。worktree 沒有 plan 也沒有 .current-task 就整個略過
 # （實驗用的 worktree 不該出現在圖上）。
+#
+# worktree 的 plan 只收「相對它自己的 HEAD 有改動」或「沒進版控」的檔：plans/ 進版控，每個 worktree
+# 一建立就帶著一份建立當下的副本，沒動過的副本不是它在做的事（主 checkout 歸檔之後，舊 worktree
+# 的副本會讓已完成的 plan 重新出現、還被猜成「本次」）。--actual 指定的那一份例外，一定收。
 declare -A SEEN_BASE
 gather_source() {
-    local src="$1" root="$2" pd="$2/.claude/taskmaster-data/plans" f b ct="" L
+    local src="$1" root="$2" pd="$2/.claude/taskmaster-data/plans" f b ct="" L p
     local -a plans=() ledgers=()
+    local -A pristine=()
+    if [ "$src" != main ]; then
+        local rel=.claude/taskmaster-data/plans
+        while IFS= read -r -d '' p; do
+            [ "${p%/*}" = "$rel" ] && pristine[${p##*/}]=1
+        done < <(git -C "$root" -c core.quotePath=false ls-files -z -- "$rel" 2>/dev/null)
+        while IFS= read -r -d '' p; do
+            [ "${p%/*}" = "$rel" ] && unset 'pristine[${p##*/}]'
+        done < <(git -C "$root" -c core.quotePath=false diff -z --name-only HEAD -- "$rel" 2>/dev/null)
+    fi
     for f in "$pd"/*.md; do
         [ -f "$f" ] || continue
         b=${f##*/}
         case "$b" in INDEX.md|*.progress.md) continue ;; esac
+        if [ -n "${pristine[$b]:-}" ] && ! { [ "$src" = "$ACTUAL_SRC" ] && [ "$b" = "$ACTUAL_NAME" ]; }; then
+            continue
+        fi
         plans+=("$b")
         [ -f "$pd/${b%.md}.progress.md" ] && ledgers+=("${b%.md}.progress.md")
     done
@@ -440,10 +474,12 @@ def parse_plan($needPart):
          | if $c.k == "files" and (.fm.files | startswith("[")) then .files += ((.fm.files | fromjson?) // []) else . end
        elif .inF and ($l | test("^\\s+-")) then .files += [$l | sub("^\\s+-\\s*"; "") | sub("\\s+#.*$"; "") | unq]
        else . end)) as $H
-  | (reduce $B[] as $l ({in: false, body: [], blk: []};
-       if ($l | test("^<!-- overview:actual:start")) then .in = true
-       elif .in and ($l | test("^<!-- overview:actual:end")) then .in = false
-       elif .in then .blk += [$l] else .body += [$l] end)) as $S
+  # 與 actual_markers_bad 同一條假設：start、end 各一行且 start 在前才算有區塊；不成對就當作沒有
+  | ([range(0; $B | length) | select($B[.] | test("^<!-- overview:actual:start"))]) as $as
+  | ([range(0; $B | length) | select($B[.] | test("^<!-- overview:actual:end"))]) as $ae
+  | (if ($as | length) == 1 and ($ae | length) == 1 and $as[0] < $ae[0]
+     then {body: ($B[:$as[0]] + $B[$ae[0] + 1:]), blk: $B[$as[0] + 1:$ae[0]]}
+     else {body: ($B | map(select(test("^<!-- overview:actual:(start|end)") | not))), blk: []} end) as $S
   | ([$S.blk[] | capture("^驗證：\\s*(✅|❌)?\\s*(?<r>PASS|FAIL)\\s*(（(?<at>[^）]*)）)?\\s*(—\\s*(?<reason>.*))?$")] | first) as $v
   | {fm: $H.fm, files: $H.files,
      title: ([$S.body[] | select(test("^#\\s")) | sub("^#\\s+"; "") | sub("^實作計畫[:：]\\s*"; "")] | first),
@@ -606,7 +642,8 @@ def parse_ledger:
 | ([$recs[] | . as $r | build_plan($r)]) as $built
 | ([$built[] | select(.source == "main")] | sort_by(.file)) as $mainPlans
 
-# worktree overlay：同名 plan 取進度較新的那份（內容相同就算主 checkout 的）。
+# worktree overlay：同名 plan 取進度較新的那份（內容相同就算主 checkout 的）。進到這裡的 worktree plan
+# 只有它改過或沒進版控的（沒動過的版控副本在 gather_source 就濾掉了），所以主 checkout 已歸檔的不會復活。
 # --actual 指定的那份一定入選，畫面才會顯示剛寫進去的結果。
 | ($built | group_by(.file) | map(
     (map(select(.source == "main")) | first) as $m
@@ -867,7 +904,11 @@ IFS= read -r -d '' JQ_ACTUAL <<'JQ'
 JQ
 
 # 把區塊換進 plan：有舊區塊就原地取代，沒有就接在檔尾。區塊外一個 byte 都不動。
+# 標記在啟動時檢查過，這裡再查一次：等鎖與產生的期間 plan 可能被人改過。
 splice_actual() {
+    local bad
+    bad=$(actual_markers_bad "$ACTUAL_PLAN")
+    if [ -n "$bad" ]; then markers_msg "$bad" "$ACTUAL_PLAN" > "$OUT/.last-error"; return 1; fi
     awk -v blk="$TMP/actual.md" '
         BEGIN { while ((getline l < blk) > 0) b = b l "\n" }
         /^<!-- overview:actual:start/ { printf "%s", b; done = 1; skip = 1; next }
