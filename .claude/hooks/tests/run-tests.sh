@@ -2909,8 +2909,8 @@ expect_eq "demo → notices 指向 /docs-init --mvp" 1 "$(ovq '[.notices[] | sel
 ov_reset; ov_proj; ov_arch; ov_wbs
 ov
 expect_eq "三個模組、WBS 無任務 → 都是 todo" "todo todo todo" "$(ovq '[.modules[].status] | join(" ")')"
-expect_contains "overview.md 含 class web todo" "class web todo" "$(cat "$OVD/overview.md" 2>/dev/null)"
-expect_contains "產生的 mermaid 連線箭頭兩端留空格" "  web --> api" "$(cat "$OVD/overview.md" 2>/dev/null)"
+expect_contains "overview.md 含 class web todo" "class web todo" "$(cat "$OVO/overview.md" 2>/dev/null)"
+expect_contains "產生的 mermaid 連線箭頭兩端留空格" "  web --> api" "$(cat "$OVO/overview.md" 2>/dev/null)"
 expect_eq "版面依 5.1 群組排欄（web／api／db 各一欄）" "0 1 2" "$(ovq '[.modules[].pos.col] | map(tostring) | join(" ")')"
 
 ov_wbs "1.1|api|✅ 11-01" "1.2|api|🔄 進行中"; ov
@@ -2928,11 +2928,11 @@ expect_eq       "WBS 舊格式（沒有模組欄）→ 不報錯"        0 "$rc"
 expect_eq       "沒有模組欄 → 任務全進 unmappedTasks"    "1.1 1.2" "$(ovq '.unmappedTasks | join(" ")')"
 expect_contains "沒有模組欄 → notices 說明"              "WBS 沒有模組欄" "$(ovq '[.notices[].text] | join("\n")')"
 
-ov_wbs "1.1|api|✅ 11-01"; ov; cp "$OVD/overview.md" "$SANDBOX/ov-first.md" 2>/dev/null
+ov_wbs "1.1|api|✅ 11-01"; ov; cp "$OVO/overview.md" "$SANDBOX/ov-first.md" 2>/dev/null
 mkdir -p "$SANDBOX/src/api"; echo x > "$SANDBOX/src/api/new.ts"
 ov
-cmp -s "$SANDBOX/ov-first.md" "$OVD/overview.md" && ok "同一組輸入連跑兩次 → overview.md 相同（工作區的改動不進 md）" \
-    || ng "同一組輸入連跑兩次 → overview.md 相同" "cmp 相同" "$(diff "$SANDBOX/ov-first.md" "$OVD/overview.md" | head -5)"
+cmp -s "$SANDBOX/ov-first.md" "$OVO/overview.md" && ok "同一組輸入連跑兩次 → overview.md 相同（工作區的改動不進 md）" \
+    || ng "同一組輸入連跑兩次 → overview.md 相同" "cmp 相同" "$(diff "$SANDBOX/ov-first.md" "$OVO/overview.md" | head -5)"
 expect_eq "data.js 去掉賦值外殼後可被 jq 解析，schema 為 1" 1 "$(ovq '.schema')"
 expect_eq "data.js 只有一句賦值（畫面靠它判斷寫到一半）" 1 "$(grep -cv '^//' "$OVO/data.js" 2>/dev/null)"
 expect_eq "未追蹤的新檔歸到路徑對得上的模組" "api true" "$(ovq '.changes[] | select(.file == "src/api/new.ts") | "\(.module) \(.new)"')"
@@ -2941,6 +2941,25 @@ expect_eq "模組的 changed 計數" 1 "$(ovq '.modules[] | select(.id == "api")
 expect_eq "overview/.gitignore 內容恰為 *" "*" "$(cat "$OVO/.gitignore" 2>/dev/null)"
 expect_eq "git status 不出現 overview/ 底下的檔" "" \
     "$(cd "$SANDBOX" && git status --porcelain --untracked-files=all 2>/dev/null | grep 'taskmaster-data/overview/' || true)"
+[ -f "$OVO/overview.md" ] && [ ! -e "$OVD/overview.md" ] && ok "overview.md 寫在 overview/ 裡、舊位置 taskmaster-data/overview.md 不再產生" \
+    || ng "overview.md 寫在 overview/ 裡" "overview/overview.md 有、taskmaster-data/overview.md 沒有" "$(ls "$OVD" "$OVO")"
+
+# md.jq 失敗：兩份都保留上一版、錯誤寫進 .last-error（不再被 2>/dev/null 吞掉）。
+# 用 PATH 前面的假 jq 只讓 md.jq 那一支失敗，data.js 那一支照常——這正是舊寫法會讓兩份不同步的情況。
+OVFAKE="$SANDBOX/fakejq"; mkdir -p "$OVFAKE"
+printf '#!/bin/bash\ncase "$*" in *md.jq*) echo "boom: md.jq 壞了" >&2; exit 5 ;; esac\nexec %q "$@"\n' "$(command -v jq)" > "$OVFAKE/jq"
+chmod +x "$OVFAKE/jq"
+cp "$OVO/data.js" "$SANDBOX/ov-prev.js"; cp "$OVO/overview.md" "$SANDBOX/ov-prev.md"
+ov_wbs "1.1|api|✅ 11-01" "1.2|web|🚫 阻塞"
+PATH="$OVFAKE:$PATH" bash "$SANDBOX/.claude/scripts/overview.sh" "$SANDBOX" >/dev/null 2>&1
+cmp -s "$SANDBOX/ov-prev.js" "$OVO/data.js" && ok "md.jq 失敗 → 保留上一份 data.js（兩份不會一新一舊）" \
+    || ng "md.jq 失敗 → 保留上一份 data.js" "cmp 相同" "data.js 被換成新的"
+cmp -s "$SANDBOX/ov-prev.md" "$OVO/overview.md" && ok "md.jq 失敗 → 保留上一份 overview.md" \
+    || ng "md.jq 失敗 → 保留上一份 overview.md" "cmp 相同" "不同或不存在"
+expect_contains "md.jq 失敗 → stderr 寫進 .last-error" "boom: md.jq 壞了" "$(cat "$OVO/.last-error" 2>/dev/null)"
+ov
+[ ! -e "$OVO/.last-error" ] && ok "下一次成功 → .last-error 被清掉" || ng "下一次成功 → .last-error 被清掉" "沒有 .last-error" "還在"
+expect_eq "下一次成功 → data.js 反映新輸入" issue "$(ovq '.modules[] | select(.id == "web") | .status')"
 
 cmp -s "$OV_TPL" "$OVO/index.html" && ok "overview/index.html 與畫面原檔相同" \
     || ng "overview/index.html 與畫面原檔相同" "cmp 相同" "不同或不存在"
@@ -3004,6 +3023,32 @@ run post-write.sh "$(wcwd "$OVWT/.claude/taskmaster-data/plans/1.2-x.md" "$OVWT"
 [ -f "$OVO/data.js" ] && ok "worktree 裡寫 plan → data.js 寫在主 checkout" || ng "worktree 裡寫 plan → data.js 寫在主 checkout" "主 checkout 有 data.js" "沒有"
 [ ! -e "$OVWT/.claude/taskmaster-data/overview" ] && ok "worktree 底下沒有 overview/" || ng "worktree 底下沒有 overview/" "沒有" "有"
 ( cd "$SANDBOX" && git worktree remove --force "$OVWT" && git branch -D ovwt ) >/dev/null 2>&1
+
+# 主 checkout 路徑含中文與空格（這個模板自己就在 D:\模板\…）：從它底下的 worktree 觸發，
+# CLAUDE_PROJECT_DIR 指向 worktree（`claude -w` 的實況），產物要落在主 checkout。
+ov_reset; ov_proj; ov_arch; ov_wbs "1.1|api|✅ 11-01"
+OVCJK="$SANDBOX/中文 目錄/模板 專案"
+rm -rf "$SANDBOX/中文 目錄"
+mkdir -p "$OVCJK/.claude/taskmaster-data" "$OVCJK/docs"
+cp -r "$SANDBOX/.claude/scripts" "$SANDBOX/.claude/templates" "$OVCJK/.claude/"
+cp "$OVD/project.json" "$OVD/wbs.md" "$OVCJK/.claude/taskmaster-data/"
+cp "$SANDBOX/docs/05_architecture.md" "$OVCJK/docs/"
+OVCJKWT="$OVCJK/.claude/worktrees/工作 樹"
+( cd "$OVCJK" && git init -q . && git add -A && git -c user.email=t@t -c user.name=t commit -qm init \
+  && git worktree add -q -b cjkwt "$OVCJKWT" ) >/dev/null 2>&1
+mkdir -p "$OVCJKWT/.claude/taskmaster-data/plans"
+run post-write.sh "$(wcwd "$OVCJKWT/.claude/taskmaster-data/plans/1.2-x.md" "$OVCJKWT")" \
+    OVERVIEW_SYNC=1 CLAUDE_PROJECT_DIR="$OVCJKWT" >/dev/null
+OVCJKO="$OVCJK/.claude/taskmaster-data/overview"
+expect_eq "主 checkout 路徑含中文與空格 → data.js 寫在主 checkout、三個模組都在" 3 \
+    "$(sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$OVCJKO/data.js" 2>/dev/null | jq -r '.modules | length' 2>/dev/null)"
+expect_contains "主 checkout 路徑含中文與空格 → overview.md 有內容" "class api done" "$(cat "$OVCJKO/overview.md" 2>/dev/null)"
+[ ! -e "$OVCJKWT/.claude/taskmaster-data/overview" ] && ok "主 checkout 路徑含中文與空格 → worktree 底下沒有 overview/" \
+    || ng "主 checkout 路徑含中文與空格 → worktree 底下沒有 overview/" "沒有" "有"
+expect_contains "主 checkout 路徑含中文與空格 → --print-path 保留原字元" "模板 專案/.claude/taskmaster-data/overview/index.html" \
+    "$(bash "$OVCJK/.claude/scripts/overview.sh" --print-path "$OVCJKWT" 2>/dev/null)"
+( cd "$OVCJK" && git worktree remove --force "$OVCJKWT" ) >/dev/null 2>&1
+rm -rf "$SANDBOX/中文 目錄"
 
 # =========================================================================
 section "全體 hooks — 語法與健壯性"

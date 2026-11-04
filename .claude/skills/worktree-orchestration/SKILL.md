@@ -46,13 +46,15 @@ description: Use when running work in parallel across git worktrees — creating
 | `taskmaster-data/.report-expectations.jsonl` | `taskmaster-data/.suggest-mode` — 專案級設定 |
 | `taskmaster-data/.last-verify` — 驗的是**這個 checkout** 的 HEAD | `logs/`＋`timelog.jsonl` — 集中一處才查得到 |
 | | `taskmaster-data/.merge-round-open` — 本輪有合併還沒被整套涵蓋；合併只在主 checkout 做（寫入與清除見 `commands/verify.md`） |
-| | `taskmaster-data/overview.md`＋`overview/` — 專案圖解；各 worktree 觸發的重產都寫主 checkout 這一份（`scripts/overview.sh` 用 git common dir 自己算主 checkout，不靠 hook 的 root 解析） |
+| | `taskmaster-data/overview/`（含 `overview.md`、`data.js`、畫面）— 專案圖解，不進 git；各 worktree 觸發的重產都寫主 checkout 這一份（`scripts/overview.sh` 用 git common dir 自己算主 checkout，不靠 hook 的 root 解析） |
 
 註：`.doc-impact` 跟著 worktree，所以 worktree 累積的文件債**不會自己回到主 checkout**。
 合併時由 hook 把它併進主 checkout 的 `.doc-impact`，主 checkout 的 `/verify`「文件同步關卡」
 才看得到；實作在 hook 那側（唯一來源），不要靠手動搬。
 
-`overview.md` 雖然進 git，但**只由主 checkout 寫**——worktree 裡那份永遠不動，合併時不會衝突。
+**在 worktree 裡改 wbs、plan、架構文件，地圖要等合併回主 checkout 後才會反映**：產生器讀的是主 checkout 的檔，
+worktree 裡的改動在合併前它看不到——在 worktree 寫入會觸發重產，但產出的仍是主 checkout 現有內容的地圖。
+合併後主 checkout 的下一次寫入或 `/task-status` 才會反映。
 
 **`wbs.md` 與 `plans/` 不在上表**——它們是 git 追蹤的檔案，worktree 會自然帶一份、
 改動由 git 合併，不需要 hook 介入選 root。這也是為什麼 `.gitignore` 必須讓它們進版控：

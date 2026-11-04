@@ -29,8 +29,9 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
    bash .claude/scripts/overview.sh && bash .claude/scripts/overview.sh --print-path
    ```
 
-   把印出的 `file:///…/overview/index.html` 放在輸出的最後一行，讓使用者點開。
-   **只印路徑，不要 Read `overview/data.js` 或 `overview.md`**——那是給人看的衍生物，
+   把印出的 `file:///…/overview/index.html` 放在輸出的最後一行，讓使用者點開
+   （同一個資料夾裡的 `overview.md` 是 Markdown 版，兩份都不進 git）。
+   **只印路徑，不要 Read `overview/data.js` 或 `overview/overview.md`**——那是給人看的衍生物，
    大專案可達數百 KB；要狀態就讀 `wbs.md`。沒有 `project.json` 時腳本什麼都不印，直接略過這行
 
 > 版面與「現況」的重算規則：`.claude/templates/wbs.template.md`（唯一來源）。
