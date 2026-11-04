@@ -625,3 +625,4 @@ update-template（帶來 overview.sh、templates/overview/、新版 post-write�
 | 7 | 同意：平行開發時多個「本次」全部標出 |
 | 8 | 輪詢 **3 秒**，且**分頁不在前景時暫停**（`document.visibilityState`），切回前景立刻檢查一次 |
 | 9 | 專案地圖做成**畫布**：拖曳平移、滾輪縮放（以游標為中心）、小地圖、雙擊聚焦、縮放分層（<55% 只看模組＋燈號；≥55% 顯示路徑、檔名、任務；≥110% 顯示每個檔改了什麼）、「只看本次改動」篩選、右側本次改動清單。**節點不可拖**，位置由腳本依 05 自動排。畫布上不能新增或刪除模組（md 是正本）。預估多 6–8KB，仍在 50KB 上限內。預覽：https://claude.ai/artifact/Ka5Jp3VTyqDJyZiGVTwnum（使用者確認 OK） |
+| 1（改） | 2026-11-04 階段 3 審查後修正第 1 項：`overview.md` **改為不進 git**，搬進 `taskmaster-data/overview/`，與 data.js 一起被 `.gitignore`（`*`）排除。原因：背景產生器會在 commit 後改寫它，讓主 checkout 變成不乾淨，觸發 git-workflow 第 1 條和 `/pr` 的前置檢查。來源（05、WBS、plan）都在 git 裡，md 只是衍生物，不進 git 不會遺失資訊 |
