@@ -624,3 +624,4 @@ update-template（帶來 overview.sh、templates/overview/、新版 post-write�
 | 6 | 同意：documentation-specialist 反推時不另寫報告，`AREA` 表與 8＋1＋1＋4 名單不改 |
 | 7 | 同意：平行開發時多個「本次」全部標出 |
 | 8 | 輪詢 **3 秒**，且**分頁不在前景時暫停**（`document.visibilityState`），切回前景立刻檢查一次 |
+| 9 | 專案地圖做成**畫布**：拖曳平移、滾輪縮放（以游標為中心）、小地圖、雙擊聚焦、縮放分層（<55% 只看模組＋燈號；≥55% 顯示路徑、檔名、任務；≥110% 顯示每個檔改了什麼）、「只看本次改動」篩選、右側本次改動清單。**節點不可拖**，位置由腳本依 05 自動排。畫布上不能新增或刪除模組（md 是正本）。預估多 6–8KB，仍在 50KB 上限內。預覽：https://claude.ai/artifact/Ka5Jp3VTyqDJyZiGVTwnum（使用者確認 OK） |
