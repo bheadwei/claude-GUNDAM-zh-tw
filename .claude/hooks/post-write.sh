@@ -7,13 +7,14 @@
 #       記進 .doc-impact 並在本任務第一次命中時注入提醒。
 #       /verify 在標記 WBS ✅ 前必須處理這份清單。
 #   (3) 前端寫入檢查：寫死色碼、動畫等級不符、AI 痕跡（P0）→ lib/ui-lint.sh（只提醒，不擋）
+#   (4) 專案圖解觸發：寫 wbs／plan／架構文件後在背景跑 scripts/overview.sh（不輸出）
 #
 # 為什麼需要 (2)：新需求／客戶 CR 的程式都會寫出來，但文件常常沒跟上。
 # 原因是 documentation-specialist 在「任務完成路徑」上完全沒有位置——
 # /verify 只驗建置/型別/lint/測試，從不問文件。靠自律記得同步文件是行不通的，
 # 所以改成：機器在改動當下就標記，並在任務收尾時擋一次。
 #
-# 逃生門：DOC_SYNC_GATE=off、UI_LINT=off、或 .suggest-mode 為 off
+# 逃生門：DOC_SYNC_GATE=off、UI_LINT=off、或 .suggest-mode 為 off；圖解是 OVERVIEW=off（不受 .suggest-mode 影響）
 
 INPUT=$(cat)
 
@@ -46,6 +47,40 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] post-write: $FILE_PATH" >> "$CLAUDE_DIR/log
 # ============================================================================
 [ -z "$FILE_PATH" ] && exit 0
 command -v jq >/dev/null 2>&1 || exit 0
+
+NORM=$(printf '%s' "$FILE_PATH" | tr '\\' '/')
+ROOT_NORM=$(printf '%s' "$PROJECT_ROOT" | tr '\\' '/')
+REL="${NORM#"$ROOT_NORM"/}"
+
+# ---------------------------------------------------------------- 專案圖解觸發
+#
+# 寫了圖解的來源（wbs、plan、架構文件、project.json）就在背景重產 overview。
+# 有機器判斷得出的時機，就不要寫成「記得重產」。**不輸出任何東西**：圖是給人看的，
+# 注入只會吃 token。重產邏輯與輸出位置全在 scripts/overview.sh（主 checkout 它自己算）。
+#
+# 背景寫法照抄，不要改成 `( cd … && nohup … & )`：那樣被放到背景的是整串，它佔著 hook 的
+# stdout，用 $(…) 擷取輸出的呼叫端（測試）會等完整支腳本（階段 1 實測多等 5 秒）。
+# 工作目錄用參數傳。放在 .suggest-mode 之前：那是建議密度開關，圖不是建議。
+#
+# 逃生門：OVERVIEW=off（腳本自己也認）；OVERVIEW_SYNC=1 改前景執行（測試用）
+if [ "${OVERVIEW:-on}" != "off" ]; then
+    OV_HIT=0
+    case "$NORM" in
+        */.claude/taskmaster-data/wbs.md|*/.claude/taskmaster-data/project.json|*/.claude/taskmaster-data/plans/*.md) OV_HIT=1 ;;
+    esac
+    case "$REL" in
+        docs/*architecture*.md|docs/tech-spec.md) OV_HIT=1 ;;
+    esac
+    OV_SH="$MAIN_CLAUDE/scripts/overview.sh"
+    if [ "$OV_HIT" -eq 1 ] && [ -f "$OV_SH" ] \
+       && { [ -f "$MAIN_CLAUDE/taskmaster-data/project.json" ] || [ -f "$WORK_CLAUDE/taskmaster-data/project.json" ]; }; then
+        if [ "${OVERVIEW_SYNC:-}" = "1" ]; then
+            bash "$OV_SH" "$WORK_ROOT" </dev/null >/dev/null 2>&1
+        else
+            ( nohup bash "$OV_SH" "$WORK_ROOT" </dev/null >/dev/null 2>&1 & )
+        fi
+    fi
+fi
 
 # ---------------------------------------------------------------- hook 語法檢查
 #
@@ -87,10 +122,6 @@ for smf in "$MAIN_CLAUDE/taskmaster-data/.suggest-mode" "$DATA_DIR/.suggest-mode
         break
     fi
 done
-
-NORM=$(printf '%s' "$FILE_PATH" | tr '\\' '/')
-ROOT_NORM=$(printf '%s' "$PROJECT_ROOT" | tr '\\' '/')
-REL="${NORM#"$ROOT_NORM"/}"
 
 # ---------------------------------------------------------------- 前端寫入檢查
 #

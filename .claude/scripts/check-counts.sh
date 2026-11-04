@@ -361,6 +361,54 @@ if [ -f "$WBST" ]; then
     fi
 fi
 
+# 專案圖解產生器的欄名常數 vs 範本表頭
+#
+# 為什麼：overview.sh 依欄名抽 5.5 模組表與 WBS 任務表。範本改了欄名、常數沒跟上，
+# 地圖會靜默變空白（不報錯）——跟孤兒 skill 同類的安靜失效，只有這裡擋得住。
+OVSH=.claude/scripts/overview.sh
+if [ -f "$OVSH" ]; then
+    cols_of() { printf '%s\n' "$1" | tr '|' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$'; }
+    ov_const() { sed -n "s/^$1=\"\([^\"]*\)\".*/\1/p" "$OVSH" | head -1; }
+    H55_COLS=$(cols_of "$(awk '/^### 5\.5/{s=1; next} s && /^##/{exit} s && /^\|/{print; exit}' "$TPL05" 2>/dev/null)")
+    WBS_COLS=$(cols_of "$(grep -m1 -E '^\| # \| 任務 \|' "$WBST" 2>/dev/null)")
+    for pair in OVERVIEW_COLS_MODULE:H55 OVERVIEW_COLS_MODULE_OPT:H55 OVERVIEW_COLS_WBS:WBS OVERVIEW_COL_WBS:WBS; do
+        name=${pair%:*}
+        if [ "${pair#*:}" = H55 ]; then have=$H55_COLS; where="05 範本 5.5 模組表表頭"
+        else have=$WBS_COLS; where="wbs.template.md 任務表頭"; fi
+        val=$(ov_const "$name")
+        miss=""
+        [ -n "$val" ] || miss=" （找不到這個常數）"
+        for c in $val; do printf '%s\n' "$have" | grep -qxF -- "$c" || miss="$miss $c"; done
+        CHECKED=$((CHECKED + 1))
+        if [ -n "$miss" ]; then
+            FAIL=$((FAIL + 1))
+            printf '  %s overview.sh 的 %s 有「%s」沒有的欄：%s\n' "$(red '✗')" "$name" "$where" "$miss"
+            printf '      改了範本欄名就同步 %s 的常數，否則地圖會靜默抽不到東西\n' "$OVSH"
+        fi
+    done
+fi
+
+# 專案圖解畫面：≤ 50KB、不載 CDN、不用 module script（file:// 下會被 CORS 擋）
+OVTPL=.claude/templates/overview/index.html
+if [ -f "$OVSH" ]; then
+    CHECKED=$((CHECKED + 1))
+    if [ ! -f "$OVTPL" ]; then
+        FAIL=$((FAIL + 1))
+        printf '  %s 缺專案圖解畫面原檔：%s（overview.sh 靠它複製到 taskmaster-data/overview/）\n' "$(red '✗')" "$OVTPL"
+    else
+        OVSIZE=$(wc -c < "$OVTPL" | tr -d ' ')
+        if [ "$OVSIZE" -gt 51200 ]; then
+            FAIL=$((FAIL + 1))
+            printf '  %s %s 有 %s bytes，超過 50KB 上限\n' "$(red '✗')" "$OVTPL" "$OVSIZE"
+        fi
+        CHECKED=$((CHECKED + 1))
+        if grep -qE 'type=["'"'"']module|(src|href)=["'"'"']https?:' "$OVTPL"; then
+            FAIL=$((FAIL + 1))
+            printf '  %s %s 用了 module script 或外部資源（離線 file:// 會打不開）\n' "$(red '✗')" "$OVTPL"
+        fi
+    fi
+fi
+
 DOCSINIT=.claude/commands/docs-init.md
 if [ -f "$DOCSINIT" ]; then
     PATHB=$(awk '/^#### 路徑 B/{s=1; next} s && /^#### /{exit} s{print}' "$DOCSINIT")

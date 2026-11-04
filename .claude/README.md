@@ -26,6 +26,8 @@
 ├── coordination/              # Agent 協調配置
 └── taskmaster-data/           # WBS、時間日誌、plans/（計畫持久化）
     ├── wbs.md                 # WBS 任務清單（What；版面見 templates/wbs.template.md）
+    ├── overview.md            # 專案地圖（scripts/overview.sh 產生，勿手改）
+    ├── overview/              # 互動版畫面＋data.js（不進版控；畫面原檔在 templates/overview/）
     ├── plans/                 # 計畫檔（How，/plan 寫入）
     │   ├── INDEX.md
     │   └── archive/           # /verify 完成後歸檔
