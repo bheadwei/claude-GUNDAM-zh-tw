@@ -7,7 +7,7 @@
 <!--
   原檔：.claude/templates/overview/index.html（唯一來源）。overview.sh 會複製到
   taskmaster-data/overview/，那份被覆蓋是正常的——要改畫面改這份。
-  限制：不載 CDN、不用 type="module"（file:// 下會被 CORS 擋），整份 ≤ 50KB（check-counts 會擋）。
+  限制：不載 CDN、不用 module script（file:// 下會被 CORS 擋），整份 ≤ 50KB（check-counts 會擋）。
 -->
 <style>
 :root{
@@ -125,7 +125,7 @@ body{background:var(--bg);color:var(--fg);font-family:var(--f-body);display:flex
   <aside class="panel" id="panel"></aside>
 </div>
 
-<!-- classic script：file:// 下 type="module" 會被 CORS 擋 -->
+<!-- classic script：file:// 下 module script 會被 CORS 擋 -->
 <script src="data.js"></script>
 <script>
 (function () {

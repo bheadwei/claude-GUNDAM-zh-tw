@@ -2823,6 +2823,189 @@ expect_eq "docker rm 後面接 rm -rf src → ask"            ask   "$(rmd 'dock
 expect_eq "settings.json 已沒有 rm 的 ask 規則"       "" "$(jq -r '.permissions.ask // [] | map(select(startswith("Bash(rm"))) | .[]' "$HOOK_DIR/../settings.json")"
 
 # =========================================================================
+section "overview.sh — 專案地圖"
+# =========================================================================
+# 產生器在沙箱裡跑：把 overview.sh 與畫面原檔複製進沙箱的 .claude（post-write 找的是
+# $MAIN_CLAUDE/scripts/overview.sh，而沙箱就是主 checkout），改原檔的測試才不會碰到真的範本。
+OV_SRC="$HOOK_DIR/../scripts/overview.sh"
+OV_TPL="$HOOK_DIR/../templates/overview/index.html"
+OVD="$SANDBOX/.claude/taskmaster-data"
+OVO="$OVD/overview"
+
+# 背景模式不得等腳本：放一支睡 10 秒的假腳本，hook 要遠早於它返回。
+# 用獨立的子目錄，免得假腳本還在跑時後面的 reset 刪不掉它（Windows 會鎖住執行中的檔）。
+# 放在本節最前面，後面的案例跑完時它早已結束。
+T21="$SANDBOX/t21"
+mkdir -p "$T21/.claude/scripts" "$T21/.claude/taskmaster-data"
+printf '#!/bin/bash\nsleep 10\n' > "$T21/.claude/scripts/overview.sh"
+echo '{"name":"t","mode":"mvp"}' > "$T21/.claude/taskmaster-data/project.json"
+SECONDS=0
+out=$(run post-write.sh "$(w "$T21/.claude/taskmaster-data/plans/1.1-x.md")" CLAUDE_PROJECT_DIR="$T21")
+t21=$SECONDS
+[ "$t21" -lt 8 ] && ok "背景模式 hook 不等產生器（${t21} 秒，假腳本睡 10 秒）" \
+    || ng "背景模式 hook 不等產生器" "< 8 秒" "${t21} 秒"
+expect_empty "背景模式 hook 沒有輸出" "$out"
+
+ov_reset() {
+    reset
+    rm -rf "$SANDBOX/docs" "$SANDBOX/src"
+    ( cd "$SANDBOX" && { [ -d .git ] || git init -q . ; } \
+      && { git rev-parse -q --verify HEAD >/dev/null || { echo x > seed && git add seed \
+           && git -c user.email=t@t -c user.name=t commit -qm init; }; } \
+      && git worktree prune ) >/dev/null 2>&1
+    mkdir -p "$SANDBOX/.claude/scripts" "$SANDBOX/.claude/templates/overview" "$SANDBOX/docs"
+    cp "$OV_SRC" "$SANDBOX/.claude/scripts/overview.sh"
+    cp "$OV_TPL" "$SANDBOX/.claude/templates/overview/index.html"
+}
+ov()      { bash "$SANDBOX/.claude/scripts/overview.sh" "$SANDBOX" >/dev/null 2>&1; }
+ov_data() { sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$OVO/data.js" 2>/dev/null; }
+ovq()     { ov_data | jq -r "$1" 2>/dev/null; }
+ov_proj() { printf '{"name":"測試專案","mode":"%s"}\n' "${1:-mvp}" > "$OVD/project.json"; }
+# 架構文件：5.1 三個節點（web→api→db）、5.5 三列。$1 附加在 mermaid 內、$2 附加在模組表後
+# （造不一致用）；OV_ARCH_HEAD 放在檔頭（草稿標記用）
+ov_arch() {
+    {
+        echo "${OV_ARCH_HEAD:-}"
+        echo "# 架構"; echo; echo "### 5.1 容器圖"; echo; echo '```mermaid'; echo "graph TD"
+        echo '    subgraph g1["用戶端"]'; echo "        web[Web App]"; echo "    end"
+        echo '    subgraph g2["服務層"]'; echo "        api[API 服務]"; echo "    end"
+        echo '    subgraph g3["資料層"]'; echo "        db[(資料庫)]"; echo "    end"
+        echo "    web --> api"; echo "    api --> db"
+        [ -n "${1:-}" ] && echo "$1"
+        echo '```'; echo; echo "### 5.5 MVP 範圍與模組清單"; echo
+        echo "| id | 模組 | 路徑 | 對應 BDD | 職責 | API 設計 | 資料模型 |"
+        echo "|---|---|---|---|---|---|---|"
+        echo '| web | Web App | `src/web/**` | — | 前端 | — | — |'
+        echo '| api | API 服務 | `src/api/**` | — | 對外 REST | — | — |'
+        echo '| db | 資料庫 | `migrations/**` | — | 持久化 | — | — |'
+        [ -n "${2:-}" ] && echo "$2"
+    } > "$SANDBOX/docs/05_architecture.md"
+}
+# 每個參數一列「編號|模組|狀態」；OV_NOCOL=1 時用沒有模組欄的舊表頭
+ov_wbs() {
+    {
+        echo "# WBS — 測試"; echo; echo "## M1 基礎"; echo
+        if [ -n "${OV_NOCOL:-}" ]; then echo "| # | 任務 | 狀態 | 優先 |"; echo "|---|---|---|---|"
+        else echo "| # | 任務 | 模組 | 狀態 | 優先 |"; echo "|---|---|---|---|---|"; fi
+        local r id mod st
+        for r in "$@"; do
+            IFS='|' read -r id mod st <<< "$r"
+            if [ -n "${OV_NOCOL:-}" ]; then echo "| $id | 任務 $id | $st | 高 |"
+            else echo "| $id | 任務 $id | $mod | $st | 高 |"; fi
+        done
+    } > "$OVD/wbs.md"
+}
+
+ov_reset; ov_arch; ov_wbs "1.1|api|✅ 11-01"
+ov; rc=$?
+expect_eq "沒有 project.json → exit 0" 0 "$rc"
+[ ! -e "$OVO" ] && [ ! -e "$OVD/overview.md" ] && ok "沒有 project.json → 不建 overview/ 也不建 overview.md（模板 repo 不被污染）" \
+    || ng "沒有 project.json → 不建任何檔" "沒有 overview/、overview.md" "$(ls "$OVD")"
+
+ov_reset; ov_proj demo; ov
+expect_eq "demo → modules 為空"                 0 "$(ovq '.modules | length')"
+expect_eq "demo → notices 指向 /docs-init --mvp" 1 "$(ovq '[.notices[] | select(.action == "/docs-init --mvp")] | length')"
+
+ov_reset; ov_proj; ov_arch; ov_wbs
+ov
+expect_eq "三個模組、WBS 無任務 → 都是 todo" "todo todo todo" "$(ovq '[.modules[].status] | join(" ")')"
+expect_contains "overview.md 含 class web todo" "class web todo" "$(cat "$OVD/overview.md" 2>/dev/null)"
+expect_contains "產生的 mermaid 連線箭頭兩端留空格" "  web --> api" "$(cat "$OVD/overview.md" 2>/dev/null)"
+expect_eq "版面依 5.1 群組排欄（web／api／db 各一欄）" "0 1 2" "$(ovq '[.modules[].pos.col] | map(tostring) | join(" ")')"
+
+ov_wbs "1.1|api|✅ 11-01" "1.2|api|🔄 進行中"; ov
+expect_eq "api 有 ✅ 與 🔄 → wip" wip "$(ovq '.modules[] | select(.id == "api") | .status')"
+
+ov_wbs "1.1|api|✅ 11-01" "1.3|db|🚫 阻塞"; ov
+expect_eq       "db 只有 🚫 → issue"          issue "$(ovq '.modules[] | select(.id == "db") | .status')"
+expect_contains "issue 的 statusReason 含 1.3" "1.3"  "$(ovq '.modules[] | select(.id == "db") | .statusReason')"
+
+ov_wbs "2.1|web|✅ 11-01" "2.2|web|⏭️ 跳過"; ov
+expect_eq "全 ✅／⏭️（至少一個 ✅）→ done" done "$(ovq '.modules[] | select(.id == "web") | .status')"
+
+OV_NOCOL=1 ov_wbs "1.1||✅ 11-01" "1.2||⏳ 待處理"; ov; rc=$?
+expect_eq       "WBS 舊格式（沒有模組欄）→ 不報錯"        0 "$rc"
+expect_eq       "沒有模組欄 → 任務全進 unmappedTasks"    "1.1 1.2" "$(ovq '.unmappedTasks | join(" ")')"
+expect_contains "沒有模組欄 → notices 說明"              "WBS 沒有模組欄" "$(ovq '[.notices[].text] | join("\n")')"
+
+ov_wbs "1.1|api|✅ 11-01"; ov; cp "$OVD/overview.md" "$SANDBOX/ov-first.md" 2>/dev/null
+mkdir -p "$SANDBOX/src/api"; echo x > "$SANDBOX/src/api/new.ts"
+ov
+cmp -s "$SANDBOX/ov-first.md" "$OVD/overview.md" && ok "同一組輸入連跑兩次 → overview.md 相同（工作區的改動不進 md）" \
+    || ng "同一組輸入連跑兩次 → overview.md 相同" "cmp 相同" "$(diff "$SANDBOX/ov-first.md" "$OVD/overview.md" | head -5)"
+expect_eq "data.js 去掉賦值外殼後可被 jq 解析，schema 為 1" 1 "$(ovq '.schema')"
+expect_eq "data.js 只有一句賦值（畫面靠它判斷寫到一半）" 1 "$(grep -cv '^//' "$OVO/data.js" 2>/dev/null)"
+expect_eq "未追蹤的新檔歸到路徑對得上的模組" "api true" "$(ovq '.changes[] | select(.file == "src/api/new.ts") | "\(.module) \(.new)"')"
+expect_eq "模組的 changed 計數" 1 "$(ovq '.modules[] | select(.id == "api") | .changed')"
+
+expect_eq "overview/.gitignore 內容恰為 *" "*" "$(cat "$OVO/.gitignore" 2>/dev/null)"
+expect_eq "git status 不出現 overview/ 底下的檔" "" \
+    "$(cd "$SANDBOX" && git status --porcelain --untracked-files=all 2>/dev/null | grep 'taskmaster-data/overview/' || true)"
+
+cmp -s "$OV_TPL" "$OVO/index.html" && ok "overview/index.html 與畫面原檔相同" \
+    || ng "overview/index.html 與畫面原檔相同" "cmp 相同" "不同或不存在"
+echo "<!-- v2 -->" >> "$SANDBOX/.claude/templates/overview/index.html"; ov
+cmp -s "$SANDBOX/.claude/templates/overview/index.html" "$OVO/index.html" && ok "畫面原檔改了 → 下一次被覆蓋成新版" \
+    || ng "畫面原檔改了 → 下一次被覆蓋成新版" "cmp 相同" "仍是舊版"
+expect_contains "--print-path 印出 file:// 路徑" "taskmaster-data/overview/index.html" \
+    "$(bash "$SANDBOX/.claude/scripts/overview.sh" --print-path "$SANDBOX" 2>/dev/null)"
+
+# 鎖：兩支同時跑 → 結果合法、鎖不殘留；過期的鎖要接手；新鮮的鎖讓位並留下 .dirty
+rm -f "$OVO/data.js"
+ov & ov & wait
+expect_eq "兩個 overview.sh 同時跑 → data.js 合法" 1 "$(ovq '.schema')"
+[ ! -e "$OVO/.lock" ] && ok "同時跑完後鎖目錄不存在" || ng "同時跑完後鎖目錄不存在" "沒有 .lock" "還在"
+rm -f "$OVO/data.js"; mkdir -p "$OVO/.lock"; echo $(( $(date +%s) - 120 )) > "$OVO/.lock/at"; ov
+expect_eq "鎖超過 60 秒 → 視為過期並接手產生" 1 "$(ovq '.schema')"
+rm -f "$OVO/data.js" "$OVO/.dirty"; mkdir -p "$OVO/.lock"; date +%s > "$OVO/.lock/at"; ov
+[ ! -e "$OVO/data.js" ] && [ -e "$OVO/.dirty" ] && ok "鎖還新 → 讓位、留下 .dirty 給持鎖者重跑" \
+    || ng "鎖還新 → 讓位、留下 .dirty" "沒有 data.js、有 .dirty" "$(ls -a "$OVO")"
+rm -rf "$OVO/.lock"
+
+ov_reset; ov_proj; OV_ARCH_HEAD='<!-- overview: draft -->' ov_arch; ov_wbs; ov
+expect_eq       "架構草稿 → 不產生地圖"               0    "$(ovq '.modules | length')"
+expect_eq       "架構草稿 → architectureDraft 為 true" true "$(ovq '.project.architectureDraft')"
+expect_contains "架構草稿 → notices 為「架構草稿待確認」" "架構草稿待確認" "$(ovq '[.notices[].text] | join("\n")')"
+
+ov_reset; ov_proj; ov_wbs
+ov_arch "    api --> cache[(快取)]" '| search | 搜尋 | `src/search/**` | — | 搜尋 | — | — |'
+ov
+expect_eq       "5.1 有、5.5 沒有的節點照畫並標成未宣告" false "$(ovq '.modules[] | select(.id == "cache") | .declared')"
+expect_contains "5.1 有、5.5 沒有 → notices 列出"        "cache" "$(ovq '[.notices[].text] | join("\n")')"
+expect_eq       "5.5 有、5.1 沒有 → 放進未分組"          _ungrouped "$(ovq '.modules[] | select(.id == "search") | .group')"
+expect_eq       "未分組群組存在且標為「未分組」"          未分組 "$(ovq '.groups[] | select(.id == "_ungrouped") | .label')"
+
+ov_reset; ov_proj; ov_wbs; ov_arch "    cache -- 讀取 --> db"; ov
+expect_eq "「a -- 文字 --> b」畫成連線，文字不會變成節點名稱" "1 cache" \
+    "$(ovq '"\([.edges[] | select(.from == "cache" and .to == "db")] | length) \(.modules[] | select(.id == "cache") | .name)"')"
+
+# post-write 觸發段（OVERVIEW_SYNC=1 讓它前景跑，才能斷言）
+ov_reset; ov_proj; ov_arch; ov_wbs
+out=$(run post-write.sh "$(w "$SANDBOX/.claude/taskmaster-data/plans/1.2-x.md")" OVERVIEW_SYNC=1)
+expect_empty "寫 plan → post-write 沒有輸出" "$out"
+[ -f "$OVO/data.js" ] && ok "寫 plan → data.js 被產生" || ng "寫 plan → data.js 被產生" "有 data.js" "沒有"
+
+ov_reset; ov_proj; ov_arch; ov_wbs
+run post-write.sh "$(w "$SANDBOX/src/app.ts")" OVERVIEW_SYNC=1 >/dev/null
+[ ! -e "$OVO/data.js" ] && ok "寫一般程式檔 → 不產生" || ng "寫一般程式檔 → 不產生" "沒有 data.js" "有"
+run post-write.sh "$(w "$SANDBOX/src/docs/architecture.md")" OVERVIEW_SYNC=1 >/dev/null
+[ ! -e "$OVO/data.js" ] && ok "docs/ 比對錨定開頭（src/docs/ 不算）" || ng "docs/ 比對錨定開頭" "沒有 data.js" "有"
+run post-write.sh "$(w "$SANDBOX/.claude/taskmaster-data/plans/1.2-x.md")" OVERVIEW_SYNC=1 OVERVIEW=off >/dev/null
+[ ! -e "$OVO/data.js" ] && ok "OVERVIEW=off → 不產生" || ng "OVERVIEW=off → 不產生" "沒有 data.js" "有"
+echo off > "$SM_FILE"
+run post-write.sh "$(w "$SANDBOX/docs/05_architecture.md")" OVERVIEW_SYNC=1 >/dev/null
+[ -f "$OVO/data.js" ] && ok ".suggest-mode=off 仍會產生（圖不是建議）" || ng ".suggest-mode=off 仍會產生" "有 data.js" "沒有"
+
+ov_reset; ov_proj; ov_arch; ov_wbs
+OVWT="$SANDBOX/.claude/worktrees/ovwt"
+( cd "$SANDBOX" && git worktree add -q -B ovwt "$OVWT" ) >/dev/null 2>&1
+mkdir -p "$OVWT/.claude/taskmaster-data/plans"
+run post-write.sh "$(wcwd "$OVWT/.claude/taskmaster-data/plans/1.2-x.md" "$OVWT")" OVERVIEW_SYNC=1 >/dev/null
+[ -f "$OVO/data.js" ] && ok "worktree 裡寫 plan → data.js 寫在主 checkout" || ng "worktree 裡寫 plan → data.js 寫在主 checkout" "主 checkout 有 data.js" "沒有"
+[ ! -e "$OVWT/.claude/taskmaster-data/overview" ] && ok "worktree 底下沒有 overview/" || ng "worktree 底下沒有 overview/" "沒有" "有"
+( cd "$SANDBOX" && git worktree remove --force "$OVWT" && git branch -D ovwt ) >/dev/null 2>&1
+
+# =========================================================================
 section "全體 hooks — 語法與健壯性"
 # =========================================================================
 for h in "$HOOK_DIR"/*.sh; do

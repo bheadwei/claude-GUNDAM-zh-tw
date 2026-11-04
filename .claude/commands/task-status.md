@@ -22,6 +22,16 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
 4. **讀取** `.claude/taskmaster-data/plans/INDEX.md`（若存在），建立 `<task-id> → plan 進度` 映射
 5. 顯示統計和任務清單（含 plan 進度欄位）
 6. 如有任務狀態變更，**立即更新** wbs.md 並重算「現況」區
+7. 重產專案圖解並印出畫面路徑（寫 wbs／plan 時 hook 已在背景重產，這一步是兜底——
+   用 Bash `mv`／`sed` 改的檔不會觸發 hook）：
+
+   ```bash
+   bash .claude/scripts/overview.sh && bash .claude/scripts/overview.sh --print-path
+   ```
+
+   把印出的 `file:///…/overview/index.html` 放在輸出的最後一行，讓使用者點開。
+   **只印路徑，不要 Read `overview/data.js` 或 `overview.md`**——那是給人看的衍生物，
+   大專案可達數百 KB；要狀態就讀 `wbs.md`。沒有 `project.json` 時腳本什麼都不印，直接略過這行
 
 > 版面與「現況」的重算規則：`.claude/templates/wbs.template.md`（唯一來源）。
 
@@ -45,6 +55,8 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
   ...
 
 下一步建議: /task-next
+
+專案圖解: file:///…/.claude/taskmaster-data/overview/index.html
 ```
 
 > 本指令**不做模板合規檢查**（那是 `/template-check` 的職責）。

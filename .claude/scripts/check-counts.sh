@@ -382,7 +382,7 @@ if [ -f "$OVSH" ]; then
         CHECKED=$((CHECKED + 1))
         if [ -n "$miss" ]; then
             FAIL=$((FAIL + 1))
-            printf '  %s overview.sh 的 %s 有%s沒有的欄：%s\n' "$(red '✗')" "$name" "$where" "$miss"
+            printf '  %s overview.sh 的 %s 有「%s」沒有的欄：%s\n' "$(red '✗')" "$name" "$where" "$miss"
             printf '      改了範本欄名就同步 %s 的常數，否則地圖會靜默抽不到東西\n' "$OVSH"
         fi
     done
