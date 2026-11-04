@@ -90,24 +90,26 @@ graph TD
 
 ```mermaid
 graph TD
-    subgraph "用戶端"
-        WebApp[Web App]
+    subgraph g1["用戶端"]
+        web[Web App]
     end
-    subgraph "服務層"
-        APIGateway[API Gateway]
-        ServiceA[服務 A]
-        ServiceB[服務 B]
+    subgraph g2["服務層"]
+        gateway[API Gateway]
+        svc-a[服務 A]
+        svc-b[服務 B]
     end
-    subgraph "資料層"
-        DB[(資料庫)]
-        Cache[(快取)]
+    subgraph g3["資料層"]
+        db[(資料庫)]
+        cache[(快取)]
     end
-    WebApp --> APIGateway
-    APIGateway --> ServiceA
-    APIGateway --> ServiceB
-    ServiceA --> DB
-    ServiceB --> Cache
+    web --> gateway
+    gateway --> svc-a
+    gateway --> svc-b
+    svc-a --> db
+    svc-b --> cache
 ```
+
+節點 id（`web`、`svc-a`…）就是 5.5 模組表的 `id`，一個節點對一列。顯示名稱寫在方括號裡，id 只放小寫識別字。
 
 | 容器/元件 | 核心職責 | 技術 | 依賴 |
 | :-------- | :------- | :--- | :--- |
@@ -145,9 +147,18 @@ graph LR
 - **關鍵模組（MVP 必含）**：[模組 1]、[模組 2]
 - **後續模組**：[模組 3]
 
-| 模組   | 對應 BDD | 職責   | API 設計                                | 資料模型        |
-| :----- | :------- | :----- | :-------------------------------------- | :-------------- |
-| [名稱] | [連結]   | [簡述] | → 見`06_api_design_specification.md` | [Schema 或說明] |
+| id      | 模組        | 路徑                         | 對應 BDD | 職責               | API 設計                               | 資料模型        |
+| :------ | :---------- | :--------------------------- | :------- | :----------------- | :------------------------------------- | :-------------- |
+| web     | Web App     | `src/web/**`                 | [連結]   | [簡述]             | —                                      | —               |
+| gateway | API Gateway | `src/gateway/**`             | [連結]   | 路由、認證、限流   | → 見`06_api_design_specification.md` | —               |
+| svc-a   | 服務 A      | `src/services/a/**`          | [連結]   | [簡述]             | → 見`06_api_design_specification.md` | [Schema 或說明] |
+| svc-b   | 服務 B      | `src/services/b/**`          | [連結]   | [簡述]             | → 見`06_api_design_specification.md` | [Schema 或說明] |
+| db      | 資料庫      | `migrations/**, src/db/**`   | —        | 持久化、schema 演進 | —                                      | [ER 圖或說明]   |
+| cache   | 快取        | `src/cache/**`               | —        | [簡述]             | —                                      | —               |
+
+- **`id`**：小寫英數字與連字號（`[a-z0-9-]+`），建立後不改名——WBS 的「模組」欄與專案圖解都用它對應
+- **`id` 必須等於 5.1 容器圖的節點 id**，一個節點一列；5.1 沒畫的模組不會出現在地圖上
+- **`路徑`**：這個模組的程式在哪，寫 glob（`src/api/**`），多個用 `,` 分隔；還沒有程式碼時先寫預定位置
 
 ---
 

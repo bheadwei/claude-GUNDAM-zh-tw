@@ -299,6 +299,75 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     fi
 fi
 
+# 架構文件模組表與 WBS 模組欄的表頭
+#
+# 為什麼：05 範本 5.5 的 `id`／`路徑`、WBS 的「模組」是之後專案圖解產生器對模組的依據，
+# 也是 /task-init、/task-add 填模組欄的依據。表頭一改名，下游只會靜默抽不到東西。
+# 5.1 的節點 id 必須都在 5.5 的 id 欄——範本自己不自洽，照抄的專案一定對不上。
+# docs-init 的 mvp 骨架只准「指向」5.5，內嵌一份 `| id |` 表頭就是第二份副本（會漂）。
+TPL05=.claude/skills/project-docs/templates/05_architecture_and_design_document.md
+if [ -f "$TPL05" ]; then
+    H55=$(awk '/^### 5\.5/{s=1; next} s && /^##/{exit} s && /^\|/{print; exit}' "$TPL05")
+    for col in id 路徑; do
+        CHECKED=$((CHECKED + 1))
+        if ! printf '%s' "$H55" | tr '|' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -qx "$col"; then
+            FAIL=$((FAIL + 1))
+            printf '  %s 05 範本 5.5 模組表表頭缺「%s」欄：%s\n' "$(red '✗')" "$col" "$TPL05"
+        fi
+    done
+
+    IDS55=$(awk '/^### 5\.5/{s=1; next} s && /^##/{exit}
+                 s && /^\|/ { n++; if (n <= 2) next
+                              split($0, c, "|"); v = c[2]; gsub(/^[ \t]+|[ \t]+$/, "", v); print v }' "$TPL05")
+    NODES51=$(awk '/^### 5\.1/{s=1; next} s && /^##/{exit}
+                   s && /^```mermaid/{m=1; next} s && m && /^```/{m=0; next}
+                   s && m && !/^[ \t]*subgraph/ && match($0, /^[ \t]*[a-z0-9-]+[ \t]*[\[\(\{]/) {
+                       v = substr($0, RSTART, RLENGTH); gsub(/[ \t\[\(\{]/, "", v); print v }' "$TPL05" | sort -u)
+    CHECKED=$((CHECKED + 1))
+    MISSING=""
+    while IFS= read -r nid; do
+        [ -n "$nid" ] || continue
+        printf '%s\n' "$IDS55" | grep -qx "$nid" || MISSING="$MISSING $nid"
+    done <<< "$NODES51"
+    if [ -z "$NODES51" ] || [ -n "$MISSING" ]; then
+        FAIL=$((FAIL + 1))
+        printf '  %s 05 範本 5.1 容器圖的節點 id 不在 5.5 的 id 欄：%s\n' "$(red '✗')" "${MISSING:- （5.1 找不到小寫 id 節點）}"
+        printf '      範例要自洽：節點 id＝模組 id。\n'
+    fi
+fi
+
+WBST=.claude/templates/wbs.template.md
+if [ -f "$WBST" ]; then
+    CHECKED=$((CHECKED + 1))
+    BAD_HDR=$(grep -nE '^\| # \| 任務 \|' "$WBST" | grep -v '| 模組 |' || true)
+    if [ -z "$(grep -E '^\| # \| 任務 \|' "$WBST")" ] || [ -n "$BAD_HDR" ]; then
+        FAIL=$((FAIL + 1))
+        printf '  %s wbs.template.md 的任務表頭缺「模組」欄：\n' "$(red '✗')"
+        printf '      %s\n' "$(dim "${BAD_HDR:-找不到任務表頭}")"
+    fi
+    CHECKED=$((CHECKED + 1))
+    if ! awk '/^## 2\./{s=1; next} s && /^## /{exit} s && /^\| 模組 \|/{f=1} END{exit !f}' "$WBST"; then
+        FAIL=$((FAIL + 1))
+        printf '  %s wbs.template.md 第 2 節欄位規則缺「模組」列\n' "$(red '✗')"
+    fi
+fi
+
+DOCSINIT=.claude/commands/docs-init.md
+if [ -f "$DOCSINIT" ]; then
+    PATHB=$(awk '/^#### 路徑 B/{s=1; next} s && /^#### /{exit} s{print}' "$DOCSINIT")
+    CHECKED=$((CHECKED + 1))
+    if ! printf '%s' "$PATHB" | grep -q '05_architecture_and_design_document\.md' \
+       || ! printf '%s' "$PATHB" | grep -q '5\.5'; then
+        FAIL=$((FAIL + 1))
+        printf '  %s docs-init.md 路徑 B 沒有指向 05 範本的 5.5（模組表的唯一來源）\n' "$(red '✗')"
+    fi
+    CHECKED=$((CHECKED + 1))
+    if printf '%s\n' "$PATHB" | grep -qE '^\|[[:space:]]*id[[:space:]]*\|'; then
+        FAIL=$((FAIL + 1))
+        printf '  %s docs-init.md 路徑 B 內嵌了模組表表頭（`| id |`）——改成指向 05 範本 5.5，不要留第二份\n' "$(red '✗')"
+    fi
+fi
+
 # 測試案例數（需由呼叫端提供實跑結果）
 if [ -n "$TESTS_ACTUAL" ]; then
     verify "WORKFLOW 測試案例數" "$TESTS_ACTUAL" "$W" '[0-9]+ 個案例，全綠'
