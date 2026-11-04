@@ -1,16 +1,16 @@
 # Hooks 回歸測試
 
 ```bash
-bash .claude/hooks/tests/run-tests.sh                    # 整套（CI、/verify pre-pr）
-bash .claude/hooks/tests/run-tests.sh --changed <起點>   # 依改動挑節（/verify 平常用這個）
+bash .claude/hooks/tests/run-tests.sh                    # 整套
+bash .claude/hooks/tests/run-tests.sh --changed <起點>   # 依改動挑節；判成整套時 worktree 裡要加 --full
 bash .claude/hooks/tests/run-tests.sh overview post-write   # 只跑標題含關鍵字的節
 bash .claude/hooks/tests/run-tests.sh --list             # 列出所有節；任何形式加 --dry-run 只印會跑哪些節
 ```
 
-903 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。只跑部分節時結尾會寫
-「部分執行：N 節／共 M 節，不是整套」——那個通過數**不能**拿去給 `check-counts.sh --tests`。
-改動檔對應到哪些節的規則只寫在 `run-tests.sh` 的 `_changed_rule`（唯一來源）；
-在 worktree 裡不帶參數跑整套會被 `full-suite-gate` 擋一次。
+921 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。只跑部分節時結尾寫
+「部分執行（N 節／共 M 節，不是整套）… 通過數 X」——刻意不用「通過 X」，CI 與 `check-counts.sh --tests`
+的 regex 抓不到。改動檔對應到哪些節的規則只寫在 `run-tests.sh` 的 `_changed_rule`（唯一來源）；
+什麼時候跑整套見 `commands/verify.md` 步驟 4。在 worktree 裡不帶參數跑整套會被 `full-suite-gate` 擋一次。
 
 **整套在 Windows Git Bash 上約需 50 分鐘**（2026-11-04 實測 869 案例 51 分鐘；2026-09-17 的
 356 案例是 12 分鐘，案例增加時這個數字會繼續往上）——大量 `bash` + `jq` 子行程，

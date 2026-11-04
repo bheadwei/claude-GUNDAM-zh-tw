@@ -124,7 +124,7 @@ GREEN 過不了修實作不改測試，都在那裡（唯一來源，本檔不�
    `subagent-execution/reviewer-prompt.md` 的「主模型收到審查結果之後」——只剩 MEDIUM／LOW 不加輪。
    通過後在帳本記一行 `審查通過｜範圍=<階段起點>..<HEAD>`（格式見 `subagent-execution` 的「帳本要記什麼」）
 
-整套測試不在這裡跑——範圍由 `/verify` 決定（整套只在 `/verify pre-pr` 與 CI）。
+整套測試不在這裡跑——那是 `/verify` 的事。
 
 ## 使用時機
 
@@ -140,5 +140,5 @@ GREEN 過不了修實作不改測試，都在那裡（唯一來源，本檔不�
 /tdd              自動載入當前 plan，按階段推進
 /build-fix        建置錯誤修復
 /code-review      程式碼審查（Claude Code 內建，需要時手動跑，不是流程固定一棒）
-/verify           測試（範圍依情境，整套只在 pre-pr）與整體驗收標準 → 標 WBS 為 ✅
+/verify           整套測試與整體驗收標準 → 標 WBS 為 ✅
 ```

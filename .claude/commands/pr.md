@@ -16,6 +16,7 @@ description: 建立 Pull Request。分析完整 commit 歷史與 diff、可選�
 | 工作目錄乾淨 | 有未提交變更 → 問「先 commit / 暫存 / 取消」 |
 | `gh` 可用（`gh auth status`） | 不可用 → 改為只 push 並給出手動開 PR 的網址 |
 | 有 remote | 無 remote → 提示先設定，停止 |
+| 不在 linked worktree 裡（`git rev-parse --git-dir` 不含 `/worktrees/`） | 在 worktree 裡 → 建議先合回主 checkout 再跑 `/pr`：worktree 裡的 `pre-pr` 不跑整套（`commands/verify.md` 步驟 4）。使用者堅持從 worktree 開 → 照做，但 PR 的測試計畫要寫明「這次沒跑整套」 |
 
 ## 步驟 1：分析完整變更（**不是只看最新 commit**）
 

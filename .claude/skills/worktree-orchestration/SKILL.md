@@ -45,7 +45,8 @@ description: Use when running work in parallel across git worktrees — creating
 | `taskmaster-data/.pitfall-seen` | `coordination/handoffs/` — agent 交接 |
 | `taskmaster-data/.report-expectations.jsonl` | `taskmaster-data/.suggest-mode` — 專案級設定 |
 | `taskmaster-data/.last-verify` — 驗的是**這個 checkout** 的 HEAD | `logs/`＋`timelog.jsonl` — 集中一處才查得到 |
-| | `taskmaster-data/.merge-round-open` — 本輪有合併還沒被測試涵蓋，內容是本輪起點；合併只在主 checkout 做（寫入與清除見 `commands/verify.md`） |
+| | `taskmaster-data/.merge-round-open` — 本輪有合併還沒被整套涵蓋；合併只在主 checkout 做（寫入與清除見 `commands/verify.md`） |
+| | `taskmaster-data/.merge-round-start` — 本輪第一個合併執行前的 HEAD，`lib/merge-gate.sh` 寫、`/verify` 關閉本輪時清（用途見 `commands/verify.md` 步驟 4） |
 | | `taskmaster-data/overview/`（含 `overview.md`、`data.js`、畫面）— 專案圖解，不進 git；各 worktree 觸發的重產都寫主 checkout 這一份（`scripts/overview.sh` 用 git common dir 自己算主 checkout，不靠 hook 的 root 解析） |
 
 註：`.doc-impact` 跟著 worktree，所以 worktree 累積的文件債**不會自己回到主 checkout**。
@@ -259,7 +260,7 @@ worktree session（含它派出的所有 subagent）被四道檢查擋住：
 
 ```bash
 # 1. 每個 worktree 先自己驗過
-#    （在該 worktree 內）/verify 通過才算完成——只跑這條線相關的測試，整套留給 pre-pr 與 CI
+#    （在該 worktree 內）/verify 通過才算完成——只跑這條線相關的測試，整套留給合併後
 
 # 2. 回主 checkout
 git checkout main && git pull --rebase
@@ -278,8 +279,8 @@ git merge --no-ff worktree-<name>
 合併才第一次讓兩邊的程式碼真的碰面，那些互動是全新的、沒人驗過的程式碼。
 
 **每次合併驗的東西不一樣**：中間的合併只快檢（建置、型別、這次帶進來的檔案對應的測試、
-該分支 plan 的驗收），**最後一個**才從本輪起點依改動挑測試＋`spec-convergence`（整套只在 `/verify pre-pr`
-與 CI）；紅了用 `git bisect --first-parent` 在本輪的 merge commit 之間找元凶。「最後一個」怎麼判定、各驗什麼、二分程序，
+該分支 plan 的驗收），**最後一個**才跑整套＋`spec-convergence`；整套紅了用 `git bisect --first-parent`
+在本輪的 merge commit 之間找元凶。「最後一個」怎麼判定、快檢與整套各驗什麼、二分程序，
 全在 `.claude/commands/verify.md` 的「合併驗證關卡」（唯一來源，勿在此重述）。
 
 **順序**：先合**獨立**的功能，再合**依賴它們**的。例如 search 與 cart 先合、
