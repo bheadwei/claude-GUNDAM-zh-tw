@@ -3209,6 +3209,18 @@ expect_eq "worktree 裡沒改過的版控 plan 副本（主 checkout 已歸檔�
     "$(tgq '"\([.plans[] | select(.file == "plans/1.2-x.md")] | length) \(.currents | length)"')"
 tg_git worktree remove --force "$TGWT"
 
+# 平行開發時 implementer 每完成一階段就在 worktree 分支上 commit（plan 狀態一起）：
+# 比的是與主 checkout HEAD 的 merge-base，不是 worktree 的 HEAD，否則一 commit 就從任務圖消失
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳; tg_git add -A; tg_git commit -qm plan
+TGWT="$TG/.claude/worktrees/wt4"
+tg_git worktree add -q -b wt4 "$TGWT"
+( TGD="$TGWT/.claude/taskmaster-data"; tg_plan 1.2-x.md ✅ 🔄 )
+git -C "$TGWT" -c user.email=t@t -c user.name=t commit -qam 階段1 >/dev/null 2>&1
+tg_ov
+expect_eq "worktree 改了 plan 並 commit 到自己的分支（工作區乾淨）→ 仍在 plans[]、來源是 worktree" \
+    "worktree:wt4 0" "$(tgp '.source') $(git -C "$TGWT" status --porcelain | wc -l)"
+tg_git worktree remove --force "$TGWT"
+
 tg_reset; tg_plan 1.2-x.md ⏳ ⏳; mkdir -p "$TGD/plans/archive"
 printf -- '---\nwbs_task: "0.9"\nstatus: "✅ 完成"\nfiles:\n  - "src/api/old.ts"\n---\n\n# 實作計畫：舊的\n' > "$TGD/plans/archive/0.9-old.md"
 tg_ov

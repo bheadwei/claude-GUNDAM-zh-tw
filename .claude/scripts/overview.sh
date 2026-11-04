@@ -243,9 +243,12 @@ ledger_base() {
 # 一個來源的 plan、帳本、.current-task、改動。worktree 沒有 plan 也沒有 .current-task 就整個略過
 # （實驗用的 worktree 不該出現在圖上）。
 #
-# worktree 的 plan 只收「相對它自己的 HEAD 有改動」或「沒進版控」的檔：plans/ 進版控，每個 worktree
-# 一建立就帶著一份建立當下的副本，沒動過的副本不是它在做的事（主 checkout 歸檔之後，舊 worktree
-# 的副本會讓已完成的 plan 重新出現、還被猜成「本次」）。--actual 指定的那一份例外，一定收。
+# worktree 的 plan 只收「分出來之後動過」（相對它的 HEAD 與主 checkout HEAD 的 merge-base，含 commit、
+# staged、工作區改動）或「沒進版控」的檔：plans/ 進版控，每個 worktree 一建立就帶著一份建立當下的副本，
+# 沒動過的副本不是它在做的事（主 checkout 歸檔之後，舊 worktree 的副本會讓已完成的 plan 重新出現、
+# 還被猜成「本次」）。不比 worktree 的 HEAD：implementer 每完成一階段就連同 plan 一起 commit，
+# 比 HEAD 的話 plan 一 commit 就從任務圖消失。找不到 merge-base 才退回 HEAD。
+# --actual 指定的那一份例外，一定收。
 declare -A SEEN_BASE
 gather_source() {
     local src="$1" root="$2" pd="$2/.claude/taskmaster-data/plans" f b ct="" L p
@@ -256,9 +259,12 @@ gather_source() {
         while IFS= read -r -d '' p; do
             [ "${p%/*}" = "$rel" ] && pristine[${p##*/}]=1
         done < <(git -C "$root" -c core.quotePath=false ls-files -z -- "$rel" 2>/dev/null)
+        local mhead fork
+        mhead=$(git -C "$MAIN_ROOT" rev-parse -q --verify HEAD 2>/dev/null)
+        [ -n "$mhead" ] && fork=$(git -C "$root" merge-base HEAD "$mhead" 2>/dev/null)
         while IFS= read -r -d '' p; do
             [ "${p%/*}" = "$rel" ] && unset 'pristine[${p##*/}]'
-        done < <(git -C "$root" -c core.quotePath=false diff -z --name-only HEAD -- "$rel" 2>/dev/null)
+        done < <(git -C "$root" -c core.quotePath=false diff -z --name-only "${fork:-HEAD}" -- "$rel" 2>/dev/null)
     fi
     for f in "$pd"/*.md; do
         [ -f "$f" ] || continue
