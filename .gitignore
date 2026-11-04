@@ -32,6 +32,7 @@
 .claude/taskmaster-data/.learned-notified
 .claude/taskmaster-data/.merge-pending
 .claude/taskmaster-data/.merge-round-open
+.claude/taskmaster-data/.merge-round-start
 .claude/taskmaster-data/.parallel-agent-warned
 .claude/taskmaster-data/.pitfall-seen
 .claude/taskmaster-data/.report-expectations.jsonl

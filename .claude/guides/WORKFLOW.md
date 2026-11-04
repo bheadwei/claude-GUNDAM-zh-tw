@@ -433,11 +433,13 @@ worktree 裡連 plan 都沒有，agent 不知道要實作什麼。
 ## 改動 hook 之後
 
 ```bash
-bash .claude/hooks/tests/run-tests.sh        # 908 案例
-bash .claude/scripts/check-counts.sh --tests 908   # 文件計數一致性
+bash .claude/hooks/tests/run-tests.sh --changed <起點>   # 依改動挑節
+bash .claude/hooks/tests/run-tests.sh                    # 整套 960 案例
+bash .claude/scripts/check-counts.sh --tests 960         # 文件計數一致性（數字只能取整套的結果）
 ```
 
-CI（`.github/workflows/template-ci.yml`）會在 push 與 PR 時自動跑這兩項，
+CI（`.github/workflows/template-ci.yml`）會在 push 與 PR 時自動跑整套與計數檢查，
 加上 Windows/Git Bash 的回歸測試、shell 與 PowerShell 語法、copy/update-template 沙箱實跑。
 
-908 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
+整套 960 個案例，全綠才算沒破壞閘門；什麼時候跑整套、什麼時候依改動挑，唯一來源是
+`commands/verify.md` 步驟 4。詳見 `.claude/hooks/tests/README.md`。

@@ -5,7 +5,16 @@
 # 誤擋（所有程式碼寫入被 deny）或靜默失效（該擋沒擋，就像當初 .current-task-mode
 # 沒人清那個 bug，壞了半年沒發現）。這些測試把每個分支釘住。
 #
-# 用法：bash .claude/hooks/tests/run-tests.sh
+# 用法：
+#   bash .claude/hooks/tests/run-tests.sh                    整套（何時跑見 commands/verify.md 步驟 4）
+#   bash .claude/hooks/tests/run-tests.sh <關鍵字>...        只跑標題含任一關鍵字的節（不分大小寫）
+#                                                            例：run-tests.sh overview post-write
+#   bash .claude/hooks/tests/run-tests.sh --changed <起點>   依 git diff --name-only <起點>（含未追蹤檔）挑節，
+#                                                            對應表見下方 _changed_rule（唯一來源）
+#   bash .claude/hooks/tests/run-tests.sh --changed -        改動清單從 stdin 讀（一行一個 repo 相對路徑）
+#   bash .claude/hooks/tests/run-tests.sh --list             列出所有節
+#   加 --dry-run                                             只印會跑哪些節，不跑
+#   加 --full                                                --changed 判成整套時照跑（worktree 裡不加就拒絕，exit 3）
 # 需求：bash + jq（無 jq 時 hooks 會軟降級，測試會提示跳過相關案例）
 #
 # 隔離：所有測試在 mktemp 沙箱內跑（CLAUDE_PROJECT_DIR 指向沙箱），
@@ -16,6 +25,238 @@ set -uo pipefail
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PASS=0
 FAIL=0
+
+# ---------------------------------------------------------------- 選節
+#
+# 為什麼要：整套在 Windows/Git Bash 上要跑約 50 分鐘（開一個程序 ~0.14 秒，跑一次
+# post-write.sh ~3 秒），只改一支 hook 也跑整套，合併後的 /verify 就卡在這裡。
+#
+# 為什麼不是讓 section() 設旗標：節的本體是直接寫在頂層的指令，旗標擋不住它們執行，
+# 只會讓 ok/ng 不計數——該開的程序一個也沒省。所以選節時改成讀本檔、按 `section "` 開頭
+# 的行切塊：選中的塊 eval，沒選中的塊只取出**頂層的函式定義與純變數指派**。
+# 後面的節會用前面節定義的輔助函式（fs、gbo、mk_handoff…）與路徑變數（MP_FILE、AG_LOG…），
+# 整塊跳過會讓它們壞掉；而只取定義不會開任何程序，也不會動到沙箱。
+#
+# 單獨跑某一節而它依賴前面節留下的**檔案狀態**（不是函式或變數）時會紅——方向是吵，不是靜默；
+# 修法是讓那一節自己 reset／setup。整套模式（不帶參數）完全不經過這段，行為與以往相同。
+
+# 改動檔 → 要跑的節（唯一來源；commands/verify.md 步驟 4 依改動挑節時用的就是這張表）
+#
+# 由上往下，第一個符合的規則生效。輸出：
+#   ALL       跑整套
+#   NONE      不跑 hook 測試（/verify 只跑 check-counts）
+#   =<字串>   標題或節內文提到這個字串的節——新增的節只要寫到那支 hook 的檔名就自動被挑到，
+#             不必回來改這張表
+#   SELF      本檔：用 `git diff -U0` 的行號找出改到哪幾節，只跑那幾節（加上呼叫了那幾節所
+#             定義函式的節）。改到第一個 section 之前的框架（含 section() 與共用函式）或結尾
+#             統計 → ALL。改動清單從 stdin 來（沒有起點可比）→ ALL
+# 只要有一個檔是 ALL 就跑整套；其餘結果取聯集，再加上「全體 hooks」那節（語法檢查）。
+_changed_rule() {
+    case "$1" in
+        .claude/hooks/tests/run-tests.sh) echo SELF ;;
+        # 共用程式：影響面從檔名看不出來
+        .claude/hooks/lib/*|.claude/settings.json) echo ALL ;;
+        # 測試會讀進沙箱的非程式檔——必須排在下面的 *.md 之前
+        .claude/skills/using-taskmaster/SKILL.md)            echo "=using-taskmaster" ;;
+        .claude/coordination/handoffs/_HANDOFF_TEMPLATE.md)  echo "=_HANDOFF_TEMPLATE.md" ;;
+        .claude/ui/_sources.json)                            echo "=_sources.json" ;;
+        scripts/copy-template.sh)                            echo "=copy-template.sh" ;;
+        .claude/templates/overview/*)                        echo "=overview.sh" ;;
+        # hook 與被測的腳本：跑提到它的節
+        .claude/hooks/*.sh|.claude/scripts/overview.sh)      echo "=${1##*/}" ;;
+        # 不被 hook 測試執行的東西
+        *.md|docs/*|workshop/*|.claude/templates/*|.claude/ui/*|.claude/skills/*|.claude/output-styles/*) echo NONE ;;
+        .claude/context/*|.claude/coordination/*|.claude/qa-history/*|.claude/taskmaster-data/*|.claude/logs/*) echo NONE ;;
+        .claude/scripts/*|scripts/*|.claude/tests/skill-compliance/*|.github/*|.claude/statusline*.sh) echo NONE ;;
+        .gitignore|.worktreeinclude|.mcp.json.*|LICENSE)     echo NONE ;;
+        # 對應不到的：保守跑整套
+        *) echo ALL ;;
+    esac
+}
+
+_SEL_KEYS=() _SEL_CHANGED="" _SEL_DRY=0 _SEL_LIST=0 _SEL_MODE=0 _SEL_FULL=0
+_root="$(cd "$HOOK_DIR/../.." && pwd)"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --changed)
+            [ $# -ge 2 ] || { echo "✗ --changed 要帶起點（commit／分支），或 - 從 stdin 讀清單" >&2; exit 2; }
+            _SEL_CHANGED="$2"; shift 2 ;;
+        --dry-run) _SEL_DRY=1; shift ;;
+        --full)    _SEL_FULL=1; shift ;;
+        --list)    _SEL_LIST=1; shift ;;
+        -*) echo "✗ 不認得的選項：$1（用法見本檔開頭）" >&2; exit 2 ;;
+        *)  _SEL_KEYS+=("$1"); shift ;;
+    esac
+done
+if [ -n "$_SEL_CHANGED" ] && [ ${#_SEL_KEYS[@]} -gt 0 ]; then
+    echo "✗ --changed 與節關鍵字不能同時用" >&2; exit 2
+fi
+
+_SEC_TITLES=() _SEC_BODIES=() _SEC_ON=() _SEC_START=() _EPI_LINE=0
+_load_sections() {
+    local __l __t="" __b="" __in=0 __n=0
+    while IFS= read -r __l || [ -n "$__l" ]; do
+        __n=$((__n + 1))
+        if [[ $__l == 'section "'* ]]; then
+            [ "$__in" = 1 ] && { _SEC_TITLES+=("$__t"); _SEC_BODIES+=("$__b"); }
+            _SEC_START+=("$__n")
+            __t=${__l#section \"}; __t=${__t%\"*}; __b=""; __in=1
+            continue
+        fi
+        [ "$__l" = finish_tests ] && { _EPI_LINE=$__n; break; }
+        [ "$__in" = 1 ] && __b+="$__l"$'\n'
+    done < "${BASH_SOURCE[0]}"
+    [ "$_EPI_LINE" -gt 0 ] || _EPI_LINE=$((__n + 1))
+    [ "$__in" = 1 ] && { _SEC_TITLES+=("$__t"); _SEC_BODIES+=("$__b"); }
+    local __i; for __i in "${!_SEC_TITLES[@]}"; do _SEC_ON[$__i]=0; done
+}
+
+# _sel_title <關鍵字> —— 標題含關鍵字（不分大小寫）的節全部選上；一個都沒有回 1
+_sel_title() {
+    local __i __hit=1 __k="${1,,}"
+    for __i in "${!_SEC_TITLES[@]}"; do
+        [[ ${_SEC_TITLES[$__i],,} == *"$__k"* ]] && { _SEC_ON[$__i]=1; __hit=0; }
+    done
+    return $__hit
+}
+
+# _sel_mention <字串> —— 標題或內文提到字串的節全部選上；一個都沒有回 1
+_sel_mention() {
+    local __i __hit=1
+    for __i in "${!_SEC_TITLES[@]}"; do
+        case "${_SEC_TITLES[$__i]}"$'\n'"${_SEC_BODIES[$__i]}" in
+            *"$1"*) _SEC_ON[$__i]=1; __hit=0 ;;
+        esac
+    done
+    return $__hit
+}
+
+# _sel_self_diff <起點> —— 本檔被改了：依 `git diff -U0` 的新檔行號選出改到的節。
+# 回 1 = 判斷不了或改到框架／結尾統計 → 呼叫端當成整套；原因放 _SELF_WHY。
+# 被改的節若定義了輔助函式，呼叫那些函式的節也一起選（後面的節會共用前面節的 helper；
+# 寧可多挑——判斷「這次改的是不是 helper 本體」不值得那份複雜度）。
+_sel_self_diff() {
+    local __d __l __s __e __i __end __first="${_SEC_START[0]:-0}" __re='^@@ -[0-9,]+ \+([0-9]+)(,([0-9]+))? @@'
+    local -a __hit=()
+    _SELF_WHY=""
+    __d=$(git -C "$_root" diff -U0 --no-renames "$1" -- .claude/hooks/tests/run-tests.sh 2>/dev/null) \
+        || { _SELF_WHY="取不到本檔的 diff"; return 1; }
+    while IFS= read -r __l; do
+        [[ $__l =~ $__re ]] || continue
+        __s=${BASH_REMATCH[1]}; __e=${BASH_REMATCH[3]:-1}
+        if [ "$__e" -eq 0 ]; then __e=$__s; else __e=$((__s + __e - 1)); fi   # 純刪除：落在第 s 行之後
+        if [ "$__s" -lt "$__first" ] || [ "$__e" -ge "$_EPI_LINE" ]; then
+            _SELF_WHY="改到第一節之前的框架或結尾統計（第 $__s 行）"; return 1
+        fi
+        for __i in "${!_SEC_START[@]}"; do
+            __end=$(( ${_SEC_START[$((__i + 1))]:-$_EPI_LINE} - 1 ))
+            [ "$__s" -le "$__end" ] && [ "$__e" -ge "${_SEC_START[$__i]}" ] && __hit[$__i]=1
+        done
+    done <<< "$__d"
+    [ ${#__hit[@]} -gt 0 ] || { _SELF_WHY="diff 裡沒有可對應的行"; return 1; }
+    local __fn __j
+    for __i in "${!__hit[@]}"; do
+        _SEC_ON[$__i]=1
+        printf '  .claude/hooks/tests/run-tests.sh → 改到「%s」\n' "${_SEC_TITLES[$__i]}"
+        while IFS= read -r __l; do
+            [[ $__l =~ ^([A-Za-z_][A-Za-z0-9_]*)\(\) ]] || continue
+            __fn=${BASH_REMATCH[1]}
+            for __j in "${!_SEC_TITLES[@]}"; do
+                [ "$__j" = "$__i" ] && continue
+                [[ ${_SEC_BODIES[$__j]} =~ (^|[^A-Za-z0-9_-])$__fn([^A-Za-z0-9_-]|$) ]] && _SEC_ON[$__j]=1
+            done
+        done <<< "${_SEC_BODIES[$__i]}"
+    done
+    return 0
+}
+
+_in_worktree() {
+    case "$(git -C "$_root" rev-parse --git-dir 2>/dev/null)" in */worktrees/*) return 0 ;; esac
+    return 1
+}
+
+if [ "$_SEL_LIST" = 1 ]; then
+    _load_sections
+    for _si in "${!_SEC_TITLES[@]}"; do printf '%2d  %s\n' "$((_si + 1))" "${_SEC_TITLES[$_si]}"; done
+    exit 0
+fi
+
+if [ -n "$_SEL_CHANGED" ]; then
+    _load_sections
+    if [ "$_SEL_CHANGED" = - ]; then
+        _files=$(cat)
+    else
+        if ! _files=$(git -C "$_root" -c core.quotepath=off diff --name-only --no-renames "$_SEL_CHANGED" -- 2>/dev/null); then
+            echo "⚠ 取不到改動清單（起點：$_SEL_CHANGED）→ 跑整套"
+            _files="__UNKNOWN__"
+        else
+            _files+=$'\n'$(git -C "$_root" -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null)
+        fi
+    fi
+    _all="" _none=0 _nfiles=0
+    while IFS= read -r _f; do
+        _f=${_f%$'\r'}
+        [ -n "$_f" ] || continue
+        _nfiles=$((_nfiles + 1))
+        if [ "$_f" = __UNKNOWN__ ]; then _all="取不到改動清單"; continue; fi
+        _r=$(_changed_rule "$_f")
+        case "$_r" in
+            SELF) if [ "$_SEL_CHANGED" = - ]; then
+                      printf '  %s → 整套（清單從 stdin 來，沒有起點可比行號）\n' "$_f"; _all="${_all:-$_f}"
+                  elif ! _sel_self_diff "$_SEL_CHANGED"; then
+                      printf '  %s → 整套（%s）\n' "$_f" "$_SELF_WHY"; _all="${_all:-$_f}"
+                  fi ;;
+            ALL)  printf '  %s → 整套\n' "$_f"; _all="${_all:-$_f}" ;;
+            NONE) _none=$((_none + 1)) ;;
+            =*)   if _sel_mention "${_r#=}"; then printf '  %s → 提到「%s」的節\n' "$_f" "${_r#=}"
+                  else printf '  %s → 沒有節提到「%s」，只跑語法檢查\n' "$_f" "${_r#=}"; fi ;;
+        esac
+    done <<< "$_files"
+    [ "$_none" -gt 0 ] && printf '  （另有 %d 個檔不需要 hook 測試：文件／範本／執行時產物）\n' "$_none"
+
+    if [ -n "$_all" ]; then
+        printf '依改動挑節：%s → 整套\n' "$_all"
+        # worktree 裡不默默跑整套：N 條線各跑一份就是 full-suite-gate 要擋的事故，
+        # 而 --changed 帶了參數，閘門從指令上看不出它會變成整套
+        if [ "$_SEL_FULL" != 1 ] && _in_worktree; then
+            echo "✗ 在 worktree 裡，不自動跑整套（Windows 上約 50 分鐘）。"
+            echo "  確定要跑：同一條指令加 --full，放背景執行（full-suite-gate 會再擋一次，重試即放行）。"
+            echo "  或者改成只跑幾節：run-tests.sh <節關鍵字>...（--list 看全部）"
+            [ "$_SEL_DRY" = 1 ] && exit 0
+            exit 3
+        fi
+        [ "$_SEL_DRY" = 1 ] && exit 0
+        _SEC_ON=()                                    # 走下面的整套路徑
+    elif [ "$_nfiles" -eq 0 ]; then
+        echo "依改動挑節：沒有改動檔 → 不跑 hook 測試"
+        exit 0
+    elif [ "$_nfiles" -eq "$_none" ]; then
+        printf '依改動挑節：%d 個改動檔都不需要 hook 測試 → 不跑（只跑 check-counts）\n' "$_nfiles"
+        exit 0
+    else
+        _sel_title "全體 hooks" || { echo "✗ 找不到「全體 hooks」那節（改了標題要同步這裡）" >&2; exit 2; }
+        _SEL_MODE=1
+    fi
+elif [ ${#_SEL_KEYS[@]} -gt 0 ]; then
+    _load_sections
+    _miss=()
+    for _k in "${_SEL_KEYS[@]}"; do _sel_title "$_k" || _miss+=("$_k"); done
+    if [ ${#_miss[@]} -gt 0 ]; then
+        echo "✗ 沒有任何節的標題含：${_miss[*]}（--list 看全部）" >&2; exit 2
+    fi
+    _SEL_MODE=1
+fi
+
+_SEC_NRUN=0
+if [ "$_SEL_MODE" = 1 ]; then
+    for _si in "${!_SEC_ON[@]}"; do [ "${_SEC_ON[$_si]}" = 1 ] && _SEC_NRUN=$((_SEC_NRUN + 1)); done
+    printf '部分執行：%d 節／共 %d 節\n' "$_SEC_NRUN" "${#_SEC_TITLES[@]}"
+    for _si in "${!_SEC_ON[@]}"; do [ "${_SEC_ON[$_si]}" = 1 ] && printf '  - %s\n' "${_SEC_TITLES[$_si]}"; done
+    [ "$_SEL_DRY" = 1 ] && exit 0
+elif [ "$_SEL_DRY" = 1 ]; then
+    printf '整套：%d 節\n' "$(grep -c '^section "' "${BASH_SOURCE[0]}")"
+    exit 0
+fi
 
 if ! command -v jq >/dev/null 2>&1; then
     echo "✗ 找不到 jq — hooks 會軟降級成不攔截，測試無意義。請先安裝 jq。"
@@ -80,6 +321,61 @@ w()  { printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$1"; }
 e()  { printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$1"; }
 b()  { jq -nc --arg c "$1" '{tool_name:"Bash",tool_input:{command:$c}}'; }
 p()  { jq -nc --arg t "$1" '{prompt:$t}'; }
+
+# 結尾統計。CI 與 check-counts --tests 用 regex 抓整套那行的「通過 N」；部分執行改用「通過數」，
+# 抓不到就不會被誤當成整套的案例數
+finish_tests() {
+    if [ "$_SEL_MODE" = 1 ]; then
+        printf '\n\033[1m部分執行（%d 節／共 %d 節，不是整套）\033[0m  通過數 %d ・ 失敗數 %d\n\n' \
+            "$_SEC_NRUN" "${#_SEC_TITLES[@]}" "$PASS" "$FAIL"
+    else
+        printf '\n\033[1m結果\033[0m  通過 %d ・ 失敗 %d\n\n' "$PASS" "$FAIL"
+    fi
+    [ "$FAIL" -eq 0 ] || exit 1
+    exit 0
+}
+
+# _hoist_defs <節內容> —— 只執行沒選中那節的頂層函式定義與純變數指派（理由見檔頭「選節」）。
+# 靠 bash 自己的 parser：把整節包成函式再 declare -f，輸出是正規化過的（頂層述句固定縮排 4 格），
+# 不必自己處理引號與 heredoc。變數只收「整行就是一個指派」的：`X=1 cmd` 這種前綴指派會執行
+# cmd，值裡有 $( 或反引號也會執行東西（`$(printf …)` 例外），兩者都不收。
+_hoist_defs() {
+    local __l __o="" __fn=0 __r
+    local __dq='"[^"]*"' __sq="'[^']*'" __bare='[^[:space:];"'"'"'`]*' __pf='\$\(printf [^`]*\)'
+    local __re="^    [A-Za-z_][A-Za-z0-9_]*=($__dq|$__sq|$__bare|$__pf);\$"
+    eval "__hoist_probe() {
+$1
+}" 2>/dev/null || { echo "✗ 節的內容解析失敗（bash -n 看看語法）" >&2; exit 2; }
+    while IFS= read -r __l; do
+        if [ "$__fn" = 1 ]; then
+            __o+="$__l"$'\n'
+            [[ $__l =~ ^\ {4}\}\;?$ ]] && __fn=0
+            continue
+        fi
+        if [[ $__l =~ ^\ {4}(function\ )?[A-Za-z_][A-Za-z0-9_]*\ \(\)\ *$ ]]; then
+            __fn=1; __o+="$__l"$'\n'; continue
+        fi
+        if [[ $__l =~ $__re ]]; then
+            __r=${__l/'$(printf '/}
+            case "$__r" in *'$('*|*'`'*) continue ;; esac
+            __o+="$__l"$'\n'
+        fi
+    done <<< "$(declare -f __hoist_probe)"
+    unset -f __hoist_probe
+    set +u; eval "$__o"; set -u
+}
+
+if [ "$_SEL_MODE" = 1 ]; then
+    for _si in "${!_SEC_TITLES[@]}"; do
+        if [ "${_SEC_ON[$_si]}" = 1 ]; then
+            section "${_SEC_TITLES[$_si]}"
+            eval "${_SEC_BODIES[$_si]}"
+        else
+            _hoist_defs "${_SEC_BODIES[$_si]}"
+        fi
+    done
+    finish_tests
+fi
 
 # =========================================================================
 section "pre-tool-use.sh — 任務模式閘門（無模式檔）"
@@ -1161,7 +1457,7 @@ expect_contains "訊息指向 testing-standards 的完整路徑"     ".claude/sk
 expect_contains "訊息給出 /deps 等的合法出口"               "# full-suite"                              "$FS_MSG"
 # worktree 裡的 /verify 不跑整套（commands/verify.md 步驟 4），訊息不能再把它列成合法出口
 expect_not_contains "訊息不再把 /verify 列為整套出口"       '`/verify`、`/deps`'                        "$FS_MSG"
-expect_contains "訊息說整套留給合併後"                      "整套留給合併回主 checkout 之後"            "$FS_MSG"
+expect_contains "訊息把「何時跑整套」指向 verify.md"       "什麼時候跑整套見 \`commands/verify.md\` 步驟 4" "$FS_MSG"
 expect_contains "訊息寫出逃生門"                            "FULL_SUITE_GATE=off"                       "$FS_MSG"
 expect_contains "vitest 給 vitest 的範例"                   "vitest run src/order/refund.test.ts"       "$(fs_msg 'npx vitest run')"
 
@@ -1186,6 +1482,21 @@ EOF')"
 expect_decision "commit 訊息提到 pytest → 放行"             allow "$(fs1 'git commit -m "test: uv run pytest 只跑相關檔"')"
 expect_decision "echo pytest → 放行"                        allow "$(fs1 'echo pytest')"
 [ -f "$FS_FLAG" ] && ng "放行的指令不寫標記" "無 .full-suite-warned" "有" || ok "放行的指令不寫標記"
+
+# ---- 本模板自己的 hook 測試：整套在 Windows 上約 50 分鐘，worktree 裡不帶參數就擋
+expect_decision "run-tests.sh 不帶參數 → 擋"                deny  "$(fs1 'bash .claude/hooks/tests/run-tests.sh')"
+expect_decision "run-tests.sh 接管線也擋"                   deny  "$(fs1 'bash .claude/hooks/tests/run-tests.sh 2>&1 | tail -5')"
+expect_decision "直接執行 ./…/run-tests.sh 也擋"            deny  "$(fs1 './.claude/hooks/tests/run-tests.sh')"
+expect_decision "run-tests.sh --changed <起點> → 放行"      allow "$(fs1 'bash .claude/hooks/tests/run-tests.sh --changed main')"
+expect_decision "run-tests.sh <節關鍵字> → 放行"            allow "$(fs1 'bash .claude/hooks/tests/run-tests.sh overview')"
+expect_decision "run-tests.sh # full-suite → 放行"          allow "$(fs1 'bash .claude/hooks/tests/run-tests.sh  # full-suite')"
+expect_decision "專案自己的 scripts/run-tests.sh 不管"      allow "$(fs1 'bash scripts/run-tests.sh')"
+expect_decision "run-tests.sh --full → 擋（它就是整套）"   deny  "$(fs1 'bash .claude/hooks/tests/run-tests.sh --changed main --full')"
+expect_decision "bash -x run-tests.sh → 擋"                 deny  "$(fs1 'bash -x .claude/hooks/tests/run-tests.sh')"
+expect_decision "nohup bash run-tests.sh … & → 擋"          deny  "$(fs1 'nohup bash .claude/hooks/tests/run-tests.sh > /tmp/t.log 2>&1 &')"
+expect_decision "引號包住的 run-tests.sh 路徑 → 擋"         deny  "$(fs1 'bash ".claude/hooks/tests/run-tests.sh"')"
+expect_decision "引號包住的路徑＋節關鍵字 → 放行"           allow "$(fs1 'bash ".claude/hooks/tests/run-tests.sh" overview')"
+expect_contains "run-tests.sh 的訊息給依改動挑節的範例"     "run-tests.sh --changed <起點>" "$(fs_msg 'bash .claude/hooks/tests/run-tests.sh')"
 
 # ---- deny-once（消耗性）
 rm -f "$FS_FLAG"
@@ -1215,6 +1526,103 @@ expect_decision "主 checkout：uv run pytest -q → 放行"      allow "$(fs 'u
 expect_decision "主 checkout：npm test → 放行"              allow "$(fs 'npm test' "$SANDBOX")"
 expect_decision "沒有 cwd 欄位 → 放行"                      allow "$(run pre-tool-use.sh "$(b 'uv run pytest -q')")"
 expect_decision "worktree 子目錄也認得是 worktree"          deny  "$(fs1 'uv run pytest -q' "$WT/src/deep")"
+reset
+
+# =========================================================================
+section "run-tests.sh 選節 — 關鍵字、依改動挑節、跳過的節只取定義"
+# =========================================================================
+# 對應表（_changed_rule）是 /verify 依改動挑節的唯一來源，挑錯的方向是「該跑的沒跑」——
+# 靜默的那種。這裡釘住每一類規則。
+#
+# hook 檔名刻意拆成兩段字串（"post-""write.sh"）：依改動挑節會選上「內文提到那支 hook」的節，
+# 本節若照寫檔名，改那支 hook 時本節也會被挑進去，而「沒有節提到」那條案例會永遠不成立。
+RT="$HOOK_DIR/tests/run-tests.sh"
+sel() { printf '%s\n' "$1" | bash "$RT" --changed - --dry-run 2>&1; }
+
+expect_contains "只改文件／範本 → 不跑 hook 測試" "不跑" \
+    "$(sel $'README.md\ndocs/a.md\n.claude/commands/verify.md\n.claude/templates/wbs.template.md\n.claude/ui/x/DESIGN.md')"
+SEL_PW=$(sel ".claude/hooks/post-""write.sh")
+expect_contains "改一支 hook → 部分執行"               "部分執行"                    "$SEL_PW"
+expect_contains "改一支 hook → 挑到標題是它的節"       "post-""write.sh — 文件影響偵測" "$SEL_PW"
+expect_contains "改一支 hook → 挑到只在內文提到它的節" "worktree 感知 — 狀態隔離邊界" "$SEL_PW"
+expect_contains "改一支 hook → 附帶全體 hooks 語法檢查" "全體 hooks — 語法與健壯性"   "$SEL_PW"
+expect_not_contains "改一支 hook → 不挑沒提到它的節"   "合併閘門 — 合併未驗證前"     "$SEL_PW"
+expect_contains "overview 的畫面範本 → 挑 overview 那節" "專案地圖" "$(sel .claude/templates/overview/index.html)"
+expect_contains "會被讀進沙箱的 .md 排在 *.md 規則之前" "session-""start.sh — 委派指示注入" \
+    "$(sel ".claude/skills/using-""taskmaster/SKILL.md")"
+expect_contains "hooks/lib/ 共用程式 → 整套"            "→ 整套" "$(sel .claude/hooks/lib/cmd-segments.sh)"
+expect_contains "run-tests.sh 本身、清單從 stdin 來 → 整套" "沒有起點可比行號" "$(sel .claude/hooks/tests/run-tests.sh)"
+expect_contains "settings.json → 整套"                  "→ 整套" "$(sel .claude/settings.json)"
+expect_contains "對應不到規則的檔 → 整套（保守）"       "→ 整套" "$(sel $'docs/a.md\n.gitattributes')"
+expect_contains "沒有節提到的 hook → 只跑語法檢查"      "只跑語法檢查" "$(sel ".claude/hooks/zz-no""body.sh")"
+expect_contains "改動清單是空的 → 不跑"                 "沒有改動檔"   "$(printf '' | bash "$RT" --changed - --dry-run 2>&1)"
+expect_contains "起點取不到 → 整套"                     "取不到改動清單" "$(bash "$RT" --changed zz-no-such-ref --dry-run 2>&1)"
+expect_contains "關鍵字選節 → 寫明部分執行節數"         "部分執行：1 節" "$(bash "$RT" '裸 cd' --dry-run 2>&1)"
+bash "$RT" zz-no-such-title --dry-run >/dev/null 2>&1
+expect_eq "關鍵字一節都對不到 → exit 2（不默默跑 0 節）" 2 "$?"
+expect_eq "--list 列出每一節" "$(grep -c '^section "' "$RT")" "$(bash "$RT" --list 2>/dev/null | grep -c .)"
+
+# 跳過的節只取定義：用一支迷你測試檔（本檔的框架＋四節）驗。
+# 節的內容用 printf 寫，不用 heredoc——heredoc 內行首的 section 會被本檔的切節當成真的節
+RT_FAKE="$SANDBOX/rtfake/tests/run-tests.sh"
+RT_PROBE="$SANDBOX/rtprobe"
+mkdir -p "${RT_FAKE%/*}" "$RT_PROBE"
+{ sed '/^section "/,$d' "$RT"
+  printf '%s\n' \
+    'section "甲 — 定義"' \
+    '# 甲-mark' \
+    'helper_a() { echo A; }' \
+    'VAR_A="va"' \
+    'HOIST_X=1 touch "$RT_PROBE/prefix-ran"' \
+    'VAR_B=$(touch "$RT_PROBE/subst-ran"; echo b)' \
+    'ok "甲"' \
+    'section "乙 — 使用"' \
+    '[ "$(helper_a 2>&1)" = A ] && ok "函式" || ng "函式" A "$(helper_a 2>&1)"' \
+    '[ "${VAR_A:-}" = va ] && ok "變數" || ng "變數" va "${VAR_A:-}"' \
+    '[ -z "${HOIST_X:-}" ] && ok "前綴指派不留下" || ng "前綴指派不留下" 空 "$HOIST_X"' \
+    'section "丙 — 獨立"' \
+    '# 丙-mark' \
+    'ok "丙"' \
+    'section "全體 hooks — 假"' \
+    'ok "全體"' \
+    'finish_tests'
+} > "$RT_FAKE"
+RT_OUT=$(RT_PROBE="$RT_PROBE" bash "$RT_FAKE" 乙 2>&1)
+expect_contains "跳過的節：後面的節拿得到它的函式與變數" "通過數 3 ・ 失敗數 0" "$RT_OUT"
+expect_contains "部分執行的結尾寫明節數"                 "部分執行（1 節／共 4 節" "$RT_OUT"
+printf '%s' "$RT_OUT" | grep -qE '通過 [0-9]' && ng "部分執行的結尾抓不到「通過 N」" "抓不到" "抓得到" \
+    || ok "部分執行的結尾抓不到「通過 N」（CI／check-counts 的 regex 不會誤讀）"
+[ -e "$RT_PROBE/prefix-ran" ] && ng "跳過的節：前綴指派的指令沒執行" "沒執行" "執行了" || ok "跳過的節：前綴指派的指令沒執行"
+[ -e "$RT_PROBE/subst-ran" ]  && ng "跳過的節：指派裡的 \$( ) 沒執行"  "沒執行" "執行了" || ok "跳過的節：指派裡的 \$( ) 沒執行"
+RT_OUT=$(RT_PROBE="$RT_PROBE" bash "$RT_FAKE" 2>&1)
+expect_contains "不帶參數照舊跑整套"                     "通過 6 ・ 失敗 0" "$RT_OUT"
+expect_not_contains "整套的結尾不寫部分執行"             "部分執行"         "$RT_OUT"
+
+# 改到本檔：用 git diff -U0 的行號只挑改到的節。迷你測試檔放進一個真的 repo
+RG="$SANDBOX/rtrepo"; RGF="$RG/.claude/hooks/tests/run-tests.sh"; RGW="$SANDBOX/rtwt"
+rgq() { git -C "$RG" -c user.email=t@t -c user.name=t "$@" >/dev/null 2>&1; }
+rg_sel() { bash "$RGF" --changed HEAD --dry-run 2>&1; }
+rg_edit() { sed -i "s/$1/$1 x/" "$RGF"; }   # 改一行
+rg_undo() { rgq checkout -- .claude/hooks/tests/run-tests.sh; }
+mkdir -p "${RGF%/*}"; cp "$RT_FAKE" "$RGF"
+rgq init -q; rgq add -A; rgq commit -qm init
+rg_edit '# 丙-mark'; RT_OUT=$(rg_sel); rg_undo
+expect_contains "改到本檔某一節 → 只挑那一節"            "改到「丙 — 獨立」" "$RT_OUT"
+expect_contains "改到本檔某一節 → 部分執行"              "部分執行"           "$RT_OUT"
+expect_not_contains "改到本檔某一節 → 不挑別的節"        "乙 — 使用"          "$RT_OUT"
+rg_edit '# 甲-mark'; RT_OUT=$(rg_sel); rg_undo
+expect_contains "改到定義 helper 的節 → 呼叫它的節一起挑" "乙 — 使用"         "$RT_OUT"
+rg_edit '# 隔離：所有測試'; RT_OUT=$(rg_sel); rg_undo
+expect_contains "改到框架（第一節之前）→ 整套"           "框架或結尾統計"     "$RT_OUT"
+
+# worktree 裡 --changed 判成整套：不默默跑，要 --full
+rgq worktree add -q "$RGW" -b rtwt
+RT_OUT=$(printf '.claude/hooks/lib/x.sh\n' | bash "$RGW/.claude/hooks/tests/run-tests.sh" --changed - 2>&1); rc=$?
+expect_eq "worktree 裡判成整套 → exit 3"                 3 "$rc"
+expect_contains "worktree 裡判成整套 → 說要加 --full"     "--full" "$RT_OUT"
+RT_OUT=$(printf '.claude/hooks/lib/x.sh\n' | RT_PROBE="$RT_PROBE" bash "$RGW/.claude/hooks/tests/run-tests.sh" --changed - --full 2>&1)
+expect_contains "加了 --full → 照跑整套"                  "通過 6 ・ 失敗 0" "$RT_OUT"
+rgq worktree remove --force "$RGW"; rm -rf "$RG" "$RGW"
 reset
 
 # =========================================================================
@@ -1456,8 +1864,25 @@ expect_decision "無關指令放行"                   allow "$(bg 'git status')
 MG_MSG=$(bg 'git merge --no-ff worktree-cart' | jq -r '.hookSpecificOutput.permissionDecisionReason')
 expect_contains "deny 訊息說中間合併只快檢"      "只快檢"       "$MG_MSG"
 expect_contains "deny 訊息說快檢通過也清清單"    "快檢通過也算" "$MG_MSG"
+expect_contains "deny 訊息把測試範圍指向 verify.md" "\`commands/verify.md\`「合併驗證關卡」" "$MG_MSG"
+
+# 本輪起點：合併**執行前**記下 HEAD（不事後讀會被 reset／rebase 改寫的 ORIG_HEAD）
+RS_FILE="$SANDBOX/.claude/taskmaster-data/.merge-round-start"
+rs_repo() { ( cd "$SANDBOX" && { [ -d .git ] || git init -q . ; } \
+    && { git rev-parse -q --verify HEAD >/dev/null || { echo x > seed && git add seed \
+         && git -c user.email=t@t -c user.name=t commit -qm init; }; } ) >/dev/null 2>&1; }
+reset; rs_repo; bg 'git merge --no-ff feature/x' >/dev/null
+expect_eq "合併前記下本輪起點（HEAD）"           "$(git -C "$SANDBOX" rev-parse HEAD 2>/dev/null)" "$(cat "$RS_FILE" 2>/dev/null)"
+reset; mkdir -p "${RS_FILE%/*}"; echo abc123 > "$RS_FILE"; bg 'git merge --no-ff feature/y' >/dev/null
+expect_eq "本輪起點已有內容不覆寫"               abc123 "$(cat "$RS_FILE" 2>/dev/null)"
+reset; bg 'git status' >/dev/null
+[ -e "$RS_FILE" ] && ng "不是合併的 git 指令不記起點" "無檔" "有" || ok "不是合併的 git 指令不記起點"
+reset; mkdir -p "$(dirname "$MP_FILE")"; echo '[merge] a' > "$MP_FILE"; bg 'git merge --no-ff feature/z' >/dev/null
+[ -e "$RS_FILE" ] && ng "被擋下的合併不記起點" "無檔" "有" || ok "被擋下的合併不記起點"
 reset
-expect_contains "合併成功訊息說最後一個才跑整套" "最後一個才跑整套" "$(pbash 'git merge --no-ff worktree-search')"
+PB_MSG=$(pbash 'git merge --no-ff worktree-search')
+expect_contains "合併成功訊息說中間只快檢" "中間的只快檢" "$PB_MSG"
+expect_contains "合併成功訊息把各驗什麼指向 verify.md" "\`commands/verify.md\`「合併驗證關卡」" "$PB_MSG"
 reset; mkdir -p "$(dirname "$MP_FILE")"; echo 'git merge --no-ff worktree-search' > "$MP_FILE"
 # 指令帶 --no-ff：關掉 MERGE_GATE 之後**下一道** lib 閘門（merge-noff-gate）
 # 仍然在線，裸的 `git merge x` 會被它擋下，那不是本案例要測的事。
@@ -3249,5 +3674,4 @@ for h in pre-tool-use.sh post-agent-report.sh user-prompt-submit.sh post-write.s
 done
 
 # =========================================================================
-printf '\n\033[1m結果\033[0m  通過 %d ・ 失敗 %d\n\n' "$PASS" "$FAIL"
-[ "$FAIL" -eq 0 ] || exit 1
+finish_tests
