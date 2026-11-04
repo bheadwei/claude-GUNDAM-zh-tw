@@ -4,10 +4,12 @@
 # 讀人寫的 md（架構文件 5.1 容器圖＋5.5 模組表、wbs.md、project.json）與 git 狀態，
 # 產生兩份衍生物。md 才是正本，這兩份隨時可以刪掉重產：
 #
-#   .claude/taskmaster-data/overview.md        進 git。確定性輸出：輸入沒變就 byte 相同，
-#                                              所以不含時間戳、不含「本次」與未 commit 的改動
-#   .claude/taskmaster-data/overview/data.js   不進 git（資料夾裡的 .gitignore 是 `*`）。
-#                                              給 overview/index.html 讀，含時間戳與本次改動
+#   .claude/taskmaster-data/overview/overview.md  確定性輸出：輸入沒變就 byte 相同，
+#                                                 所以不含時間戳、不含「本次」與未 commit 的改動
+#   .claude/taskmaster-data/overview/data.js      給 overview/index.html 讀，含時間戳與本次改動
+#
+# 兩份都不進 git（資料夾裡的 .gitignore 是 `*`）。overview.md 曾經進 git，但背景重產會讓
+# 主 checkout 剛 commit 完又冒出未 commit 的變更，撞上 git-workflow 第 1 條與 /pr 的前置檢查。
 #
 # 這支**不寫**任何模型會 Edit 的檔（wbs、plan、架構文件）：背景改那些檔會讓模型下一次
 # Edit 因「讀取後被改過」而失敗。
@@ -135,11 +137,11 @@ collect_changes() {
 # ---------------------------------------------------------------- 產生
 
 generate() {
-    local arch_rel arch_file wbs_file cur_task now
-    : > "$TMP/empty"
+    local arch_rel cur_task now
     arch_rel=$(find_arch)
-    arch_file="$TMP/empty"; [ -n "$arch_rel" ] && arch_file="$MAIN_ROOT/$arch_rel"
-    wbs_file="$TMP/empty"; [ -f "$DATA/wbs.md" ] && wbs_file="$DATA/wbs.md"
+    : > "$TMP/arch.md"; [ -n "$arch_rel" ] && cp -f "$MAIN_ROOT/$arch_rel" "$TMP/arch.md"
+    : > "$TMP/wbs.md"; [ -f "$DATA/wbs.md" ] && cp -f "$DATA/wbs.md" "$TMP/wbs.md"
+    cp -f "$DATA/project.json" "$TMP/proj.json" 2> "$TMP/err" || return 1
     cur_task=$(tr -d '[:space:]' < "$DATA/.current-task" 2>/dev/null)
     : > "$TMP/base"
     collect_changes | head -n $((MAX_CHANGES * 2)) > "$TMP/changes.tsv"
@@ -147,16 +149,19 @@ generate() {
 
     # 一支 jq 算完全部：資料是 data.js 的物件，overview.md 再由第二支 jq 從同一份物件產出，
     # 兩份圖不可能各說各話。
-    LC_ALL=C.UTF-8 jq -n -c \
-        --rawfile arch "$arch_file" --arg archPath "$arch_rel" \
-        --rawfile wbs "$wbs_file" \
-        --slurpfile proj "$DATA/project.json" \
-        --rawfile changes "$TMP/changes.tsv" --rawfile base "$TMP/base" \
+    # 輸入先複製進 TMP、在 TMP 裡用相對檔名給 jq：Windows 的 jq 1.8.1 遇到含非 ASCII 字元的
+    # 絕對路徑，--rawfile／--slurpfile／-f 一律「Could not open」（位置參數的輸入檔不受影響），
+    # 主 checkout 在 D:\模板\ 這類路徑時整張圖會靜默不產生。
+    ( cd "$TMP" && LC_ALL=C.UTF-8 jq -n -c \
+        --rawfile arch arch.md --arg archPath "$arch_rel" \
+        --rawfile wbs wbs.md \
+        --slurpfile proj proj.json \
+        --rawfile changes changes.tsv --rawfile base base \
         --arg current "$cur_task" --arg now "$now" --arg draftMark "$DRAFT_MARK" \
         --arg colsMod "$OVERVIEW_COLS_MODULE" --arg colsModOpt "$OVERVIEW_COLS_MODULE_OPT" \
         --arg colsWbs "$OVERVIEW_COLS_WBS" --arg colWbs "$OVERVIEW_COL_WBS" \
         --argjson maxChanges "$MAX_CHANGES" \
-        -f "$TMP/overview.jq" > "$TMP/data.json" 2>"$TMP/err" && [ -s "$TMP/data.json" ]
+        -f overview.jq > data.json 2> err ) && [ -s "$TMP/data.json" ]
 }
 
 # jq 程式與 bash 放在同一檔，用 heredoc 落到暫存檔再 jq -f（避免拆成兩個要一起改的檔）
@@ -439,8 +444,13 @@ JQ
 }
 
 run_once() {
-    # 失敗時保留上一份 data.js（畫面照常顯示舊資料），錯誤留在 .last-error 供除錯
+    # 兩份都在 TMP 產好才搬：任一步失敗都保留上一份 data.js／overview.md（畫面照常顯示舊資料），
+    # 錯誤留在 .last-error 供除錯。先搬 data.js 再算 md 的話，md 失敗時兩份會不同步。
     if ! generate; then cp -f "$TMP/err" "$OUT/.last-error" 2>/dev/null; return 1; fi
+    if ! ( cd "$TMP" && LC_ALL=C.UTF-8 jq -r -f md.jq data.json > overview.md 2> err ); then
+        { echo "overview.md 產生失敗（md.jq）："; cat "$TMP/err"; } > "$OUT/.last-error" 2>/dev/null
+        return 1
+    fi
     rm -f "$OUT/.last-error" 2>/dev/null
     {
         printf '// 給瀏覽器讀的資料，模型不要讀——要狀態請讀 wbs.md\n'
@@ -449,8 +459,7 @@ run_once() {
         printf 'window.OVERVIEW = %s;\n' "$(cat "$TMP/data.json")"
     } > "$TMP/data.js" && mv -f "$TMP/data.js" "$OUT/data.js"
 
-    LC_ALL=C.UTF-8 jq -r -f "$TMP/md.jq" "$TMP/data.json" > "$TMP/overview.md" 2>/dev/null \
-        && { cmp -s "$TMP/overview.md" "$DATA/overview.md" || mv -f "$TMP/overview.md" "$DATA/overview.md"; }
+    cmp -s "$TMP/overview.md" "$OUT/overview.md" || mv -f "$TMP/overview.md" "$OUT/overview.md"
 
     local tpl="$SCRIPT_DIR/../templates/overview/index.html"
     if [ -f "$tpl" ] && ! cmp -s "$tpl" "$OUT/index.html"; then
