@@ -3226,7 +3226,151 @@ printf -- '---\nwbs_task: "0.9"\nstatus: "✅ 完成"\nfiles:\n  - "src/api/old.
 tg_ov
 expect_eq "已歸檔的 plan 不進 plans[]，只計入模組的完成數" "plans/1.2-x.md 1" \
     "$(tgq '"\([.plans[].file] | join(",")) \(.modules[] | select(.id == "api") | .counts.archivedDone)"')"
+
+# ---- 階段 5：已歸檔完成數、大小上限、沒有 jq、畫不出地圖的提示、開 session 補產
+# wbs-archive.md：舊節沒有模組欄 → 歸「未標模組」；新節照模組欄；同一任務另有已歸檔 plan → 只算一次；
+# 沒有模組欄的那列有已歸檔 plan → 用 plan 的 files: 對模組；⏭️ 不算完成；WBS 還在的任務不重算。
+# 第二張表前面只有說明文字、沒有標題：驗「濾掉說明文字後兩張表不會黏成一張」
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳; mkdir -p "$TGD/plans/archive"
+{ echo "# WBS 歸檔"; echo; echo "## M0 舊節（還沒有模組欄）"; echo
+  echo "| # | 任務 | 狀態 | 優先 |"; echo "|---|---|---|---|"
+  echo "| 0.1 | 舊 a | ✅ 10-01 | 高 |"; echo "| 0.2 | 舊 b | ✅ 10-01 | 高 |"; echo "| 0.3 | 舊 c | ⏭️ 跳過 | 高 |"
+  echo; echo "中間的說明文字"; echo
+  echo "| # | 任務 | 模組 | 狀態 | 優先 | 實際 |"; echo "|---|---|---|---|---|---|"
+  echo "| 0.8 | 新 d | api | ✅ 10-02 | 高 | 1h |"; echo "| 0.9 | 新 e | api | ✅ 10-02 | 高 | 1h |"
+  echo "| 1.2 | 還在 WBS | api | ✅ 10-02 | 高 | 1h |"
+} > "$TGD/wbs-archive.md"
+for t in 0.9 0.2; do
+    printf -- '---\nwbs_task: "%s"\nstatus: "✅ 完成"\nfiles:\n  - "src/api/old.ts"\n---\n\n# 實作計畫：舊的\n' "$t" > "$TGD/plans/archive/$t-old.md"
+done
+tg_ov
+expect_eq "wbs-archive 舊節無模組欄不報錯；api 已歸檔完成 3（0.9 與 plan 去重、0.2 靠 plan 對到）、未標模組 1、共 4" \
+    "ok 3 1 4" "$([ -e "$TGO/.last-error" ] && echo err || echo ok) $(tgq '"\(.modules[] | select(.id == "api") | .counts.archivedDone) \(.archived.unmapped) \(.archived.done)"')"
+expect_contains "overview.md 說明已歸檔任務有幾個沒標模組" "1 個沒有標模組" "$(cat "$TGO/overview.md" 2>/dev/null)"
+
+# 改動超過 200 個：plan 與地圖都只列前 200（依檔名排序），其餘依第一層目錄彙總
+tg_reset; tg_plan 1.2-x.md 🔄 ⏳; mkdir -p "$TG/lib" "$TG/src/gen"
+for i in $(seq 1 100); do echo x > "$TG/lib/l$i.ts"; done
+for i in $(seq 1 150); do echo x > "$TG/src/gen/g$i.ts"; done
+tg_git add -A; tg_git commit -qm many; tg_ov
+expect_eq "250 個改動 → plan 列 200、其餘依第一層目錄彙總成 src/ 50 個（+50）、truncated" "200 src/:50:50 true" \
+    "$(tgp '"\(.changes | length) \([.changesRollup[] | "\(.dir):\(.files):\(.added)"] | join(","))"') $(tgq '.truncated')"
+expect_eq "地圖的本次改動同樣只列 200、其餘彙總" "200 50" "$(tgq '"\(.changes | length) \([.changesRollup[].files] | add)"')"
+expect_contains "overview.md 的任務圖列出彙總列" "未逐一列出" "$(cat "$TGO/overview.md" 2>/dev/null)"
+OVERVIEW_MAX_BYTES=20000 tg_ov
+expect_eq "data.js 超過 OVERVIEW_MAX_BYTES → 一級一級丟到放得下：plan 明細全改彙總（仍是 250 個）、notices 說明" "1 0 250 true" \
+    "$([ "$(wc -c < "$TGO/data.js")" -le 20000 ] && echo 1 || echo 0) $(tgp '.changes | length') $(tgp '[.changesRollup[].files] | add') $(tgq '[.notices[].text] | any(test("已省略"))')"
+expect_contains "大小上限只動 data.js：overview.md 仍列得出彙總前的計畫外部件" "＋ 計畫外" "$(cat "$TGO/overview.md" 2>/dev/null)"
+
+# 提案階段 5 驗收 1 的量級：300 個任務、20 份 plan、每份 500 個改動
+tg_reset
+OV_ROWS=(); for i in $(seq 1 300); do OV_ROWS+=("9.$i|api|⏳ 待處理"); done
+OVD="$TGD" ov_wbs "${OV_ROWS[@]}"
+for i in $(seq 1 20); do TP_TASK="9.$i" tg_plan "9.$i-p.md" 🔄 ⏳; done
+mkdir -p "$TG/src/big"; for i in $(seq 1 500); do echo x > "$TG/src/big/f$i.ts"; done
+tg_git add -A; tg_git commit -qm big; tg_ov
+expect_eq "300 任務・20 份 plan・每份 500 個改動 → data.js ≤ 512KB、truncated、20 份都是 changes ≤ 200 且明細＋彙總＝500" \
+    "1 true 20" "$([ "$(wc -c < "$TGO/data.js" 2>/dev/null || echo 999999999)" -le 524288 ] && echo 1 || echo 0) $(tgq '.truncated') $(tgq '[.plans[] | select((.changes | length) <= 200 and ((.changes | length) + ([.changesRollup[].files] | add // 0)) == 500)] | length')"
+
+# 沒有 jq：PATH 拿掉 jq 所在的目錄。jq 跟 bash 同一個目錄（Linux 的 /usr/bin）時，
+# 改放一個除了 jq 以外全部 symlink 過去的目錄頂替
+nojq_path() {
+    local d out="" farm="$SANDBOX/nojq-farm" parts
+    IFS=':' read -ra parts <<< "$PATH"
+    for d in "${parts[@]}"; do
+        if [ -e "$d/jq" ] || [ -e "$d/jq.exe" ]; then
+            if [ ! -d "$farm" ]; then
+                mkdir -p "$farm"
+                ln -s "$d"/* "$farm/" 2>/dev/null
+                rm -f "$farm/jq" "$farm/jq.exe"
+            fi
+            out="$out:$farm"
+        else
+            out="$out:$d"
+        fi
+    done
+    printf '%s' "${out#:}"
+}
+tg_reset; tg_plan 1.2-x.md 🔄 ⏳
+NOJQ_PATH=$(nojq_path)
+if env PATH="$NOJQ_PATH" "$BASH" -c 'command -v jq' >/dev/null 2>&1; then
+    ng "沒有 jq 的情境造不出來" "PATH 裡找不到 jq" "$(env PATH="$NOJQ_PATH" "$BASH" -c 'command -v jq')"
+else
+    env PATH="$NOJQ_PATH" "$BASH" "$TG/.claude/scripts/overview.sh" "$TG" >/dev/null 2>&1; rc=$?
+    expect_eq "沒有 jq → exit 0、data.js 只有 schema 1 與一則「需要 jq」、畫面照樣複製" "0 notices,schema 1 1 1" \
+        "$rc $(tgq 'keys | join(",")') $(tgq '.schema') $(tgq '[.notices[] | select(.text | startswith("需要 jq"))] | length') $(cmp -s "$OV_TPL" "$TGO/index.html" && echo 1 || echo 0)"
+    env PATH="$NOJQ_PATH" "$BASH" "$TG/.claude/scripts/overview.sh" --actual "$TGD/plans/1.2-x.md" --result PASS >/dev/null 2>&1; rc=$?
+    expect_eq "沒有 jq 時 --actual → exit 1（讓 /verify 知道沒寫）、plan 沒被動" "1 0" \
+        "$rc $(grep -c 'overview:actual:start' "$TGD/plans/1.2-x.md")"
+fi
+
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳
+tg_pp() { bash "$TG/.claude/scripts/overview.sh" --print-path "$TG" 2>/dev/null; }
+expect_eq "--print-path：有正式架構文件 → 只印路徑、沒有提示" 0 "$(tg_pp | grep -c '^提示：')"
+{ echo '<!-- overview: draft -->'; cat "$TG/docs/05_architecture.md"; } > "$SANDBOX/tg-arch.md" && mv "$SANDBOX/tg-arch.md" "$TG/docs/05_architecture.md"
+expect_contains "--print-path：架構是草稿 → 提示確認後移除標記" "是架構草稿" "$(tg_pp)"
+rm -f "$TG/docs/05_architecture.md"
+expect_contains "--print-path：找不到架構文件 → 提示委派 documentation-specialist 反推草稿" "documentation-specialist" "$(tg_pp)"
+printf '{"name":"x","mode":"demo"}\n' > "$TGD/project.json"
+expect_eq "--print-path：demo 沒有架構是正常的 → 不提示" 0 "$(tg_pp | grep -c '^提示：')"
 rm -rf "$SANDBOX/任務 圖"
+
+# 舊專案 update-template 之後還沒寫過 wbs／plan：開 session 就補產，使用者不用手動做任何事
+ov_reset; ov_proj; ov_arch; ov_wbs "1.1|api|✅ 11-01"
+out=$(run session-start.sh '{}' OVERVIEW_SYNC=1)
+expect_eq "有 project.json、還沒有 data.js → 開 session 就產生（stdout 仍是合法 JSON）" "1 1" \
+    "$(ovq '.schema') $(printf '%s' "$out" | jq -e . >/dev/null 2>&1 && echo 1 || echo 0)"
+echo sentinel > "$OVO/data.js"; touch -d '2000-01-01' "$SANDBOX/.claude/templates/overview/index.html"
+run session-start.sh '{}' OVERVIEW_SYNC=1 >/dev/null
+expect_eq "已經產過、畫面原檔沒有比較新 → 開 session 不重產" sentinel "$(cat "$OVO/data.js" 2>/dev/null)"
+touch -d '2099-01-01' "$SANDBOX/.claude/templates/overview/index.html"
+run session-start.sh '{}' OVERVIEW_SYNC=1 >/dev/null
+expect_eq "畫面原檔比現有的新（update-template 帶來新版畫面）→ 開 session 重產" 1 "$(ovq '.schema')"
+rm -f "$OVO/data.js"
+run session-start.sh '{}' OVERVIEW_SYNC=1 OVERVIEW=off >/dev/null
+[ ! -e "$OVO/data.js" ] && ok "OVERVIEW=off → 開 session 不補產" || ng "OVERVIEW=off → 開 session 不補產" "沒有 data.js" "有"
+
+# =========================================================================
+section "update-template — .gitignore 只補缺少的短命狀態行"
+# =========================================================================
+# 舊專案的 .gitignore 沒有後來新增的狀態檔（.last-verify 等）→ 會被 commit。
+# 用假模板跑（真模板整包同步太慢）：只放 update-template.sh、.gitignore、.worktreeinclude 與一個 agent
+UT_SRC="$HOOK_DIR/../../scripts/update-template.sh"
+UT_GI="$HOOK_DIR/../../.gitignore"
+if [ -f "$UT_SRC" ] && [ -f "$UT_GI" ]; then
+    for l in .full-suite-warned .last-verify .merge-round-open; do
+        grep -qxF ".claude/taskmaster-data/$l" "$UT_GI" && ok "模板 .gitignore 列了 $l" || ng "模板 .gitignore 列了 $l" "有這一行" "沒有"
+    done
+    UT="$SANDBOX/ut"; rm -rf "$UT"; mkdir -p "$UT/tpl/scripts" "$UT/tpl/.claude/agents" "$UT/dst/.claude" "$UT/dst2/.claude"
+    cp "$UT_SRC" "$UT/tpl/scripts/"; echo a > "$UT/tpl/.claude/agents/a.md"; echo x > "$UT/tpl/.worktreeinclude"
+    printf '# x\n.env\n.claude/taskmaster-data/.current-task\n.claude/taskmaster-data/.last-verify\n.claude/taskmaster-data/.merge-round-open\n.claude/taskmaster-data/.full-suite-warned\n.claude/worktrees/\n' > "$UT/tpl/.gitignore"
+    ut() { bash "$UT/tpl/scripts/update-template.sh" "$@" --no-backup </dev/null 2>&1; }
+    # 目標：CRLF、檔尾沒有換行、已經有 .current-task、還有一行自己的規則
+    printf 'node_modules/\r\n.claude/taskmaster-data/.current-task\r\nmy-rule' > "$UT/dst/.gitignore"
+    cp "$UT/dst/.gitignore" "$UT/gi-before"
+    out=$(ut "$UT/dst")
+    expect_contains "補上缺的三行並列出來" "已補 3 行" "$out"
+    expect_eq "原有內容一個 byte 都沒動（新內容只接在後面）" 0 \
+        "$(head -c "$(wc -c < "$UT/gi-before")" "$UT/dst/.gitignore" | cmp -s - "$UT/gi-before"; echo $?)"
+    expect_eq "補的是缺的那三行、已有的 .current-task 沒重複" "1 1 1 1" \
+        "$(for l in .current-task .last-verify .merge-round-open .full-suite-warned; do tr -d '\r' < "$UT/dst/.gitignore" | grep -cxF ".claude/taskmaster-data/$l"; done | paste -sd' ' -)"
+    UT_LINES=$(grep -c '' "$UT/dst/.gitignore"); UT_CR=$(tr -cd '\r' < "$UT/dst/.gitignore" | wc -c | tr -d ' ')
+    expect_eq "目標是 CRLF → 補的行也是 CRLF；原本檔尾沒換行的那行被補上換行" "0 my-rule" \
+        "$((UT_LINES - UT_CR)) $(tr -d '\r' < "$UT/dst/.gitignore" | sed -n '3p')"
+    cp "$UT/dst/.gitignore" "$UT/gi-after1"
+    out=$(ut "$UT/dst")
+    cmp -s "$UT/gi-after1" "$UT/dst/.gitignore" && expect_contains "再跑一次 → 已齊全、檔案不變" "已齊全" "$out" \
+        || ng "再跑一次 → 檔案不變" "cmp 相同" "$(diff "$UT/gi-after1" "$UT/dst/.gitignore" | head -5)"
+    ut "$UT/dst2" --dry-run >/dev/null
+    [ ! -e "$UT/dst2/.gitignore" ] && ok "--dry-run → 不寫" || ng "--dry-run → 不寫" "沒有 .gitignore" "有"
+    ut "$UT/dst2" --claude-only >/dev/null
+    [ ! -e "$UT/dst2/.gitignore" ] && ok "--claude-only → 不碰根目錄的 .gitignore" || ng "--claude-only → 不碰 .gitignore" "沒有 .gitignore" "有"
+    ut "$UT/dst2" >/dev/null
+    expect_eq "目標沒有 .gitignore → 建一份，只含這幾行" 4 "$(grep -c '^\.claude/taskmaster-data/' "$UT/dst2/.gitignore" 2>/dev/null)"
+    rm -rf "$UT"
+else
+    ok "（不是模板 repo，沒有 scripts/update-template.sh，略過）"
+fi
 
 # =========================================================================
 section "全體 hooks — 語法與健壯性"

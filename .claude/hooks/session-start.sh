@@ -368,6 +368,24 @@ fi
 
 log "ℹ️ TaskMaster 已初始化"
 
+# ============================================================================
+# 專案圖解：還沒產過（舊專案剛跑完 update-template、剛 clone），或畫面原檔比現有的新
+# （update-template 帶來新版畫面）→ 在背景產生一次，使用者不用先寫 wbs／plan 才看得到圖。
+# 常態只有兩個檔案測試（bash 內建，不開行程）。背景寫法與 post-write 的圖解觸發段相同
+# （理由見那裡）；不輸出任何東西。逃生門：OVERVIEW=off；OVERVIEW_SYNC=1 改前景（測試用）
+# ============================================================================
+_OV_SH="$CLAUDE_DIR/scripts/overview.sh"
+_OV_OUT="$_TM_DATA/overview"
+if [ "${OVERVIEW:-on}" != "off" ] && [ -f "$_OV_SH" ] \
+   && { [ ! -f "$_OV_OUT/data.js" ] || [ "$CLAUDE_DIR/templates/overview/index.html" -nt "$_OV_OUT/index.html" ]; }; then
+    if [ "${OVERVIEW_SYNC:-}" = "1" ]; then
+        bash "$_OV_SH" "$PROJECT_ROOT" </dev/null >/dev/null 2>&1
+    else
+        ( nohup bash "$_OV_SH" "$PROJECT_ROOT" </dev/null >/dev/null 2>&1 & )
+    fi
+    log "🗺️ 專案圖解尚未產生或畫面有新版，已在背景產生"
+fi
+
 # 有 WBS 就提示接續
 if [ -f "$_TM_DATA/wbs.md" ]; then
     log "📋 偵測到現有 WBS 任務清單"

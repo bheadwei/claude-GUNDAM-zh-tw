@@ -149,6 +149,39 @@ for f in "${SEED_ROOT_FILES[@]}"; do
   fi
 done
 
+# .gitignore 不能整份覆寫（專案自己加過規則、根目錄檔案沒備份），但模板新增的短命狀態檔
+# （.last-verify、.merge-round-open…）不補進去的話會被 commit。所以只做一件事：
+# 模板 .gitignore 裡 `.claude/taskmaster-data/` 開頭的行，目標沒有的才接在檔尾。
+# 既有的行一行都不動、不排序、不去重；換行符照目標原本的（CRLF 就補 CRLF）。update-template.ps1 要一致
+echo "▶ 補 .gitignore 的執行時短命狀態（只補缺少的行，不動既有的）..."
+if [ "$CLAUDE_ONLY" -eq 1 ]; then
+  echo "   ⏭  --claude-only：跳過"
+elif [ -f "$SOURCE/.gitignore" ]; then
+  GI="$DEST/.gitignore"
+  GI_HAVE=/dev/null; [ -f "$GI" ] && GI_HAVE="$GI"
+  # 用 FILENAME 分辨兩個檔，不用 NR == FNR：目標沒有 .gitignore 時第一個檔是空的 /dev/null，
+  # NR == FNR 會在整份模板 .gitignore 上成立，結果什麼都不補
+  GI_MISSING=$(awk 'FILENAME == ARGV[1] { sub(/[ \t\r]+$/, ""); have[$0] = 1; next }
+                    { sub(/[ \t\r]+$/, "") }
+                    /^\.claude\/taskmaster-data\// && !($0 in have) && !seen[$0]++' "$GI_HAVE" "$SOURCE/.gitignore")
+  if [ -z "$GI_MISSING" ]; then
+    echo "   ✓ 已齊全"
+  elif [ "$DRY_RUN" -eq 1 ]; then
+    printf '   [dry] 會補進 .gitignore：%s\n' "$(printf '%s' "$GI_MISSING" | tr '\n' ' ')"
+  else
+    GI_NL=$'\n'
+    # 用 tr 找 CR：Git Bash 的 grep 認 $'\r$' 不可靠
+    [ -f "$GI" ] && [ -n "$(tr -cd '\r' < "$GI" | head -c 1)" ] && GI_NL=$'\r\n'
+    {
+      # 檔尾沒有換行就先補一個，免得第一行接到別人的規則後面
+      [ -s "$GI" ] && [ -n "$(tail -c 1 "$GI")" ] && printf '%s' "$GI_NL"
+      printf '%s# 執行時短命狀態（update-template 補上；理由見模板的 .gitignore）%s' "$GI_NL" "$GI_NL"
+      printf '%s\n' "$GI_MISSING" | while IFS= read -r l; do printf '%s%s' "$l" "$GI_NL"; done
+    } >> "$GI"
+    printf '   ✚ 已補 %s 行：%s\n' "$(printf '%s\n' "$GI_MISSING" | wc -l | tr -d ' ')" "$(printf '%s' "$GI_MISSING" | tr '\n' ' ')"
+  fi
+fi
+
 echo "▶ MERGE 骨架目錄（保留執行資料）..."
 # 只補「骨架檔」：README.md、_*_TEMPLATE.md、以及各 area 的目錄與 .gitkeep。
 #
@@ -203,5 +236,7 @@ if [ "$DRY_RUN" -eq 0 ]; then
   echo ""
   echo "👉 下一步：到目標專案開 Claude Code 跑一次 /task-status"
   echo "   若 wbs.md 還是舊版面（沒有「現況」區），它會提議轉換成新版面（一次性遷移，長內容搬出不丟資料）"
+  echo "   專案圖解在開 session 時自動產生，/task-status 最後一行印畫面路徑；"
+  echo "   沒有架構文件時它會多印一行提示，說明怎麼請 documentation-specialist 反推草稿"
 fi
 echo ""

@@ -131,6 +131,18 @@ wbs-archive.md  已完成里程碑的完整任務列（含實際耗時，可回�
 編號**永不重用**，`/task-add` 會同時掃兩個檔決定新編號。
 `/task-status` 顯示「活躍 8 ・已歸檔 34」，`/time-log` 找不到任務時會回查歸檔。
 
+### 想看整體長什麼樣（專案圖解）
+
+`/task-status` 最後一行印出 `file:///…/taskmaster-data/overview/index.html`，瀏覽器打開有兩頁：
+**專案地圖**（架構文件的模組＋燈號＋本次改動）與**任務圖**（每份 plan 的部件做了沒、改了哪些檔）。
+不用手動重產——寫 wbs／plan／架構文件時 hook 在背景更新，畫面每 3 秒自己讀一次。
+兩份產物（`data.js`、`overview.md`）都不進 git。
+
+舊專案跑完 `update-template` 後，下一次開 session 就會自動產生第一份。
+沒有架構文件時只有任務圖，`/task-status` 會多印一行提示，問你要不要請
+`documentation-specialist` 從程式碼反推草稿；草稿確認前地圖不會出現。
+產生器與資料格式見 `.claude/scripts/overview.sh` 檔頭（唯一來源）。
+
 ### Ad-hoc 路徑（沒跑 /task-next，直接叫我改東西）
 
 這條路以前是斷的——沒人判級、也不會產計畫。現在由 hook 保證：
@@ -186,11 +198,11 @@ PreToolUse 閘門攔截（.current-task-mode 不存在）
 
 | 時機 | Hook | 做什麼 |
 |---|---|---|
-| Session 開始 | `session-start.sh` | **注入 `using-taskmaster`（強制委派指令）**、時間歸檔、模板偵測、log 輪替、jq 健檢 |
+| Session 開始 | `session-start.sh` | **注入 `using-taskmaster`（強制委派指令）**、時間歸檔、模板偵測、log 輪替、jq 健檢、專案圖解沒產過就在背景補產 |
 | 你送出訊息 | `user-prompt-submit.sh` | 依關鍵字路由：任務模式、**該委派哪個 agent（含 `subagent_type`）**、該載入哪個 skill |
 | 我要寫檔/跑 Bash | `pre-tool-use.sh` | **任務模式閘門**、**坑閘門**、模式檔 TTL 過期清除、裸 `cd` 攔截 |
 | Agent 完成 | `post-agent-report.sh` | 把 pending handoff 注入對話，提示接下一棒；**非同步啟動的 agent 記下報告期望，交由延後稽核** |
-| 寫檔後 | `post-write.sh` | 記錄 WBS 變更歷史；**文件影響偵測**（改到 API／schema／對外介面時記進 `.doc-impact` 並提醒一次） |
+| 寫檔後 | `post-write.sh` | 記錄 WBS 變更歷史；**文件影響偵測**（改到 API／schema／對外介面時記進 `.doc-impact` 並提醒一次）；寫 wbs／plan／架構文件時在背景重產專案圖解 |
 | Context 將壓縮 | `pre-compact.sh` | 自動快照 |
 
 ### 閘門的逃生門
@@ -433,11 +445,11 @@ worktree 裡連 plan 都沒有，agent 不知道要實作什麼。
 ## 改動 hook 之後
 
 ```bash
-bash .claude/hooks/tests/run-tests.sh        # 908 案例
-bash .claude/scripts/check-counts.sh --tests 908   # 文件計數一致性
+bash .claude/hooks/tests/run-tests.sh        # 937 案例
+bash .claude/scripts/check-counts.sh --tests 937   # 文件計數一致性
 ```
 
 CI（`.github/workflows/template-ci.yml`）會在 push 與 PR 時自動跑這兩項，
 加上 Windows/Git Bash 的回歸測試、shell 與 PowerShell 語法、copy/update-template 沙箱實跑。
 
-908 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
+937 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
