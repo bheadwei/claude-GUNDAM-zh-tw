@@ -80,7 +80,8 @@ STATUS: DONE | DONE_WITH_CONCERNS | NEEDS_CONTEXT | BLOCKED
 產出：<新增/修改的檔案路徑清單>
 commit：<你建立的 commit SHA，多個就都列>
 測試：<通過 N／失敗 M；失敗只列測試名＋一行錯誤；改到的檔的覆蓋率>
-摘要：<3 行內>
+摘要：<3 行內；第一行寫成一句話，主模型會原樣抄進帳本給任務圖顯示（長度限制見 subagent-execution 的「帳本要記什麼」）>
+部件：<plan 有「一眼看懂」部件表時，列出這階段做完的部件 id（例：p2, p3）；沒有表就寫「無」>
 疑慮：<DONE_WITH_CONCERNS 才填；沒有就寫「無」>
 ```
 

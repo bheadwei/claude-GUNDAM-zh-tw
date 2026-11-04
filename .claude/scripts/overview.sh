@@ -1,18 +1,20 @@
 #!/bin/bash
-# overview.sh — 專案圖解產生器（專案地圖）
+# overview.sh — 專案圖解產生器（專案地圖＋任務圖）
 #
-# 讀人寫的 md（架構文件 5.1 容器圖＋5.5 模組表、wbs.md、project.json）與 git 狀態，
-# 產生兩份衍生物。md 才是正本，這兩份隨時可以刪掉重產：
+# 讀人寫的 md（架構文件 5.1 容器圖＋5.5 模組表、wbs.md、plans/*.md 與帳本、project.json）與
+# git 狀態，產生兩份衍生物。md 才是正本，這兩份隨時可以刪掉重產：
 #
-#   .claude/taskmaster-data/overview/overview.md  確定性輸出：輸入沒變就 byte 相同，
-#                                                 所以不含時間戳、不含「本次」與未 commit 的改動
-#   .claude/taskmaster-data/overview/data.js      給 overview/index.html 讀，含時間戳與本次改動
+#   .claude/taskmaster-data/overview/overview.md  只反映主 checkout；輸入沒變就 byte 相同，
+#                                                 所以不含時間戳、不含「本次」標記
+#   .claude/taskmaster-data/overview/data.js      給 overview/index.html 讀，含時間戳、本次改動，
+#                                                 並疊上各 worktree 的 plan 進度（worktree overlay）
 #
 # 兩份都不進 git（資料夾裡的 .gitignore 是 `*`）。overview.md 曾經進 git，但背景重產會讓
 # 主 checkout 剛 commit 完又冒出未 commit 的變更，撞上 git-workflow 第 1 條與 /pr 的前置檢查。
 #
-# 這支**不寫**任何模型會 Edit 的檔（wbs、plan、架構文件）：背景改那些檔會讓模型下一次
-# Edit 因「讀取後被改過」而失敗。
+# 背景重產**不寫**任何模型會 Edit 的檔（wbs、plan、架構文件）：背景改那些檔會讓模型下一次
+# Edit 因「讀取後被改過」而失敗。唯一的例外是 --actual，它由 /verify 在前景明確呼叫，
+# 只改 plan 裡 overview:actual 標記區塊之內的文字。
 #
 # 主 checkout 用 git common dir 自己算，不信 CLAUDE_PROJECT_DIR：`claude -w` 開的 session 裡
 # 它指向 worktree（2026-11-04 實測），用它會把 overview 寫進 worktree。
@@ -20,27 +22,78 @@
 # 用法：
 #   bash .claude/scripts/overview.sh [<工作目錄>]                重產，不輸出任何東西
 #   bash .claude/scripts/overview.sh --print-path [<工作目錄>]   只印 index.html 的 file:// 路徑
+#   bash .claude/scripts/overview.sh --actual <plan> --result PASS|FAIL [--reason "<一句>"]
+#        把「計畫 vs 實際」寫進 plan 的標記區塊（再跑一次是取代，不會重複）並重產。FAIL 必須帶 reason
 #
 # 沒有 taskmaster-data/project.json（模板 repo 本身、還沒 /task-init 的專案）一律 exit 0、不建任何檔。
 # 逃生門：OVERVIEW=off
 
-# 欄名常數。check-counts.sh 會比對它們與 05 範本 5.5、wbs.template.md 的表頭；
-# 改那兩份範本的欄名時同步這裡，否則這支會靜默抽不到東西。
+# 欄名常數。check-counts.sh 會比對它們與 05 範本 5.5、wbs.template.md、plan-format 的表頭；
+# 改那幾份範本的欄名時同步這裡，否則這支會靜默抽不到東西。
 OVERVIEW_COLS_MODULE="id 路徑"          # 05 範本 5.5 模組表的必要欄
 OVERVIEW_COLS_MODULE_OPT="模組 職責"    # 05 範本 5.5 模組表的選用欄（顯示名稱、職責）
 OVERVIEW_COLS_WBS="# 任務 狀態"         # wbs.template.md 任務表的必要欄
 OVERVIEW_COL_WBS="模組"                 # wbs.template.md 任務表的模組欄
+OVERVIEW_COLS_PART="id 部件 階段 檔案"  # plan-format「一眼看懂」部件表的必要欄（驗收欄選用）
 
 DRAFT_MARK='<!-- overview: draft -->'
-LOCK_STALE_SEC=60
+LOCK_STALE_SEC=120                 # 要比 --actual 的等待（60 秒）長，否則等鎖的那支會搶走還活著的鎖
 MAX_CHANGES=200
 
-[ "${OVERVIEW:-on}" = "off" ] && exit 0
+ACTUAL_PLAN="" ACTUAL_RESULT="" ACTUAL_REASON="" PRINT_PATH=0
+case "${1:-}" in
+    --print-path) PRINT_PATH=1; shift ;;
+    --actual)
+        ACTUAL_PLAN="${2:-}"
+        if [ $# -ge 2 ]; then shift 2; else shift $#; fi
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                --result) ACTUAL_RESULT="${2:-}"; shift; [ $# -gt 0 ] && shift ;;
+                --reason) ACTUAL_REASON="${2:-}"; shift; [ $# -gt 0 ] && shift ;;
+                *) shift ;;
+            esac
+        done
+        [ -n "$ACTUAL_PLAN" ] || ACTUAL_PLAN="（沒給）" ;;
+esac
 
-PRINT_PATH=0
-if [ "${1:-}" = "--print-path" ]; then PRINT_PATH=1; shift; fi
-WORK_ROOT="${1:-$PWD}"
+die_actual() { printf 'overview.sh --actual：%s\n' "$1" >&2; exit 2; }
+
+# overview:actual 標記只能是零組或一組（start、end 各一行，start 在前）。印出壞在哪，正常時不印。
+# splice_actual 與 parse_plan 都靠這個假設：只有 start 時 awk 會從 start 跳到檔尾，把後面的內容整段刪掉。
+actual_markers_bad() {
+    awk '/^<!-- overview:actual:start/ { s++; if (!sl) sl = NR }
+         /^<!-- overview:actual:end/   { e++; if (!el) el = NR }
+         END {
+             if (s == 0 && e == 0) exit
+             if (s == 1 && e == 1 && sl < el) exit
+             printf "start %d 個（第一個在第 %d 行）、end %d 個（第一個在第 %d 行）", s, sl, e, el
+         }' "$1"
+}
+markers_msg() {
+    printf 'plan 的 overview:actual 標記壞了（%s），整份沒有寫入。\n修法：打開 %s，刪掉多餘或落單的 <!-- overview:actual:start/end --> 標記行，只留一組完整的（start 在前）；或全部刪掉，讓下一次 --actual 在檔尾重寫。' "$1" "$2"
+}
+
+if [ "${OVERVIEW:-on}" = "off" ]; then
+    [ -n "$ACTUAL_PLAN" ] && echo "overview.sh：OVERVIEW=off，沒有寫入「計畫 vs 實際」" >&2
+    exit 0
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)"
+
+if [ -n "$ACTUAL_PLAN" ]; then
+    [ -f "$ACTUAL_PLAN" ] || die_actual "找不到 plan 檔：$ACTUAL_PLAN"
+    case "$ACTUAL_RESULT" in PASS|FAIL) ;; *) die_actual "--result 要是 PASS 或 FAIL" ;; esac
+    [ "$ACTUAL_RESULT" = FAIL ] && [ -z "$ACTUAL_REASON" ] && die_actual 'FAIL 必須帶 --reason "<一句失敗原因>"'
+    ACTUAL_DIR=$(cd "$(dirname "$ACTUAL_PLAN")" 2>/dev/null && pwd) || die_actual "讀不到 plan 所在目錄"
+    ACTUAL_NAME=${ACTUAL_PLAN##*/}
+    case "$ACTUAL_DIR" in */.claude/taskmaster-data/plans) ;; *) die_actual "plan 要在 .claude/taskmaster-data/plans/ 底下（已歸檔的不寫）" ;; esac
+    ACTUAL_PLAN="$ACTUAL_DIR/$ACTUAL_NAME"
+    bad=$(actual_markers_bad "$ACTUAL_PLAN")
+    [ -z "$bad" ] || die_actual "$(markers_msg "$bad" "$ACTUAL_PLAN")"
+    WORK_ROOT="${ACTUAL_DIR%/.claude/taskmaster-data/plans}"
+else
+    WORK_ROOT="${1:-$PWD}"
+fi
 
 MAIN_ROOT=""
 GCD=$(git -C "$WORK_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
@@ -50,7 +103,10 @@ GCD=$(git -C "$WORK_ROOT" rev-parse --path-format=absolute --git-common-dir 2>/d
 
 DATA="$MAIN_ROOT/.claude/taskmaster-data"
 OUT="$DATA/overview"
-[ -f "$DATA/project.json" ] || exit 0
+if [ ! -f "$DATA/project.json" ]; then
+    [ -n "$ACTUAL_PLAN" ] && echo "overview.sh：沒有 taskmaster-data/project.json，沒有寫入「計畫 vs 實際」" >&2
+    exit 0
+fi
 
 if [ "$PRINT_PATH" -eq 1 ]; then
     p="$OUT/index.html"
@@ -59,15 +115,27 @@ if [ "$PRINT_PATH" -eq 1 ]; then
     exit 0
 fi
 
-command -v jq >/dev/null 2>&1 || exit 0
+command -v jq >/dev/null 2>&1 || { [ -n "$ACTUAL_PLAN" ] && echo "overview.sh：需要 jq" >&2; exit 0; }
 mkdir -p "$OUT" 2>/dev/null || exit 0
 [ -f "$OUT/.gitignore" ] || printf '*\n' > "$OUT/.gitignore"
+
+# --actual 寫的是哪一份 plan：主 checkout 的叫 main，worktree 的叫 worktree:<資料夾名>（與 overlay 同名）。
+# 用 git-dir 是否等於 common dir 判斷，不比路徑字串：Windows 的 8.3 短檔名（KUANWE~1）會讓同一個目錄比不相等。
+ACTUAL_SRC=""
+if [ -n "$ACTUAL_PLAN" ]; then
+    ACTUAL_SRC=main
+    gd=$(git -C "$WORK_ROOT" rev-parse --path-format=absolute --git-dir 2>/dev/null)
+    if [ -n "$gd" ] && [ "$gd" != "$GCD" ]; then
+        wr=$(git -C "$WORK_ROOT" rev-parse --show-toplevel 2>/dev/null)
+        ACTUAL_SRC="worktree:${wr##*/}"
+    fi
+fi
 
 # ---------------------------------------------------------------- 鎖
 #
 # 每次寫 wbs／plan 都會觸發，連續寫幾次就會有幾支同時跑。拿不到鎖的那支只留下 .dirty
-# 就走，由持鎖者做完後再跑一輪——不排隊、不丟更新。
-# 當掉的前一次會留下鎖，超過 LOCK_STALE_SEC 秒視為過期並接手。
+# 就走，由持鎖者做完後再跑一輪——不排隊、不丟更新。--actual 例外：它要寫 plan，不能
+# 讓位，所以最多等 60 秒。當掉的前一次會留下鎖，超過 LOCK_STALE_SEC（120）秒視為過期並接手。
 LOCK="$OUT/.lock"
 lock_age() {
     local at
@@ -85,8 +153,16 @@ take_lock() {
     return 1
 }
 if ! take_lock; then
-    : > "$OUT/.dirty" 2>/dev/null
-    exit 0
+    if [ -z "$ACTUAL_PLAN" ]; then
+        : > "$OUT/.dirty" 2>/dev/null
+        exit 0
+    fi
+    got=0
+    for ((i = 0; i < 120; i++)); do
+        sleep 0.5
+        take_lock && { got=1; break; }
+    done
+    [ "$got" -eq 1 ] || { echo "overview.sh --actual：等不到 overview/.lock（60 秒），沒有寫入" >&2; exit 1; }
 fi
 date +%s > "$LOCK/at" 2>/dev/null
 TMP="$OUT/.tmp-$$"
@@ -106,49 +182,153 @@ find_arch() {
     [ -f "$MAIN_ROOT/docs/tech-spec.md" ] && echo "docs/tech-spec.md"
 }
 
-# 本次改動：分支上已 commit 的＋工作區未 commit 的＋未追蹤的新檔。
-# 比較基準：站在預設分支上 → HEAD（只看未 commit 的）；站在 topic 分支 → 與預設分支的 merge-base。
-# 輸出 TSV：<added>\t<removed>\t<path>；未追蹤的新檔 added 帶 `+` 前綴。.claude/ 底下不算。
+# 一個來源（主 checkout 或某個 worktree）的改動，寫進 changes.tsv（以 \001C 標記行分段）。
+# 比較基準：
+#   主 checkout 站在預設分支上 → HEAD（只看未 commit 的）；站在 topic 分支 → 與預設分支的 merge-base；
+#   找不到預設分支 → 仍用 HEAD 畫地圖，但 kind=fallback，plan 不拿它當基準（見 changes_for）
+#   worktree → 與主 checkout 當前分支的 merge-base（那是它要合回去的地方）
+# 未追蹤的新檔另成一段，added 帶 `+` 前綴。.claude/ 底下不算。
+MAIN_BRANCH="" DEF_BRANCH=""
 collect_changes() {
-    local g=(git -C "$MAIN_ROOT" -c core.quotePath=false)
-    "${g[@]}" rev-parse -q --verify HEAD >/dev/null 2>&1 || return 0
-    local def cur base=HEAD
-    def=$("${g[@]}" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null)
-    if [ -z "$def" ]; then
-        for b in main master; do
-            "${g[@]}" show-ref -q --verify "refs/heads/$b" && { def=$b; break; }
-        done
+    local src="$1" root="$2"
+    local g=(git -C "$root" -c core.quotePath=false)
+    if ! "${g[@]}" rev-parse -q --verify HEAD >/dev/null 2>&1; then
+        printf '%s\tdefault\t\tnone\t\n' "$src" >> "$TMP/bases.tsv"
+        return 0
     fi
-    cur=$("${g[@]}" symbolic-ref -q --short HEAD 2>/dev/null)
-    if [ -n "$def" ] && [ -n "$cur" ] && [ "$cur" != "${def#origin/}" ]; then
-        base=$("${g[@]}" merge-base HEAD "$def" 2>/dev/null) || base=HEAD
-        [ -n "$base" ] || base=HEAD
+    local base=HEAD kind=head cur target
+    if [ "$src" = main ]; then
+        DEF_BRANCH=$("${g[@]}" symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null)
+        if [ -z "$DEF_BRANCH" ]; then
+            for b in main master; do
+                "${g[@]}" show-ref -q --verify "refs/heads/$b" && { DEF_BRANCH=$b; break; }
+            done
+        fi
+        cur=$("${g[@]}" symbolic-ref -q --short HEAD 2>/dev/null)
+        MAIN_BRANCH=$cur
+        target=$DEF_BRANCH
+        [ -n "$DEF_BRANCH" ] || kind=fallback
+        [ -n "$cur" ] && [ "$cur" = "${DEF_BRANCH#origin/}" ] && target=""
+    else
+        target=${MAIN_BRANCH:-$DEF_BRANCH}
+        [ -n "$target" ] || kind=fallback
     fi
-    printf '%s\n' "$("${g[@]}" rev-parse --short "$base" 2>/dev/null)" > "$TMP/base"
-    printf '%s\n' "${def:-}" >> "$TMP/base"
-    "${g[@]}" diff --numstat --no-renames "$base" -- . ':(exclude).claude' 2>/dev/null
-    # 新檔沒有 numstat：用一支 awk 數行數（逐檔開 wc 在 Windows 每個要上百毫秒）；空檔記 0
-    "${g[@]}" ls-files -z --others --exclude-standard -- . ':(exclude).claude' 2>/dev/null \
-        | head -z -n "$MAX_CHANGES" \
-        | ( cd "$MAIN_ROOT" && xargs -0 -r awk 'BEGIN { for (i = 1; i < ARGC; i++) seen[ARGV[i]] = 1 }
-              { n[FILENAME]++ } END { for (f in seen) printf "+%d\t0\t%s\n", n[f], f }' 2>/dev/null )
+    if [ -n "$target" ]; then
+        base=$("${g[@]}" merge-base HEAD "$target" 2>/dev/null) && [ -n "$base" ] && kind=merge-base \
+            || { base=HEAD; kind=fallback; }
+    fi
+    printf '%s\tdefault\t%s\t%s\t%s\n' "$src" "$("${g[@]}" rev-parse --short "$base" 2>/dev/null)" "$kind" "$DEF_BRANCH" >> "$TMP/bases.tsv"
+    {
+        printf '\001C\t%s\tdefault\n' "$src"
+        "${g[@]}" diff --numstat --no-renames "$base" -- . ':(exclude).claude' 2>/dev/null
+        printf '\001C\t%s\tuntracked\n' "$src"
+        # 新檔沒有 numstat：用一支 awk 數行數（逐檔開 wc 在 Windows 每個要上百毫秒）；空檔記 0
+        "${g[@]}" ls-files -z --others --exclude-standard -- . ':(exclude).claude' 2>/dev/null \
+            | head -z -n "$MAX_CHANGES" \
+            | ( cd "$root" && xargs -0 -r awk 'BEGIN { for (i = 1; i < ARGC; i++) seen[ARGV[i]] = 1 }
+                  { n[FILENAME]++ } END { for (f in seen) printf "+%d\t0\t%s\n", n[f], f }' 2>/dev/null )
+    } >> "$TMP/changes.tsv"
+}
+
+# 帳本第一個 BASE= 就是這份 plan 動工前的 commit（subagent-execution 的帳本格式）。
+# 用 bash 內建的 read 掃，不開行程；結果放在 LB。
+ledger_base() {
+    local l
+    LB=""
+    while IFS= read -r l; do
+        [[ $l =~ BASE=([0-9a-fA-F]{4,40}) ]] && { LB=${BASH_REMATCH[1]}; return; }
+    done < "$1"
+}
+
+# 一個來源的 plan、帳本、.current-task、改動。worktree 沒有 plan 也沒有 .current-task 就整個略過
+# （實驗用的 worktree 不該出現在圖上）。
+#
+# worktree 的 plan 只收「分出來之後動過」（相對它的 HEAD 與主 checkout HEAD 的 merge-base，含 commit、
+# staged、工作區改動）或「沒進版控」的檔：plans/ 進版控，每個 worktree 一建立就帶著一份建立當下的副本，
+# 沒動過的副本不是它在做的事（主 checkout 歸檔之後，舊 worktree 的副本會讓已完成的 plan 重新出現、
+# 還被猜成「本次」）。不比 worktree 的 HEAD：implementer 每完成一階段就連同 plan 一起 commit，
+# 比 HEAD 的話 plan 一 commit 就從任務圖消失。找不到 merge-base 才退回 HEAD。
+# --actual 指定的那一份例外，一定收。
+declare -A SEEN_BASE
+gather_source() {
+    local src="$1" root="$2" pd="$2/.claude/taskmaster-data/plans" f b ct="" L p
+    local -a plans=() ledgers=()
+    local -A pristine=()
+    if [ "$src" != main ]; then
+        local rel=.claude/taskmaster-data/plans
+        while IFS= read -r -d '' p; do
+            [ "${p%/*}" = "$rel" ] && pristine[${p##*/}]=1
+        done < <(git -C "$root" -c core.quotePath=false ls-files -z -- "$rel" 2>/dev/null)
+        local mhead fork
+        mhead=$(git -C "$MAIN_ROOT" rev-parse -q --verify HEAD 2>/dev/null)
+        [ -n "$mhead" ] && fork=$(git -C "$root" merge-base HEAD "$mhead" 2>/dev/null)
+        while IFS= read -r -d '' p; do
+            [ "${p%/*}" = "$rel" ] && unset 'pristine[${p##*/}]'
+        done < <(git -C "$root" -c core.quotePath=false diff -z --name-only "${fork:-HEAD}" -- "$rel" 2>/dev/null)
+    fi
+    for f in "$pd"/*.md; do
+        [ -f "$f" ] || continue
+        b=${f##*/}
+        case "$b" in INDEX.md|*.progress.md) continue ;; esac
+        if [ -n "${pristine[$b]:-}" ] && ! { [ "$src" = "$ACTUAL_SRC" ] && [ "$b" = "$ACTUAL_NAME" ]; }; then
+            continue
+        fi
+        plans+=("$b")
+        [ -f "$pd/${b%.md}.progress.md" ] && ledgers+=("${b%.md}.progress.md")
+    done
+    [ -f "$root/.claude/taskmaster-data/.current-task" ] && IFS= read -r ct < "$root/.claude/taskmaster-data/.current-task"
+    ct=${ct//[[:space:]]/}
+    [ "$src" = main ] || [ ${#plans[@]} -gt 0 ] || [ -n "$ct" ] || return 0
+    [ -n "$ct" ] && printf '%s\t%s\n' "$src" "$ct" >> "$TMP/currents.tsv"
+    if [ ${#plans[@]} -gt 0 ]; then
+        ( cd "$pd" && stat -c "$src"$'\t''%Y'$'\t''%n' -- "${plans[@]}" ) >> "$TMP/mtimes.tsv" 2>/dev/null
+        ( cd "$pd" && awk -v s="$src" 'FNR == 1 { print "\001F\t" s "\t" FILENAME } { print }' "${plans[@]}" "${ledgers[@]}" ) >> "$TMP/bundle.txt" 2>/dev/null
+    fi
+    collect_changes "$src" "$root"
+    for L in "${ledgers[@]}"; do
+        ledger_base "$pd/$L"
+        [ -n "$LB" ] || continue
+        printf '%s\t%s\t%s\n' "$src" "${L%.progress.md}.md" "$LB" >> "$TMP/planbase.tsv"
+        [ -n "${SEEN_BASE[$src|$LB]:-}" ] && continue
+        SEEN_BASE[$src|$LB]=1
+        local out
+        # BASE 不是有效的 commit → 不寫這段，changes_for 會退回預設基準
+        if out=$(git -C "$root" -c core.quotePath=false diff --numstat --no-renames "$LB" -- . ':(exclude).claude' 2>/dev/null); then
+            { printf '\001C\t%s\t%s\n' "$src" "$LB"; [ -n "$out" ] && printf '%s\n' "$out"; } >> "$TMP/changes.tsv"
+        fi
+    done
+}
+
+gather() {
+    local f wt
+    for f in bundle.txt mtimes.tsv changes.tsv bases.tsv currents.tsv planbase.tsv archive.txt; do : > "$TMP/$f"; done
+    SEEN_BASE=()
+    gather_source main "$MAIN_ROOT"
+    while IFS= read -r wt; do
+        [ -n "$wt" ] && [ -d "$wt" ] || continue
+        gather_source "worktree:${wt##*/}" "$wt"
+    done < <(git -C "$MAIN_ROOT" worktree list --porcelain 2>/dev/null \
+             | awk '/^worktree / { n++; if (n > 1) { sub(/^worktree /, ""); print } }')
+    # 已歸檔的 plan 只讀 frontmatter（數量會一直長，不整份讀）
+    if compgen -G "$DATA/plans/archive/*.md" >/dev/null; then
+        ( cd "$DATA/plans/archive" && awk 'FNR == 1 { fm = 0; print "\001A\t" FILENAME }
+              /^---[[:space:]]*$/ { fm++; if (fm == 2) nextfile; next } fm == 1 { print }' *.md ) > "$TMP/archive.txt" 2>/dev/null
+    fi
 }
 
 # ---------------------------------------------------------------- 產生
 
 generate() {
-    local arch_rel cur_task now
+    local arch_rel now
     arch_rel=$(find_arch)
     : > "$TMP/arch.md"; [ -n "$arch_rel" ] && cp -f "$MAIN_ROOT/$arch_rel" "$TMP/arch.md"
     : > "$TMP/wbs.md"; [ -f "$DATA/wbs.md" ] && cp -f "$DATA/wbs.md" "$TMP/wbs.md"
     cp -f "$DATA/project.json" "$TMP/proj.json" 2> "$TMP/err" || return 1
-    cur_task=$(tr -d '[:space:]' < "$DATA/.current-task" 2>/dev/null)
-    : > "$TMP/base"
-    collect_changes | head -n $((MAX_CHANGES * 2)) > "$TMP/changes.tsv"
+    gather
     now=$(date '+%Y-%m-%dT%H:%M:%S.%3N%:z')
 
-    # 一支 jq 算完全部：資料是 data.js 的物件，overview.md 再由第二支 jq 從同一份物件產出，
-    # 兩份圖不可能各說各話。
+    # 一支 jq 算完全部，輸出兩行：第 1 行是 data.js 的物件（疊上 worktree），第 2 行是只看主 checkout
+    # 的那份、給 overview.md 用。兩份圖由同一段程式算出，不可能各說各話。
     # 輸入先複製進 TMP、在 TMP 裡用相對檔名給 jq：Windows 的 jq 1.8.1 遇到含非 ASCII 字元的
     # 絕對路徑，--rawfile／--slurpfile／-f 一律「Could not open」（位置參數的輸入檔不受影響），
     # 主 checkout 在 D:\模板\ 這類路徑時整張圖會靜默不產生。
@@ -156,17 +336,26 @@ generate() {
         --rawfile arch arch.md --arg archPath "$arch_rel" \
         --rawfile wbs wbs.md \
         --slurpfile proj proj.json \
-        --rawfile changes changes.tsv --rawfile base base \
-        --arg current "$cur_task" --arg now "$now" --arg draftMark "$DRAFT_MARK" \
+        --rawfile bundle bundle.txt --rawfile mtimes mtimes.tsv --rawfile changes changes.tsv \
+        --rawfile bases bases.tsv --rawfile planbase planbase.tsv --rawfile currents currents.tsv \
+        --rawfile archive archive.txt \
+        --arg now "$now" --arg draftMark "$DRAFT_MARK" \
         --arg colsMod "$OVERVIEW_COLS_MODULE" --arg colsModOpt "$OVERVIEW_COLS_MODULE_OPT" \
-        --arg colsWbs "$OVERVIEW_COLS_WBS" --arg colWbs "$OVERVIEW_COL_WBS" \
+        --arg colsWbs "$OVERVIEW_COLS_WBS" --arg colWbs "$OVERVIEW_COL_WBS" --arg colsPart "$OVERVIEW_COLS_PART" \
+        --arg vSrc "$ACTUAL_SRC" --arg vFile "${ACTUAL_PLAN:+$ACTUAL_NAME}" --arg vResult "$ACTUAL_RESULT" \
+        --arg vReason "$ACTUAL_REASON" --arg vAt "$(date '+%m-%d %H:%M')" \
         --argjson maxChanges "$MAX_CHANGES" \
-        -f overview.jq > data.json 2> err ) && [ -s "$TMP/data.json" ]
+        -f overview.jq > out.json 2> err ) || return 1
+    local l1="" l2=""
+    { IFS= read -r l1; IFS= read -r l2; } < "$TMP/out.json"
+    [ -n "$l1" ] && [ -n "$l2" ] || { echo "overview.jq 沒有輸出兩行" >> "$TMP/err"; return 1; }
+    printf '%s\n' "$l1" > "$TMP/data.json"
+    printf '%s\n' "$l2" > "$TMP/md.json"
+    DATA_LINE=$l1
 }
 
-# jq 程式與 bash 放在同一檔，用 heredoc 落到暫存檔再 jq -f（避免拆成兩個要一起改的檔）
-write_jq() {
-cat > "$TMP/overview.jq" <<'JQ'
+# jq 程式與 bash 放在同一檔，存在變數裡、要用時才寫成暫存檔再 jq -f（避免拆成兩個要一起改的檔）
+IFS= read -r -d '' JQ_MAIN <<'JQ'
 def trim: gsub("^\\s+|\\s+$"; "");
 def unq: trim | if test("^\".*\"$") then .[1:-1] else . end;
 def unbt: gsub("`"; "") | trim;
@@ -179,6 +368,8 @@ def heading: test("^#{1,6}\\s");
 def htext: sub("^#+\\s*"; "") | trim;
 def words: split(" ") | map(select(. != ""));
 def blank: . == null or . == "" or . == "—" or . == "-" or test("^\\[.*\\]$");
+def splitlist: split("[,，、]"; null) | map(unbt) | map(select(blank | not));
+def tsv: lines | map(select(. != "") | split("\t"));
 
 # Markdown 表格：[{h: 所在標題, header: [...], rows: [[...]]}]；程式碼區塊裡的不算
 def tables:
@@ -193,6 +384,15 @@ def tables:
     else .prev = $l end)
   | .out;
 def rowobj($header): . as $r | reduce range(0; $header | length) as $i ({}; .[$header[$i]] = ($r[$i] // ""));
+
+# 合併檔（bash 用 \001<tag>\t<欄>… 分段）拆成 [{head: [...], text}]
+def chunks($tag):
+  ("\u0001" + $tag + "\t") as $m
+  | reduce lines[] as $l ([];
+      if ($l | startswith($m)) then . + [{head: ($l | ltrimstr($m) | split("\t")), lines: []}]
+      elif length > 0 then .[-1].lines += [$l]
+      else . end)
+  | map({head, text: (.lines | join("\n"))});
 
 # ---- mermaid（只支援子集：subgraph、id[...]／id[(...)]／id((...))、a --> b、a -->|x| b、a -.-> b、a & b --> c）
 def mermaid_blocks:
@@ -252,6 +452,9 @@ def glob2re:
 def tstate: if test("✅") then "done" elif test("🔄") then "wip" elif test("🚫") then "blocked"
             elif test("⏭") then "skip" else "todo" end;
 def temoji: {done: "✅", wip: "🔄", blocked: "🚫", skip: "⏭️", todo: "⏳"}[.];
+# plan 階段標題的狀態（plan-format：⏳ 未開始／🔄 進行中／✅ 完成）
+def pstate: if test("✅") then "done" elif test("🔄") then "wip" else "planned" end;
+def strip_state: sub("\\s*(✅|🔄|⏳|🚫|❌|⏭️?)\\s*$"; "");
 
 # 燈號規則唯一來源：.claude/templates/wbs.template.md 第 3 節「里程碑狀態」
 def modstatus:
@@ -262,8 +465,52 @@ def modstatus:
     elif any($s[]; . == "blocked") then "issue"
     else "todo" end;
 
+# ---- plan 檔：frontmatter、標題、階段、「一眼看懂」部件表、overview:actual 區塊裡的驗證結果。
+# 解析時先把 actual 區塊拿掉，免得它自己寫出來的表格被當成輸入。
+def parse_plan($needPart):
+  lines as $L
+  | (if (($L[0] // "") | trim) == "---" then ([range(1; $L | length) | select(($L[.] | trim) == "---")] | first) else null end) as $e
+  | (if $e != null then $L[1:$e] else [] end) as $F
+  | (if $e != null then $L[$e + 1:] else $L end) as $B
+  | (reduce $F[] as $l ({fm: {}, files: [], inF: false};
+       if ($l | test("^[A-Za-z_]+:")) then
+         ($l | capture("^(?<k>[A-Za-z_]+):\\s*(?<v>.*)$")) as $c
+         | .inF = ($c.k == "files")
+         | .fm[$c.k] = ($c.v | sub("\\s+#.*$"; "") | unq)
+         | if $c.k == "files" and (.fm.files | startswith("[")) then .files += ((.fm.files | fromjson?) // []) else . end
+       elif .inF and ($l | test("^\\s+-")) then .files += [$l | sub("^\\s+-\\s*"; "") | sub("\\s+#.*$"; "") | unq]
+       else . end)) as $H
+  # 與 actual_markers_bad 同一條假設：start、end 各一行且 start 在前才算有區塊；不成對就當作沒有
+  | ([range(0; $B | length) | select($B[.] | test("^<!-- overview:actual:start"))]) as $as
+  | ([range(0; $B | length) | select($B[.] | test("^<!-- overview:actual:end"))]) as $ae
+  | (if ($as | length) == 1 and ($ae | length) == 1 and $as[0] < $ae[0]
+     then {body: ($B[:$as[0]] + $B[$ae[0] + 1:]), blk: $B[$as[0] + 1:$ae[0]]}
+     else {body: ($B | map(select(test("^<!-- overview:actual:(start|end)") | not))), blk: []} end) as $S
+  | ([$S.blk[] | capture("^驗證：\\s*(✅|❌)?\\s*(?<r>PASS|FAIL)\\s*(（(?<at>[^）]*)）)?\\s*(—\\s*(?<reason>.*))?$")] | first) as $v
+  | {fm: $H.fm, files: $H.files,
+     title: ([$S.body[] | select(test("^#\\s")) | sub("^#\\s+"; "") | sub("^實作計畫[:：]\\s*"; "")] | first),
+     phases: ([$S.body[] | select(test("^###\\s*階段\\s*\\d"))
+               | capture("^###\\s*階段\\s*(?<n>\\d+)[^:：\\s]*\\s*[:：]?\\s*(?<rest>.*)$")
+               | {n: (.n | tonumber), name: (.rest | strip_state | trim), state: (.rest | pstate)}] | unique_by(.n)),
+     partsTable: ([$S.body | join("\n") | tables[] | select(.header as $h | all($needPart[]; . as $c | $h | index($c)))] | first),
+     verify: (if $v then {result: $v.r, at: $v.at, reason: (($v.reason // "") | trim | if . == "" then null else . end)} else null end)};
+
+# ---- 帳本：每個階段最後一筆「階段完成」行的 摘要=／測試=，以及「部件 pN 完成」行（格式見 subagent-execution）
+def parse_ledger:
+  reduce lines[] as $l ({ph: null, phase: {}, part: {}};
+    if ($l | test("^##\\s*階段\\s*\\d")) then .ph = ($l | capture("階段\\s*(?<n>\\d+)").n)
+    else
+      {s: ([$l | capture("摘要=(?<s>[^｜|]*)") | .s | trim] | first),
+       t: ([$l | capture("測試=(?<t>[^｜|\\s]*)") | .t] | first)} as $x
+      | if $x.s == null and $x.t == null then .
+        elif ($l | test("部件\\s*[A-Za-z0-9_-]+\\s*完成")) then .part[$l | capture("部件\\s*(?<p>[A-Za-z0-9_-]+)\\s*完成").p] = $x
+        elif ($l | test("階段完成")) and .ph != null then .phase[.ph] = $x
+        else . end
+    end);
+
 ($proj[0] // {}) as $p
 | ($colsMod | words) as $needMod
+| ($colsPart | words) as $needPart
 | ($colWbs) as $wcol
 | ($p.mode // "none") as $mode
 | ($archPath != "") as $hasArch
@@ -276,7 +523,7 @@ def modstatus:
    end) as $mt
 | ([$mt // empty | .header as $h | .rows[] | rowobj($h)
     | {id: (.id | unbt), name: ((.["模組"] // "") | unbt),
-       paths: ((.["路徑"] // "") | split("[,，、]"; null) | map(unbt) | map(select(blank | not))),
+       paths: ((.["路徑"] // "") | splitlist),
        responsibility: ((.["職責"] // "") | trim)}
     | select(.id | blank | not)]) as $rows
 
@@ -299,61 +546,161 @@ def modstatus:
       | {id, name: (if .name == "" then .id else .name end), group: "_ungrouped", shape: "box",
          paths, responsibility, declared: true}]) as $mods0
 | ([$mods0[].id]) as $modIds
+| ([$mods0[] | {id, res: [.paths[] | glob2re]}]) as $res
+| def modof: . as $f | [$res[] | select(any(.res[]; . as $r | $f | test($r))) | .id] | first // null;
+  # plan files: 的 glob 對模組：萬用字元換成一般字元再比對（寬鬆側誤差，只用來找「碰到哪些模組」）
+  def globmod: gsub("\\*\\*"; "x") | gsub("[*?]"; "x") | modof;
 
 # ---- WBS 任務：表頭有 # 任務 狀態 的表，依表頭找欄（舊節少欄也照讀）
-| ($colsWbs | words) as $needWbs
+  ($colsWbs | words) as $needWbs
 | ([$wbs | tables[] | select(.header as $h | all($needWbs[]; . as $c | $h | index($c)))]) as $wt
 | ([$wt[] | .h as $ms | (.header | index($wcol) != null) as $hasCol | .header as $h | .rows[] | rowobj($h)
     | select(.["#"] | unbt | blank | not)
     | (.["狀態"] | tstate) as $st
     | {id: (.["#"] | unbt), title: (.["任務"] | trim), status: ($st | temoji), state: $st,
        milestone: $ms, hasCol: $hasCol,
-       modules: (if $hasCol then (.[$wcol] | split("[,，、]"; null) | map(unbt) | map(select(blank | not))) else [] end)}]) as $tasks0
+       modules: (if $hasCol then (.[$wcol] | splitlist) else [] end)}]) as $tasks0
 | ([$tasks0[] | .modules |= map(select(. as $m | $modIds | index($m)))]) as $tasks
 | ([$tasks0[] | .id as $t | .modules[] | select(. as $m | $modIds | index($m) | not) | "\($t)（\(.)）"]) as $unknownMods
 | ($tasks0 | map(select(.hasCol | not)) | length) as $noColCount
 
-# ---- 本次改動
-| ($base | split("\n")) as $baseL
-| ([$changes | lines[] | select(. != "") | split("\t") | select(length >= 3)
-    | {file: (.[2:] | join("\t")),
-       added: (.[0] | ltrimstr("+") | tonumber? // null),
-       removed: (.[1] | tonumber? // null),
-       new: (.[0] | startswith("+"))}]
-   | unique_by(.file)) as $ch0
-| ([$mods0[] | {id, res: [.paths[] | glob2re]}]) as $res
-| ([$ch0[:$maxChanges][] | .file as $f
-    | . + {module: ([$res[] | select(any(.res[]; . as $r | $f | test($r))) | .id] | first // null)}]) as $changesList
+# ---- 改動與比較基準（bash 收集，見 collect_changes／gather_source）
+| ($changes | chunks("C") | map({key: (.head[0] + "|" + .head[1]),
+    value: [.text | lines[] | select(. != "") | split("\t") | select(length >= 3)
+            | {file: (.[2:] | join("\t")),
+               added: (.[0] | ltrimstr("+") | tonumber? // null),
+               removed: (.[1] | tonumber? // null),
+               new: (.[0] | startswith("+"))}]}) | from_entries) as $CH
+| ($bases | tsv | map({key: (.[0] + "|" + .[1]), value: {short: (.[2] // ""), kind: (.[3] // "none"), def: (.[4] // "")}}) | from_entries) as $BS
+| ($planbase | tsv | map({key: (.[0] + "|" + .[1]), value: .[2]}) | from_entries) as $PB
+| ($mtimes | tsv | map({key: (.[0] + "|" + (.[2:] | join("\t"))), value: (.[1] | tonumber? // 0)}) | from_entries) as $MT
+| ($bundle | chunks("F")) as $FILES
+| ([$FILES[] | select(.head[1] | endswith(".progress.md"))
+    | {key: (.head[0] + "|" + (.head[1] | sub("\\.progress\\.md$"; ".md"))), value: (.text | parse_ledger)}] | from_entries) as $LG
 
-# ---- 模組燈號與版面
-| ($mods0 | map(
-    .id as $id
-    | [$tasks[] | select(.modules | index($id))] as $own
-    | [$own[].state] as $s
-    | ($s | modstatus) as $status
-    | ([$own[] | select(.state == "done")] | length) as $done
-    | ([$own[] | select(.state != "skip")] | length) as $total
-    | . + {status: $status,
-           statusReason: (if ($own | length) == 0 then "WBS 沒有任務掛在這個模組"
-             else "\($done)/\($total) 完成"
-               + ([$own[] | select(.state == "wip") | .id] | if length > 0 then "；\(join("、")) 進行中" else "" end)
-               + ([$own[] | select(.state == "blocked") | .id] | if length > 0 then "；\(join("、")) 阻塞" else "" end)
-             end),
-           counts: {done: $done, total: $total},
-           tasks: [$own[].id],
-           current: ($current != "" and ([$own[].id] | index($current) != null)),
-           changed: ([$changesList[] | select(.module == $id)] | length)})) as $mods1
+# plan 的比較基準：帳本的 BASE → 該來源的預設基準（merge-base）→ 都沒有就沒有改動清單
+| def srcchanges($s): (($CH[$s + "|default"] // []) + ($CH[$s + "|untracked"] // [])) | unique_by(.file);
+  def changes_for($src; $name):
+    ($PB[$src + "|" + $name]) as $lb
+    | if $lb != null and $CH[$src + "|" + $lb] != null then
+        {base: $lb[:7], list: ((($CH[$src + "|" + $lb] // []) + ($CH[$src + "|untracked"] // [])) | unique_by(.file))}
+      else ($BS[$src + "|default"] // {kind: "none"}) as $d
+        | if $d.kind == "none" or $d.kind == "fallback" then {base: null, list: []}
+          else {base: $d.short, list: srcchanges($src)} end
+      end;
 
-| ((($dg // {}).groups // []) | map(select(.id as $g | $mods1 | any(.group == $g)))
-   + (if any($mods1[]; .group == "_ungrouped") then [{id: "_ungrouped", label: "未分組"}] else [] end)) as $groups
+  def build_plan($rec):
+    ($rec.text | parse_plan($needPart)) as $pp
+    | ($LG[$rec.src + "|" + $rec.name] // {phase: {}, part: {}}) as $lg
+    | changes_for($rec.src; $rec.name) as $cf
+    | (if $vSrc == $rec.src and $vFile == $rec.name
+       then {result: $vResult, at: $vAt, reason: (if $vReason == "" then null else ($vReason | gsub("[\r\n]+"; " ")) end)}
+       else $pp.verify end) as $verify
+    | ($verify.result // "") as $vr
+    | ([($pp.partsTable // {header: [], rows: []}) | .header as $h | .rows[] | rowobj($h)
+        | {id: (.id | unbt), name: ((.["部件"] // "") | trim), phase: ((.["階段"] // "") | unbt | tonumber? // null),
+           files: ((.["檔案"] // "") | splitlist),
+           acceptance: ((.["驗收"] // "") | trim | if blank then [] else [.] end)}
+        | select(.id | blank | not)]) as $parts0
+    | ([$parts0[] | {id, res: [.files[] | glob2re]}]) as $pres
+    | ([$pp.files[] | glob2re]) as $fres
+    | ([$cf.list[:$maxChanges][] | .file as $f
+        | ([$pres[] | select(any(.res[]; . as $r | $f | test($r))) | .id] | first // null) as $pt
+        | . + {part: $pt, planned: ($pt != null or any($fres[]; . as $r | $f | test($r))), module: ($f | modof)}]) as $ch1
+    | ([$ch1[] | select(.planned | not)] | to_entries | map(.value + {xid: "x\(.key + 1)"})) as $ex
+    | ([$ch1[] | if .planned then . else (.file as $f | .part = ([$ex[] | select(.file == $f) | .xid] | first)) end]) as $ch
+    | ([$pp.phases[] | {key: (.n | tostring), value: .state}] | from_entries) as $phs
+    | ([$parts0[] | .id as $id
+        | [$ch[] | select(.part == $id)] as $mine
+        | ($phs[(.phase // -1) | tostring] // "planned") as $ps
+        | (($mine | length) > 0) as $t
+        | ($lg.part[$id] // {}) as $lp
+        | ($lg.phase[(.phase // -1) | tostring] // {}) as $lph
+        | . + {state: (if $ps == "done" then (if $t then "done" else "skipped" end)
+                       elif $vr == "FAIL" then (if $t then "failed" else "skipped" end)
+                       elif $vr == "PASS" then (if $t then "done" else "skipped" end)
+                       elif $ps == "wip" or $t then "wip" else "planned" end),
+               planned: true,
+               ai: {summary: ($lp.s // $lph.s), tests: ($lp.t // $lph.t),
+                    source: (if $lp.s != null or $lp.t != null then "part" elif $lph.s != null or $lph.t != null then "phase" else null end),
+                    added: ([$mine[].added // 0] | add // 0), removed: ([$mine[].removed // 0] | add // 0)}}]) as $parts
+    | ($ex[:30] | map({id: .xid, name: .file, phase: null, files: [.file], acceptance: [], state: "extra", planned: false,
+                       ai: {summary: null, tests: null, source: null, added: .added, removed: .removed}})) as $xparts
+    | ([$ch[] | select(.module != null) | {module, file}]
+       + [$pp.files[] | {module: globmod, file: .} | select(.module != null)]) as $touch
+    | {file: "plans/\($rec.name)",
+       task: (($pp.fm.wbs_task // "") | if . == "" or . == "none" then null else . end),
+       title: ($pp.title // $rec.name), mode: ($pp.fm.mode // null), status: ($pp.fm.status // ""),
+       currentPhase: (($pp.fm.current_phase // "") | tonumber? // null),
+       source: $rec.src, base: $cf.base,
+       phases: [$pp.phases[] | .n as $n
+                | if .state != "done" and any($parts[]; .phase == $n and .state == "failed") then .state = "failed" else . end],
+       hasParts: ($pp.partsTable != null),
+       parts: ($parts + $xparts), extraMore: ([($ex | length) - 30, 0] | max),
+       verify: $verify,
+       changes: [$ch[] | {file, added, removed, new, part, planned, module}],
+       modules: ($touch | map(.module) | unique),
+       _touch: $touch, _mtime: $rec.mtime, _text: $rec.text};
+  def progress: [(.phases | map(select(.state == "done")) | length), (.verify != null), ._mtime];
+
+  ([$FILES[] | select(.head[1] | endswith(".progress.md") | not)
+    | {src: .head[0], name: .head[1], text, mtime: ($MT[.head[0] + "|" + .head[1]] // 0)}]) as $recs
+| ([$recs[] | . as $r | build_plan($r)]) as $built
+| ([$built[] | select(.source == "main")] | sort_by(.file)) as $mainPlans
+
+# worktree overlay：同名 plan 取進度較新的那份（內容相同就算主 checkout 的）。進到這裡的 worktree plan
+# 只有它改過或沒進版控的（沒動過的版控副本在 gather_source 就濾掉了），所以主 checkout 已歸檔的不會復活。
+# --actual 指定的那份一定入選，畫面才會顯示剛寫進去的結果。
+| ($built | group_by(.file) | map(
+    (map(select(.source == "main")) | first) as $m
+    | (map(select(.source == $vSrc and .file == ("plans/" + $vFile))) | first) as $forced
+    | if $forced != null then $forced
+      elif $m == null then (sort_by(progress) | last)
+      else (([.[] | select(.source != "main" and ._text != $m._text and (progress > ($m | progress)))]
+             | sort_by(progress) | last) // $m)
+      end)) as $plans0
+
+# 「本次」：主 checkout 與各 worktree 的 .current-task 全部標出；都沒有 → 最近改過、還沒完成的 plan
+| ($currents | tsv | map({src: .[0], v: .[1]})) as $cur0
+| def plan_of($v):
+    [$plans0[] | select((.file | ltrimstr("plans/") | rtrimstr(".md")) as $b
+                        | $b == $v or ($b | startswith($v + "-")) or .task == $v)] | first;
+  ([$cur0[] | . as $c | plan_of($c.v) as $pl
+    | {task: (if ($c.v | startswith("adhoc-")) then ($pl.task // null) else $c.v end),
+       plan: ($pl.file // null), source: $c.src}]) as $cur1
+| (if ($cur1 | length) > 0 then $cur1
+   else [[$plans0[] | select(.status | test("⏳|🔄"))] | sort_by(._mtime) | last // empty
+         | {task, plan: .file, source, guessed: true}] end) as $currents
+| ([$currents[].task | select(. != null)]) as $curTasks
+| ($plans0 | map(. + {current: (.file as $f | any($currents[]; .plan == $f))})
+   | sort_by([(if .current then 0 else 1 end), .file])) as $plans
+| ([$plans[] | select(.current and .task == null) | .modules[]] | unique) as $curMods
+
+# ---- 地圖上的「本次改動」：主 checkout ＋ 有 plan 或 .current-task 的 worktree
+| ([$BS | keys[] | select(endswith("|default")) | rtrimstr("|default") | select(. != "main")] | sort) as $wtSrcs
+| ([(srcchanges("main")[] + {source: "main"})] + [$wtSrcs[] as $s | srcchanges($s)[] + {source: $s}]) as $chAll
+| ([$plans[] | .source as $s | .parts as $pa | .changes[] | select(.planned and .part != null) | .part as $pt
+    | {key: ($s + "|" + .file), value: ([$pa[] | select(.id == $pt) | .ai.summary] | first)} | select(.value != null)]
+   | from_entries) as $SUM
+| ([$chAll[:$maxChanges][] | .file as $f | . + {module: ($f | modof), summary: ($SUM[.source + "|" + $f] // null)}]) as $changesList
+
+# ---- 已歸檔的 plan：不進 plans[]，只算進模組的完成數（WBS 裡還在的任務已經算過，不重算）
+| ([$tasks0[].id]) as $wbsIds
+| ([$archive | chunks("A")[] | ("---\n" + .text + "\n---") | parse_plan($needPart)
+    | {task: (.fm.wbs_task // "none"), mods: ([.files[] | globmod | select(. != null)] | unique)}
+    | select(.task == "none" or (.task as $t | $wbsIds | index($t) | not))]
+   | group_by(.task) | map(if .[0].task == "none" then .[] else .[0] end)) as $arch1
+| (reduce $arch1[] as $a ({}; reduce $a.mods[] as $m (.; .[$m] += 1))) as $AD
+
+# ---- 版面由這裡決定（畫面只換算像素、節點不可拖）：群組由左到右排成欄；
+# 群組內依「群組內連線」的深度再分子欄（gateway → svc-a 會排在 gateway 右邊），每欄最多 4 列
+| ((($dg // {}).groups // []) | map(select(.id as $g | $mods0 | any(.group == $g)))
+   + (if any($mods0[]; .group == "_ungrouped") then [{id: "_ungrouped", label: "未分組"}] else [] end)) as $groups
 | ([($dg // {}).edges // [] | .[] | select(.from != .to)
     | select(.from as $a | .to as $b | ($modIds | index($a)) and ($modIds | index($b)))]
    | reduce .[] as $e ([]; if any(.[]; .from == $e.from and .to == $e.to) then . else . + [$e] end)) as $edges
-
-# 版面由這裡決定（畫面只換算像素、節點不可拖）：群組由左到右排成欄；
-# 群組內依「群組內連線」的深度再分子欄（gateway → svc-a 會排在 gateway 右邊），每欄最多 4 列
 | (reduce $groups[] as $g ({col: 0, pos: {}};
-    [$mods1[] | select(.group == $g.id) | .id] as $ids
+    [$mods0[] | select(.group == $g.id) | .id] as $ids
     | [$edges[] | select(.from as $a | .to as $b | ($ids | index($a)) and ($ids | index($b)))] as $ie
     | (reduce range(0; $ids | length) as $_
         ([$ids[] | {key: ., value: 0}] | from_entries;
@@ -364,47 +711,133 @@ def modstatus:
           .pos[$colIds[$i]] = {col: (.col + (($i / 4) | floor)), row: ($i % 4)})
         | .col += ((($colIds | length) + 3) / 4 | floor))
    ) | .pos) as $pos
-| ($mods1 | map(. + {pos: $pos[.id]})) as $mods
 
-| ([
+# ---- 模組燈號：WBS 的判法（modstatus）＋「掛在這個模組的 plan 最近一次 /verify 是 FAIL → 有問題」
+| def mods_with($plans; $curTasks; $curMods; $chg):
+    $mods0 | map(
+      .id as $id
+      | [$tasks[] | select(.modules | index($id))] as $own
+      | [$own[].id] as $ownIds
+      | ([$own[].state] | modstatus) as $st0
+      | ([$own[] | select(.state == "done")] | length) as $done
+      | ([$own[] | select(.state != "skip")] | length) as $total
+      | [$plans[] | select(.verify.result == "FAIL")
+         | select((.modules | index($id)) or (.task != null and (.task as $t | $ownIds | index($t))))] as $failed
+      | . + {status: (if ($failed | length) > 0 then "issue" else $st0 end),
+             statusReason: ((if ($own | length) == 0 then "WBS 沒有任務掛在這個模組"
+               else "\($done)/\($total) 完成"
+                 + ([$own[] | select(.state == "wip") | .id] | if length > 0 then "；\(join("、")) 進行中" else "" end)
+                 + ([$own[] | select(.state == "blocked") | .id] | if length > 0 then "；\(join("、")) 阻塞" else "" end)
+               end)
+               + ($failed | map("；\(.task // .file) 驗證失敗：\(.verify.reason // "（沒寫原因）")") | join(""))),
+             counts: {done: $done, total: $total, archivedDone: ($AD[$id] // 0)},
+             tasks: $ownIds,
+             current: (any($ownIds[]; . as $t | $curTasks | index($t)) or ($curMods | index($id) != null)),
+             changed: ([$chg[] | select(.module == $id)] | length),
+             mismatch: [$plans[] | select(.task != null) | .task as $t
+                        | ([$tasks[] | select(.id == $t) | .modules[]]) as $decl
+                        | .modules as $tch
+                        | select(($decl | length) > 0 and ($tch | length) > 0)
+                        | if ($decl | index($id)) and ($tch | index($id) | not) then {task: $t, kind: "declared-not-touched", files: []}
+                          elif ($tch | index($id)) and ($decl | index($id) | not) then
+                            {task: $t, kind: "touched-not-declared", files: ([._touch[] | select(.module == $id) | .file] | unique | .[:5])}
+                          else empty end],
+             pos: $pos[$id]});
+  def notices_for($plans): [
     (if $mode == "demo" then {level: "info", text: "demo 情境沒有架構文件，專案地圖不會出現（之後的任務圖仍可用）", action: "/docs-init --mvp"} else empty end),
     (if $mode != "demo" and ($hasArch | not) then {level: "warn", text: "找不到架構文件（docs/*architecture*.md 或 docs/tech-spec.md），畫不出專案地圖", action: "委派 documentation-specialist 從程式碼反推草稿"} else empty end),
     (if $draft then {level: "warn", text: "架構草稿待確認：\($archPath) 帶 `\($draftMark)` 標記，確認模組切分後移除標記，地圖才會出現", action: "確認後由主模型移除標記"} else empty end),
     (if ($nomap | not) and $mt == null then {level: "warn", text: "架構文件沒有含 `id`、`路徑` 欄的模組表（05 範本 5.5），模組全部顯示為灰色", action: "委派 documentation-specialist 補欄"} else empty end),
     (if ($nomap | not) and $dg == null and ($rows | length) > 0 then {level: "info", text: "架構文件沒有可解析的容器圖（5.1 mermaid），模組全部放在「未分組」", action: null} else empty end),
-    ([$mods[] | select(.declared | not) | .id] | if length > 0 then {level: "warn", text: "容器圖有、模組表沒有的節點（灰色虛線）：\(join("、"))", action: "在 5.5 補上這幾列"} else empty end),
+    ([$mods0[] | select(.declared | not) | .id] | if length > 0 then {level: "warn", text: "容器圖有、模組表沒有的節點（灰色虛線）：\(join("、"))", action: "在 5.5 補上這幾列"} else empty end),
     ([$rows[] | select(.id as $i | $dgIds | index($i) | not) | .id] | if length > 0 and $dg != null then {level: "info", text: "模組表有、容器圖沒畫的模組（放在「未分組」）：\(join("、"))", action: "在 5.1 補上節點"} else empty end),
     (if ($tasks0 | length) > 0 and $noColCount == ($tasks0 | length) and ($nomap | not) then {level: "warn", text: "WBS 沒有模組欄，任務無法對到模組", action: "/task-status（會提議補欄）"}
      elif $noColCount > 0 and ($nomap | not) then {level: "warn", text: "WBS 有 \($noColCount) 個任務所在的節沒有模組欄", action: "/task-status（會提議補欄）"} else empty end),
-    ($unknownMods | if length > 0 and ($nomap | not) then {level: "warn", text: "任務標了模組表沒有的模組：\(.[:8] | join("、"))", action: "改 WBS 模組欄或補架構文件 5.5"} else empty end)
-  ]) as $notices
+    ($unknownMods | if length > 0 and ($nomap | not) then {level: "warn", text: "任務標了模組表沒有的模組：\(.[:8] | join("、"))", action: "改 WBS 模組欄或補架構文件 5.5"} else empty end),
+    ([$plans[] | select(.base == null and (.status | test("✅") | not)) | .file] | if length > 0 then {level: "warn", text: "找不到比較基準（帳本沒有 BASE=，也找不到預設分支），列不出這幾份 plan 改了哪些檔：\(join("、"))", action: "帳本記 BASE=<commit>（subagent-execution）"} else empty end),
+    ([$plans[] | select((.hasParts | not) and (.status | test("✅") | not)) | .file] | if length > 0 then {level: "info", text: "這幾份 plan 沒有「一眼看懂」部件表，任務圖只列得出改了哪些檔：\(join("、"))", action: "格式見 plan-format skill"} else empty end)
+  ];
+  def public: map(del(._touch, ._mtime, ._text));
 
-| {schema: 1,
+  {schema: 1,
    generatedAt: $now,
-   generator: {script: "overview.sh", version: 1},
-   truncated: (($ch0 | length) > $maxChanges),
+   generator: {script: "overview.sh", version: 2},
+   truncated: (($chAll | length) > $maxChanges),
    project: {name: ($p.name // "（未命名專案）"), docsMode: $mode,
              architectureDoc: (if $hasArch then $archPath else null end), architectureDraft: $draft},
-   notices: $notices,
-   current: (if $current != "" then {task: $current, source: "main"} else null end),
+   notices: notices_for($plans),
+   current: ($currents[0] // null),
+   currents: $currents,
    groups: $groups,
-   modules: $mods,
+   modules: mods_with($plans; $curTasks; $curMods; $changesList),
    edges: $edges,
    tasks: [$tasks[] | del(.hasCol)],
    unmappedTasks: [$tasks0[] | select(.modules | length == 0) | .id],
-   changesBase: (if ($baseL[0] // "") != "" then {commit: $baseL[0], defaultBranch: ($baseL[1] // "")} else null end),
-   changes: $changesList}
+   changesBase: (($BS["main|default"] // {}) | if (.short // "") != "" then {commit: .short, defaultBranch: .def} else null end),
+   changes: $changesList,
+   plans: ($plans | public)},
+  {project: {name: ($p.name // "（未命名專案）")},
+   notices: notices_for($mainPlans),
+   groups: $groups,
+   modules: mods_with($mainPlans; []; []; []),
+   edges: $edges,
+   tasks: [$tasks[] | del(.hasCol)],
+   unmappedTasks: [$tasks0[] | select(.modules | length == 0) | .id],
+   plans: ($mainPlans | public)}
 JQ
-}
 
-# overview.md：只用確定性欄位（不含 generatedAt、current、changes）
-write_md_jq() {
-cat > "$TMP/md.jq" <<'JQ'
+# overview.md 與 plan 的「計畫 vs 實際」共用的 markdown 產生器
+IFS= read -r -d '' JQ_MDDEFS <<'JQ'
 def light: {done: "🟢", wip: "🟡", issue: "🔴", todo: "⚪"}[.];
 def word: {done: "完成", wip: "開發中", issue: "有問題", todo: "未開始"}[.];
 def lab: gsub("\""; "#quot;") | gsub("[\\[\\]]"; " ");
 def cell: gsub("\\|"; "\\|") | gsub("\n"; " ");
 def RESERVED: ["end", "graph", "subgraph", "style", "class", "classDef", "click", "linkStyle", "flowchart", "direction"];
+def nid: if test("^[A-Za-z][A-Za-z0-9_]*$") and (. as $i | RESERVED | index($i) | not) then . else "n_" + gsub("[^A-Za-z0-9_]"; "_") end;
+def sicon: {planned: "⬜", wip: "🟡", done: "✅", skipped: "⬚", failed: "❌", extra: "＋"}[.] // "";
+def sword: {planned: "計畫中", wip: "進行中", done: "完成", skipped: "計畫內沒做", failed: "失敗", extra: "計畫外"}[.] // .;
+# 這一行會被 overview.sh 讀回來當作驗證結果（parse_plan），格式改了要同步那邊的 regex
+def vline: if . == null then empty
+  else "驗證：\(if .result == "PASS" then "✅" else "❌" end) \(.result)\(if .at then "（\(.at)）" else "" end)\(if .reason then " — \(.reason | gsub("\n"; " "))" else "" end)" end;
+def delta: if (.added // 0) + (.removed // 0) > 0 then "+\(.added // 0) / −\(.removed // 0)" else "—" end;
+# 線條：虛線＝還沒走到；實線＝兩端都完成。部件外框虛線＝計畫、實線＝已做
+def taskgraph:
+  . as $p
+  | [$p.parts[] | select(.planned)] as $pl
+  | [$p.parts[] | select(.planned | not)] as $ex
+  | [$p.phases[].n] as $pns
+  | if ($p.parts | length) == 0 then "（plan 沒有「一眼看懂」部件表，也沒有計畫外的改動）" else
+    ("```mermaid",
+     "flowchart LR",
+     "  classDef planned fill:#ffffff,stroke:#9ca3af,stroke-dasharray:5 5,color:#6b7280",
+     "  classDef wip fill:#fef3c7,stroke:#d97706,color:#78350f",
+     "  classDef done fill:#d1fae5,stroke:#059669,color:#064e3b",
+     "  classDef skipped fill:#f9fafb,stroke:#d1d5db,stroke-dasharray:2 4,color:#9ca3af",
+     "  classDef failed fill:#fee2e2,stroke:#dc2626,color:#7f1d1d",
+     "  classDef extra fill:#ede9fe,stroke:#7c3aed,color:#4c1d95",
+     ($p.phases[] as $ph | [$pl[] | select(.phase == $ph.n)] as $ps | select(($ps | length) > 0)
+       | "  subgraph ph\($ph.n)[\"階段 \($ph.n) \($ph.state | sicon) \($ph.name | lab)\"]",
+         ($ps[] | "    \(.id | nid)[\"\(.state | sicon) \(.name | lab)\"]"),
+         "  end"),
+     ($pl[] | select(.phase as $n | $pns | index($n) | not) | "  \(.id | nid)[\"\(.state | sicon) \(.name | lab)\"]"),
+     ($ex[] | "  \(.id | nid)[\"＋ 計畫外 \(.name | lab)\"]"),
+     (range(0; ($pl | length) - 1) as $i
+       | "  \($pl[$i].id | nid) \(if $pl[$i].state == "done" and $pl[$i + 1].state == "done" then "-->" else "-.->" end) \($pl[$i + 1].id | nid)"),
+     ($p.parts[] | "  class \(.id | nid) \(.state)"),
+     "```") end;
+def ptable:
+  . as $p
+  | "| 部件 | 狀態 | AI 做了什麼 | 檔案 | +/− | 測試 |",
+    "|---|---|---|---|---|---|",
+    ($p.parts[] | .id as $id | [$p.changes[] | select(.part == $id) | .file] as $cf
+     | "| \(if .planned then "\(.id) \(.name | cell)" else "＋" end) | \(.state | sicon) \(.state | sword) | \(if .ai.summary then (.ai.summary | cell) + (if .ai.source == "phase" then "（階段摘要）" else "" end) elif .planned then "—" else "（帳本無紀錄）" end) | \((if ($cf | length) > 0 then $cf else .files end) | .[:4] | map("`\(.)`") | join(" ") | if . == "" then "—" else . end) | \(.ai | delta) | \(.ai.tests // "—") |"),
+    ([$p.changes[] | select(.planned and .part == null)] | select(length > 0)
+     | "| — | 計畫內（沒對到部件） | — | \(.[:4] | map("`\(.file)`") | join(" ")) | \({added: (map(.added // 0) | add), removed: (map(.removed // 0) | add)} | delta) | — |"),
+    (if ($p.extraMore // 0) > 0 then "| ＋ | 計畫外 | 另有 \($p.extraMore) 個檔沒列出 | — | — | — |" else empty end);
+JQ
+
+# overview.md：只反映主 checkout（md.json），不含 generatedAt、「本次」、地圖的本次改動
+IFS= read -r -d '' JQ_MD <<'JQ'
 . as $d
 | ($d.modules | to_entries | map({key: .value.id,
     value: (if (.value.id | test("^[A-Za-z0-9_-]+$")) and (.value.id as $i | RESERVED | index($i) | not)
@@ -436,27 +869,84 @@ def RESERVED: ["end", "graph", "subgraph", "style", "class", "classDef", "click"
      "| 燈號 | 模組 | 路徑 | 任務 | 說明 |",
      "|---|---|---|---|---|",
      ($d.modules[] | .id as $mid
-       | "| \(.status | light) \(.status | word) | \(.name | cell)（`\(.id)`）\(if .declared then "" else "（模組表沒有）" end) | \(if (.paths | length) > 0 then (.paths | map("`\(.)`") | join(", ")) else "—" end) | \(if (.tasks | length) > 0 then ([$d.tasks[] | select(.modules | index($mid)) | "\(.id) \(.status)"] | .[:6] | join(" ・ ")) + (if (.tasks | length) > 6 then " …" else "" end) else "—" end) | \(.statusReason | cell) |"))
+       | "| \(.status | light) \(.status | word) | \(.name | cell)（`\(.id)`）\(if .declared then "" else "（模組表沒有）" end) | \(if (.paths | length) > 0 then (.paths | map("`\(.)`") | join(", ")) else "—" end) | \(if (.tasks | length) > 0 then ([$d.tasks[] | select(.modules | index($mid)) | "\(.id) \(.status)"] | .[:6] | join(" ・ ")) + (if (.tasks | length) > 6 then " …" else "" end) else "—" end)\(if .counts.archivedDone > 0 then "（另 \(.counts.archivedDone) 份已歸檔）" else "" end) | \(.statusReason | cell)\(.mismatch | map(" ・ \(.task) \(if .kind == "touched-not-declared" then "改到這裡但 WBS 沒標" else "WBS 標了但沒改到" end)") | join("")) |"))
   end),
-  (if ($d.unmappedTasks | length) > 0 then ("", "沒有對到模組的任務：\($d.unmappedTasks | join("、"))") else empty end)
+  (if ($d.unmappedTasks | length) > 0 then ("", "沒有對到模組的任務：\($d.unmappedTasks | join("、"))") else empty end),
+  "",
+  "## 任務圖",
+  "",
+  (if ($d.plans | length) == 0 then "（plans/ 底下沒有進行中的計畫）" else
+    ($d.plans[]
+     | "### \(if .task then "\(.task) " else "" end)\(.title | cell)（`\(.file)`）\(.status | sub("\\s.*$"; ""))",
+       "",
+       (.verify | vline | ., ""),
+       (if .base then "比較基準：`\(.base)`" else "比較基準：找不到（列不出改了哪些檔）" end),
+       "",
+       taskgraph,
+       "",
+       ptable,
+       "")
+  end)
 ] | join("\n")
 JQ
+
+# plan 的「計畫 vs 實際」區塊（--actual）
+IFS= read -r -d '' JQ_ACTUAL <<'JQ'
+[.plans[] | select(.source == $src and .file == $file)] | first // error("data.js 裡找不到這份 plan")
+| [
+  "<!-- overview:actual:start — 由 /verify 經 overview.sh --actual 寫入，勿手改 -->",
+  "## 計畫 vs 實際",
+  "",
+  (.verify | vline),
+  "",
+  (if (.parts | length) > 0 then (taskgraph, "") else empty end),
+  "### 這次 AI 改了什麼",
+  "",
+  ptable,
+  "",
+  (if .base then "比較基準：`\(.base)`（AI 摘要取自執行帳本；帳本沒寫的顯示 —）" else "找不到比較基準（帳本沒有 BASE=，也找不到預設分支），列不出改了哪些檔" end),
+  "<!-- overview:actual:end -->"
+] | join("\n")
+JQ
+
+# 把區塊換進 plan：有舊區塊就原地取代，沒有就接在檔尾。區塊外一個 byte 都不動。
+# 標記在啟動時檢查過，這裡再查一次：等鎖與產生的期間 plan 可能被人改過。
+splice_actual() {
+    local bad
+    bad=$(actual_markers_bad "$ACTUAL_PLAN")
+    if [ -n "$bad" ]; then markers_msg "$bad" "$ACTUAL_PLAN" > "$OUT/.last-error"; return 1; fi
+    awk -v blk="$TMP/actual.md" '
+        BEGIN { while ((getline l < blk) > 0) b = b l "\n" }
+        /^<!-- overview:actual:start/ { printf "%s", b; done = 1; skip = 1; next }
+        skip && /^<!-- overview:actual:end/ { skip = 0; next }
+        skip { next }
+        { print; last = $0 }
+        END { if (!done) { if (NR > 0 && last != "" && last != "\r") print ""; printf "%s", b } }
+    ' "$ACTUAL_PLAN" > "$TMP/plan.md" && mv -f "$TMP/plan.md" "$ACTUAL_PLAN"
 }
 
 run_once() {
-    # 兩份都在 TMP 產好才搬：任一步失敗都保留上一份 data.js／overview.md（畫面照常顯示舊資料），
+    # 全部在 TMP 產好才搬：任一步失敗都保留上一份 data.js／overview.md（畫面照常顯示舊資料），
     # 錯誤留在 .last-error 供除錯。先搬 data.js 再算 md 的話，md 失敗時兩份會不同步。
     if ! generate; then cp -f "$TMP/err" "$OUT/.last-error" 2>/dev/null; return 1; fi
-    if ! ( cd "$TMP" && LC_ALL=C.UTF-8 jq -r -f md.jq data.json > overview.md 2> err ); then
+    if ! ( cd "$TMP" && LC_ALL=C.UTF-8 jq -r -f md.jq md.json > overview.md 2> err ); then
         { echo "overview.md 產生失敗（md.jq）："; cat "$TMP/err"; } > "$OUT/.last-error" 2>/dev/null
         return 1
+    fi
+    if [ -n "$ACTUAL_PLAN" ]; then
+        if ! ( cd "$TMP" && LC_ALL=C.UTF-8 jq -r --arg src "$ACTUAL_SRC" --arg file "plans/$ACTUAL_NAME" \
+                 -f actual.jq data.json > actual.md 2> err ) || [ ! -s "$TMP/actual.md" ]; then
+            { echo "「計畫 vs 實際」產生失敗（actual.jq）："; cat "$TMP/err"; } > "$OUT/.last-error" 2>/dev/null
+            return 1
+        fi
+        splice_actual || return 1
     fi
     rm -f "$OUT/.last-error" 2>/dev/null
     {
         printf '// 給瀏覽器讀的資料，模型不要讀——要狀態請讀 wbs.md\n'
         # 必須是單一一句賦值：畫面在載入前把 window.OVERVIEW 設成 null、載入後仍是 null 就當作
         # 讀到寫一半的檔。拆成多句的話，半份檔案可能已執行前幾句，畫面會半新半舊。
-        printf 'window.OVERVIEW = %s;\n' "$(cat "$TMP/data.json")"
+        printf 'window.OVERVIEW = %s;\n' "$DATA_LINE"
     } > "$TMP/data.js" && mv -f "$TMP/data.js" "$OUT/data.js"
 
     cmp -s "$TMP/overview.md" "$OUT/overview.md" || mv -f "$TMP/overview.md" "$OUT/overview.md"
@@ -468,11 +958,22 @@ run_once() {
     return 0
 }
 
-write_jq
-write_md_jq
+printf '%s\n' "$JQ_MAIN" > "$TMP/overview.jq"
+printf '%s\n%s\n' "$JQ_MDDEFS" "$JQ_MD" > "$TMP/md.jq"
+printf '%s\n%s\n' "$JQ_MDDEFS" "$JQ_ACTUAL" > "$TMP/actual.jq"
+RC=0
 for _ in 1 2 3; do
     rm -f "$OUT/.dirty" 2>/dev/null
-    run_once || break
+    if ! run_once; then RC=1; break; fi
+    if [ -n "$ACTUAL_PLAN" ]; then
+        printf '已寫入「計畫 vs 實際」（%s）：%s\n' "$ACTUAL_RESULT" "$ACTUAL_PLAN"
+        ACTUAL_PLAN="" ACTUAL_SRC="" ACTUAL_NAME="" ACTUAL_RESULT="" ACTUAL_REASON=""
+    fi
     [ -f "$OUT/.dirty" ] || break
 done
+# --actual 失敗要讓 /verify 知道；背景重產失敗只留 .last-error、照舊 exit 0
+if [ "$RC" -ne 0 ] && [ -n "$ACTUAL_PLAN" ]; then
+    { echo "overview.sh --actual：沒有寫入，原因："; cat "$OUT/.last-error" 2>/dev/null; } >&2
+    exit 1
+fi
 exit 0

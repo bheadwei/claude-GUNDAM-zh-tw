@@ -371,10 +371,14 @@ if [ -f "$OVSH" ]; then
     ov_const() { sed -n "s/^$1=\"\([^\"]*\)\".*/\1/p" "$OVSH" | head -1; }
     H55_COLS=$(cols_of "$(awk '/^### 5\.5/{s=1; next} s && /^##/{exit} s && /^\|/{print; exit}' "$TPL05" 2>/dev/null)")
     WBS_COLS=$(cols_of "$(grep -m1 -E '^\| # \| 任務 \|' "$WBST" 2>/dev/null)")
-    for pair in OVERVIEW_COLS_MODULE:H55 OVERVIEW_COLS_MODULE_OPT:H55 OVERVIEW_COLS_WBS:WBS OVERVIEW_COL_WBS:WBS; do
+    PART_COLS=$(cols_of "$(grep -m1 -E '^\| id \| 部件 \|' .claude/skills/plan-format/SKILL.md 2>/dev/null)")
+    for pair in OVERVIEW_COLS_MODULE:H55 OVERVIEW_COLS_MODULE_OPT:H55 OVERVIEW_COLS_WBS:WBS OVERVIEW_COL_WBS:WBS OVERVIEW_COLS_PART:PART; do
         name=${pair%:*}
-        if [ "${pair#*:}" = H55 ]; then have=$H55_COLS; where="05 範本 5.5 模組表表頭"
-        else have=$WBS_COLS; where="wbs.template.md 任務表頭"; fi
+        case "${pair#*:}" in
+            H55) have=$H55_COLS; where="05 範本 5.5 模組表表頭" ;;
+            WBS) have=$WBS_COLS; where="wbs.template.md 任務表頭" ;;
+            *)   have=$PART_COLS; where="plan-format「一眼看懂」部件表表頭" ;;
+        esac
         val=$(ov_const "$name")
         miss=""
         [ -n "$val" ] || miss=" （找不到這個常數）"
