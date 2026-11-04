@@ -21,6 +21,8 @@
 .claude/taskmaster-data/.current-task
 .claude/taskmaster-data/.current-task-mode
 .claude/taskmaster-data/.doc-impact
+.claude/taskmaster-data/.full-suite-warned
+.claude/taskmaster-data/.last-verify
 .claude/taskmaster-data/.doc-impact-notified
 .claude/taskmaster-data/.skill-impact
 .claude/taskmaster-data/.skill-impact-notified
@@ -29,6 +31,7 @@
 .claude/taskmaster-data/.learned-candidates
 .claude/taskmaster-data/.learned-notified
 .claude/taskmaster-data/.merge-pending
+.claude/taskmaster-data/.merge-round-open
 .claude/taskmaster-data/.parallel-agent-warned
 .claude/taskmaster-data/.pitfall-seen
 .claude/taskmaster-data/.report-expectations.jsonl

@@ -60,17 +60,20 @@ git status --short                        # 確認合併確實在進行中
 
 ### 3. 解完跑測試
 
+只跑**解過衝突的檔案**對應的測試檔（測試檔本身有衝突就跑它；套件管理器與指令寫法見必讀規範與
+`testing-standards` 的「執行測試」）：
+
 ```bash
-# 用專案設定的 package manager／uv，見必讀規範
-<pm> test  # full-suite      （或 uv run pytest -q  # full-suite）
+git diff --name-only --diff-filter=U    # 還沒 add 之前：處於衝突狀態的檔案
+uv run pytest tests/test_x.py -q        # 或 <pm> vitest run src/x.test.ts —— 一律帶路徑
 ```
 
-`# full-suite` 註解要留著：在 worktree 裡解衝突時，沒帶路徑的測試指令會被 `full-suite-gate` 擋一次。
+不跑整套：接下來的 `/verify` 會依「這是不是本輪最後一個合併」決定要不要跑整套
+（`commands/verify.md`「合併驗證關卡」），你再跑一次只是重複。
 
 測試過 → `git add <解過的檔案>`。
 
-**但不要 `git commit`。** 這個 repo 的合併閘門要求跑完整的 `/verify`
-（建置／型別／lint／測試 ＋ 每個已合併任務的 plan 驗收標準 ＋ `spec-convergence`），
+**但不要 `git commit`。** 這個 repo 的合併閘門要求 `/verify` 通過，
 而那是主模型的事，你叫不動 slash command。你把檔案 stage 好、回報清楚，
 由主模型跑 `/verify` 後再 commit。
 

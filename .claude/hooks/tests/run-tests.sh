@@ -1123,7 +1123,7 @@ section "整套測試閘門 — worktree 裡沒帶路徑的 pytest／vitest／je
 # 事故（2026-11-02，另一個專案）：4 條平行線每輪都跑整套 tests/unit（約 1.5 萬條、
 # 20～40 分鐘）。「只跑相關測試」原本只是 testing-standards 的文字規則。
 # 現在由 lib/full-suite-gate.sh 強制：只在 worktree、deny-once（消耗性）、
-# `# full-suite` 註解是 /verify、/deps、/refactor-clean 的合法出口。
+# `# full-suite` 註解是 /deps、/refactor-clean 的合法出口（worktree 裡的 /verify 不跑整套）。
 
 setup_worktree
 FS_FLAG="$WT/.claude/taskmaster-data/.full-suite-warned"
@@ -1158,7 +1158,10 @@ FS_MSG=$(fs_msg 'uv run pytest -q')
 expect_contains "訊息講為什麼擋（平行搶資源）"              "N 份整套"                                  "$FS_MSG"
 expect_contains "訊息附帶路徑的指令範例"                    "uv run pytest tests/test_order.py -q"     "$FS_MSG"
 expect_contains "訊息指向 testing-standards 的完整路徑"     ".claude/skills/testing-standards/SKILL.md" "$FS_MSG"
-expect_contains "訊息給出 /verify 等的合法出口"             "# full-suite"                              "$FS_MSG"
+expect_contains "訊息給出 /deps 等的合法出口"               "# full-suite"                              "$FS_MSG"
+# worktree 裡的 /verify 不跑整套（commands/verify.md 步驟 4），訊息不能再把它列成合法出口
+expect_not_contains "訊息不再把 /verify 列為整套出口"       '`/verify`、`/deps`'                        "$FS_MSG"
+expect_contains "訊息說整套留給合併後"                      "整套留給合併回主 checkout 之後"            "$FS_MSG"
 expect_contains "訊息寫出逃生門"                            "FULL_SUITE_GATE=off"                       "$FS_MSG"
 expect_contains "vitest 給 vitest 的範例"                   "vitest run src/order/refund.test.ts"       "$(fs_msg 'npx vitest run')"
 
@@ -1200,7 +1203,7 @@ expect_decision "多行指令也能重試放行（重試）"              allow 
 echo done')"
 
 # ---- 合法出口與逃生門
-expect_decision "# full-suite 註解 → 放行（/verify 等）"    allow "$(fs1 'uv run pytest -q  # full-suite')"
+expect_decision "# full-suite 註解 → 放行（/deps 等）"      allow "$(fs1 'uv run pytest -q  # full-suite')"
 expect_decision "# full-suite: 說明 → 放行"                 allow "$(fs1 'npm test  # full-suite: /deps 基準')"
 [ -f "$FS_FLAG" ] && ng "# full-suite 不寫標記" "無標記" "有" || ok "# full-suite 不寫標記"
 expect_decision "# full-suite-x 不算宣告 → 擋"              deny  "$(fs1 'uv run pytest -q  # full-suite-x')"
@@ -1448,6 +1451,14 @@ expect_decision "待驗證時擋下 rebase"            deny  "$(bg 'git rebase m
 expect_decision "merge --abort 放行（收拾現場）" allow "$(bg 'git merge --abort')"
 expect_decision "rebase --continue 放行"         allow "$(bg 'git rebase --continue')"
 expect_decision "無關指令放行"                   allow "$(bg 'git status')"
+# 中間合併只快檢（commands/verify.md「合併驗證關卡」）：deny 訊息要讓模型知道快檢通過就夠清清單，
+# 否則它會以為每次合併都得跑整套——那正是這次精簡要拿掉的重工。
+MG_MSG=$(bg 'git merge --no-ff worktree-cart' | jq -r '.hookSpecificOutput.permissionDecisionReason')
+expect_contains "deny 訊息說中間合併只快檢"      "只快檢"       "$MG_MSG"
+expect_contains "deny 訊息說快檢通過也清清單"    "快檢通過也算" "$MG_MSG"
+reset
+expect_contains "合併成功訊息說最後一個才跑整套" "最後一個才跑整套" "$(pbash 'git merge --no-ff worktree-search')"
+reset; mkdir -p "$(dirname "$MP_FILE")"; echo 'git merge --no-ff worktree-search' > "$MP_FILE"
 # 指令帶 --no-ff：關掉 MERGE_GATE 之後**下一道** lib 閘門（merge-noff-gate）
 # 仍然在線，裸的 `git merge x` 會被它擋下，那不是本案例要測的事。
 expect_decision "MERGE_GATE=off 關閉閘門"        allow \

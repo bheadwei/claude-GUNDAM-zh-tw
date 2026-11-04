@@ -44,7 +44,8 @@ description: Use when running work in parallel across git worktrees — creating
 | `taskmaster-data/.doc-impact`＋`.doc-impact-notified`（註） | `context/<area>/` — agent 報告 |
 | `taskmaster-data/.pitfall-seen` | `coordination/handoffs/` — agent 交接 |
 | `taskmaster-data/.report-expectations.jsonl` | `taskmaster-data/.suggest-mode` — 專案級設定 |
-| | `logs/`＋`timelog.jsonl` — 集中一處才查得到 |
+| `taskmaster-data/.last-verify` — 驗的是**這個 checkout** 的 HEAD | `logs/`＋`timelog.jsonl` — 集中一處才查得到 |
+| | `taskmaster-data/.merge-round-open` — 本輪有合併還沒被整套涵蓋；合併只在主 checkout 做（寫入與清除見 `commands/verify.md`） |
 
 註：`.doc-impact` 跟著 worktree，所以 worktree 累積的文件債**不會自己回到主 checkout**。
 合併時由 hook 把它併進主 checkout 的 `.doc-impact`，主 checkout 的 `/verify`「文件同步關卡」
@@ -253,7 +254,7 @@ worktree session（含它派出的所有 subagent）被四道檢查擋住：
 
 ```bash
 # 1. 每個 worktree 先自己驗過
-#    （在該 worktree 內）/verify 通過才算完成
+#    （在該 worktree 內）/verify 通過才算完成——只跑這條線相關的測試，整套留給合併後
 
 # 2. 回主 checkout
 git checkout main && git pull --rebase
@@ -270,12 +271,11 @@ git merge --no-ff worktree-<name>
 
 **第 4 步為什麼不能跳**：每個 worktree 自己驗過，但它們**看不到彼此** ——
 合併才第一次讓兩邊的程式碼真的碰面，那些互動是全新的、沒人驗過的程式碼。
-而且一次疊三個之後測試紅了，你得回頭二分找元凶。
 
-**最後一個合併之後**，`/verify` 會多做一件事：載入 `spec-convergence` 跑收斂檢查。
-理由是平行開發最容易踩的不是「漏做」而是**範圍蔓延** —— 三個 agent 各自多做了一點
-「順手的改善」，單獨看都合理，合起來就偏離當初講好的範圍。
-完整關卡定義見 `.claude/commands/verify.md` 的「合併驗證關卡（不論有沒有進行中任務）」。
+**每次合併驗的東西不一樣**：中間的合併只快檢（建置、型別、這次帶進來的檔案對應的測試、
+該分支 plan 的驗收），**最後一個**才跑整套＋`spec-convergence`；整套紅了用 `git bisect --first-parent`
+在本輪的 merge commit 之間找元凶。「最後一個」怎麼判定、快檢與整套各驗什麼、二分程序，
+全在 `.claude/commands/verify.md` 的「合併驗證關卡」（唯一來源，勿在此重述）。
 
 **順序**：先合**獨立**的功能，再合**依賴它們**的。例如 search 與 cart 先合、
 用到 `CartItem` 的 order-email 後合——這樣基礎型別已經在 main 了。

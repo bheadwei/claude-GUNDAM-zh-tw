@@ -30,13 +30,43 @@ git diff "$BASE"...HEAD                  # 實際內容
 
 從中歸納：真正的意圖是什麼（不是逐 commit 複述）、影響範圍、有沒有破壞性變更。
 
-## 步驟 2：把關（用 `AskUserQuestion` 問一題）
+## 步驟 2：把關
+
+### 2a. 先比對上次 `/verify`（跑這段，不要憑記憶判斷）
+
+```bash
+LV="$(git rev-parse --show-toplevel)/.claude/taskmaster-data/.last-verify"
+# 同 commands/verify.md「記下這次驗證」的 SCOPE（唯一來源，逐字沿用）
+SCOPE=(':(top)' ':(top,exclude).claude/taskmaster-data' ':(top,exclude).claude/context' ':(top,exclude).claude/coordination' ':(top,exclude).claude/qa-history')
+SHA=$(sed -n 's/^sha=\([0-9a-f]*\) .*/\1/p' "$LV" 2>/dev/null)
+if [ -z "$SHA" ] || ! grep -q ' result=PASS clean=yes suite=full ' "$LV"; then
+  echo "REUSE: no（沒有可沿用的整套驗證）"
+elif [ -n "$(git status --porcelain -- "${SCOPE[@]}")" ]; then
+  echo "REUSE: no（工作區有未 commit 變更）"
+elif ! git merge-base --is-ancestor "$SHA" HEAD || [ -n "$(git diff --name-only "$SHA" HEAD -- "${SCOPE[@]}")" ]; then
+  echo "REUSE: no（驗證之後程式碼有變）"
+else
+  echo "REUSE: yes"; grep -o 'secrets=[a-z]* spec=[a-z]*' "$LV"
+fi
+```
+
+「沒變」＝HEAD 就是驗過的那個 commit，或之後的 commit 只動了 `SCOPE` 排除的執行時產物目錄
+（`/verify` 完標 WBS ✅、plan 歸檔、agent 報告那類 commit）。檔案格式與寫入時機見 `commands/verify.md`
+的「記下這次驗證」（唯一來源）。
+
+- `REUSE: yes` → **不重跑建置／型別／lint／測試**。`/verify pre-pr` 只補上次沒做的：
+  `secrets=no` → 補步驟 7 秘密掃描；`spec=no` → 補 `spec-convergence` A+B
+- `REUSE: no` → 照常
+
+### 2b. 問要不要跑檢查（用 `AskUserQuestion` 問一題）
 
 > **題目：** 開 PR 前要先跑檢查嗎？
 
-- **跑 `/verify pre-pr`**（Recommended）— 建置/型別/lint/測試/安全掃描
+- **跑 `/verify pre-pr`**（Recommended）— 建置/型別/lint/測試/安全掃描。
+  2a 是 `REUSE: yes` 時選項說明改成「沿用 `<sha 前 7 碼>` 的整套結果，只補 …」
 - **跑完整把關鏈** — code-quality-specialist → security-infrastructure-auditor →
-  e2e-validation-specialist（見 `using-taskmaster` skill 路由表的「開 PR 前把關」列）
+  e2e-validation-specialist（見 `using-taskmaster` skill 路由表的「開 PR 前把關」列）。
+  code-quality-specialist 的審查範圍見下方 2c
 - **跳過，直接開** — 適合文件變更或已經驗過
 
 **critical 時把關鏈不可跳過**——直接執行，不問。判定 critical 的條件（任一成立）：
@@ -48,6 +78,44 @@ git diff "$BASE"...HEAD                  # 實際內容
 - `.claude/taskmaster-data/.current-task-mode` 為 `critical`
 
 檢查失敗 → 停下回報，不要帶著紅燈開 PR。
+
+### 2c. 把關鏈的 code-quality-specialist 只審「階段審查沒看過」的 diff
+
+每個階段的 diff 已經由 `code-quality-specialist` 審過（`rules/task-mode.md`「審查節奏」）。
+這裡再審整條分支等於同一批程式碼審兩次，所以只交給它三類：
+
+| 類別 | 怎麼找 |
+|---|---|
+| 沒走階段審查的 commit（沒有 plan、quick 任務、合併後在主 checkout 補的修正） | 本分支非 merge 的 commit，扣掉帳本記錄的已審範圍 |
+| 解衝突的修改 | 每個 merge commit 的 `git show --remerge-diff`——乾淨合併沒有輸出，有輸出的就是解衝突時寫的東西 |
+| 已審範圍之後又改過的 | 同第一類：審查通過之後的 commit 不在範圍內，自然會被列出來 |
+
+已審範圍＝帳本（`plans/` 與 `plans/archive/` 的 `*.progress.md`）裡含「審查通過」那幾行的 `範圍=<A>..<B>`
+（格式見 `subagent-execution` skill 的「帳本要記什麼」，唯一來源）。
+
+```bash
+P=.claude/taskmaster-data/plans
+RANGES=$(cat "$P"/*.progress.md "$P"/archive/*.progress.md 2>/dev/null | grep '審查通過' |
+         grep -o '範圍=[0-9a-f]*\.\.[0-9a-f]*' | sed 's/^範圍=//')
+REVIEWED=$(for r in $RANGES; do git rev-list "$r" 2>/dev/null || echo "BAD-RANGE $r"; done | sort -u)
+echo "$REVIEWED" | grep BAD-RANGE                                           # 有輸出 → 範圍不可信
+git show --remerge-diff --format= HEAD >/dev/null 2>&1 || echo NO-REMERGE-DIFF   # git < 2.36 沒有這個選項
+git rev-list --no-merges "$BASE"..HEAD | grep -vxF -f <(printf '%s\n' "$REVIEWED")   # 沒審過的 commit
+for m in $(git rev-list --merges "$BASE"..HEAD); do
+  [ -n "$(git show --remerge-diff --format= "$m")" ] && echo "conflict-resolved: $m"
+done
+```
+
+交給它的內容：沒審過的 commit 各自的 `git show <sha>`，加上解衝突那幾個 merge 的
+`git show --remerge-diff <merge>`。三類都是空的 → 這一棒跳過，在回報寫明「全部 diff 已由階段審查覆蓋」。
+
+**退回審整個 `git diff "$BASE"...HEAD`（保守）**：一行 `審查通過｜範圍=` 都找不到、
+出現 `BAD-RANGE`（範圍的 commit 已不存在，例如被 rebase 或 squash 掉）、
+出現 `NO-REMERGE-DIFF`（舊版 git 會讓 `--remerge-diff` 報錯、迴圈把每個合併都當成乾淨的）、或沒審過的 commit
+佔了大半（拆開審不划算）。
+
+**只有 code-quality-specialist 縮範圍。** critical 的 `security-infrastructure-auditor`
+與 `e2e-validation-specialist` 照舊看整條分支。
 
 ## 步驟 3：草擬 PR 內容
 
