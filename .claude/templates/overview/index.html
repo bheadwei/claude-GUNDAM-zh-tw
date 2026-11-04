@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>專案地圖</title>
+<!--
+  原檔：.claude/templates/overview/index.html（唯一來源）。overview.sh 會複製到
+  taskmaster-data/overview/，那份被覆蓋是正常的——要改畫面改這份。
+  限制：不載 CDN、不用 type="module"（file:// 下會被 CORS 擋），整份 ≤ 50KB（check-counts 會擋）。
+-->
+<style>
+:root{
+  --bg:#f2f3f0;--canvas:#f9faf7;--dot:#cfd4cc;--panel:#fff;--fg:#1c2420;--muted:#66716a;
+  --line:#d3d8d0;--edge:#88938c;--group:#eceee9;--accent:#2f66c9;
+  --done:#2c9a57;--wip:#cf8500;--issue:#d2413c;--todo:#9aa29c;--chg:#7448d0;--chg-bg:#eee8fb;
+  --warn-bg:#fff4e0;--info-bg:#e9f0fb;
+  --f-body:system-ui,-apple-system,"Segoe UI","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  --f-mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#131714;--canvas:#181c19;--dot:#2b322d;--panel:#1d2320;--fg:#e4eae6;--muted:#9aa59e;
+  --line:#323a35;--edge:#6c7770;--group:#1f2521;--accent:#76a2f2;
+  --done:#4cc27e;--wip:#f0a82a;--issue:#f2675f;--todo:#6f7872;--chg:#a98cf2;--chg-bg:#2b2442;
+  --warn-bg:#3a2e17;--info-bg:#1c2738;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);display:flex;flex-direction:column;overflow:hidden}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.bar h1{font-size:16px;margin:0;font-weight:700}
+#status{color:var(--muted);font-size:12px}
+#status.stale{color:var(--wip)}
+.draft{font-size:11px;font-weight:700;color:var(--wip);border:1px solid var(--wip);border-radius:4px;padding:1px 6px;margin-left:6px;vertical-align:2px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
+.s-done{background:var(--done)}.s-wip{background:var(--wip)}.s-issue{background:var(--issue)}.s-todo{background:var(--todo)}.s-chg{background:var(--chg)}
+.toggle{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;user-select:none}
+.toggle input{accent-color:var(--chg)}
+#notices{display:none;padding:6px 16px;border-bottom:1px solid var(--line);background:var(--panel);font-size:13px}
+#notices.on{display:grid;gap:4px}
+.ntc{border-radius:6px;padding:5px 10px}
+.ntc.warn{background:var(--warn-bg)}.ntc.info{background:var(--info-bg)}
+.ntc .act{color:var(--muted);margin-left:6px}
+.main{flex:1;min-height:0;display:flex}
+#stage{flex:1;min-width:0;position:relative;overflow:hidden;background-color:var(--canvas);
+  background-image:radial-gradient(circle,var(--dot) 1.1px,transparent 1.4px);cursor:grab;touch-action:none}
+#stage.dragging{cursor:grabbing}
+#cv{width:100%;height:100%;display:block}
+.hint{position:absolute;top:10px;left:12px;font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:4px 8px;pointer-events:none}
+#empty{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:40px;text-align:center;color:var(--muted);font-size:15px;line-height:1.7}
+#empty.on{display:flex}
+.zoom{position:absolute;right:12px;bottom:12px;display:flex;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.zoom button{border:0;background:none;color:var(--fg);font:500 14px var(--f-body);padding:7px 11px;cursor:pointer}
+.zoom button:hover{background:var(--group)}
+.zoom button:focus-visible,.panel button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.zoom output{font:12px var(--f-mono);color:var(--muted);min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
+#mini{position:absolute;left:12px;bottom:12px;width:180px;height:112px;background:var(--panel);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.panel{width:330px;flex:none;border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:16px}
+.panel h2{font-size:15px;margin:0 0 4px;display:flex;align-items:center;gap:6px}
+.panel .meta{font-size:12px;color:var(--muted);margin-bottom:12px}
+.panel h3{font-size:12px;color:var(--muted);font-weight:500;letter-spacing:.04em;margin:16px 0 6px}
+.panel code{font:12px var(--f-mono)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;border:1px solid var(--line);border-radius:5px;padding:2px 7px}
+.flist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.flist button,.flist .row{all:unset;cursor:pointer;display:grid;gap:2px;border-radius:6px;padding:6px 8px;background:var(--chg-bg)}
+.flist .row{cursor:default}
+.flist button:hover{outline:1px solid var(--chg)}
+.fpath{font:12px var(--f-mono);word-break:break-all;color:var(--chg)}
+.fdesc{font-size:12px;color:var(--muted)}
+.note{font-size:12px;border-radius:6px;padding:6px 8px;margin-top:8px;background:var(--group)}
+.note.issue{color:var(--issue);border:1px solid var(--issue);background:none}
+.back{all:unset;cursor:pointer;font-size:12px;color:var(--accent);margin-bottom:10px;display:inline-block}
+.grp{fill:var(--group);stroke:var(--line)}
+.grp-label{fill:var(--muted);font:500 13px var(--f-body);letter-spacing:.04em}
+.edge{fill:none;stroke:var(--edge);stroke-width:1.6}
+.arrow{fill:var(--edge)}
+.box{fill:var(--panel);stroke:var(--line);stroke-width:1.2}
+.undecl .box{stroke-dasharray:6 4;stroke:var(--todo)}
+.mod{cursor:pointer}
+.mod.sel .box{stroke:var(--accent);stroke-width:2.5}
+.mod.cur .box{stroke:var(--chg);stroke-width:2}
+.name{fill:var(--fg);font:700 17px var(--f-body)}
+.mid,.path{fill:var(--muted);font:12px var(--f-mono)}
+.file{fill:var(--chg);font:12.5px var(--f-mono)}
+.desc,.tasks{fill:var(--muted);font:12px var(--f-body)}
+.far{fill:var(--muted);font:500 26px var(--f-body)}
+.l-done{fill:var(--done)}.l-wip{fill:var(--wip)}.l-issue{fill:var(--issue)}.l-todo{fill:var(--todo)}
+.badge{fill:var(--chg)}.badge-t{fill:var(--panel);font:700 12px var(--f-body)}
+.cmark{fill:var(--chg)}
+.d1,.d2{display:none}
+.lod1 .d1,.lod2 .d2{display:inline}
+.lod1 .far{display:none}
+.onlychg .mod:not(.has-chg),.onlychg .edge{opacity:.22}
+.m-box{stroke:none}.m-grp{fill:var(--group)}.m-vp{fill:none;stroke:var(--accent);stroke-width:2}
+@media (max-width:760px){.main{flex-direction:column}.panel{width:auto;max-height:38%;border-left:0;border-top:1px solid var(--line)}#mini{display:none}.toggle{margin-left:0}}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div><h1 id="title">專案地圖</h1><div id="status">載入中…</div></div>
+  <div class="legend">
+    <span><i class="dot s-done"></i>完成</span><span><i class="dot s-wip"></i>開發中</span>
+    <span><i class="dot s-issue"></i>有問題</span><span><i class="dot s-todo"></i>未開始</span>
+    <span><i class="dot s-chg"></i>本次改動</span>
+  </div>
+  <label class="toggle"><input type="checkbox" id="onlychg">只看本次改動</label>
+</header>
+<div id="notices"></div>
+<div class="main">
+  <div id="stage">
+    <svg id="cv" xmlns="http://www.w3.org/2000/svg" aria-label="專案架構畫布">
+      <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+      <g id="world"></g>
+    </svg>
+    <div id="empty"></div>
+    <div class="hint">拖曳平移 · 滾輪縮放 · 雙擊模組聚焦 · Esc 回全圖</div>
+    <svg id="mini" xmlns="http://www.w3.org/2000/svg" aria-label="小地圖"></svg>
+    <div class="zoom">
+      <button id="zout" aria-label="縮小">−</button><output id="zl">100%</output>
+      <button id="zin" aria-label="放大">+</button><button id="zfit">全圖</button>
+    </div>
+  </div>
+  <aside class="panel" id="panel"></aside>
+</div>
+
+<!-- classic script：file:// 下 type="module" 會被 CORS 擋 -->
+<script src="data.js"></script>
+<script>
+(function () {
+'use strict';
+var POLL_MS = 3000;
+var STATUS = {done: '完成', wip: '開發中', issue: '有問題', todo: '未開始'};
+// 版面常數。位置由 overview.sh 依 5.1 群組決定（pos.col／pos.row），這裡只換算像素；節點不可拖
+var W = 290, GAPX = 90, GAPG = 50, GAPY = 36, ROW = 40, HEAD = 70, FOOT = 34, MAXF = 6;
+var LOD1 = 0.55, LOD2 = 1.1, KMIN = 0.2, KMAX = 3;
+var NS = 'http://www.w3.org/2000/svg';
+
+function $(id) { return document.getElementById(id); }
+function el(tag, attrs, parent, text) {
+  var e = document.createElementNS(NS, tag);
+  for (var k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c];
+  });
+}
+function base(f) { var i = f.lastIndexOf('/'); return i < 0 ? f : f.slice(i + 1); }
+function delta(c) {
+  if (c.new) return '新檔' + (c.added != null ? ' +' + c.added : '');
+  if (c.added == null) return '二進位檔';
+  return '+' + c.added + ' / −' + c.removed;
+}
+
+var world = $('world'), stage = $('stage'), root = document.documentElement, mini = $('mini'), panel = $('panel');
+var D = null, MODS = [], BY = {}, GB = [], ALL = null, CHG = {}, TASK = {};
+var S = {tx: 0, ty: 0, k: 1}, selected = null, vp = null, fitted = false;
+
+// ---------------------------------------------------------------- 版面
+function layout(d) {
+  MODS = d.modules.slice(); BY = {}; CHG = {}; TASK = {};
+  (d.tasks || []).forEach(function (t) { TASK[t.id] = t; });
+  (d.changes || []).forEach(function (c) { var k = c.module || ''; (CHG[k] = CHG[k] || []).push(c); });
+  var gi = {}; d.groups.forEach(function (g, i) { gi[g.id] = i; });
+  var cols = {};
+  MODS.forEach(function (m) {
+    BY[m.id] = m;
+    m.files = CHG[m.id] || [];
+    var rows = Math.max(1, Math.min(m.files.length, MAXF) + (m.files.length > MAXF ? 1 : 0));
+    m.w = W; m.h = HEAD + rows * ROW + FOOT;
+    var p = m.pos || {col: 0, row: 0};
+    m.x = p.col * (W + GAPX) + (gi[m.group] || 0) * GAPG;
+    (cols[p.col] = cols[p.col] || []).push(m);
+  });
+  Object.keys(cols).forEach(function (c) {
+    var y = 0;
+    cols[c].sort(function (a, b) { return (a.pos ? a.pos.row : 0) - (b.pos ? b.pos.row : 0); })
+      .forEach(function (m) { m.y = y; y += m.h + GAPY; });
+  });
+  GB = d.groups.map(function (g) {
+    var ms = MODS.filter(function (m) { return m.group === g.id; });
+    if (!ms.length) return null;
+    var x = Math.min.apply(null, ms.map(function (m) { return m.x; })) - 24;
+    var y = Math.min.apply(null, ms.map(function (m) { return m.y; })) - 44;
+    return {id: g.id, label: g.label, x: x, y: y,
+      w: Math.max.apply(null, ms.map(function (m) { return m.x + m.w; })) + 24 - x,
+      h: Math.max.apply(null, ms.map(function (m) { return m.y + m.h; })) + 24 - y};
+  }).filter(Boolean);
+  var bs = GB.length ? GB : MODS;
+  ALL = bs.length ? {
+    x: Math.min.apply(null, bs.map(function (b) { return b.x; })),
+    y: Math.min.apply(null, bs.map(function (b) { return b.y; }))
+  } : {x: 0, y: 0, w: 1, h: 1};
+  if (bs.length) {
+    ALL.w = Math.max.apply(null, bs.map(function (b) { return b.x + b.w; })) - ALL.x;
+    ALL.h = Math.max.apply(null, bs.map(function (b) { return b.y + b.h; })) - ALL.y;
+  }
+}
+
+// ---------------------------------------------------------------- 繪製
+function edgePath(A, B) {
+  var ax = A.x + A.w / 2, bx = B.x + B.w / 2;
+  if (Math.abs(ax - bx) < 1) {
+    var down = B.y > A.y, y1 = down ? A.y + A.h : A.y, y2 = down ? B.y - 2 : B.y + B.h + 2;
+    return 'M' + ax + ',' + y1 + ' L' + bx + ',' + y2;
+  }
+  var right = bx > ax, x1 = right ? A.x + A.w : A.x, x2 = right ? B.x - 2 : B.x + B.w + 2;
+  var y1 = A.y + 40, yb = B.y + 40, mx = (x1 + x2) / 2;
+  return 'M' + x1 + ',' + y1 + ' C' + mx + ',' + y1 + ' ' + mx + ',' + yb + ' ' + x2 + ',' + yb;
+}
+function draw(d) {
+  world.replaceChildren();
+  GB.forEach(function (g) {
+    el('rect', {'class': 'grp', x: g.x, y: g.y, width: g.w, height: g.h, rx: 16}, world);
+    el('text', {'class': 'grp-label', x: g.x + 16, y: g.y + 26}, world, g.label);
+  });
+  d.edges.forEach(function (e) {
+    var A = BY[e.from], B = BY[e.to];
+    if (!A || !B) return;
+    el('path', {'class': 'edge', d: edgePath(A, B), 'marker-end': 'url(#ah)'}, world);
+  });
+  MODS.forEach(function (m) {
+    var cls = 'mod' + (m.files.length ? ' has-chg' : '') + (m.declared ? '' : ' undecl') + (m.current ? ' cur' : '');
+    var g = el('g', {'class': cls, transform: 'translate(' + m.x + ',' + m.y + ')', 'data-id': m.id}, world);
+    el('rect', {'class': 'box', width: m.w, height: m.h, rx: 12}, g);
+    el('circle', {'class': 'l-' + m.status, cx: 24, cy: 30, r: 13, opacity: 0.22}, g);
+    el('circle', {'class': 'l-' + m.status, cx: 24, cy: 30, r: 7}, g);
+    el('text', {'class': 'name', x: 44, y: 36}, g, (m.current ? '★ ' : '') + m.name);
+    el('text', {'class': 'mid', x: m.w - 16, y: 35, 'text-anchor': 'end'}, g, m.id);
+    if (m.files.length) {
+      el('circle', {'class': 'badge', cx: m.w - 4, cy: 4, r: 13}, g);
+      el('text', {'class': 'badge-t', x: m.w - 4, y: 8.5, 'text-anchor': 'middle'}, g, m.files.length);
+    }
+    el('text', {'class': 'far', x: m.w / 2, y: m.h / 2 + 30, 'text-anchor': 'middle'}, g, STATUS[m.status] || '');
+    el('text', {'class': 'path d1', x: 18, y: 58}, g, m.paths.length ? m.paths.join(', ') : (m.declared ? '（模組表沒寫路徑）' : '（模組表沒有這個模組）'));
+    if (!m.files.length) el('text', {'class': 'desc d1', x: 18, y: HEAD + 22}, g, '（本次沒有改動）');
+    m.files.slice(0, MAXF).forEach(function (c, i) {
+      var y = HEAD + i * ROW + 20;
+      el('rect', {'class': 'cmark d1', x: 18, y: y - 10, width: 4, height: 28, rx: 2}, g);
+      el('text', {'class': 'file d1', x: 30, y: y}, g, base(c.file));
+      el('text', {'class': 'desc d2', x: 30, y: y + 16}, g, delta(c) + ' · ' + c.file);
+    });
+    if (m.files.length > MAXF) el('text', {'class': 'desc d1', x: 30, y: HEAD + MAXF * ROW + 20}, g, '…另 ' + (m.files.length - MAXF) + ' 個檔');
+    el('text', {'class': 'tasks d1', x: 18, y: m.h - 14}, g, m.tasks.length
+      ? 'WBS ' + m.tasks.map(function (t) { return t + (TASK[t] ? ' ' + TASK[t].status : ''); }).join(' · ')
+      : 'WBS 沒有任務');
+  });
+  drawMini();
+}
+function drawMini() {
+  mini.replaceChildren();
+  var P = 60;
+  mini.setAttribute('viewBox', (ALL.x - P) + ' ' + (ALL.y - P) + ' ' + (ALL.w + 2 * P) + ' ' + (ALL.h + 2 * P));
+  GB.forEach(function (g) { el('rect', {'class': 'm-grp', x: g.x, y: g.y, width: g.w, height: g.h, rx: 16}, mini); });
+  MODS.forEach(function (m) { el('rect', {'class': 'm-box l-' + m.status, x: m.x, y: m.y, width: m.w, height: m.h, rx: 12, opacity: 0.75}, mini); });
+  vp = el('rect', {'class': 'm-vp', rx: 8, 'vector-effect': 'non-scaling-stroke'}, mini);
+  drawVp();
+}
+function drawVp() {
+  if (!vp) return;
+  var r = stage.getBoundingClientRect();
+  vp.setAttribute('x', -S.tx / S.k); vp.setAttribute('y', -S.ty / S.k);
+  vp.setAttribute('width', r.width / S.k); vp.setAttribute('height', r.height / S.k);
+}
+
+// ---------------------------------------------------------------- 平移縮放
+function clamp(k) { return Math.min(KMAX, Math.max(KMIN, k)); }
+function apply() {
+  world.setAttribute('transform', 'translate(' + S.tx + ',' + S.ty + ') scale(' + S.k + ')');
+  var d = 24 * S.k;
+  stage.style.backgroundSize = d + 'px ' + d + 'px';
+  stage.style.backgroundPosition = S.tx + 'px ' + S.ty + 'px';
+  root.classList.toggle('lod1', S.k >= LOD1);
+  root.classList.toggle('lod2', S.k >= LOD2);
+  $('zl').textContent = Math.round(S.k * 100) + '%';
+  drawVp();
+}
+function zoomAt(px, py, f) {
+  var nk = clamp(S.k * f);
+  S.tx = px - (px - S.tx) * nk / S.k; S.ty = py - (py - S.ty) * nk / S.k; S.k = nk; apply();
+}
+var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches, anim = 0;
+function animateTo(t) {
+  cancelAnimationFrame(anim);
+  if (reduce) { S.tx = t.tx; S.ty = t.ty; S.k = t.k; return apply(); }
+  var s = {tx: S.tx, ty: S.ty, k: S.k}, t0 = performance.now();
+  function step(now) {
+    var p = Math.min(1, (now - t0) / 320), e = 1 - Math.pow(1 - p, 3);
+    S.tx = s.tx + (t.tx - s.tx) * e; S.ty = s.ty + (t.ty - s.ty) * e; S.k = s.k + (t.k - s.k) * e; apply();
+    if (p < 1) anim = requestAnimationFrame(step);
+  }
+  anim = requestAnimationFrame(step);
+}
+function fitTo(b, pad, maxK) {
+  var r = stage.getBoundingClientRect();
+  var k = clamp(Math.min((r.width - 2 * pad) / b.w, (r.height - 2 * pad) / b.h, maxK || KMAX));
+  return {k: k, tx: r.width / 2 - (b.x + b.w / 2) * k, ty: r.height / 2 - (b.y + b.h / 2) * k};
+}
+function fitAll() { animateTo(fitTo(ALL, 40, 1)); }
+function focusMod(id) {
+  var m = BY[id]; if (!m) return;
+  select(id); animateTo(fitTo({x: m.x, y: m.y, w: m.w, h: m.h}, 60, 1.6));
+}
+function hitMod(e) {
+  var n = document.elementsFromPoint(e.clientX, e.clientY).find(function (x) { return x.closest && x.closest('.mod'); });
+  return n ? n.closest('.mod').dataset.id : null;
+}
+var drag = null;
+stage.addEventListener('pointerdown', function (e) {
+  if (e.target.closest('#mini,.zoom')) return;
+  drag = {x: e.clientX, y: e.clientY, tx: S.tx, ty: S.ty, moved: false};
+  stage.setPointerCapture(e.pointerId); stage.classList.add('dragging');
+});
+stage.addEventListener('pointermove', function (e) {
+  if (!drag) return;
+  var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+  if (drag.moved) { S.tx = drag.tx + dx; S.ty = drag.ty + dy; apply(); }
+});
+stage.addEventListener('pointerup', function (e) {
+  if (!drag) return;
+  stage.classList.remove('dragging');
+  if (!drag.moved) select(hitMod(e));
+  drag = null;
+});
+stage.addEventListener('dblclick', function (e) { var id = hitMod(e); if (id) focusMod(id); });
+stage.addEventListener('wheel', function (e) {
+  e.preventDefault();
+  var r = stage.getBoundingClientRect();
+  zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
+}, {passive: false});
+function center() { var r = stage.getBoundingClientRect(); return [r.width / 2, r.height / 2]; }
+$('zin').onclick = function () { var c = center(); zoomAt(c[0], c[1], 1.25); };
+$('zout').onclick = function () { var c = center(); zoomAt(c[0], c[1], 0.8); };
+$('zfit').onclick = function () { select(null); fitAll(); };
+document.addEventListener('keydown', function (e) {
+  if (e.target.matches('input')) return;
+  var c = center();
+  if (e.key === 'Escape') { select(null); fitAll(); }
+  else if (e.key === '+' || e.key === '=') zoomAt(c[0], c[1], 1.25);
+  else if (e.key === '-') zoomAt(c[0], c[1], 0.8);
+});
+$('onlychg').addEventListener('change', function (e) { root.classList.toggle('onlychg', e.target.checked); });
+var mdrag = false;
+function miniJump(e) {
+  var p = new DOMPoint(e.clientX, e.clientY).matrixTransform(mini.getScreenCTM().inverse());
+  var r = stage.getBoundingClientRect();
+  S.tx = r.width / 2 - p.x * S.k; S.ty = r.height / 2 - p.y * S.k; apply();
+}
+mini.addEventListener('pointerdown', function (e) { mdrag = true; mini.setPointerCapture(e.pointerId); miniJump(e); });
+mini.addEventListener('pointermove', function (e) { if (mdrag) miniJump(e); });
+mini.addEventListener('pointerup', function () { mdrag = false; });
+
+// ---------------------------------------------------------------- 右側面板
+function fileItems(list, withMod) {
+  return list.map(function (c) {
+    var m = c.module && BY[c.module];
+    return '<li><button data-m="' + esc(c.module || '') + '"><span class="fpath">' + esc(c.file) + '</span><span class="fdesc">' +
+      (withMod ? esc(m ? m.name : '不屬於任何模組') + ' — ' : '') + esc(delta(c)) + '</span></button></li>';
+  }).join('');
+}
+function select(id) {
+  if (id && !BY[id]) id = null;
+  selected = id;
+  world.querySelectorAll('.mod').forEach(function (n) { n.classList.toggle('sel', n.dataset.id === id); });
+  if (!id) return summary();
+  var m = BY[id];
+  panel.innerHTML = '<button class="back" id="pback">← 本次改動總覽</button>' +
+    '<h2><i class="dot s-' + esc(m.status) + '"></i>' + esc(m.name) + '</h2>' +
+    '<div class="meta">' + esc(STATUS[m.status]) + ' · <code>' + esc(m.id) + '</code>' + (m.current ? ' · ★ 本次任務' : '') + '</div>' +
+    '<div class="note' + (m.status === 'issue' ? ' issue' : '') + '">' + esc(m.statusReason) + '</div>' +
+    (m.declared ? '' : '<div class="note issue">容器圖有、模組表（5.5）沒有這個模組</div>') +
+    (m.responsibility ? '<h3>職責</h3><div class="fdesc">' + esc(m.responsibility) + '</div>' : '') +
+    '<h3>路徑</h3><div class="chips">' + (m.paths.map(function (p) { return '<code class="chip">' + esc(p) + '</code>'; }).join('') || '<span class="fdesc">—</span>') + '</div>' +
+    '<h3>WBS 任務（' + m.tasks.length + '）</h3><ul class="flist">' + (m.tasks.map(function (t) {
+      var x = TASK[t] || {};
+      return '<li><span class="row"><span class="fdesc">' + esc((x.status || '') + ' ' + t + ' ' + (x.title || '')) + '</span></span></li>';
+    }).join('') || '<li class="fdesc">沒有任務掛在這個模組</li>') + '</ul>' +
+    '<h3>本次改動（' + m.files.length + '）</h3><ul class="flist">' + (fileItems(m.files, false) || '<li class="fdesc">沒有</li>') + '</ul>';
+  $('pback').onclick = function () { select(null); fitAll(); };
+}
+function summary() {
+  if (!D) { panel.innerHTML = ''; return; }
+  var ch = D.changes || [], mods = {};
+  ch.forEach(function (c) { if (c.module) mods[c.module] = 1; });
+  var cur = D.current ? '任務 ' + esc(D.current.task) : '沒有標記中的任務';
+  var b = D.changesBase;
+  panel.innerHTML = '<h2>本次改動</h2><div class="meta">' + ch.length + ' 個檔 · ' + Object.keys(mods).length + ' 個模組 · ' + cur +
+    (b ? '<br>比較基準 <code>' + esc(b.commit) + '</code>' + (b.defaultBranch ? '（與 ' + esc(b.defaultBranch) + ' 分岔處）' : '') : '') +
+    (D.truncated ? '<br>改動太多，只列前段' : '') + '</div>' +
+    '<ul class="flist">' + (fileItems(ch, true) || '<li class="fdesc">工作區與分支上都沒有改動</li>') + '</ul>' +
+    (D.unmappedTasks && D.unmappedTasks.length ? '<h3>沒有對到模組的任務</h3><div class="chips">' + D.unmappedTasks.map(function (t) { return '<span class="chip">' + esc(t) + '</span>'; }).join('') + '</div>' : '') +
+    '<h3>說明</h3><div class="fdesc">點檔案會飛到所屬模組。縮小只看模組和燈號，放大到 55% 以上顯示路徑、檔名、任務，110% 以上再顯示每個檔改了多少。地圖由架構文件產生，要改模組請改文件。</div>';
+}
+panel.addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-m]');
+  if (b && b.dataset.m) focusMod(b.dataset.m);
+});
+
+// ---------------------------------------------------------------- 資料
+function setStatus(text, stale) { var s = $('status'); s.textContent = text; s.className = stale ? 'stale' : ''; }
+function when(d) { return String(d.generatedAt || '').replace('T', ' ').slice(0, 19); }
+function render(d) {
+  D = d;
+  document.title = '專案地圖 — ' + (d.project && d.project.name || '');
+  $('title').innerHTML = '專案地圖 — ' + esc(d.project && d.project.name) + (d.project && d.project.architectureDraft ? '<span class="draft">架構草稿</span>' : '');
+  var n = $('notices');
+  n.innerHTML = (d.notices || []).map(function (x) {
+    return '<div class="ntc ' + esc(x.level) + '">' + esc(x.text) + (x.action ? '<span class="act">→ ' + esc(x.action) + '</span>' : '') + '</div>';
+  }).join('');
+  n.classList.toggle('on', !!(d.notices && d.notices.length));
+  layout(d);
+  var none = !MODS.length;
+  $('empty').classList.toggle('on', none);
+  $('empty').textContent = none ? ((d.notices && d.notices[0] && d.notices[0].text) || '沒有可畫的模組') : '';
+  draw(d);
+  select(selected);
+  if (!fitted && !none) { var f = fitTo(ALL, 40, 1); S.tx = f.tx; S.ty = f.ty; S.k = f.k; fitted = true; }
+  apply();
+  setStatus('資料時間 ' + when(d), false);
+}
+
+// 輪詢：每次插一個新的 classic script（帶 ?t= 避開快取）。載入前把 window.OVERVIEW 設成 null，
+// 載入後仍是 null ＝ 檔案寫到一半（語法錯誤）或暫時不存在 → 保留上一份、顯示「更新中」。
+// 這招成立的前提是 data.js 只有一句賦值（overview.sh 保證）。
+var timer = null, inflight = false;
+function check() {
+  if (inflight) return;
+  inflight = true;
+  var prev = window.OVERVIEW;
+  window.OVERVIEW = null;
+  var s = document.createElement('script');
+  s.src = 'data.js?t=' + Date.now();
+  function done() {
+    s.remove(); inflight = false;
+    var next = window.OVERVIEW;
+    if (!next) {
+      window.OVERVIEW = prev;
+      setStatus('更新中…（資料時間 ' + (D ? when(D) : '—') + '）', true);
+      return;
+    }
+    if (!D || next.generatedAt !== D.generatedAt) render(next);
+    else setStatus('資料時間 ' + when(D), false);
+  }
+  s.onload = done; s.onerror = done;
+  document.head.appendChild(s);
+}
+function start() { if (!timer) timer = setInterval(check, POLL_MS); }
+function stop() { clearInterval(timer); timer = null; }
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState === 'visible') { check(); start(); } else stop();
+});
+new ResizeObserver(function () { drawVp(); }).observe(stage);
+
+if (window.OVERVIEW) render(window.OVERVIEW);
+else { setStatus('找不到 data.js——跑一次 /task-status 產生', true); summary(); }
+if (document.visibilityState === 'visible') start();
+})();
+</script>
+</body>
+</html>
