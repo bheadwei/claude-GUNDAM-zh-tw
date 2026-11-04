@@ -438,7 +438,8 @@ commit。本輪 ≤4 個合併最多 2 步。**先在 `ROUND_BASE` 跑一次那�
 ```
 
 - **補登為已完成**（Recommended）— 追加一行到 `wbs.md` 的當前里程碑節，狀態直接標 `✅ MM-DD`，
-  負責欄填 `—`、連結欄填 `[計畫](plans/archive/<filename>)`，並重算「現況」區（版面見 `.claude/templates/wbs.template.md`）
+  模組欄與負責欄填 `—`、連結欄填 `[計畫](plans/archive/<filename>)`，並重算「現況」區（版面見 `.claude/templates/wbs.template.md`）。
+  寫入前先讀該節表頭，依該表頭的欄位寫；表頭沒有「模組」欄就不寫那一格（範本第 2 節「依表頭寫入」）
 - **不用，這是一次性的** — 不動 WBS
 - **補登並順便加後續任務** — 補登後接 `/task-add` 流程
 
