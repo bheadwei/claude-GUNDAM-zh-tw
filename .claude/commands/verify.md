@@ -126,6 +126,24 @@ printf 'sha=%s result=%s clean=%s suite=%s secrets=%s spec=%s profile=%s at=%s\n
 
 清掉 `.merge-round-open` 的理由：整套在乾淨工作區通過，本輪合併的結果就被整套涵蓋了（旗標見「中間合併：快檢」）。
 
+## 寫回 plan 的「計畫 vs 實際」
+
+緊接在「記下這次驗證」之後、**歸檔 plan 之前**（PASS 或 FAIL 都做；worktree 裡也做，寫的是 worktree 那份 plan）。
+對應的 plan 照下方「Plan 驗收標準比對」的找法（`.current-task` → `plans/<值>.md` 或 `<值>-*.md`）；
+找不到 plan 就跳過這一步，在輸出寫一句「無對應 plan，未寫回計畫 vs 實際」。
+
+```bash
+bash .claude/scripts/overview.sh --actual .claude/taskmaster-data/plans/<plan 檔名> --result <PASS|FAIL> --reason "<一句>"
+```
+
+- `--reason` 只有 FAIL 要帶，寫**一句**使用者看得懂的失敗原因（例：`2 個測試失敗：token 過期判斷用了本地時區`）；
+  FAIL 沒帶 reason 腳本會 exit 2、不寫
+- 腳本只改 plan 裡 `<!-- overview:actual:start -->` 到 `end` 之間的文字（再跑是取代），並重產專案圖解。
+  區塊格式見 `plan-format` skill 的「計畫 vs 實際」節（唯一來源）
+- 印出 `已寫入「計畫 vs 實際」…` 就完成，**不要 Read 剛寫的區塊來檢查**；之後要 Edit 這份 plan（勾 checklist、
+  歸檔改 frontmatter）前照常先重讀，因為檔案剛被腳本改過
+- exit 非 0 → 把它印的原因放進驗證報告，**不因此把驗證結果改成 FAIL**（這是圖解，不是驗證本身）
+
 ## Plan 驗收標準比對
 
 若當前 `.current-task` 對應的 plan 存在（`.claude/taskmaster-data/plans/<值>.md` 或 `<值>-*.md`，

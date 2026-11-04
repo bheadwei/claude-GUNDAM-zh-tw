@@ -84,6 +84,10 @@ files:                       # 本任務會「新增/修改」的檔案範圍
 
 2-3 句摘要，描述完成後使用者看到什麼變化。
 
+## 一眼看懂
+
+（部件表＋虛線 mermaid，寫法見下方「一眼看懂」節）
+
 ## WBS 連結
 
 - 任務：2.1 建立 auth middleware
@@ -167,6 +171,66 @@ Plan 獨有的技術層面依賴，非 WBS 的任務依賴：
 - 不確定範圍時**寧可多列**（多列只會讓系統更保守、少誤判可平行）
 - **沒有 plan 檔或沒寫 `files:` 的任務 → 一律視為「範圍未知，不可自動平行」**
 
+### 「一眼看懂」（任務圖的資料來源，唯一來源）
+
+放在「目標」之後。`/plan` 寫一次，之後不用維護——進度由階段標題的 ⏳/🔄/✅、
+`git diff` 與執行帳本算出來，畫在 `taskmaster-data/overview/` 的任務圖上（`scripts/overview.sh`）。
+
+````markdown
+## 一眼看懂
+
+```mermaid
+flowchart LR
+  classDef planned fill:#ffffff,stroke:#9ca3af,stroke-dasharray:5 5,color:#6b7280
+  subgraph s1["階段 1 介面與型別"]
+    p1["TokenPayload schema"]
+  end
+  subgraph s2["階段 2 JWT 驗證核心"]
+    p2["verifyToken()"]
+    p3["錯誤碼對應"]
+  end
+  p1 -.-> p2
+  p2 -.-> p3
+  class p1,p2,p3 planned
+```
+
+| id | 部件 | 階段 | 檔案 | 驗收 |
+|---|---|---|---|---|
+| p1 | TokenPayload schema | 1 | `src/types/auth.ts` | 缺 `sub` 欄位 → 驗證錯誤 |
+| p2 | verifyToken() | 2 | `src/lib/auth/middleware.ts` | 簽章正確且未過期 → 回傳 payload |
+| p3 | 錯誤碼對應 | 2 | `src/lib/auth/errors.ts` | 過期 → 401 `TOKEN_EXPIRED` |
+````
+
+- **部件**＝使用者看得懂的一塊功能，不是一個函式。一個階段 1-3 個部件
+- **`id`** 用 `p1`、`p2`…，整份 plan 不重複。mermaid 的節點 id 與表格的 `id` 相同
+- **`階段`** 填數字，要對得上「階段拆解」的 `### 階段 N`
+- **`檔案`** 填這個部件會寫的檔或 glob，多個用 `,` 分隔；都要落在 frontmatter 的 `files:` 範圍內
+- **`驗收`** 從該階段的「驗收」挑最能代表這個部件的一條（寫法見「驗收欄怎麼寫」）
+- mermaid 一律畫虛線 `-.->`、全部 `planned`：這段是**計畫**，完成狀態由腳本另外畫，不要回來改它
+- 表頭四欄 `id／部件／階段／檔案` 的字是腳本抽資料的依據（`overview.sh` 的 `OVERVIEW_COLS_PART`，
+  `check-counts.sh` 會比對）。改欄名要兩邊一起改，否則任務圖會靜默抽不到部件
+
+沒寫這段的舊 plan 照樣能跑，任務圖只列得出「改了哪些檔」，畫不出部件。
+
+### 「計畫 vs 實際」（`/verify` 寫入，任何人不得手改）
+
+`/verify` 結束時呼叫 `overview.sh --actual`，在 plan **檔尾**寫入一段由標記包住的區塊：
+
+```markdown
+<!-- overview:actual:start — 由 /verify 經 overview.sh --actual 寫入，勿手改 -->
+## 計畫 vs 實際
+
+驗證：❌ FAIL（11-04 13:50）— 2 個測試失敗：token 過期判斷用了本地時區
+
+（部件實際狀態的 mermaid ＋「這次 AI 改了什麼」表：部件、狀態、AI 摘要、檔案、+/−、測試）
+<!-- overview:actual:end -->
+```
+
+- 再跑一次是**原地取代**，不會疊第二份；區塊外的內容一個字都不動
+- 「驗證：」那一行會被腳本讀回來決定燈號（FAIL → 這份 plan 碰到的模組顯示「有問題」），所以不要手改
+- 「AI 摘要」取自執行帳本的 `摘要=`、`測試=`（格式見 `subagent-execution` skill 的「帳本要記什麼」）；
+  帳本沒寫就顯示 `—`
+
 ---
 
 ## 狀態同步規則
@@ -178,6 +242,7 @@ Plan 獨有的技術層面依賴，非 WBS 的任務依賴：
 | `/plan` | 建立、覆寫整份 | 初次規劃或使用者要求重寫 |
 | `/tdd`（主模型） | 只改階段狀態、current_phase、updated | 每完成一階段 |
 | `/verify` | 只標記整體 status=✅ 並歸檔（**帳本一起歸檔**） | 所有階段完成且驗證通過 |
+| `/verify` 經 `overview.sh --actual` | 只寫 `overview:actual` 標記區塊之內 | 每次 `/verify`（PASS 或 FAIL） |
 | 使用者手動 | 任何時候 | 但會被 `/tdd` 下次讀取時覆寫階段狀態 |
 
 **subagent 一律沒有寫入權——只有主模型能改 plan 檔**（`/plan` 時的 `planner` 是唯一例外，

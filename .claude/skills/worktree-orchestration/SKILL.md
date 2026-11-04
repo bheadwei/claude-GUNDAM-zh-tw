@@ -46,7 +46,7 @@ description: Use when running work in parallel across git worktrees — creating
 | `taskmaster-data/.report-expectations.jsonl` | `taskmaster-data/.suggest-mode` — 專案級設定 |
 | `taskmaster-data/.last-verify` — 驗的是**這個 checkout** 的 HEAD | `logs/`＋`timelog.jsonl` — 集中一處才查得到 |
 | | `taskmaster-data/.merge-round-open` — 本輪有合併還沒被整套涵蓋；合併只在主 checkout 做（寫入與清除見 `commands/verify.md`） |
-| | `taskmaster-data/overview/`（含 `overview.md`、`data.js`、畫面）— 專案圖解，不進 git；各 worktree 觸發的重產都寫主 checkout 這一份（`scripts/overview.sh` 用 git common dir 自己算主 checkout，不靠 hook 的 root 解析） |
+| | `taskmaster-data/overview/`（含 `overview.md`、`data.js`、畫面）— 專案圖解，不進 git；各 worktree 觸發的重產都寫主 checkout 這一份（`scripts/overview.sh` 用 git common dir 自己算主 checkout，不靠 hook 的 root 解析）。`data.js` 會疊上各 worktree 的 plan 進度、改動與 `.current-task`（每個 worktree 自己那份 plan 只讀不寫）；`overview.md` 只反映主 checkout |
 
 註：`.doc-impact` 跟著 worktree，所以 worktree 累積的文件債**不會自己回到主 checkout**。
 合併時由 hook 把它併進主 checkout 的 `.doc-impact`，主 checkout 的 `/verify`「文件同步關卡」

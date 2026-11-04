@@ -80,7 +80,7 @@ description: Use when executing a multi-phase plan under standard/critical task 
 - 2026-09-07 10:12 派工 implementer（sonnet）｜BASE=a1b2c3d
 - 2026-09-07 10:20 回報 DONE｜commit=e4f5g6h｜產出 src/types/auth.ts, tests/auth/types.test.ts
 - 2026-09-07 10:23 審查通過（規格 ✅ 品質 ✅）｜範圍=a1b2c3d..e4f5g6h
-- 2026-09-07 10:23 階段完成 → plan 標 ✅，current_phase=2
+- 2026-09-07 10:23 階段完成 → plan 標 ✅，current_phase=2｜摘要=新增 TokenPayload 的 Zod schema｜測試=6/6
 
 ## 階段 2: JWT 驗證核心
 - 2026-09-07 10:25 派工 implementer（sonnet）｜BASE=e4f5g6h
@@ -95,6 +95,15 @@ description: Use when executing a multi-phase plan under standard/critical task 
 `/pr` 靠它判斷哪些 commit 已被階段審查看過、只把剩下的交給 `code-quality-specialist`
 （見 `commands/pr.md` 步驟 2c）。漏寫只會讓 `/pr` 退回審整條分支，不會漏審——但那就白審一次。
 主模型直接實作（`/tdd` 不派 implementer）時同樣照這個格式記。
+
+**「階段完成」那一行結尾加 `｜摘要=<一句話，30 字內>｜測試=<通過/總數>`。** 任務圖的
+「這次 AI 改了什麼」就是讀這兩個值（`scripts/overview.sh`）；摘要從 implementer 回報的「摘要」濃縮，
+測試數照它回報的「測試」。plan 有「一眼看懂」部件表、而這個階段做了不只一個部件時，
+可以每個部件另記一行 `- <時間> 部件 p2 完成｜摘要=…｜測試=…`，任務圖以部件行為準；
+沒記就整個階段的部件共用階段摘要。
+
+**同一份帳本第一個 `BASE=` 是整份 plan 的比較基準**——任務圖用它算「這份 plan 改了哪些檔」。
+沒記的話退回「與預設分支的 merge-base」，同分支上有別的工作時會混進來。
 
 ### 決策（Ruling）的格式
 
