@@ -8,7 +8,7 @@ description: Use when executing a multi-phase plan under standard/critical task 
 把 plan 的**每一個階段**交給一個**全新的 implementer subagent** 去實作，每階段做完立刻
 審查，審查有問題就進有上限的修復迴圈。主模型只做協調：派工、讀回報、裁決、記帳。
 
-**核心原則：** 每階段一個新 subagent ＋ 階段審查 ＋ 有界修復迴圈 ＋ 全域最終審查。
+**核心原則：** 每階段一個新 subagent ＋ 階段審查 ＋ 有界修復迴圈。
 
 **為什麼要派而不自己寫**：subagent 的 context 是你**親手構造**的，不會繼承你這條對話的
 雜訊。你精準給它需要的東西，它就不會跑偏；而你的 context 留給協調工作，不會被實作細節
@@ -46,7 +46,7 @@ description: Use when executing a multi-phase plan under standard/critical task 
 │  6. 通過 → 帳本記完成、plan 階段標 ✅、current_phase++│
 └──────────────────────────────────────────────────────┘
    ▼
-全部階段完成 → 全域審查（整條 branch 的 diff）→ /verify
+全部階段完成 → /verify（不另做全域審查：每階段已審過，見 `rules/task-mode.md`「審查節奏」）
 ```
 
 ---
@@ -79,7 +79,7 @@ description: Use when executing a multi-phase plan under standard/critical task 
 ## 階段 1: 介面與型別
 - 2026-09-07 10:12 派工 implementer（sonnet）｜BASE=a1b2c3d
 - 2026-09-07 10:20 回報 DONE｜commit=e4f5g6h｜產出 src/types/auth.ts, tests/auth/types.test.ts
-- 2026-09-07 10:23 審查通過（規格 ✅ 品質 ✅）
+- 2026-09-07 10:23 審查通過（規格 ✅ 品質 ✅）｜範圍=a1b2c3d..e4f5g6h
 - 2026-09-07 10:23 階段完成 → plan 標 ✅，current_phase=2
 
 ## 階段 2: JWT 驗證核心
@@ -87,8 +87,14 @@ description: Use when executing a multi-phase plan under standard/critical task 
 - 2026-09-07 10:41 回報 DONE_WITH_CONCERNS｜「middleware.ts 已 320 行」
 - 2026-09-07 10:42 Ruling: 不在本階段拆檔 — plan 階段 4 就要重整這支 — 若階段 4 取消則留下技術債
 - 2026-09-07 10:48 審查 R1：驗簽失敗未回 401 而是 500（規格 ✗）
-- 2026-09-07 10:55 修復 R1 完成｜commit=i7j8k9l｜審查通過
+- 2026-09-07 10:55 修復 R1 完成｜commit=i7j8k9l
+- 2026-09-07 10:58 審查通過（規格 ✅ 品質 ✅）｜範圍=e4f5g6h..i7j8k9l
 ```
+
+**「審查通過」那一行必須帶 `範圍=<BASE>..<審查時的 HEAD>`**（完整或縮寫 sha 皆可）。
+`/pr` 靠它判斷哪些 commit 已被階段審查看過、只把剩下的交給 `code-quality-specialist`
+（見 `commands/pr.md` 步驟 2c）。漏寫只會讓 `/pr` 退回審整條分支，不會漏審——但那就白審一次。
+主模型直接實作（`/tdd` 不派 implementer）時同樣照這個格式記。
 
 ### 決策（Ruling）的格式
 

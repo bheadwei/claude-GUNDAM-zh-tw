@@ -31,13 +31,14 @@ description: Use when writing or fixing tests, about to run a test command, deci
 |---|---|---|
 | RED／GREEN 每一輪（含除錯修復後的驗證） | **只跑這次相關的測試檔**（新寫的、和被改到的模組對應的） | 跑整套 |
 | 一個階段結束 | **跑一次** coverage，範圍限縮在這次改到的檔 | 每輪都跑 coverage、印整個專案的覆蓋率表 |
-| 任務收尾 | 整套測試 | 自己跑——**那是 `/verify` 的事**，它一定會跑 |
+| 任務收尾 | 整套測試——**只在主 checkout**；worktree 裡的 `/verify` 只跑本線相關的，整套留給合併後（見 `commands/verify.md` 步驟 4） | 自己跑——**那是 `/verify` 的事** |
 | 影響面對不到特定測試檔的批次變更（依賴升級 `/deps`、刪死碼 `/refactor-clean`） | 開始前跑一次整套當基準，之後**每批**跑一次整套 | 每個項目各跑一次整套 |
 | 任何時候 | 只回報結果摘要（見下） | 把整份測試輸出讀進 context |
 
 **第一列在 worktree 裡由 hook 強制**（`.claude/hooks/lib/full-suite-gate.sh`）：沒帶測試路徑、
 也沒有 `::`／`-k`／`-t` 這類篩選的 pytest／vitest／jest／`npm test` 會被擋一次，重試同一條即放行。
-整套是正當的（上表第三、四列：`/verify`、`/deps`、`/refactor-clean` 的基準與每批）→
+worktree 裡整套是正當的只有上表第四列（`/deps`、`/refactor-clean` 的基準與每批），以及 `/verify`
+取不到分支起點時的退路（見 `commands/verify.md` 步驟 4）→
 指令尾端加註解 `# full-suite`（例：`uv run pytest -q  # full-suite`），閘門不攔。
 主 checkout 不擋。逃生門：`FULL_SUITE_GATE=off`
 

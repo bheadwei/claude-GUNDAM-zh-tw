@@ -75,7 +75,7 @@
    ▼
 修復迴圈上限 5 輪：R1-R3 交回同一個 implementer；R4-R5 換新的 + 升級模型
    ▼
-全部階段完成 → 全域審查 → /verify（帳本隨 plan 一起歸檔）
+全部階段完成 → /verify（帳本隨 plan 一起歸檔）
 ```
 
 三個關鍵設計：
@@ -433,11 +433,11 @@ worktree 裡連 plan 都沒有，agent 不知道要實作什麼。
 ## 改動 hook 之後
 
 ```bash
-bash .claude/hooks/tests/run-tests.sh        # 807 案例
-bash .claude/scripts/check-counts.sh --tests 807   # 文件計數一致性
+bash .claude/hooks/tests/run-tests.sh        # 812 案例
+bash .claude/scripts/check-counts.sh --tests 812   # 文件計數一致性
 ```
 
 CI（`.github/workflows/template-ci.yml`）會在 push 與 PR 時自動跑這兩項，
 加上 Windows/Git Bash 的回歸測試、shell 與 PowerShell 語法、copy/update-template 沙箱實跑。
 
-807 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。
+812 個案例，全綠才算沒破壞閘門。詳見 `.claude/hooks/tests/README.md`。

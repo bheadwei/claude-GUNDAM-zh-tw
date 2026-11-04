@@ -102,11 +102,13 @@ git checkout main && git pull --rebase
     │          └─ CONCERNS → ⛔ 停下回報（測試紅，或它對某個解法沒把握）
     └─ 成功 → 往下跑 /verify
 
-    /verify
-    ├─ FAIL → ⛔ 停下回報，不自動修
+    /verify          中間只快檢、最後一個才整套＋收斂（判準見 verify.md「合併驗證關卡」）
+    │                合本輪最後一個時明說「這是本輪最後一個」
+    ├─ FAIL → ⛔ 停下回報，不自動修（最後一個的整套紅了 → 照 verify.md 的二分程序找元凶）
     └─ PASS → 解過衝突的話這裡才 commit → 繼續下一個
 
 全部合完 → 更新 WBS（各任務標 ✅）→ plan 歸檔 → 問要不要移除這些 worktree
+          （標 ✅ 前的「整套已涵蓋」前置檢查見 verify.md「標記與歸檔」第 0 步）
 ```
 
 **這個迴圈可以自動跑，是因為閘門在把關**：`post-bash.sh` 在每次合併成功時記一筆
@@ -114,9 +116,9 @@ git checkout main && git pull --rebase
 悄悄跳過 `/verify` —— 這也是為什麼舊版本明文寫著「不提供全部合併選項」，
 那條限制在閘門存在之後不再需要。
 
-`/verify` 在有 `.merge-pending` 時會多做兩件事（定義見 `commands/verify.md` 的
-「合併驗證關卡（不論有沒有進行中任務）」）：比對**每一個已合併任務**的 plan 驗收標準、以及載入
-`spec-convergence` 查漏做／範圍蔓延／描述失真。
+`/verify` 在有 `.merge-pending` 時先判斷這是不是本輪最後一個合併，中間的只快檢、
+最後一個才跑整套與 `spec-convergence`。判準、各驗什麼、整套紅了怎麼二分，
+見 `commands/verify.md` 的「合併驗證關卡（不論有沒有進行中任務）」（唯一來源）。
 
 **停下來的時候要回報什麼**：已經合成功幾個、卡在哪一個、卡的是衝突還是驗證、
 以及還沒合的有哪些。使用者要能決定「修完繼續」或「`git merge --abort` 退回」。
@@ -148,8 +150,8 @@ git checkout main && git pull --rebase
 env var 意義）、一邊刪掉另一邊在改的東西、兩份 plan 的驗收標準互相矛盾。
 那時它會 `git merge --abort` 並回報，不自己決定。
 
-**它不會 commit。** 完整的 `/verify`（含 plan 驗收比對與 `spec-convergence`）
-是主模型的事——解過衝突的合併比乾淨合併**更**需要驗證。
+**它不會 commit。** 接下來的 `/verify` 是主模型的事——解過衝突的合併比乾淨合併**更**需要驗證，
+`/pr` 跑把關鏈時，解衝突寫下的那幾行會被單獨挑出來審（`commands/pr.md` 步驟 2c）。
 
 **衝突另有一個訊號要處理**：它代表該 plan 的 `files:` 估算有漏。
 `conflict-resolver` 會順手補正那份 plan 的 `files:` frontmatter ——
