@@ -395,6 +395,11 @@ function fileItems(list, withMod) {
       (c.summary ? '<span class="fdesc">' + esc(c.summary) + '</span>' : '') + '</button></li>';
   }).join('');
 }
+function rollItems(list) {
+  return (list || []).map(function (r) {
+    return '<li class="fdesc">' + esc(r.dir) + ' 另 ' + r.files + ' 個檔（+' + r.added + ' / −' + r.removed + '，未逐一列出）</li>';
+  }).join('');
+}
 function select(id) {
   if (id && !BY[id]) id = null;
   selected = id;
@@ -408,7 +413,7 @@ function select(id) {
     (m.declared ? '' : '<div class="note issue">容器圖有、模組表（5.5）沒有這個模組</div>') +
     (m.responsibility ? '<h3>職責</h3><div class="fdesc">' + esc(m.responsibility) + '</div>' : '') +
     '<h3>路徑</h3><div class="chips">' + (m.paths.map(function (p) { return '<code class="chip">' + esc(p) + '</code>'; }).join('') || '<span class="fdesc">—</span>') + '</div>' +
-    '<h3>WBS 任務（' + m.tasks.length + '）</h3><ul class="flist">' + (m.tasks.map(function (t) {
+    '<h3>WBS 任務（' + m.tasks.length + '）' + (m.counts && m.counts.archivedDone ? '・另 ' + m.counts.archivedDone + ' 個已歸檔完成' : '') + '</h3><ul class="flist">' + (m.tasks.map(function (t) {
       var x = TASK[t] || {};
       return '<li><span class="row"><span class="fdesc">' + esc((x.status || '') + ' ' + t + ' ' + (x.title || '')) + '</span></span></li>';
     }).join('') || '<li class="fdesc">沒有任務掛在這個模組</li>') + '</ul>' +
@@ -424,8 +429,9 @@ function summary() {
   var b = D.changesBase;
   panel.innerHTML = '<h2>本次改動</h2><div class="meta">' + ch.length + ' 個檔 · ' + Object.keys(mods).length + ' 個模組 · ' + cur +
     (b ? '<br>比較基準 <code>' + esc(b.commit) + '</code>' + (b.defaultBranch ? '（與 ' + esc(b.defaultBranch) + ' 分岔處）' : '') : '') +
-    (D.truncated ? '<br>改動太多，只列前段' : '') + '</div>' +
-    '<ul class="flist">' + (fileItems(ch, true) || '<li class="fdesc">工作區與分支上都沒有改動</li>') + '</ul>' +
+    (D.truncated ? '<br>資料太多，部分省略（見頂端提示）' : '') + '</div>' +
+    '<ul class="flist">' + (fileItems(ch, true) || (D.changesRollup.length ? '' : '<li class="fdesc">工作區與分支上都沒有改動</li>')) + rollItems(D.changesRollup) + '</ul>' +
+    (D.archived && D.archived.unmapped ? '<div class="fdesc">已歸檔的完成任務有 ' + D.archived.unmapped + ' 個沒有標模組，不算進任何模組</div>' : '') +
     (D.unmappedTasks && D.unmappedTasks.length ? '<h3>沒有對到模組的任務</h3><div class="chips">' + D.unmappedTasks.map(function (t) { return '<span class="chip">' + esc(t) + '</span>'; }).join('') + '</div>' : '') +
     '<h3>說明</h3><div class="fdesc">點檔案會飛到所屬模組。縮小只看模組和燈號，放大到 55% 以上顯示路徑、檔名、任務，110% 以上再顯示每個檔改了多少。地圖由架構文件產生，要改模組請改文件。</div>';
 }
@@ -468,13 +474,16 @@ function planCard(pl) {
     (v ? '<div class="vr ' + esc(v.result) + '">驗證 ' + esc(v.result) + (v.at ? '（' + esc(v.at) + '）' : '') + (v.reason ? ' — ' + esc(v.reason) : '') + '</div>' : '') +
     (cols.length ? '<div class="phs">' + cols.map(function (c) {
       return '<div class="ph"><h3>' + esc(c.t) + '</h3>' + (c.ps.map(function (p) { return partCard(p, pl); }).join('') || '<div class="fdesc">沒有部件</div>') + '</div>';
-    }).join('') + '</div>' : '<div class="note">這份 plan 沒有「一眼看懂」部件表，只列得出改了哪些檔</div>') +
+    }).join('') + '</div>' : '<div class="note">' + (pl.stub ? '資料太多，這份 plan 只留狀態（本次的 plan 不受影響）' : '這份 plan 沒有「一眼看懂」部件表，只列得出改了哪些檔') + '</div>') +
     '<table class="pt"><thead><tr><th>檔案</th><th>部件</th><th>+/−</th><th>AI 做了什麼</th></tr></thead><tbody>' +
     (pl.changes.map(function (c) {
       var p = pl.parts.filter(function (x) { return x.id === c.part; })[0];
       return '<tr><td><code>' + esc(c.file) + '</code></td><td>' + esc(p ? (p.planned ? p.id + ' ' + p.name : '計畫外') : (c.planned ? '計畫內' : '—')) +
         '</td><td>' + esc(delta(c)) + '</td><td>' + esc(p && p.ai && p.ai.summary || '—') + '</td></tr>';
-    }).join('') || '<tr><td colspan="4" class="fdesc">沒有改動</td></tr>') + '</tbody></table></section>';
+    }).join('') || ((pl.changesRollup || []).length ? '' : '<tr><td colspan="4" class="fdesc">沒有改動</td></tr>')) +
+    (pl.changesRollup || []).map(function (r) {
+      return '<tr><td><code>' + esc(r.dir) + '</code> ' + r.files + ' 個檔</td><td>未逐一列出</td><td>' + esc(nums(r)) + '</td><td>—</td></tr>';
+    }).join('') + '</tbody></table></section>';
 }
 function renderTasks(d) {
   var tv = $('tv'), st = tv.scrollTop, ps = d.plans || [];
@@ -502,6 +511,8 @@ document.querySelector('.tabs').addEventListener('click', function (e) {
 function setStatus(text, stale) { var s = $('status'); s.textContent = text; s.className = stale ? 'stale' : ''; }
 function when(d) { return String(d.generatedAt || '').replace('T', ' ').slice(0, 19); }
 function render(d) {
+  // 沒有 jq 時 data.js 只有 notices（overview.sh 用 printf 寫的），其餘欄位補成空的
+  ['modules', 'groups', 'edges', 'tasks', 'plans', 'changes', 'changesRollup', 'notices', 'unmappedTasks'].forEach(function (k) { d[k] = d[k] || []; });
   D = d;
   document.title = '專案圖解 — ' + (d.project && d.project.name || '');
   $('title').innerHTML = '專案圖解 — ' + esc(d.project && d.project.name) + (d.project && d.project.architectureDraft ? '<span class="draft">架構草稿</span>' : '');
