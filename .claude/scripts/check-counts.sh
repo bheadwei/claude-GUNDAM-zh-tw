@@ -321,8 +321,17 @@ if [ -f "$TPL05" ]; then
                               split($0, c, "|"); v = c[2]; gsub(/^[ \t]+|[ \t]+$/, "", v); print v }' "$TPL05")
     NODES51=$(awk '/^### 5\.1/{s=1; next} s && /^##/{exit}
                    s && /^```mermaid/{m=1; next} s && m && /^```/{m=0; next}
-                   s && m && !/^[ \t]*subgraph/ && match($0, /^[ \t]*[a-z0-9-]+[ \t]*[\[\(\{]/) {
+                   s && m && !/^[ \t]*subgraph/ && match($0, /^[ \t]*[A-Za-z0-9_-]+[ \t]*[\[\(\{]/) {
                        v = substr($0, RSTART, RLENGTH); gsub(/[ \t\[\(\{]/, "", v); print v }' "$TPL05" | sort -u)
+    # 先抓所有節點、再驗格式：只抓合格的 id 會讓 `Web`、`svc_a` 這種節點靜默漏掉
+    CHECKED=$((CHECKED + 1))
+    BAD_IDS=$(printf '%s\n' "$NODES51" | grep -v '^$' | grep -vxE '[a-z0-9-]+' || true)
+    RESERVED=$(printf '%s\n' "$NODES51" | grep -xE 'end|graph|subgraph|style|class' || true)
+    BAD_IDS=$(printf '%s\n%s\n' "$BAD_IDS" "$RESERVED" | grep -v '^$' | tr '\n' ' ' || true)
+    if [ -n "$BAD_IDS" ]; then
+        FAIL=$((FAIL + 1))
+        printf '  %s 05 範本 5.1 容器圖的節點 id 不合格（只准 [a-z0-9-]+，且不可是 mermaid 保留字）：%s\n' "$(red '✗')" "$BAD_IDS"
+    fi
     CHECKED=$((CHECKED + 1))
     MISSING=""
     while IFS= read -r nid; do
@@ -331,7 +340,7 @@ if [ -f "$TPL05" ]; then
     done <<< "$NODES51"
     if [ -z "$NODES51" ] || [ -n "$MISSING" ]; then
         FAIL=$((FAIL + 1))
-        printf '  %s 05 範本 5.1 容器圖的節點 id 不在 5.5 的 id 欄：%s\n' "$(red '✗')" "${MISSING:- （5.1 找不到小寫 id 節點）}"
+        printf '  %s 05 範本 5.1 容器圖的節點 id 不在 5.5 的 id 欄：%s\n' "$(red '✗')" "${MISSING:- （5.1 找不到任何節點）}"
         printf '      範例要自洽：節點 id＝模組 id。\n'
     fi
 fi

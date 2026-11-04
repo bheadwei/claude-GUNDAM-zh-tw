@@ -157,4 +157,4 @@
 | 2.1 | 建立 auth middleware | api | 🔄 進行中 | 高 | 1.3 | 4h | alice | [計畫](plans/2.1-auth-middleware.md) |
 ```
 
-「模組」填架構文件 5.5 的 `id`，沒有架構或跨全域填 `—`。「負責」只寫一個小寫人名，未指派 `—`。每格只寫一行；驗證數據、選型理由、阻塞原因該搬去哪，見 `.claude/templates/wbs.template.md` 第 4 節。
+各欄（含「模組」「負責」）怎麼填，見 `.claude/templates/wbs.template.md` 第 2 節（唯一來源）。每格只寫一行；驗證數據、選型理由、阻塞原因該搬去哪，見 `.claude/templates/wbs.template.md` 第 4 節。
