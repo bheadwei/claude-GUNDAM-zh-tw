@@ -3050,6 +3050,131 @@ expect_contains "主 checkout 路徑含中文與空格 → --print-path 保留�
 ( cd "$OVCJK" && git worktree remove --force "$OVCJKWT" ) >/dev/null 2>&1
 rm -rf "$SANDBOX/中文 目錄"
 
+# ---- 任務圖（階段 4）
+# 獨立的假專案、每個案例重開 repo（沙箱根目錄有別節留下的檔，會混進「計畫外」）。
+# 路徑刻意含中文與空格：jq 讀中文絕對路徑會失敗（context/learned/2026-11-04-jq-windows-non-ascii-path.md）。
+TG="$SANDBOX/任務 圖/專 案"; TGD="$TG/.claude/taskmaster-data"; TGO="$TGD/overview"
+tg_git()  { git -C "$TG" -c user.email=t@t -c user.name=t "$@" >/dev/null 2>&1; }
+tg_ov()   { bash "$TG/.claude/scripts/overview.sh" "$TG" >/dev/null 2>&1; }
+tgq()     { sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$TGO/data.js" 2>/dev/null | jq -r "$1" 2>/dev/null; }
+tgp()     { tgq ".plans[] | select(.file == \"plans/${2:-1.2-x.md}\") | $1"; }
+tg_reset() {
+    rm -rf "$SANDBOX/任務 圖"
+    mkdir -p "$TG/.claude/scripts" "$TG/.claude/templates/overview" "$TGD/plans" "$TG/docs" "$TG/src/api" "$SANDBOX/docs"
+    cp "$OV_SRC" "$TG/.claude/scripts/overview.sh"; cp "$OV_TPL" "$TG/.claude/templates/overview/index.html"
+    printf '{"name":"任務圖","mode":"mvp"}\n' > "$TGD/project.json"
+    ov_arch; cp "$SANDBOX/docs/05_architecture.md" "$TG/docs/"
+    OVD="$TGD" ov_wbs "${@:-1.2|api|🔄 進行中}"
+    printf '1\n2\n' > "$TG/src/api/old.ts"
+    git -C "$TG" init -q -b main; tg_git add -A; tg_git commit -qm init; tg_git checkout -q -b feat/x
+}
+# plan：p1（階段 1）、p2（階段 2）；$2 $3 是兩個階段的狀態；TP_A／TP_B 換掉兩個部件的檔案
+tg_plan() {
+    local a="${TP_A:-src/api/a.ts}" b="${TP_B:-src/api/b.ts}"
+    { echo '---'; echo "wbs_task: \"${TP_TASK:-1.2}\""; echo "status: \"${TP_STATUS:-⏳ 未開始}\""; echo 'current_phase: 1'
+      echo 'mode: "standard"'; echo 'files:'; echo "  - \"$a\""; echo "  - \"$b\""; echo '---'; echo
+      echo '# 實作計畫：測試計畫'; echo; echo '## 一眼看懂'; echo
+      echo '| id | 部件 | 階段 | 檔案 | 驗收 |'; echo '|---|---|---|---|---|'
+      echo "| p1 | A 部件 | 1 | \`$a\` | 呼叫 a → 回 1 |"; echo "| p2 | B 部件 | 2 | \`$b\` | 呼叫 b → 回 2 |"; echo
+      echo '## 階段拆解'; echo; echo "### 階段 1: 介面 ${2:-⏳}"; echo; echo "### 階段 2: 核心 ${3:-⏳}"
+    } > "$TGD/plans/${1:-1.2-x.md}"
+}
+tg_actual() { bash "$TG/.claude/scripts/overview.sh" --actual "$TGD/plans/1.2-x.md" "$@" >/dev/null 2>&1; }
+# plan 拿掉 actual 區塊後的內容（驗「區塊外不動」用）
+tg_outside() { awk '/^<!-- overview:actual:start/ { s = 1 } !s { print } /^<!-- overview:actual:end/ { s = 0 }' "$TGD/plans/1.2-x.md"; }
+
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳; tg_ov
+expect_eq "兩階段都 ⏳ → 兩個部件都是 planned" "planned planned" "$(tgp '[.parts[].state] | join(" ")')"
+expect_contains "overview.md 任務圖：p1 是 planned" "class p1 planned" "$(cat "$TGO/overview.md" 2>/dev/null)"
+expect_contains "overview.md 任務圖：p2 是 planned" "class p2 planned" "$(cat "$TGO/overview.md" 2>/dev/null)"
+
+printf '1\n2\n3\n' > "$TG/src/api/a.ts"; printf 'x\n' > "$TG/src/api/c.ts"; printf '1\n' > "$TG/src/api/old.ts"
+tg_git add -A; tg_git commit -qm a
+tg_plan 1.2-x.md ✅ ⏳; tg_ov
+expect_eq "階段 1 ✅、src/api/a.ts 在 diff 裡 → p1 done" done "$(tgp '.parts[] | select(.id == "p1") | .state')"
+expect_eq "diff 裡有不在部件也不在 files: 的檔 → extra 部件、planned:false" "src/api/c.ts false" \
+    "$(tgp '.parts[] | select(.state == "extra" and .name == "src/api/c.ts") | "\(.name) \(.planned)"')"
+expect_eq "changes 的 +/− 等於 git diff --numstat <base>..HEAD" \
+    "$(git -C "$TG" diff --numstat main..HEAD -- . ':(exclude).claude' | awk '{ print $3 " " $1 " " $2 }' | sort | paste -sd, -)" \
+    "$(tgp '[.changes[] | "\(.file) \(.added) \(.removed)"] | sort | join(",")')"
+expect_eq "沒有帳本 → 基準是與預設分支的 merge-base" "$(git -C "$TG" rev-parse --short main)" "$(tgp '.base')"
+
+{ echo "# 執行帳本 — plan: x"; echo "## 階段 1: 介面"; echo "- 10:00 派工｜BASE=$(git -C "$TG" rev-parse HEAD)"
+  echo "- 10:20 階段完成 → plan 標 ✅｜摘要=新增 token 解析｜測試=12/12"; } > "$TGD/plans/1.2-x.progress.md"
+printf 'y\n' > "$TG/src/api/b.ts"; tg_git add -A; tg_git commit -qm b
+tg_ov
+expect_eq "帳本有 BASE= → 用它當基準（只剩之後的改動）" "$(git -C "$TG" rev-parse --short=7 HEAD~1) src/api/b.ts" \
+    "$(tgp '"\(.base) \([.changes[].file] | join(","))"')"
+expect_eq "帳本「階段完成」的摘要／測試 → 該階段部件的 ai" "新增 token 解析 12/12 phase" \
+    "$(tgp '.parts[] | select(.id == "p1") | "\(.ai.summary) \(.ai.tests) \(.ai.source)"')"
+echo "- 10:30 部件 p1 完成｜摘要=部件層摘要｜測試=3/3" >> "$TGD/plans/1.2-x.progress.md"; tg_ov
+expect_eq "帳本有「部件 p1 完成」行 → 以部件行為準" "部件層摘要 3/3 part" \
+    "$(tgp '.parts[] | select(.id == "p1") | "\(.ai.summary) \(.ai.tests) \(.ai.source)"')"
+
+tg_reset; tg_plan 1.2-x.md ✅ ⏳; tg_ov
+expect_eq "階段 1 ✅、但 p1 的檔案不在 diff 裡 → skipped" skipped "$(tgp '.parts[] | select(.id == "p1") | .state')"
+tg_git branch -m main trunk; tg_ov
+expect_eq "沒有帳本、也找不到預設分支 → changes 為空、base 為 null" "0 null" "$(tgp '"\(.changes | length) \(.base)"')"
+expect_contains "找不到基準 → notices 說明" "找不到比較基準" "$(tgq '[.notices[].text] | join("\n")')"
+
+tg_reset; tg_plan 1.2-x.md 🔄 ⏳; printf 'a\n' > "$TG/src/api/a.ts"; tg_git add -A; tg_git commit -qm a
+cp "$TGD/plans/1.2-x.md" "$SANDBOX/tg-plan-orig.md"
+tg_actual --result FAIL --reason "2 個測試失敗：token 過期"; rc=$?
+expect_eq "--actual FAIL → exit 0" 0 "$rc"
+expect_contains "--actual FAIL → plan 有 actual 區塊、含 ❌ FAIL 與原因" "❌ FAIL" "$(sed -n '/overview:actual:start/,/overview:actual:end/p' "$TGD/plans/1.2-x.md")"
+expect_contains "--actual FAIL → 區塊含原因" "token 過期" "$(sed -n '/overview:actual:start/,/overview:actual:end/p' "$TGD/plans/1.2-x.md")"
+expect_eq "--actual 第一次 → 原內容一字不差留在區塊前" "" \
+    "$(tg_outside | head -n "$(wc -l < "$SANDBOX/tg-plan-orig.md")" | cmp -s - "$SANDBOX/tg-plan-orig.md" || echo 不同)"
+expect_eq "plan 驗證 FAIL → 碰到的模組 status 為 issue" issue "$(tgq '.modules[] | select(.id == "api") | .status')"
+expect_contains "plan 驗證 FAIL → statusReason 含原因" "token 過期" "$(tgq '.modules[] | select(.id == "api") | .statusReason')"
+printf '\n## 區塊後面的手寫段落\n\n不能被動到。\n' >> "$TGD/plans/1.2-x.md"
+tg_outside > "$SANDBOX/tg-out1.md"
+tg_actual --result PASS
+expect_eq "再跑 --actual PASS → 區塊被取代（只剩一個）" 1 "$(grep -c 'overview:actual:start' "$TGD/plans/1.2-x.md")"
+expect_contains "再跑 --actual PASS → 內含 ✅ PASS" "✅ PASS" "$(sed -n '/overview:actual:start/,/overview:actual:end/p' "$TGD/plans/1.2-x.md")"
+tg_outside | cmp -s - "$SANDBOX/tg-out1.md" && ok "--actual 只動標記區塊內：區塊外（含區塊後的段落）前後相同" \
+    || ng "--actual 只動標記區塊內" "cmp 相同" "$(tg_outside | diff - "$SANDBOX/tg-out1.md" | head -5)"
+out=$(bash "$TG/.claude/scripts/overview.sh" --actual "$TGD/plans/1.2-x.md" --result FAIL 2>&1); rc=$?
+expect_eq "--actual FAIL 沒帶 --reason → exit 2、不寫" "2 1" "$rc $(grep -c 'overview:actual:start' "$TGD/plans/1.2-x.md")"
+
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳; echo 1.2 > "$TGD/.current-task"; tg_ov
+expect_eq "主 checkout 的 .current-task 是 1.2 → 任務 1.2 的模組 current:true" true "$(tgq '.modules[] | select(.id == "api") | .current')"
+rm -f "$TGD/.current-task"
+TP_TASK=1.3 TP_A=migrations/1.sql TP_B=migrations/2.sql tg_plan 1.3-y.md ⏳ ⏳
+touch -d '2020-01-01' "$TGD/plans/1.2-x.md"; OVD="$TGD" ov_wbs "1.2|api|⏳ 待處理" "1.3|db|⏳ 待處理"; tg_ov
+expect_eq "沒有 .current-task → 取 mtime 最新、還沒完成的 plan 當本次" "1.3 true false" \
+    "$(tgq '"\(.current.task) \(.modules[] | select(.id == "db") | .current) \(.modules[] | select(.id == "api") | .current)"')"
+
+tg_reset; mkdir -p "$TG/src/web"; TP_A=src/web/form.tsx TP_B=src/web/list.tsx tg_plan 1.2-x.md 🔄 ⏳
+printf 'f\n' > "$TG/src/web/form.tsx"; tg_git add -A; tg_git commit -qm web; tg_ov
+expect_eq "WBS 標 api、plan 只碰 web → api 帶 declared-not-touched" declared-not-touched "$(tgq '.modules[] | select(.id == "api") | .mismatch[0].kind')"
+expect_eq "WBS 標 api、plan 只碰 web → web 帶 touched-not-declared" touched-not-declared "$(tgq '.modules[] | select(.id == "web") | .mismatch[0].kind')"
+
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳; tg_git add -A; tg_git commit -qm plan
+TGWT="$TG/.claude/worktrees/wt1"
+tg_git worktree add -q -b wt1 "$TGWT"
+mkdir -p "$TGWT/.claude/taskmaster-data/plans"
+( TGD="$TGWT/.claude/taskmaster-data"; tg_plan 1.2-x.md ✅ 🔄 )
+OVD="$TGD" ov_wbs "1.2|api|🔄 進行中" "1.3|db|⏳ 待處理"
+echo 1.3 > "$TGD/.current-task"; echo 1.2 > "$TGWT/.claude/taskmaster-data/.current-task"
+mkdir -p "$TGWT/src/api"; printf 'w\n' > "$TGWT/src/api/w.ts"
+tg_ov
+expect_eq "worktree 的 plan 進度較新 → data.js 取 worktree 那份" "worktree:wt1 skipped" \
+    "$(tgp '"\(.source) \(.parts[] | select(.id == "p1") | .state)"')"
+expect_contains "worktree overlay 不進 overview.md（仍是主 checkout 的 planned）" "class p1 planned" "$(cat "$TGO/overview.md" 2>/dev/null)"
+expect_eq "主 checkout 與 worktree 各有 .current-task → 兩個本次都標出" "1.3 1.2 true true" \
+    "$(tgq '"\([.currents[].task] | join(" ")) \(.modules[] | select(.id == "db") | .current) \(.modules[] | select(.id == "api") | .current)"')"
+expect_eq "worktree 的改動出現在地圖的本次改動（帶來源）" "worktree:wt1 api" \
+    "$(tgq '.changes[] | select(.file == "src/api/w.ts") | "\(.source) \(.module)"')"
+tg_git worktree remove --force "$TGWT"
+
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳; mkdir -p "$TGD/plans/archive"
+printf -- '---\nwbs_task: "0.9"\nstatus: "✅ 完成"\nfiles:\n  - "src/api/old.ts"\n---\n\n# 實作計畫：舊的\n' > "$TGD/plans/archive/0.9-old.md"
+tg_ov
+expect_eq "已歸檔的 plan 不進 plans[]，只計入模組的完成數" "plans/1.2-x.md 1" \
+    "$(tgq '"\([.plans[].file] | join(",")) \(.modules[] | select(.id == "api") | .counts.archivedDone)"')"
+rm -rf "$SANDBOX/任務 圖"
+
 # =========================================================================
 section "全體 hooks — 語法與健壯性"
 # =========================================================================
