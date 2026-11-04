@@ -29,7 +29,8 @@ skill 寫了沒人喚起、description 是內容摘要、同一份模板散在�
 
 ### 結束後（**必須**）
 1. **跑 `bash .claude/scripts/check-counts.sh`，必須全部一致**才算完成
-2. 若動過 hook → 跑 `bash .claude/hooks/tests/run-tests.sh`（用背景執行，這台機器要 2 分鐘以上）
+2. 若動過 hook → 跑 `bash .claude/hooks/tests/run-tests.sh --changed <起點>`（依改動挑節，用背景執行）。
+   整套在 Windows 上約 50 分鐘，只在 `/verify pre-pr` 與 CI 跑；在 worktree 裡不帶參數會被 `full-suite-gate` 擋一次
 3. 寫報告到 `.claude/context/decisions/skill-curator-{YYYY-MM-DD-HHMM}.md`
 4. 清除 `.skill-impact`（已處理完）
 5. 需要改程式碼或測試 → 建 handoff 給對應 agent

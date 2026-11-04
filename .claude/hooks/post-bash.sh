@@ -300,7 +300,7 @@ if [ "${MERGE_GATE:-on}" != "off" ]; then
                             jq -n --arg ev "$EVENT" --arg doc "$DOC_NOTE" '{
                               hookSpecificOutput: {
                                 hookEventName: $ev,
-                                additionalContext: ("🔀 合併完成，**這一步還沒驗證**。\n\n各 worktree 自己 `/verify` 過，不代表合併結果是對的——它們看不到彼此，合併才第一次讓兩邊的程式碼真的碰面。\n\n**下一步跑 `/verify`。** 在它通過之前，`pre-tool-use.sh` 會擋下下一次 merge／cherry-pick／rebase（避免疊了好幾個才發現紅、還得回頭二分找元凶）。\n\n`/verify` 會先判斷這是不是本輪最後一個合併：中間的只快檢（建置、型別、這次帶進來的檔案的測試、該分支 plan 的驗收），通過就清掉待驗證、放行下一個；最後一個才跑整套與 `spec-convergence`。" + $doc + "\n（關閉：MERGE_GATE=off）")
+                                additionalContext: ("🔀 合併完成，**這一步還沒驗證**。\n\n各 worktree 自己 `/verify` 過，不代表合併結果是對的——它們看不到彼此，合併才第一次讓兩邊的程式碼真的碰面。\n\n**下一步跑 `/verify`。** 在它通過之前，`pre-tool-use.sh` 會擋下下一次 merge／cherry-pick／rebase（避免疊了好幾個才發現紅、還得回頭二分找元凶）。\n\n`/verify` 會先判斷這是不是本輪最後一個合併：中間的只快檢（建置、型別、這次帶進來的檔案的測試、該分支 plan 的驗收），通過就清掉待驗證、放行下一個；最後一個才從本輪起點依改動挑測試、跑 `spec-convergence`（整套留給 `/verify pre-pr` 與 CI）。" + $doc + "\n（關閉：MERGE_GATE=off）")
                               }
                             }' 2>/dev/null || true
                         fi

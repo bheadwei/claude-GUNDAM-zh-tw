@@ -69,7 +69,7 @@ merge_gate() {
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",
-        permissionDecisionReason: ("⛔ 上一次合併還沒驗證過，不能再合併下一個。\n\n待驗證：" + $n + " 筆，最早一筆是 `" + $first + "`\n\n**為什麼擋**：每個 worktree 自己 /verify 過，不代表合併結果是對的——各 worktree 看不到彼此，**合併才第一次讓兩邊的程式碼真的碰面**，那些互動是全新的、沒人驗過的。而且一次疊好幾個之後測試紅了，你得回頭二分找元凶。\n\n**照這個順序做：**\n\n1. 跑 `/verify`（中間的合併只快檢：建置／型別／這次帶進來的檔案的測試／plan 驗收；本輪最後一個才跑整套）\n2. **PASS** → `/verify` 自動清掉待驗證清單（快檢通過也算） → 回來繼續合下一個\n3. **FAIL** → 在主 checkout 修好再驗；修不動就 `git merge --abort` 退回\n\n（關閉：MERGE_GATE=off）")
+        permissionDecisionReason: ("⛔ 上一次合併還沒驗證過，不能再合併下一個。\n\n待驗證：" + $n + " 筆，最早一筆是 `" + $first + "`\n\n**為什麼擋**：每個 worktree 自己 /verify 過，不代表合併結果是對的——各 worktree 看不到彼此，**合併才第一次讓兩邊的程式碼真的碰面**，那些互動是全新的、沒人驗過的。而且一次疊好幾個之後測試紅了，你得回頭二分找元凶。\n\n**照這個順序做：**\n\n1. 跑 `/verify`（中間的合併只快檢：建置／型別／這次帶進來的檔案的測試／plan 驗收；本輪最後一個才從本輪起點依改動挑測試，整套留給 `/verify pre-pr` 與 CI）\n2. **PASS** → `/verify` 自動清掉待驗證清單（快檢通過也算） → 回來繼續合下一個\n3. **FAIL** → 在主 checkout 修好再驗；修不動就 `git merge --abort` 退回\n\n（關閉：MERGE_GATE=off）")
       }
     }' 2>/dev/null || true
     exit 0

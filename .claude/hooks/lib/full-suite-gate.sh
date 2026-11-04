@@ -9,16 +9,19 @@
 # 在工具呼叫當下判斷得出來，正是 writing-extensions 決策表第一列的形狀。
 #
 # 判準：**在 linked worktree 裡**、某一段指令是測試執行器（pytest／`uv run pytest`／
-# `python -m pytest`／vitest／jest／`npm|pnpm|yarn|bun test`），而且**沒有任何**：
+# `python -m pytest`／vitest／jest／`npm|pnpm|yarn|bun test`／本模板的 hook 測試
+# `.claude/hooks/tests/run-tests.sh`），而且**沒有任何**：
 #   - 測試檔或範圍夠窄的目錄（`tests/test_x.py`、`src/order/`；`tests`、`tests/unit`、
 #     `src`、`.` 這種「整個測試根」視同整套——事故裡跑的正是 `tests/unit`）
 #   - 篩選：`::`、pytest 的 `-k`／`-m`／`--lf`、jest／vitest 的 `-t`／`--testPathPattern`／
-#     `--changed`／`--onlyChanged`／`--findRelatedTests`、`vitest related`
+#     `--changed`／`--onlyChanged`／`--findRelatedTests`、`vitest related`；
+#     run-tests.sh 帶了任何參數（節關鍵字、`--changed <起點>`、`--list`）都算篩選
+#     ——它的整套在 Windows/Git Bash 上要跑約 50 分鐘，是這個模板自己最貴的整套
 # → 擋一次。
 #
 # **只在 worktree 裡擋，主 checkout 不擋。** 理由：
 #   - 事故的成本來自**平行**：N 條線同時跑整套才互相拖慢。主 checkout 同一時間只有一條線
-#   - 主 checkout 是 `/verify` 驗合併結果的地方（見 merge-gate.sh），在那裡跑整套是本分
+#   - 主 checkout 是 `/verify` 驗合併結果、`/verify pre-pr` 跑整套的地方（見 merge-gate.sh）
 #   - 單線開發每輪跑整套也是浪費，但那條規則留給 testing-standards（文字）；
 #     要擴大到主 checkout，先拿真實資料證明它在單線也造成問題
 #
@@ -29,8 +32,8 @@
 # git-backup-gate.sh 檔頭），所以重試一定放行，不會卡死。
 #
 # 合法的整套（`/deps`、`/refactor-clean` 的基準與每批）→ 指令裡加註解
-# `# full-suite`，本閘門直接放行。`/verify` 在 worktree 裡只跑本線相關的測試、整套留給
-# 合併後的主 checkout（commands/verify.md 步驟 4），所以它不需要這個出口。
+# `# full-suite`，本閘門直接放行。`/verify` 在 worktree 裡只跑本線相關的測試、整套只在
+# 主 checkout 的 `/verify pre-pr` 與 CI 跑（commands/verify.md 步驟 4），所以它不需要這個出口。
 # 為什麼用註解而不是 `.merge-pending` 那種旗標檔：
 #   - 旗標檔要有人寫、有人刪；忘了刪就是永久放行，而且 refactor-cleaner 在 worktree 裡跑，
 #     旗標要寫在哪一邊又是一個要想清楚的邊界
@@ -91,6 +94,17 @@ _fsg_is_full() {
 
     w="${t[$i]##*/}"; w="${w##*'\'}"; w="${w%.exe}"; w="${w%.cmd}"
     nx="${t[$((i + 1))]:-}"
+
+    # 本模板的 hook 測試：`bash …/hooks/tests/run-tests.sh` 或直接執行它。
+    # 只認 hooks/tests/ 底下這支，專案自己叫 run-tests.sh 的腳本參數語意不同，不管
+    local rt="${t[$i]//'\'//}"
+    case "$w" in bash|sh) rt="${nx//'\'//}" ;; esac
+    case "$rt" in
+        *hooks/tests/run-tests.sh)
+            FSG_RUNNER="run-tests.sh"
+            case "$w" in bash|sh) i=$((i + 2)) ;; *) i=$((i + 1)) ;; esac ;;
+    esac
+
     case "$w" in
         uv)
             [ "$nx" = run ] || return 1
@@ -171,6 +185,8 @@ _fsg_is_full() {
                     -t*|--testNamePattern*|--testPathPattern*|--changed*|--onlyChanged|-o|--findRelatedTests|--related) return 1 ;;
                     -c|--config|--reporter|--outputFile|--maxWorkers|-w|--pool|--environment|--testEnvironment|--collectCoverageFrom|--coverageDirectory|--coverageReporters|--testTimeout|--root|-r|--dir|--mode|--project|--selectProjects|--shard) skip=1; continue ;;
                 esac ;;
+            run-tests.sh)  # 帶了任何參數（節關鍵字、--changed、--list、--dry-run）都不是整套
+                return 1 ;;
             *)  # npm/pnpm/yarn/bun test：不知道底下是哪個框架，篩選取聯集
                 case "$tok" in
                     -k*|-m*|-t*|--testNamePattern*|--testPathPattern*|--changed*|--onlyChanged|-o|--findRelatedTests|--related|--lf|--last-failed) return 1 ;;
@@ -193,7 +209,7 @@ full_suite_gate() {
 
     # 便宜的預篩：連這幾個字都沒有就不切段（切段要開 5 個行程，Windows 上約 1 秒）
     case "$cmd" in
-        *pytest*|*py.test*|*vitest*|*jest*|*[[:space:]]test*|*[[:space:]]t|*[[:space:]]t[[:space:]]*) ;;
+        *pytest*|*py.test*|*vitest*|*jest*|*run-tests.sh*|*[[:space:]]test*|*[[:space:]]t|*[[:space:]]t[[:space:]]*) ;;
         *) return 0 ;;
     esac
 
@@ -238,6 +254,9 @@ uv run pytest tests/order/ -k refund -q' ;;
         jest)
             ex='<pm> jest src/order/refund.test.ts
 <pm> jest src/order/ -t "refund over limit"' ;;
+        run-tests.sh)
+            ex='bash .claude/hooks/tests/run-tests.sh --changed <起點>      # 依改動挑節（對應表：該檔的 _changed_rule）
+bash .claude/hooks/tests/run-tests.sh overview post-write   # 只跑標題含關鍵字的節（--list 看全部）' ;;
         *)
             ex='<pm> test -- src/order/refund.test.ts
 （pytest 專案：uv run pytest tests/test_order.py -q）' ;;
@@ -247,7 +266,7 @@ uv run pytest tests/order/ -k refund -q' ;;
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",
-        permissionDecisionReason: ("⛔ 你在 worktree 裡跑**整套**測試：`" + $hit + "`——沒帶測試檔路徑，也沒有 `::`／`-k`／`-t` 這類篩選（`tests`、`tests/unit`、`src` 這種整個測試根也算整套）。\n\n**為什麼擋**：平行開發時每條 worktree 線各跑一份整套，就是 N 份整套同時搶同一台機器的 CPU 與同一個測試 DB。實際發生過：約 1.5 萬條測試、每輪 20～40 分鐘，4 條線每一輪都這樣跑。RED／GREEN 每一輪只需要跑**這次相關的測試檔**；整套留給合併回主 checkout 之後的 `/verify`（worktree 裡的 `/verify` 也只跑本線相關的）。\n\n**改成只跑相關的（照這個形狀改寫）：**\n\n```\n" + $ex + "\n```\n\n「相關」＝新寫的測試檔，加上 `git diff --name-only <階段起點>` 列出的那些模組對應的測試檔。規則的唯一來源：`.claude/skills/testing-standards/SKILL.md` 的「執行測試」節。\n\n**確定這次就是要整套：**\n\n- `/deps`、`/refactor-clean` 的基準與每批 → 指令尾端加註解 `# full-suite`（例：`uv run pytest -q  # full-suite`），本閘門不攔\n- 其他理由 → 重試**同一條指令**即通過（每次整套擋一次，重試就放行）\n\n（只在 worktree 裡擋，主 checkout 不擋。關閉：FULL_SUITE_GATE=off）")
+        permissionDecisionReason: ("⛔ 你在 worktree 裡跑**整套**測試：`" + $hit + "`——沒帶測試檔路徑，也沒有 `::`／`-k`／`-t` 這類篩選（`tests`、`tests/unit`、`src` 這種整個測試根也算整套）。\n\n**為什麼擋**：平行開發時每條 worktree 線各跑一份整套，就是 N 份整套同時搶同一台機器的 CPU 與同一個測試 DB。實際發生過：約 1.5 萬條測試、每輪 20～40 分鐘，4 條線每一輪都這樣跑。RED／GREEN 每一輪只需要跑**這次相關的測試檔**；整套只在主 checkout 的 `/verify pre-pr` 與 CI 跑（其他時候的 `/verify` 也只跑相關的，見 `commands/verify.md` 步驟 4）。\n\n**改成只跑相關的（照這個形狀改寫）：**\n\n```\n" + $ex + "\n```\n\n「相關」＝新寫的測試檔，加上 `git diff --name-only <階段起點>` 列出的那些模組對應的測試檔。規則的唯一來源：`.claude/skills/testing-standards/SKILL.md` 的「執行測試」節。\n\n**確定這次就是要整套：**\n\n- `/deps`、`/refactor-clean` 的基準與每批 → 指令尾端加註解 `# full-suite`（例：`uv run pytest -q  # full-suite`），本閘門不攔\n- 其他理由 → 重試**同一條指令**即通過（每次整套擋一次，重試就放行）\n\n（只在 worktree 裡擋，主 checkout 不擋。關閉：FULL_SUITE_GATE=off）")
       }
     }' 2>/dev/null || true
     exit 0

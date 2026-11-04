@@ -68,7 +68,7 @@ git diff --name-only --diff-filter=U    # 還沒 add 之前：處於衝突狀態
 uv run pytest tests/test_x.py -q        # 或 <pm> vitest run src/x.test.ts —— 一律帶路徑
 ```
 
-不跑整套：接下來的 `/verify` 會依「這是不是本輪最後一個合併」決定要不要跑整套
+不跑整套：接下來的 `/verify` 會依「這是不是本輪最後一個合併」決定測試範圍
 （`commands/verify.md`「合併驗證關卡」），你再跑一次只是重複。
 
 測試過 → `git add <解過的檔案>`。
