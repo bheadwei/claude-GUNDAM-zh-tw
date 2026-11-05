@@ -3391,6 +3391,9 @@ cmp -s "$OV_TPL" "$OVO/index.html" && ok "overview/index.html 與畫面原檔相
 echo "<!-- v2 -->" >> "$SANDBOX/.claude/templates/overview/index.html"; ov
 cmp -s "$SANDBOX/.claude/templates/overview/index.html" "$OVO/index.html" && ok "畫面原檔改了 → 下一次被覆蓋成新版" \
     || ng "畫面原檔改了 → 下一次被覆蓋成新版" "cmp 相同" "仍是舊版"
+touch -d '2000-01-01' "$OVO/index.html"; touch -d '2010-01-01' "$SANDBOX/.claude/templates/overview/index.html"; ov
+[ "$OVO/index.html" -nt "$SANDBOX/.claude/templates/overview/index.html" ] && ok "畫面原檔內容沒變、只有時間較新 → index.html 仍更新時間（開 session 才不會每次重產）" \
+    || ng "畫面原檔內容沒變、只有時間較新 → index.html 仍更新時間" "index.html 比原檔新" "仍比原檔舊"
 expect_contains "--print-path 印出 file:// 路徑" "taskmaster-data/overview/index.html" \
     "$(bash "$SANDBOX/.claude/scripts/overview.sh" --print-path "$SANDBOX" 2>/dev/null)"
 
@@ -3683,9 +3686,14 @@ expect_eq "250 個改動 → plan 列 200、其餘依第一層目錄彙總成 sr
 expect_eq "地圖的本次改動同樣只列 200、其餘彙總" "200 50" "$(tgq '"\(.changes | length) \([.changesRollup[].files] | add)"')"
 expect_contains "overview.md 的任務圖列出彙總列" "未逐一列出" "$(cat "$TGO/overview.md" 2>/dev/null)"
 OVERVIEW_MAX_BYTES=20000 tg_ov
-expect_eq "data.js 超過 OVERVIEW_MAX_BYTES → 一級一級丟到放得下：plan 明細全改彙總（仍是 250 個）、notices 說明" "1 0 250 true" \
-    "$([ "$(wc -c < "$TGO/data.js")" -le 20000 ] && echo 1 || echo 0) $(tgp '.changes | length') $(tgp '[.changesRollup[].files] | add') $(tgq '[.notices[].text] | any(test("已省略"))')"
+expect_eq "超過 OVERVIEW_MAX_BYTES、只有本次 plan → 本次 plan 明細保留 200、地圖本次改動改彙總、四級丟完仍放不下 → 加一則 warn" "200 0 true" \
+    "$(tgp '.changes | length') $(tgq '.changes | length') $(tgq '[.notices[] | select(.level == "warn") | .text] | any(test("仍超過"))')"
 expect_contains "大小上限只動 data.js：overview.md 仍列得出彙總前的計畫外部件" "＋ 計畫外" "$(cat "$TGO/overview.md" 2>/dev/null)"
+TP_TASK=1.3 tg_plan 1.3-y.md 🔄 ⏳; echo 1.2 > "$TGD/.current-task"; OVD="$TGD" ov_wbs "1.2|api|🔄 進行中" "1.3|api|🔄 進行中"
+OVERVIEW_MAX_BYTES=40000 tg_ov
+expect_eq "超過上限、另有非本次 plan → 放得下、本次 plan 明細保留 200、非本次 plan 明細改彙總、沒有 warn" "1 200 0 false" \
+    "$([ "$(wc -c < "$TGO/data.js")" -le 40000 ] && echo 1 || echo 0) $(tgp '.changes | length') $(tgp '.changes | length' 1.3-y.md) $(tgq '[.notices[].level] | any(. == "warn")')"
+rm -f "$TGD/plans/1.3-y.md" "$TGD/.current-task"
 
 # 提案階段 5 驗收 1 的量級：300 個任務、20 份 plan、每份 500 個改動
 tg_reset

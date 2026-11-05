@@ -125,8 +125,13 @@ find_arch() {
 
 TPL="$SCRIPT_DIR/../templates/overview/index.html"
 copy_page() {
-    if [ -f "$TPL" ] && ! cmp -s "$TPL" "$OUT/index.html"; then
+    [ -f "$TPL" ] || return 0
+    if ! cmp -s "$TPL" "$OUT/index.html"; then
         cp -f "$TPL" "$OUT/.index.tmp-$$" && mv -f "$OUT/.index.tmp-$$" "$OUT/index.html"
+    else
+        # 內容相同也要更新時間：session-start 用 -nt 判斷要不要補產，不 touch 的話
+        # 範本只有時間變新（例如切分支再切回）時，每個 session 都會白跑一次
+        touch "$OUT/index.html"
     fi
 }
 
@@ -408,15 +413,17 @@ def rollup:
 JQ
 
 # data.js 超過 OVERVIEW_MAX_BYTES 時一級一級丟（每級都是在上一級的結果上再丟）：
-#   1 每份 plan 的改動明細 → 全部改成目錄彙總   2 非本次 plan 的部件驗收
+#   1 非本次 plan 的改動明細 → 目錄彙總   2 非本次 plan 的部件驗收
 #   3 非本次 plan 只留狀態（畫面仍列得出有哪些 plan）   4 地圖的本次改動清單 → 目錄彙總
+#   5 不丟東西，只加一則「仍超過上限」（四級都丟完還放不下時才跑）
 # 只動寫進 data.js 的那份：--actual 寫回 plan 用的是沒丟過的資料，overview.md 不受影響。
 IFS= read -r -d '' JQ_SHRINK <<'JQ'
 def note($what): .notices += [{level: "info", text: "資料超過 \($kb) KB 上限，已省略：\($what)", action: null}];
 .truncated = true
 | if $level == 1 then
-    .plans |= map(.changesRollup = ((.changes + (.changesRollup // [])) | rollup) | .changes = [])
-    | note("每份 plan 的改動明細（改成依目錄彙總）")
+    .plans |= map(if .current then . else
+        .changesRollup = ((.changes + (.changesRollup // [])) | rollup) | .changes = [] end)
+    | note("非本次 plan 的改動明細（改成依目錄彙總）")
   elif $level == 2 then
     .plans |= map(if .current then . else .parts |= map(.acceptance = []) end)
     | note("非本次 plan 的部件驗收")
@@ -425,9 +432,11 @@ def note($what): .notices += [{level: "info", text: "資料超過 \($kb) KB 上�
         {file, task, title, mode, status, currentPhase, source, base, verify, modules, current,
          phases: [], hasParts: false, parts: [], extraMore: 0, changes: [], changesRollup: [], stub: true} end)
     | note("非本次 plan 的內容（只留狀態）")
-  else
+  elif $level == 4 then
     .changesRollup = ((.changes + (.changesRollup // [])) | rollup) | .changes = []
     | note("地圖上的本次改動清單（改成依目錄彙總）")
+  else
+    .notices += [{level: "warn", text: "能省略的都省略了，資料仍超過 \($kb) KB 上限，畫面可能變慢", action: "調高 OVERVIEW_MAX_BYTES"}]
   end
 JQ
 
@@ -1021,14 +1030,14 @@ splice_actual() {
     ' "$ACTUAL_PLAN" > "$TMP/plan.md" && mv -f "$TMP/plan.md" "$ACTUAL_PLAN"
 }
 
-# data.js 超過上限就照 JQ_SHRINK 的順序一級一級丟，直到放得下（四級都丟完仍超過就照寫，畫面有 notice）。
+# data.js 超過上限就照 JQ_SHRINK 的順序一級一級丟，直到放得下（四級都丟完仍超過就照寫，另加一則「仍超過上限」）。
 # 常態只多一次 wc：放得下就什麼都不做。80 是 data.js 外殼（註解行＋賦值）的位元組數。
 shrink_data() {
     local level size
     size=$(wc -c < "$TMP/data.json")
     [ $((size + 80)) -le "$MAX_BYTES" ] && return 0
     cp -f "$TMP/data.json" "$TMP/view.json"
-    for level in 1 2 3 4; do
+    for level in 1 2 3 4 5; do
         ( cd "$TMP" && LC_ALL=C.UTF-8 jq -c --argjson level "$level" --argjson kb $((MAX_BYTES / 1024)) \
             -f shrink.jq view.json > shrunk.json 2> err ) || return 1
         mv -f "$TMP/shrunk.json" "$TMP/view.json"
