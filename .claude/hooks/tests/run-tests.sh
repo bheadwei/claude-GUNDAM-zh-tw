@@ -62,8 +62,9 @@ _changed_rule() {
         .claude/ui/_sources.json)                            echo "=_sources.json" ;;
         scripts/copy-template.sh)                            echo "=copy-template.sh" ;;
         .claude/templates/overview/*)                        echo "=overview.sh" ;;
+        .claude/hooks/tests/fixtures/overview/*)             echo "=overview" ;;
         # hook 與被測的腳本：跑提到它的節
-        .claude/hooks/*.sh|.claude/scripts/overview.sh)      echo "=${1##*/}" ;;
+        .claude/hooks/*.sh|.claude/scripts/overview.sh|.claude/scripts/overview-scan.sh)      echo "=${1##*/}" ;;
         # 不被 hook 測試執行的東西
         *.md|docs/*|workshop/*|.claude/templates/*|.claude/ui/*|.claude/skills/*|.claude/output-styles/*) echo NONE ;;
         .claude/context/*|.claude/coordination/*|.claude/qa-history/*|.claude/taskmaster-data/*|.claude/logs/*) echo NONE ;;
@@ -3770,6 +3771,80 @@ expect_eq "畫面原檔比現有的新（update-template 帶來新版畫面）�
 rm -f "$OVO/data.js"
 run session-start.sh '{}' OVERVIEW_SYNC=1 OVERVIEW=off >/dev/null
 [ ! -e "$OVO/data.js" ] && ok "OVERVIEW=off → 開 session 不補產" || ng "OVERVIEW=off → 開 session 不補產" "沒有 data.js" "有"
+
+# =========================================================================
+section "overview fixture — 測試資料產生器"
+# =========================================================================
+# make-fixture.sh／gen-large.sh 是 overview.sh 與 overview-scan.sh 的測試輸入。目標目錄刻意含中文與空格。
+FXD="$HOOK_DIR/tests/fixtures/overview"
+FXR="$SANDBOX/任務 圖/fx"
+rm -rf "$SANDBOX/任務 圖"
+fx_repo() {
+    ( cd "$1" && git init -q . && git add -A && git -c user.email=t@t -c user.name=t commit -qm base ) >/dev/null 2>&1
+}
+fx_ovq() { sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$1/.claude/taskmaster-data/overview/data.js" 2>/dev/null | jq -r "$2" 2>/dev/null; }
+
+bash "$FXD/make-fixture.sh" shop-clean "$FXR/shop" >/dev/null 2>&1; rc=$?
+expect_eq "shop-clean → 產生成功" 0 "$rc"
+fx_repo "$FXR/shop"
+bash "$OV_SRC" "$FXR/shop" >/dev/null 2>&1
+expect_eq "shop-clean → data.js 有 6 個模組" 6 "$(fx_ovq "$FXR/shop" '.modules | length')"
+expect_eq "shop-clean → unmappedTasks 為空" 0 "$(fx_ovq "$FXR/shop" '.unmappedTasks | length')"
+[ ! -e "$FXR/shop/.claude/taskmaster-data/overview/.last-error" ] && ok "shop-clean → 沒有 .last-error" \
+    || ng "shop-clean → 沒有 .last-error" "沒有" "$(cat "$FXR/shop/.claude/taskmaster-data/overview/.last-error")"
+expect_eq "shop-clean → 每個模組 2–5 個程式檔" "" "$(cd "$FXR/shop" && git ls-files -- 'src/*' migrations | grep -E '\.(py|ts|tsx)$' \
+    | awk '{ m = $0; if (m ~ /^src\/services\//) { split(m, p, "/"); m = p[1] "/" p[2] "/" p[3] } else if (m ~ /^migrations\//) m = "src/db"; else { split(m, p, "/"); m = p[1] "/" p[2] } n[m]++ } END { for (k in n) if (n[k] > 5) print k, n[k] }')"
+expect_eq "shop-clean → 現行 overview.sh 的模組、群組、邊與 shop-clean.golden 一致" "" \
+    "$(fx_ovq "$FXR/shop" '(.modules[] | "module \(.id) \(.group)"), (.groups[] | "group \(.id) \(.label)"), (.edges[] | "edge \(.from) \(.to)")' \
+        | tr -d '\r' | diff - <(tr -d '\r' < "$FXD/shop-clean.golden"))"
+MAKE_FIXTURE_CHANGES=1 bash "$FXD/make-fixture.sh" shop-clean "$FXR/shop" >/dev/null 2>&1
+bash "$OV_SRC" "$FXR/shop" >/dev/null 2>&1
+expect_eq "shop-clean MAKE_FIXTURE_CHANGES=1 → 改動清單恰好是參考資料的三個檔" "src/services/a/create.ts src/web/Cart.tsx src/web/a.ts" \
+    "$(fx_ovq "$FXR/shop" '[.changes[].file] | sort | join(" ")')"
+
+bash "$FXD/make-fixture.sh" messy-fullstack "$FXR/messy" >/dev/null 2>&1; rc=$?
+expect_eq "messy-fullstack → 產生成功" 0 "$rc"
+expect_eq "messy-fullstack → docs/architecture/ 底下有檔名含 architecture 的 md" 1 \
+    "$(find "$FXR/messy/docs/architecture" -name '*architecture*.md' | wc -l | tr -d ' ')"
+expect_eq "messy-fullstack → wbs.md 任務表頭沒有「模組」" 0 "$(grep -c '^| # .*模組' "$FXR/messy/.claude/taskmaster-data/wbs.md")"
+expect_eq "messy-fullstack → wbs.md 任務列恰好 32 列" 32 "$(grep -c '^| [0-9]' "$FXR/messy/.claude/taskmaster-data/wbs.md")"
+expect_eq "messy-fullstack → plan 28 份、其中 24 份帶 files:" "28 24" \
+    "$(ls "$FXR/messy/.claude/taskmaster-data/plans" | wc -l | tr -d ' ') $(grep -l '^files:' "$FXR/messy/.claude/taskmaster-data"/plans/*.md | wc -l | tr -d ' ')"
+expect_eq "messy-fullstack → 沒有有效的 5.5（架構文件沒有含 id、路徑 欄的表）" 0 "$(grep -c '^| id | .*路徑' "$FXR/messy/docs/architecture/01_system_architecture.md")"
+expect_contains "messy-fullstack → 架構圖標籤含 <br/> 與 &amp;" "<br/>" "$(cat "$FXR/messy/docs/architecture/01_system_architecture.md")"
+expect_contains "messy-fullstack → 有 FastAPI 路由" '@router.get("/")' "$(cat "$FXR/messy/backend/app/api/users.py")"
+fx_repo "$FXR/messy"
+expect_contains "messy-fullstack → 有路徑含非 ASCII 字元，core.quotepath=off 列得出原字元" "報表匯出與排程作業" \
+    "$(cd "$FXR/messy" && git -c core.quotepath=off ls-files)"
+bash "$OV_SRC" "$FXR/messy" >/dev/null 2>&1
+expect_eq "messy-fullstack → 現行 overview.sh 跑得出來（schema 1）、沒有 .last-error" "1 0" \
+    "$(fx_ovq "$FXR/messy" '.schema') $([ -e "$FXR/messy/.claude/taskmaster-data/overview/.last-error" ] && echo 1 || echo 0)"
+
+out=$(bash "$FXD/make-fixture.sh" 不存在的名稱 "$FXR/x" 2>&1 >/dev/null); rc=$?
+expect_eq       "make-fixture.sh 不認得的名稱 → exit 2" 2 "$rc"
+expect_contains "make-fixture.sh 不認得的名稱 → stderr 印用法" "用法" "$out"
+bash "$FXD/make-fixture.sh" shop-clean >/dev/null 2>&1; rc=$?
+expect_eq       "make-fixture.sh 少了目標目錄 → exit 2" 2 "$rc"
+bash "$FXD/make-fixture.sh" shop-clean "$FXR/x" extra >/dev/null 2>&1; rc=$?
+expect_eq       "make-fixture.sh 多了參數 → exit 2" 2 "$rc"
+[ ! -e "$FXR/x" ] && ok "make-fixture.sh 參數錯誤 → 不建目標目錄" || ng "make-fixture.sh 參數錯誤 → 不建目標目錄" "沒有" "有"
+
+out=$(bash "$FXD/gen-large.sh" abc "$FXR/big" 2>&1 >/dev/null); rc=$?
+expect_eq       "gen-large.sh 檔案數不是正整數 → exit 2" 2 "$rc"
+expect_contains "gen-large.sh 檔案數不是正整數 → stderr 印用法" "用法" "$out"
+bash "$FXD/gen-large.sh" 5000 "$FXR/big" >/dev/null 2>&1; rc=$?
+expect_eq "gen-large.sh 5000 → 產生成功" 0 "$rc"
+fx_repo "$FXR/big"
+expect_eq "gen-large.sh 5000 → git ls-files 恰好 5000 個" 5000 "$(cd "$FXR/big" && git ls-files | wc -l | tr -d ' ')"
+expect_eq "gen-large.sh → 分散在 60 個目錄" 60 "$(cd "$FXR/big" && git ls-files | sed 's|/[^/]*$||' | sort -u | wc -l | tr -d ' ')"
+expect_eq "gen-large.sh → 同時有 .py 與 .ts，且都帶 import" "1 1" \
+    "$(cd "$FXR/big" && grep -q '^from src\.' src/m00/f0.py && echo 1 || echo 0) $(cd "$FXR/big" && grep -q "^import " src/m00/f60.ts && echo 1 || echo 0)"
+rm -rf "$SANDBOX/任務 圖"
+
+out=$(printf '%s\n' .claude/scripts/overview-scan.sh | bash "$HOOK_DIR/tests/run-tests.sh" --changed - --dry-run 2>&1)
+expect_contains "--changed：overview-scan.sh 挑到 overview 的節（不是 NONE）" "overview fixture" "$out"
+out=$(printf '%s\n' .claude/hooks/tests/fixtures/overview/make-fixture.sh | bash "$HOOK_DIR/tests/run-tests.sh" --changed - --dry-run 2>&1)
+expect_contains "--changed：fixtures/overview 底下的檔挑到 overview 的節（含地圖節）" "overview.sh — 專案地圖" "$out"
 
 # =========================================================================
 section "update-template — .gitignore 只補缺少的短命狀態行"
