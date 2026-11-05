@@ -315,8 +315,8 @@ function py(f, l,   mod, names, dots, n, i, nm, base, k, t, got, NM, s, m, ms, w
         s = strarg(substr(l, RSTART + RLENGTH))
         if (m != "route") { addroute(f, m, s); return }
         ms = l
-        if (!sub(/^.*methods[ \t]*=[ \t]*[\[(]/, "", ms)) { addroute(f, "GET", s); return }
-        sub(/[\])].*$/, "", ms); n = split(ms, NM, ",")
+        if (!sub(/^.*methods[ \t]*=[ \t]*[[(]/, "", ms)) { addroute(f, "GET", s); return }
+        sub(/[])].*$/, "", ms); n = split(ms, NM, ",")
         for (i = 1; i <= n; i++) { w = NM[i]; gsub(/[^A-Za-z]/, "", w); if (w != "") addroute(f, w, s) }
         return
     }
