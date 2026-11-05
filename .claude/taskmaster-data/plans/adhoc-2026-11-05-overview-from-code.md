@@ -113,7 +113,7 @@ flowchart LR
 |---|---|---|---|---|
 | p1 | 兩組假資料產生器＋基準 | 0 | `.claude/hooks/tests/fixtures/overview/**` | `make-fixture.sh shop-clean <dir>` 後跑現行 overview.sh → 6 個模組、`unmappedTasks` 為空 |
 | p2 | Windows 效能實測＋jq 1.6 CI | 0 | `.claude/context/decisions/overview-scan-bench-*.md`, `.github/workflows/template-ci.yml` | CI 的 jq 1.6 job 印出 `jq-1.6` 並跑完 overview 節全綠 |
-| p3 | overview-scan.sh | 1 | `.claude/scripts/overview-scan.sh` | forquery-like → 模組含 `backend-api` 與 `frontend-api`（跨套件撞名加套件前綴） |
+| p3 | overview-scan.sh | 1 | `.claude/scripts/overview-scan.sh` | messy-fullstack → 模組含 `backend-api` 與 `frontend-api`（跨套件撞名加套件前綴） |
 | p4 | 骨架與 5.5 合併（schema 2） | 1 | `.claude/scripts/overview.sh` | `docs/12_frontend_architecture.md` 與 `docs/architecture.md` 並存 → `project.architectureDoc` 是後者 |
 | p5 | 寫程式碼檔的節流重掃 | 1 | `.claude/hooks/post-write.sh` | 30 秒內第二次寫程式碼檔 → 不呼叫 overview.sh、stdout 為空 |
 | p6 | 落差報告五類 | 2 | `.claude/scripts/overview.sh` | 5.5 寫了 `src/legacy/**`、沒有對應檔案 → `drift.docNotInCode` 含 `legacy` |
@@ -122,7 +122,7 @@ flowchart LR
 | p14 | plan 疊層（planned、activePhases） | 2 | `.claude/scripts/overview.sh` | plan 的階段 2、3 標題都是 🔄 → `currents[].activePhases` 為 `[2,3]` |
 | p15 | 架構文件自動段 --sync-arch | 2 | `.claude/scripts/overview.sh` | 有標記 → 只改標記之間、標記外的位元組不變 |
 | p16 | 一頁現況 --status | 2 | `.claude/scripts/overview.sh`, `.claude/commands/task-status.md` | `--status` 在 fixture 上輸出 ≤ 30 行，含「進行中」「阻塞」「下一個」「落差」 |
-| p9 | 髒資料呈現修法 | 3 | `.claude/templates/overview/index.html`, `.claude/hooks/tests/fixtures/overview/qa-check.js` | forquery-like 在 390／1440 × 淺／深四種組合下，`qa-check.js` 回傳的六項全為 0／false |
+| p9 | 髒資料呈現修法 | 3 | `.claude/templates/overview/index.html`, `.claude/hooks/tests/fixtures/overview/qa-check.js` | messy-fullstack 在 390／1440 × 淺／深四種組合下，`qa-check.js` 回傳的六項全為 0／false |
 | p10 | token 與雙主題 | 3 | `.claude/templates/overview/index.html`, `.claude/scripts/check-counts.sh` | token 區塊以外出現 hex 色碼 → `check-counts.sh` 失敗 |
 | p17 | 虛線框、plan 階段、頁首現況＋畫面審閱 | 3 | `.claude/templates/overview/index.html`, `.claude/qa-history/*-overview-page-review.md` | 使用者在 AskUserQuestion 選「確認」→ 才合併階段 3 |
 | p11 | 說明驗證與寫入當下回饋 | 4 | `.claude/scripts/overview.sh`, `.claude/hooks/post-write.sh`, `.claude/skills/project-docs/module-notes.md` | 寫入含 `Server=db01` 的 module-notes.md → post-write 的 `additionalContext` 列出該列 |
@@ -185,9 +185,9 @@ flowchart LR
 ### 階段 0: 實測、fixture 產生器、jq 1.6 CI ⏳
 
 - **依賴**：無
-- [ ] `.claude/hooks/tests/fixtures/overview/make-fixture.sh <shop-clean|forquery-like> <目標目錄>`：把檔案寫進目標目錄（不 `git init`，由呼叫端決定）
+- [ ] `.claude/hooks/tests/fixtures/overview/make-fixture.sh <shop-clean|messy-fullstack> <目標目錄>`：把檔案寫進目標目錄（不 `git init`，由呼叫端決定）
   - `shop-clean`：範例電商（照 `.claude/context/planning/overview-shop-clean-reference.md` 重建），`docs/05_architecture.md` 帶有效的 5.1 與 5.5（6 個模組、3 個群組，路徑都對得到檔案），WBS 有模組欄、每個任務都有標，每個模組 2–5 個程式檔（Python＋TS）
-  - `forquery-like`：**不含 for-query 的任何真實名稱或程式碼**，只複製結構特徵
+  - `messy-fullstack`：**不含任何實測專案的真實名稱或程式碼**，只複製結構特徵
     - `backend/pyproject.toml`、`backend/app/{api,services,models,core,<一個 ≥ 8 字的中文目錄>}/*.py`，含 FastAPI 的 `APIRouter(prefix=…)` 與 `@router.get(…)`，以及 `from app.services… import`、`from .x import`
     - `frontend/package.json`、`frontend/src/{api,pages,components,stores}/*.ts(x)`，含 `@/` 與相對路徑的 import、`fetch` 呼叫
     - `backend/tests/`、`frontend/src/__tests__/`（只計數不當模組）、一個只有 1 個檔的目錄（應併入「其他」）
@@ -203,8 +203,8 @@ flowchart LR
 - **預估**：3h
 - **驗收**：
   - `make-fixture.sh shop-clean <dir>` 後 `git init`＋commit、跑現行 overview.sh → data.js 有 6 個模組、`unmappedTasks` 為空、沒有 `.last-error`
-  - `make-fixture.sh forquery-like <dir>` → `docs/architecture/` 底下有一份檔名含 `architecture` 的 md、`wbs.md` 的任務表頭沒有「模組」、任務列恰好 32 列
-  - `make-fixture.sh forquery-like <dir>` → 至少一個路徑含非 ASCII 字元，且 `git -c core.quotepath=off ls-files` 列得出原字元
+  - `make-fixture.sh messy-fullstack <dir>` → `docs/architecture/` 底下有一份檔名含 `architecture` 的 md、`wbs.md` 的任務表頭沒有「模組」、任務列恰好 32 列
+  - `make-fixture.sh messy-fullstack <dir>` → 至少一個路徑含非 ASCII 字元，且 `git -c core.quotepath=off ls-files` 列得出原字元
   - `make-fixture.sh 不存在的名稱 <dir>` → exit 2、stderr 含用法
   - `gen-large.sh 5000 <dir>` 後 `git ls-files | wc -l` → 5000（不含產生器自己額外放的設定檔）
   - `run-tests.sh --changed - --dry-run`，stdin 給 `.claude/scripts/overview-scan.sh` → 挑到 overview 那節，不是 NONE
@@ -246,10 +246,10 @@ flowchart LR
   - shop-clean → 每個模組的 `source` 都是 `"both"`
   - 5.5 多一列 `src/legacy/**`、沒有對應檔 → 該模組存在且 `source:"doc"`
   - 程式多一個 `src/search/` 目錄（2 個檔）、5.5 沒寫 → 出現 `search` 模組、`source:"scan"`
-  - forquery-like → 模組含 `backend-api` 與 `frontend-api`
-  - forquery-like → 沒有任何 `fileCount == 0` 的模組（C4 的使用者、LDAP、MSSQL、Redis 都沒畫出來）
-  - forquery-like → 沒有 id 以 `tests` 或 `__tests__` 結尾的模組，且 `scan.files` 不含 `docs/`、`.claude/` 底下的檔
-  - forquery-like 的中文目錄 → 模組 id 符合 `^[a-z0-9-]+$`、`name` 等於原目錄名；連跑兩次 id 相同
+  - messy-fullstack → 模組含 `backend-api` 與 `frontend-api`
+  - messy-fullstack → 沒有任何 `fileCount == 0` 的模組（C4 的使用者、LDAP、MSSQL、Redis 都沒畫出來）
+  - messy-fullstack → 沒有 id 以 `tests` 或 `__tests__` 結尾的模組，且 `scan.files` 不含 `docs/`、`.claude/` 底下的檔
+  - messy-fullstack 的中文目錄 → 模組 id 符合 `^[a-z0-9-]+$`、`name` 等於原目錄名；連跑兩次 id 相同
   - 只有 1 個檔的目錄 → 不單獨成模組，該檔計入 `other`
   - `gen-large.sh` 產生 60 個各 ≥ 2 檔的目錄 → `modules | length` 為 40，其中一個是 `other`
   - `backend/app/api/orders.py` 寫 `from app.services.orders import create` → 有一條 api→services、`source:"import"` 的邊
@@ -320,10 +320,10 @@ flowchart LR
   - WBS 沒有模組欄、plan `files:` 全在 `backend/app/services/**` → 該任務 `modules:["services"]`、`inferred:true`、`inferredBy:"plan-files"`
   - plan 沒寫 `files:`、帳本 BASE 之後的 diff 落在 `frontend/src/pages/` → `inferredBy:"diff"`、`modules:["pages"]`
   - WBS 明標 `api` → 即使 plan `files:` 在別處，該任務 `inferred` 不是 true
-  - forquery-like → 有模組的任務 28 個（24 `plan-files`、4 `diff`）、`unmappedTasks` 恰好 4 個；「還沒對到模組」的 notice 只出現 1 則
+  - messy-fullstack → 有模組的任務 28 個（24 `plan-files`、4 `diff`）、`unmappedTasks` 恰好 4 個；「還沒對到模組」的 notice 只出現 1 則
   - 推斷出 `services` 的任務是 🚫 阻塞 → `services` 模組 status 為 `issue`
   - 五類落差都是 0 → `overview.md` 沒有 `## 落差`；有落差 → 有這一節且列出各類數量
-  - `--print-inferred` 在 forquery-like 上 → 28 行、每行 3 欄 tab 分隔；沒有推斷結果 → 輸出為空
+  - `--print-inferred` 在 messy-fullstack 上 → 28 行、每行 3 欄 tab 分隔；沒有推斷結果 → 輸出為空
   - 有推斷結果 → `--print-path` 有一行以 `提示：` 開頭且含「推斷」
   - 前端 `` fetch(`/api/orders/${id}`) ``、後端 `APIRouter(prefix="/orders")` 的 `@router.get("/{order_id}")` → 有一條 `from:"frontend-api"`、`source:"http"` 的邊；`fetch('https://example.com/x')` 或打到後端沒有的路徑 → 不產生邊
   - 本次任務 plan 的 `files:` 只有 `src/services/a/**` → 只有該模組 `planned: true`；plan 沒有 `files:` → 沒有任何模組 `planned: true`
@@ -363,7 +363,7 @@ flowchart LR
   - `index.html` 在 token 區塊外寫一個 `#fff` → `check-counts.sh` 失敗並指出行號；拿掉後通過
   - `index.html` 加 `<link href="https://fonts.googleapis.com/…">` → `check-counts.sh` 失敗；SVG 命名空間的 `http://www.w3.org/2000/svg` 不觸發
   - `index.html` 超過 51200 bytes → `check-counts.sh` 失敗
-  - shop-clean 與 forquery-like × 390／1440 × 淺色／深色共 8 種組合，`qa-check.js` 回傳的六項全為 0 或 false
+  - shop-clean 與 messy-fullstack × 390／1440 × 淺色／深色共 8 種組合，`qa-check.js` 回傳的六項全為 0 或 false
   - `browser_evaluate` 量兩個主題下 `--fg`／`--muted` 對 `--bg`／`--surface` 的對比 → 全部 ≥ 4.5；縮放鈕的量測尺寸 ≥ 44×44
   - 餵 `schema:1` 的 data.js → 頁面出現「請重產」那則提示（`browser_evaluate` 找得到該文字）
   - 審閱 artifact 裡看得到：三種燈號、本次改動標記、至少兩個虛線框、右側欄「plan 第 2、3／4 階段」、「預計但沒動」與「沒預計卻動了」、頁首的現況摘要、「⚠ N 則提示」與「落差 N 項」兩個 chip
@@ -388,7 +388,7 @@ flowchart LR
 - [ ] `task-status.md` 步驟 7：收到說明層提示時 AskUserQuestion 問 只更新過期的（Recommended）／全部重寫／先不要（本 session 不再提）；說明程式碼片段會經 Claude Code 送到 Anthropic。**永遠不自動執行**
 - [ ] `documentation-specialist.md` 新增「寫模組說明」節：先讀附屬檔（完整路徑）→ 跑 `--notes-todo` → 每模組照規定讀檔 → 寫 `module-notes.md`、`based_on` 填當下 HEAD → 看 post-write 注入的違規並修到沒有
 - [ ] `hooks/README.md`：post-write 功能表加「寫入 module-notes.md 時驗證並注入違規」
-- [ ] `make-fixture.sh` 加一個選項產生 forquery-like 的 module-notes.md（含刻意違規的列）
+- [ ] `make-fixture.sh` 加一個選項產生 messy-fullstack 的 module-notes.md（含刻意違規的列）
 - **預估**：6h
 - **驗收**：
   - 格式正確、id 都在骨架裡的 notes → `--check-notes` exit 0、stdout 為空
@@ -455,7 +455,7 @@ flowchart LR
 | 2026-11-05 | X1 | fixture 是實體檔放在 `fixtures/overview/` | 改成**產生器腳本** `make-fixture.sh <名稱> <目標目錄>`；repo 裡只有 `.sh`、`qa-check.js` 與基準檔 | `.claude/hooks/tests/` 會被 copy-template 帶進新專案，實體的 `.py`、`.ts`、`package.json` 可能被專案的 pytest、tsc、eslint、依賴掃描撿到 |
 | 2026-11-05 | X2 | 撞名時加父層前綴 | **跨套件撞名加套件目錄名**（`backend-api`、`frontend-api`）；同套件內才加父層 | 父層是 `app`、`src` 時看不出是哪一邊 |
 | 2026-11-05 | X3 | 模組 id 取目錄名轉 kebab-case | 目錄名含非 ASCII 時 id 用 `m-` 加 6 碼雜湊，名稱保留原目錄名 | mermaid 節點 id 必須是 ASCII |
-| 2026-11-05 | X4 | 32 個任務全部對到模組 | forquery-like 設計成 24 帶 `files:`、4 只有 diff、4 沒有 plan → 驗收 28 推斷、4 未對 | 沒有 plan 的任務推斷不出來，不猜任務標題 |
+| 2026-11-05 | X4 | 32 個任務全部對到模組 | messy-fullstack 設計成 24 帶 `files:`、4 只有 diff、4 沒有 plan → 驗收 28 推斷、4 未對 | 沒有 plan 的任務推斷不出來，不猜任務標題 |
 | 2026-11-05 | X5 | 落差與說明只寫進 data.js | 加 `--print-inferred`（階段 2）、`--notes-todo`（階段 4），輸出 TSV | 模型不讀 data.js／skeleton.json，總得有個小出口 |
 | 2026-11-05 | X6 | 前端 fetch 呼叫提案沒有規劃 | 放階段 2、只做字串常值與 template literal，邊標 `source:"http"` | 前後端分開的專案沒有這條就是兩座孤島；可整段砍掉 |
 | 2026-11-05 | X7 | jq 1.6 CI job 在階段 5 | **提前到階段 0** | 階段 1–4 都會新增 jq 程式，晚發現要回頭改四個已合併階段 |
@@ -469,7 +469,7 @@ flowchart LR
 - 2026-11-05 改成 ADR-006 的四段格式：原「目標」→「為什麼做」；「WBS 連結」刪（ad-hoc，完成後 `/verify` 會問要不要補登）；「技術依賴」與依據收進「怎麼做」的「共同門檻與限制」小節；「風險與緩解」各列搬進對應階段的「注意」；「驗收標準（整體）」的 CI 三個 job 全綠搬進階段 5 的不可退化。「共同門檻與限制」「平行開發」兩個小節是 ADR-006 沒列的，不是 `### 階段` 標題，不影響 `overview.sh` 與 statusline 的解析
 - 2026-11-05 每個階段補「依賴」行，與「平行開發」表一致；跨計畫的條件寫在依賴行的分號後
 - 2026-11-05 使用者補充：畫面做好後由主模型用範例電商資料發 artifact 審閱，確認前不合併 → 放進階段 3 最後一步，階段 5 依賴階段 3 所以也在審閱之後；原本的「8 張截圖並排給使用者確認」併進這次審閱
-- 2026-11-05 使用者補充：驗收只到本 repo 的自動測試、`check-counts.sh`、`skill-compliance` 與畫面審閱 → 刪掉階段 4「在 forquery-like 上實跑 documentation-specialist、人工抽查」與階段 5「使用者在真實專案跑 update-template＋/task-status」兩條 [M]；階段 3 的畫面檢查改成 `qa-check.js`／`browser_evaluate` 的量測與審閱 artifact 的檢查項
+- 2026-11-05 使用者補充：驗收只到本 repo 的自動測試、`check-counts.sh`、`skill-compliance` 與畫面審閱 → 刪掉階段 4「在 messy-fullstack 上實跑 documentation-specialist、人工抽查」與階段 5「使用者在真實專案跑 update-template＋/task-status」兩條 [M]；階段 3 的畫面檢查改成 `qa-check.js`／`browser_evaluate` 的量測與審閱 artifact 的檢查項
 - 2026-11-05 階段 1 加一步：拿掉 `overview.sh` 第 848 行「找不到架構文件…畫不出專案地圖」的 warn——地圖不再依賴架構文件，留著會和「`--print-path` 不再提示」矛盾
 - 2026-11-05 階段 2 加了 A3–A5 後是 12.5h；拆成 2-A／2-B／2-C 三個 commit，不拆成兩個階段：拆了也同改 `overview.sh`、不能平行，還會讓文件計畫寫的「地圖 2」「地圖 4」對不上
 - 2026-11-05 選做項目不排入本計畫（外部系統欄、codegraph adapter、增量掃描），等完成後照 ADR-001「何時該重新考慮」決定；增量掃描若階段 0 實測超標則提前到階段 1
