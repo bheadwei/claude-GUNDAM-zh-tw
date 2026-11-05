@@ -372,7 +372,7 @@ flowchart LR
   - 沒有標記 → 檔案 mtime 與內容不變、stdout 有一行含「自動段標記」
   - 在 worktree 執行 `--sync-arch` → 主 checkout 與 worktree 的架構文件都不變
   - 只有 `start` 沒有 `end` → 檔案不變、exit 非 0
-  - 標記區裡有模組表、標記區外沒有 5.5 → 模組的 `nameSource` 都不是 `"doc"`；標記區外人寫的 5.5 → 照舊覆寫名稱
+  - 標記區裡有模組表、標記區外沒有 5.5 → 模組的 `nameSource` 都不是 `"doc"`；標記區外由 architect 撰寫的 5.5（舊格式）→ 照舊覆寫名稱
   - 掃到 70 條邊 → 自動段的 mermaid 只含跨分組的邊，模組表列數不變
   - `--status` 在 shop-clean（加一份進行中 plan、一個 🚫 任務）上 → ≤ 30 行，含「進行中」「阻塞」「下一個」「落差」；`overview.md` 第一個二級標題是 `## 現況`
   - 進行中任務的 plan `activePhases` 為 `[2,3]`、共 4 階段 → 「進行中」那行含 `第 2、3／4 階段`
@@ -459,7 +459,7 @@ flowchart LR
 - [ ] `overview.sh` 產 `modules[].inner`（`root`、`nodes`、`folded`、`edges`、`out`、`outMore`，欄位名照決策 1 定死）：常數 `OVERVIEW_INNER_MAX_NODES=60`、`OVERVIEW_INNER_MAX_EDGES=200`、`OVERVIEW_INNER_MAX_OUT=15`（環境變數可覆寫）；摺疊三步（逐檔 → 超過時根下一層子目錄各併成 `<名>/` 節點、根目錄的檔照舊 → 仍超過時依進出邊數留前 59 個、其餘計入 `folded`，碰到被併檔案的模組內邊丟掉）；模組內邊依次數留前 200；框外依「其他模組 → 資料庫 → 外部套件」、同類依次數留前 15，其餘計入 `outMore`；測試目錄不進 `inner`；掃描截斷時 `inner: null` — 驗證：同上
 - [ ] `overview.sh` 解析資料流節（決策 3）：找 `^## [0-9]+\. <OVERVIEW_FLOW_SECTION>` 一節（常數 `OVERVIEW_FLOW_SECTION="資料流"`，不綁節號）；節內每個 `###` 是一條流程，只讀其後 mermaid 區塊的 `participant`／`actor` 宣告行取 id；id 等於模組 id → 該模組、等於分組 id → 該分組全部模組；產頂層 `flows[]`（`title`、`line`、`participants`、`modules`）與 `modules[].flows`（索引，沒有時 `[]`）；一條流程沒有任何參與者對得到模組 → notice「資料流「<標題>」對不到任何模組（模組改名？）」；沒有架構文件或沒有資料流節 → `flows: []`、不出 notice；`sequenceDiagram` 不參與 5.1 容器圖的挑選（加測試鎖住） — 驗證：同上
 - [ ] `shrink_data` 加兩級：**最先**丟「`planned` 為 false 且沒有本次改動」的模組的 `inner`；既有四級都丟完仍超過 → **最後**丟全部 `inner`
-- [ ] `make-fixture.sh`：shop-clean、messy-fullstack 都加資料庫（`sqlalchemy`／`pg`）、外部套件（`httpx`／`axios`）與標準庫（`os`／`node:fs`）的 import；messy-fullstack 加一個 > 60 個檔、分在 3 個子目錄的模組；兩組的架構文件加資料流節——shop-clean 的流程參與者都對得到模組，messy-fullstack 有一條流程的參與者全部對不到模組
+- [ ] `make-fixture.sh`：shop-clean、messy-fullstack 都加資料庫（`sqlalchemy`／`pg`）、外部套件（`httpx`／`axios`）與標準庫（`os`／`node:fs`）的 import；messy-fullstack 加一個 > 60 個檔、分在 3 個子目錄的模組；兩組的架構文件加資料流節，照 05 範本放在自動段 `<!-- overview:generated:end -->` 之後（緊接 end 標記，讓不可退化的「`--sync-arch` 前後資料流節位元組相同」在真實版面上驗）——shop-clean 的流程參與者都對得到模組，messy-fullstack 有一條流程的參與者全部對不到模組
 - [ ] `run-tests.sh` 的 overview 節加下面驗收的案例
 - **預估**：3.5h
 - **驗收**：
@@ -526,7 +526,7 @@ flowchart LR
   - 把 `module-notes.md` 附屬檔的表頭「依據」改成「來源」→ `check-counts.sh` 失敗並指出 `OVERVIEW_COLS_NOTES`；改回後通過
   - `documentation-specialist.md` 裡的附屬檔路徑改錯一個字 → `check-counts.sh` 失敗
   - 把 05 範本的 `<!-- overview:generated:start -->` 改成 `<!-- overview:gen:start -->` → `check-counts.sh` 失敗並指出 `overview.sh` 的標記常數；改回後通過
-  - 把 05 範本的 `## 4. 資料流` 改成 `## 4. 跨服務流程` → `check-counts.sh` 失敗並指出 `OVERVIEW_FLOW_SECTION`；改回後通過
+  - 把 05 範本的 `## 5. 資料流` 改成 `## 5. 跨服務流程` → `check-counts.sh` 失敗並指出 `OVERVIEW_FLOW_SECTION`；改回後通過
   - 把 `overview.sh` 的 `OVERVIEW_FLOW_SECTION` 改成 `"流程"` → `check-counts.sh` 失敗；改回後通過
   - `WORKFLOW.md` 有一段 SSH 遠端用 VS Code Remote 開畫面（grep 得到 `VS Code`、`overview/index.html`）
   - `WORKFLOW.md`、`README.md` 的地圖說明各有一句同時含「展開」與「資料流」
@@ -570,6 +570,7 @@ flowchart LR
 | 2026-11-06 | X12 | jq 只用 1.6 語法、CI 用 jq 1.6 把關 | **模板最低要求 jq 1.7.1**，拿掉階段 0 加的 `hooks-jq16` job（合併後另一個 commit 移除） | 遷就 1.6 仍然漏（`overview.sh` 的 `{module, file}` 物件簡寫在 1.6 語法錯誤）；使用者可升級，Ubuntu 24.04 apt 即 1.7.1。版本檢查在 `fix/jq-min-version` 分支 |
 | 2026-11-06 | X13 | （ADR-2026-11-06-002：地圖點模組展開看內部；`architect-2026-11-06-1100.md` 第 4 節） | 新增階段 5「模組展開——資料」（3.5h）、階段 6「模組展開——畫面＋審閱」（4h）；原階段 5（收尾）改號 7、多兩項（`OVERVIEW_FLOW_SECTION` 對 05 範本、地圖說明加展開與資料流），3h → 3.5h；X9 的 50KB 在階段 6 改 64KB；階段 1 的 import 解析寫成「逐檔紀錄 → 彙總」兩步（不改範圍）。合計 40.5h → 48.5h。本表 X7 的「階段 5」是提案的編號，不改 | 資料與畫面拆開，階段 6 在階段 3 合併後就能和 2、4、5 同時跑；合成一個階段要等階段 4 做完（約多 4h 牆鐘時間）。64KB 仍在 ADR-003 原訂的 80KB 內 |
 | 2026-11-06 | X14 | ADR-2026-11-06-002：`inner` 在掃描截斷或被大小上限丟掉時為 null，被丟的顯示「資料量超過上限…」 | 畫面依 `scan.truncated` 分兩種文字：true →「檔案數超過掃描上限，沒有內部資料」；否則 null →「資料量超過上限，未保留內部細節（調高 `OVERVIEW_MAX_BYTES`）」；沒有 `inner` 欄位 →「沒有內部資料」 | ADR 只寫了被丟的那種；兩種原因的解法不同（調 `OVERVIEW_SCAN_MAX_FILES` 還是 `OVERVIEW_MAX_BYTES`），`scan.truncated` 階段 1 就有，不用新欄位 |
+| 2026-11-06 | X15 | ADR-2026-11-06-001 原決策：資料流第 4 節、自動段改第 5 節，資料流在 start 標記之前 | ADR 修訂（範本審閱 v3）：自動段維持第 4 節、資料流第 5 節在 `<!-- overview:generated:end -->` 之後。**程式設計不變**；只改階段 7 驗收的節名範例（`## 5. 資料流` → `## 5. 跨服務流程`）與階段 5 `make-fixture.sh` 的版面（資料流節放在 end 標記之後）。預估不變。來源 `coordination/handoffs/architect-to-planner-2026-11-06-1400.md` | 資料流解析樣式 `^## [0-9]+\. 資料流` 不綁節號、A7 標記檢查與 `--sync-arch` 的標記常數不看節號；fixture 要照真實版面，「`--sync-arch` 前後資料流節位元組相同」才驗得到緊鄰 end 標記的情況 |
 
 其他：
 
