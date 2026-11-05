@@ -1,7 +1,9 @@
 #!/bin/bash
 # overview.sh — 專案圖解產生器（專案地圖＋任務圖）
 #
-# 讀人寫的 md（架構文件 5.1 容器圖＋5.5 模組表、wbs.md、plans/*.md 與帳本、project.json）與
+# 地圖骨架來自程式碼（scripts/overview-scan.sh 掃出的 skeleton.json）；架構文件 5.5 有效時，
+# 路徑對得上的檔案改歸 5.5 的模組（id、名稱、分組照 5.5），沒有或格式不合就完全用掃描結果。
+# 再讀人寫的 md（架構文件 5.1 容器圖＋5.5 模組表、wbs.md、plans/*.md 與帳本、project.json）與
 # git 狀態，產生兩份衍生物。md 才是正本，這兩份隨時可以刪掉重產：
 #
 #   .claude/taskmaster-data/overview/overview.md  只反映主 checkout；輸入沒變就 byte 相同，
@@ -22,7 +24,7 @@
 # 用法：
 #   bash .claude/scripts/overview.sh [<工作目錄>]                重產，不輸出任何東西
 #   bash .claude/scripts/overview.sh --print-path [<工作目錄>]   印 index.html 的 file:// 路徑；
-#        畫不出地圖時（找不到架構文件、架構是草稿）再多印一行「提示：…」，給 /task-status 轉告使用者
+#        架構文件是草稿時再多印一行「提示：…」，給 /task-status 轉告使用者
 #   bash .claude/scripts/overview.sh --actual <plan> --result PASS|FAIL [--reason "<一句>"]
 #        把「計畫 vs 實際」寫進 plan 的標記區塊（再跑一次是取代，不會重複）並重產。FAIL 必須帶 reason
 #
@@ -112,14 +114,33 @@ if [ ! -f "$DATA/project.json" ]; then
     exit 0
 fi
 
-# 架構文件：project.json 的 overview.architectureDoc（選填覆寫）→ docs/*architecture*.md → docs/tech-spec.md
+PJ_TEXT=""
+IFS= read -r -d '' PJ_TEXT < "$DATA/project.json"
+IS_DEMO=0
+[[ $PJ_TEXT =~ \"mode\"[[:space:]]*:[[:space:]]*\"demo\" ]] && IS_DEMO=1
+
+# 架構文件：project.json 的 overview.architectureDoc（選填覆寫）→ docs/architecture.md → docs/*architecture*.md
+# → docs/**/*architecture*.md → docs/tech-spec.md。檔名含 frontend 的跳過：/ui-site 產的
+# docs/12_frontend_architecture.md 依字母序排在 architecture.md 前面，會被當成系統架構文件。
+# docs/** 用 find 不用 globstar（bash 3.2 沒有）。
 find_arch() {
-    local f
-    f=$(jq -r '.overview.architectureDoc // empty' "$DATA/project.json" 2>/dev/null | tr -d '\r')
-    if [ -n "$f" ] && [ -f "$MAIN_ROOT/$f" ]; then echo "$f"; return; fi
+    local f b best="" re='"architectureDoc"[[:space:]]*:[[:space:]]*"([^"]*)"'
+    if [[ $PJ_TEXT =~ $re ]] && [ -n "${BASH_REMATCH[1]}" ] && [ -f "$MAIN_ROOT/${BASH_REMATCH[1]}" ]; then
+        echo "${BASH_REMATCH[1]}"; return
+    fi
+    [ -f "$MAIN_ROOT/docs/architecture.md" ] && { echo docs/architecture.md; return; }
     for f in "$MAIN_ROOT"/docs/*architecture*.md; do
+        b=${f##*/}; [[ ${b,,} == *frontend* ]] && continue
         [ -f "$f" ] && { echo "${f#"$MAIN_ROOT"/}"; return; }
     done
+    if [ -d "$MAIN_ROOT/docs" ]; then
+        while IFS= read -r -d '' f; do
+            b=${f##*/}; [[ ${b,,} == *frontend* ]] && continue
+            f=${f#"$MAIN_ROOT"/}
+            if [ -z "$best" ] || [[ $f < $best ]]; then best=$f; fi
+        done < <(find "$MAIN_ROOT/docs" -mindepth 2 -type f -name '*architecture*.md' -print0 2>/dev/null)
+        [ -n "$best" ] && { echo "$best"; return; }
+    fi
     [ -f "$MAIN_ROOT/docs/tech-spec.md" ] && echo "docs/tech-spec.md"
 }
 
@@ -139,14 +160,12 @@ if [ "$PRINT_PATH" -eq 1 ]; then
     p="$OUT/index.html"
     command -v cygpath >/dev/null 2>&1 && p=$(cygpath -m "$p")
     printf 'file:///%s\n' "${p#/}"
-    # 畫不出地圖的兩種情況要讓 /task-status 講出來：模型不讀 data.js，只看得到這裡印的字。
-    # demo 不提（使用者決定：demo 的升級提示只放畫面與 overview.md）
-    if ! grep -q '"mode"[[:space:]]*:[[:space:]]*"demo"' "$DATA/project.json" 2>/dev/null; then
+    # 草稿要讓 /task-status 講出來：模型不讀 data.js，只看得到這裡印的字。沒有架構文件不提：
+    # 地圖由程式碼掃出，照樣畫得出來。demo 不提（使用者決定：demo 的升級提示只放畫面與 overview.md）
+    if [ "$IS_DEMO" -eq 0 ]; then
         a=$(find_arch)
-        if [ -z "$a" ]; then
-            echo "提示：找不到架構文件，專案地圖畫不出來（任務圖照常）。可委派 documentation-specialist 從程式碼反推草稿；草稿確認前地圖不會出現"
-        elif grep -qF -- "$DRAFT_MARK" "$MAIN_ROOT/$a" 2>/dev/null; then
-            echo "提示：$a 是架構草稿（帶 $DRAFT_MARK），確認模組切分後移除這行標記，專案地圖才會出現"
+        if [ -n "$a" ] && grep -qF -- "$DRAFT_MARK" "$MAIN_ROOT/$a" 2>/dev/null; then
+            echo "提示：$a 是架構草稿（帶 $DRAFT_MARK），地圖照畫，但不拿它覆寫模組名稱；確認模組切分後移除這行標記"
         fi
     fi
     exit 0
@@ -162,7 +181,7 @@ if ! command -v jq >/dev/null 2>&1; then
     [ -f "$OUT/.gitignore" ] || printf '*\n' > "$OUT/.gitignore"
     {
         printf '// 給瀏覽器讀的資料，模型不要讀——要狀態請讀 wbs.md\n'
-        printf 'window.OVERVIEW = {"schema":1,"notices":[{"text":"需要 jq：安裝 jq 後跑一次 /task-status，專案圖解就會產生"}]};\n'
+        printf 'window.OVERVIEW = {"schema":2,"notices":[{"text":"需要 jq：安裝 jq 後跑一次 /task-status，專案圖解就會產生"}]};\n'
     } > "$OUT/.data.tmp-$$" && mv -f "$OUT/.data.tmp-$$" "$OUT/data.js"
     copy_page
     exit 0
@@ -356,6 +375,26 @@ gather() {
     fi
 }
 
+# 骨架掃描：結果（共享產物）在 OUT/skeleton.json，這裡複製一份進 TMP 給 jq（理由同 generate 的註解）。
+# 失敗不擋整張圖：地圖退回只有架構文件寫的模組，錯誤留在 .scan-error、data.js 加一則 notice。
+SCAN_STATE=skipped SCAN_MS=0
+scan() {
+    local t0 t1
+    printf '{}\n' > "$TMP/skel.json"
+    [ "$IS_DEMO" -eq 0 ] || return 0
+    if [ ! -f "$SCRIPT_DIR/overview-scan.sh" ]; then SCAN_STATE=missing; return 0; fi
+    t0=${EPOCHREALTIME//[!0-9]/}
+    if SCAN_STATE=$(bash "$SCRIPT_DIR/overview-scan.sh" "$MAIN_ROOT" 2> "$TMP/scan.err") && [ -f "$OUT/skeleton.json" ]; then
+        cp -f "$OUT/skeleton.json" "$TMP/skel.json"
+        [ -f "$OUT/.scan-error" ] && rm -f "$OUT/.scan-error"
+    else
+        SCAN_STATE=failed
+        cp -f "$TMP/scan.err" "$OUT/.scan-error" 2>/dev/null
+    fi
+    t1=${EPOCHREALTIME//[!0-9]/}
+    [ -n "$t0" ] && [ -n "$t1" ] && SCAN_MS=$(( (t1 - t0) / 1000 ))
+}
+
 # ---------------------------------------------------------------- 產生
 
 generate() {
@@ -369,6 +408,7 @@ generate() {
     [ -f "$DATA/wbs-archive.md" ] && awk '/^[[:space:]]*(\||#|```)/ { print; b = 0; next } !b { print ""; b = 1 }' \
         "$DATA/wbs-archive.md" > "$TMP/wbsarch.md" 2>/dev/null
     cp -f "$DATA/project.json" "$TMP/proj.json" 2> "$TMP/err" || return 1
+    scan
     gather
     now=$(date '+%Y-%m-%dT%H:%M:%S.%3N%:z')
 
@@ -384,6 +424,7 @@ generate() {
         --rawfile bundle bundle.txt --rawfile mtimes mtimes.tsv --rawfile changes changes.tsv \
         --rawfile bases bases.tsv --rawfile planbase planbase.tsv --rawfile currents currents.tsv \
         --rawfile archive archive.txt \
+        --slurpfile skel skel.json --arg scanState "$SCAN_STATE" --argjson scanMs "$SCAN_MS" \
         --arg now "$now" --arg draftMark "$DRAFT_MARK" \
         --arg colsMod "$OVERVIEW_COLS_MODULE" --arg colsModOpt "$OVERVIEW_COLS_MODULE_OPT" \
         --arg colsWbs "$OVERVIEW_COLS_WBS" --arg colWbs "$OVERVIEW_COL_WBS" --arg colsPart "$OVERVIEW_COLS_PART" \
@@ -413,26 +454,29 @@ def rollup:
 JQ
 
 # data.js 超過 OVERVIEW_MAX_BYTES 時一級一級丟（每級都是在上一級的結果上再丟）：
-#   1 非本次 plan 的改動明細 → 目錄彙總   2 非本次 plan 的部件驗收
-#   3 非本次 plan 只留狀態（畫面仍列得出有哪些 plan）   4 地圖的本次改動清單 → 目錄彙總
-#   5 不丟東西，只加一則「仍超過上限」（四級都丟完還放不下時才跑）
+#   1 模組的路由清單（只留數量）   2 非本次 plan 的改動明細 → 目錄彙總   3 非本次 plan 的部件驗收
+#   4 非本次 plan 只留狀態（畫面仍列得出有哪些 plan）   5 地圖的本次改動清單 → 目錄彙總
+#   6 不丟東西，只加一則「仍超過上限」（五級都丟完還放不下時才跑）
 # 只動寫進 data.js 的那份：--actual 寫回 plan 用的是沒丟過的資料，overview.md 不受影響。
 IFS= read -r -d '' JQ_SHRINK <<'JQ'
 def note($what): .notices += [{level: "info", text: "資料超過 \($kb) KB 上限，已省略：\($what)", action: null}];
 .truncated = true
 | if $level == 1 then
+    .modules |= map(if .routes then .routes.sample = [] else . end)
+    | note("模組的路由清單（只留數量）")
+  elif $level == 2 then
     .plans |= map(if .current then . else
         .changesRollup = ((.changes + (.changesRollup // [])) | rollup) | .changes = [] end)
     | note("非本次 plan 的改動明細（改成依目錄彙總）")
-  elif $level == 2 then
+  elif $level == 3 then
     .plans |= map(if .current then . else .parts |= map(.acceptance = []) end)
     | note("非本次 plan 的部件驗收")
-  elif $level == 3 then
+  elif $level == 4 then
     .plans |= map(if .current then . else
         {file, task, title, mode, status, currentPhase, source, base, verify, modules, current,
          phases: [], hasParts: false, parts: [], extraMore: 0, changes: [], changesRollup: [], stub: true} end)
     | note("非本次 plan 的內容（只留狀態）")
-  elif $level == 4 then
+  elif $level == 5 then
     .changesRollup = ((.changes + (.changesRollup // [])) | rollup) | .changes = []
     | note("地圖上的本次改動清單（改成依目錄彙總）")
   else
@@ -456,6 +500,11 @@ def blank: . == null or . == "" or . == "—" or . == "-" or test("^\\[.*\\]$");
 def splitlist: split("[,，、]"; null) | map(unbt) | map(select(blank | not));
 def tsv: lines | map(select(. != "") | split("\t"));
 def cap($n): if type == "string" and length > $n then .[:$n - 1] + "…" else . end;
+# 來自 md 的名稱：<br> 換空白、解碼實體、去標籤（mermaid 標籤常寫 `訂單<br/>處理&amp;出貨`）。&amp; 最後解，
+# `&amp;lt;` 才會留成字面的 `&lt;`
+def clean: gsub("\\\\n"; " ") | gsub("<br\\s*/?>"; " "; "i")
+  | gsub("&lt;"; "<") | gsub("&gt;"; ">") | gsub("&quot;"; "\"") | gsub("&#39;"; "'") | gsub("&amp;"; "&")
+  | gsub("<br\\s*/?>"; " "; "i") | gsub("<[^>]*>"; "") | gsub("\\s+"; " ") | trim;
 
 # Markdown 表格：[{h: 所在標題, header: [...], rows: [[...]]}]；程式碼區塊裡的不算
 def tables:
@@ -497,7 +546,7 @@ def node_ref:
   | (.rest | sub(":::.*$"; "") | trim) as $r
   | {id,
      label: (if ($r | test("^[\\[\\(\\{>]") | not) then null
-             else ($r | sub("^[\\[\\(\\{>/\\\\]+"; "") | sub("[\\]\\)\\}/\\\\]+$"; "") | unq) end),
+             else ($r | sub("^[\\[\\(\\{>/\\\\]+"; "") | sub("[\\]\\)\\}/\\\\]+$"; "") | unq | clean) end),
      shape: (if ($r | startswith("[(")) then "db" else "box" end)};
 def addnode($n; $g):
   if any(.nodes[]; .id == $n.id) then
@@ -512,7 +561,7 @@ def parse_block:
        elif ($l | test("^subgraph\\b")) then
          ($l | sub("^subgraph\\s*"; "") | trim) as $s
          | (($s | capture("^(?<id>[A-Za-z0-9_-]+)\\s*\\[(?<lab>.*)\\]$")) // {id: $s, lab: $s}) as $sg
-         | .groups += [{id: $sg.id, label: ($sg.lab | unq)}] | .stack += [$sg.id]
+         | .groups += [{id: $sg.id, label: ($sg.lab | unq | clean)}] | .stack += [$sg.id]
        elif $l == "end" then .stack |= .[:-1]
        elif ($l | test("^(classDef|class|style|linkStyle|click|direction)\\b")) then .
        elif ($l | test(ARROW)) then
@@ -595,26 +644,29 @@ def parse_ledger:
     end);
 
 ($proj[0] // {}) as $p
+| ($skel[0] // {}) as $sk
 | ($colsMod | words) as $needMod
 | ($colsPart | words) as $needPart
 | ($colWbs) as $wcol
 | ($p.mode // "none") as $mode
+| ($mode == "demo") as $demo
 | ($archPath != "") as $hasArch
 | ($hasArch and ($arch | contains($draftMark))) as $draft
-| ($mode == "demo" or ($hasArch | not) or $draft) as $nomap
+| ($demo or ($hasArch | not) or $draft) as $nodoc
 
 # ---- 5.5 模組表：第一張表頭同時有 id 與 路徑 的表
-| (if $nomap then null else
+| (if $nodoc then null else
     [$arch | tables[] | select(.header as $h | all($needMod[]; . as $c | $h | index($c)))] | first
    end) as $mt
 | ([$mt // empty | .header as $h | .rows[] | rowobj($h)
-    | {id: (.id | unbt), name: ((.["模組"] // "") | unbt),
+    | {id: (.id | unbt), name: ((.["模組"] // "") | unbt | clean),
        paths: ((.["路徑"] // "") | splitlist),
        responsibility: ((.["職責"] // "") | trim)}
     | select(.id | blank | not)]) as $rows
+| (($rows | length) > 0) as $docValid
 
 # ---- 5.1 容器圖：節點 id 與模組表重疊最多的 graph／flowchart 區塊；同分取前面的
-| (if $nomap then null else
+| (if ($docValid | not) then null else
     [$arch | mermaid_blocks | to_entries[] | (.value | parse_block) as $b
      | select($b.kind == "flow" and ($b.nodes | length) > 0)
      | {i: .key, b: $b, score: ([$b.nodes[].id as $n | $rows[] | select(.id == $n)] | length)}]
@@ -630,10 +682,25 @@ def parse_ledger:
         paths: ($r.paths // []), responsibility: ($r.responsibility // ""), declared: ($r != null)}]
    + [$rows[] | select(.id as $i | $dgIds | index($i) | not)
       | {id, name: (if .name == "" then .id else .name end), group: "_ungrouped", shape: "box",
-         paths, responsibility, declared: true}]) as $mods0
+         paths, responsibility, declared: true}]
+   | map(. + {nameSource: "doc"})) as $docMods
+
+# ---- 與骨架合併（提案 3.2）：5.5 有效時，路徑對得上的檔改歸 5.5 的模組，其餘留在掃描模組。
+# 以檔為單位合併，不以掃描模組為單位：5.5 常把一個目錄拆成兩個模組（src/services/a、b）
+| ([$docMods[].id]) as $docIds
+| ([$docMods[] | {id, res: [.paths[] | glob2re]}]) as $dres
+| def docmod: . as $f | [$dres[] | select(any(.res[]; . as $r | $f | test($r))) | .id] | first // null;
+  ([($sk.modules // [])[] | .id as $i | {key: $i, value: (if ($docIds | index($i)) != null then $i + "-scan" else $i end)}]
+   | from_entries) as $ren
+| (($sk.files // {}) | with_entries(.value = ((if $docValid then (.key | docmod) else null end) // $ren[.value] // .value))) as $FM
+| ($FM | to_entries | group_by(.value) | map({key: .[0].value, value: length}) | from_entries) as $FC
+| ([($sk.modules // [])[] | $ren[.id] as $id | select($FC[$id] != null)
+    | {id: $id, name, group, shape: "box", paths, responsibility: "", declared: true, nameSource: "dir", source: "scan"}]) as $scanMods
+| ([$docMods[] | . + {source: (if ($FC[.id] // 0) > 0 then "both" else "doc" end)}] + $scanMods) as $mods0
+| (reduce ($sk.routes // [])[] as $r ({}; $FM[$r[0]] as $m | if $m == null then . else .[$m] += [$r[1]] end)) as $RT
 | ([$mods0[].id]) as $modIds
 | ([$mods0[] | {id, res: [.paths[] | glob2re]}]) as $res
-| def modof: . as $f | [$res[] | select(any(.res[]; . as $r | $f | test($r))) | .id] | first // null;
+| def modof: . as $f | $FM[$f] // ([$res[] | select(any(.res[]; . as $r | $f | test($r))) | .id] | first // null);
   # plan files: 的 glob 對模組：萬用字元換成一般字元再比對（寬鬆側誤差，只用來找「碰到哪些模組」）
   def globmod: gsub("\\*\\*"; "x") | gsub("[*?]"; "x") | modof;
 
@@ -794,18 +861,26 @@ def parse_ledger:
 
 # ---- 版面由這裡決定（畫面只換算像素、節點不可拖）：群組由左到右排成欄；
 # 群組內依「群組內連線」的深度再分子欄（gateway → svc-a 會排在 gateway 右邊），每欄最多 4 列
-| ((($dg // {}).groups // []) | map(select(.id as $g | $mods0 | any(.group == $g)))
+| ((($dg // {}).groups // []) + ($sk.groups // []) | map(select(.id as $g | $mods0 | any(.group == $g)))
    + (if any($mods0[]; .group == "_ungrouped") then [{id: "_ungrouped", label: "未分組"}] else [] end)) as $groups
 | ([($dg // {}).edges // [] | .[] | select(.from != .to)
     | select(.from as $a | .to as $b | ($modIds | index($a)) and ($modIds | index($b)))]
-   | reduce .[] as $e ([]; if any(.[]; .from == $e.from and .to == $e.to) then . else . + [$e] end)) as $edges
+   | reduce .[] as $e ([]; if any(.[]; .from == $e.from and .to == $e.to) then . else . + [$e] end)
+   | map(. + {source: "doc"})) as $dedges
+# import 邊：逐檔紀錄依合併後的歸屬彙總；第三方（pkg:…）與模組內的 import 不成邊。與文件邊重複的不另畫
+| ([($sk.imports // [])[] | select(.[2] == "import") | [$FM[.[0]], $FM[.[1]]]
+    | select(.[0] != null and .[1] != null and .[0] != .[1])]
+   | group_by(.) | map({from: .[0][0], to: .[0][1], label: "", weight: length, source: "import"})) as $iedges
+| ($dedges | map({key: "\(.from)\t\(.to)", value: true}) | from_entries) as $dpair
+| ($dedges + [$iedges[] | select($dpair["\(.from)\t\(.to)"] | not)]) as $edges
 | (reduce $groups[] as $g ({col: 0, pos: {}};
     [$mods0[] | select(.group == $g.id) | .id] as $ids
-    | [$edges[] | select(.from as $a | .to as $b | ($ids | index($a)) and ($ids | index($b)))] as $ie
+    | ([$edges[] | select(.from as $a | .to as $b | ($ids | index($a)) and ($ids | index($b)))]
+       | group_by(.to) | map({key: .[0].to, value: map(.from)}) | from_entries) as $inc
     | (reduce range(0; $ids | length) as $_
         ([$ids[] | {key: ., value: 0}] | from_entries;
          . as $d | with_entries(.key as $k
-           | .value = ([0] + [$ie[] | select(.to == $k) | $d[.from] + 1] | max | [., ($ids | length) - 1] | min)))) as $depth
+           | .value = ([0] + [($inc[$k] // [])[] | $d[.] + 1] | max | [., ($ids | length) - 1] | min)))) as $depth
     | reduce ($ids | group_by($depth[.]) | sort_by($depth[.[0]]))[] as $colIds (.;
         reduce range(0; $colIds | length) as $i (.;
           .pos[$colIds[$i]] = {col: (.col + (($i / 4) | floor)), row: ($i % 4)})
@@ -842,36 +917,47 @@ def parse_ledger:
                           elif ($tch | index($id)) and ($decl | index($id) | not) then
                             {task: $t, kind: "touched-not-declared", files: ([._touch[] | select(.module == $id) | .file] | unique | .[:5])}
                           else empty end],
-             pos: $pos[$id]});
+             pos: $pos[$id],
+             fileCount: ($FC[$id] // 0),
+             routes: {count: (($RT[$id] // []) | length), sample: (($RT[$id] // [])[:20])},
+             description: null,
+             planned: false});
   def notices_for($plans): [
-    (if $mode == "demo" then {level: "info", text: "demo 情境沒有架構文件，專案地圖不會出現（之後的任務圖仍可用）", action: "/docs-init --mvp"} else empty end),
-    (if $mode != "demo" and ($hasArch | not) then {level: "warn", text: "找不到架構文件（docs/*architecture*.md 或 docs/tech-spec.md），畫不出專案地圖", action: "委派 documentation-specialist 從程式碼反推草稿"} else empty end),
-    (if $draft then {level: "warn", text: "架構草稿待確認：\($archPath) 帶 `\($draftMark)` 標記，確認模組切分後移除標記，地圖才會出現", action: "確認後由主模型移除標記"} else empty end),
-    (if ($nomap | not) and $mt == null then {level: "warn", text: "架構文件沒有含 `id`、`路徑` 欄的模組表（05 範本 5.5），模組全部顯示為灰色", action: "委派 documentation-specialist 補欄"} else empty end),
-    (if ($nomap | not) and $dg == null and ($rows | length) > 0 then {level: "info", text: "架構文件沒有可解析的容器圖（5.1 mermaid），模組全部放在「未分組」", action: null} else empty end),
-    ([$mods0[] | select(.declared | not) | .id] | if length > 0 then {level: "warn", text: "容器圖有、模組表沒有的節點（灰色虛線）：\(join("、"))", action: "在 5.5 補上這幾列"} else empty end),
+    (if $demo then {level: "info", text: "demo 情境沒有架構文件，專案地圖不會出現（之後的任務圖仍可用）", action: "/docs-init --mvp"} else empty end),
+    (if $draft then {level: "warn", text: "架構草稿待確認：\($archPath) 帶 `\($draftMark)` 標記，地圖照畫，但不拿它覆寫模組名稱；確認模組切分後移除標記", action: "確認後由主模型移除標記"} else empty end),
+    (if $scanState == "failed" then {level: "warn", text: "骨架掃描失敗，地圖只有架構文件寫的模組", action: "錯誤訊息在 taskmaster-data/overview/.scan-error"}
+     elif $scanState == "missing" then {level: "warn", text: "找不到 .claude/scripts/overview-scan.sh，地圖只有架構文件寫的模組", action: "跑 update-template 補齊"} else empty end),
+    (if $docValid and $dg == null then {level: "info", text: "架構文件沒有可解析的容器圖（5.1 mermaid），模組全部放在「未分組」", action: null} else empty end),
+    ([$docMods[] | select(.declared | not) | .id] | if length > 0 then {level: "warn", text: "容器圖有、模組表沒有的節點（灰色虛線）：\(join("、"))", action: "在 5.5 補上這幾列"} else empty end),
     ([$rows[] | select(.id as $i | $dgIds | index($i) | not) | .id] | if length > 0 and $dg != null then {level: "info", text: "模組表有、容器圖沒畫的模組（放在「未分組」）：\(join("、"))", action: "在 5.1 補上節點"} else empty end),
-    (if ($tasks0 | length) > 0 and $noColCount == ($tasks0 | length) and ($nomap | not) then {level: "warn", text: "WBS 沒有模組欄，任務無法對到模組", action: "/task-status（會提議補欄）"}
-     elif $noColCount > 0 and ($nomap | not) then {level: "warn", text: "WBS 有 \($noColCount) 個任務所在的節沒有模組欄", action: "/task-status（會提議補欄）"} else empty end),
-    ($unknownMods | if length > 0 and ($nomap | not) then {level: "warn", text: "任務標了模組表沒有的模組：\(.[:8] | join("、"))", action: "改 WBS 模組欄或補架構文件 5.5"} else empty end),
+    (if ($tasks0 | length) > 0 and $noColCount == ($tasks0 | length) and ($demo | not) then {level: "warn", text: "WBS 沒有模組欄，任務無法對到模組", action: "/task-status（會提議補欄）"}
+     elif $noColCount > 0 and ($demo | not) then {level: "warn", text: "WBS 有 \($noColCount) 個任務所在的節沒有模組欄", action: "/task-status（會提議補欄）"} else empty end),
+    ($unknownMods | if length > 0 and ($demo | not) then {level: "warn", text: "任務標了模組表沒有的模組：\(.[:8] | join("、"))", action: "改 WBS 模組欄或補架構文件 5.5"} else empty end),
+    (($sk.notices // [])[]),
     ([$plans[] | select(.base == null and (.status | test("✅") | not)) | .file] | if length > 0 then {level: "warn", text: "找不到比較基準（帳本沒有 BASE=，也找不到預設分支），列不出這幾份 plan 改了哪些檔：\(join("、"))", action: "帳本記 BASE=<commit>（subagent-execution）"} else empty end),
     ([$plans[] | select((.hasParts | not) and (.status | test("✅") | not)) | .file] | if length > 0 then {level: "info", text: "這幾份 plan 沒有「一眼看懂」部件表，任務圖只列得出改了哪些檔：\(join("、"))", action: "格式見 plan-format skill"} else empty end)
   ];
   def public: map(del(._touch, ._mtime, ._text));
+  # plan 疊層（phase／phases／activePhases）與 status 由階段 2 填；這裡先放預設值，畫面才能先照合約排版
+  ($currents | map(. + {phase: null, phases: null, activePhases: []})) as $cx
 
-  {schema: 1,
+| {schema: 2,
    generatedAt: $now,
-   generator: {script: "overview.sh", version: 2},
+   generator: {script: "overview.sh", version: 3},
    truncated: (($chAll | length) > $maxChanges or any($plans[]; (.changesRollup | length) > 0)),
    project: {name: ($p.name // "（未命名專案）"), docsMode: $mode,
              architectureDoc: (if $hasArch then $archPath else null end), architectureDraft: $draft},
+   scan: (if $sk.scan == null then null
+          else $sk.scan + {modules: ($mods0 | length), edges: ($iedges | length), ms: $scanMs, cached: ($scanState == "cached")} end),
+   status: null,
    notices: notices_for($plans),
-   current: ($currents[0] // null),
-   currents: $currents,
+   current: ($cx[0] // null),
+   currents: $cx,
    groups: $groups,
    modules: mods_with($plans; $curTasks; $curMods; $changesList),
    edges: $edges,
-   tasks: [$tasks[] | del(.hasCol)],
+   tasks: [$tasks[] | del(.hasCol) + {inferred: false, inferredBy: null}],
+   drift: {codeNotInDoc: [], docNotInCode: [], taskModuleMismatch: [], wbsUnknownModule: [], tasksInferred: []},
    unmappedTasks: [$tasks0[] | select(.modules | length == 0) | .id],
    changesBase: (($BS["main|default"] // {}) | if (.short // "") != "" then {commit: .short, defaultBranch: .def} else null end),
    changes: $changesList,
@@ -1030,14 +1116,14 @@ splice_actual() {
     ' "$ACTUAL_PLAN" > "$TMP/plan.md" && mv -f "$TMP/plan.md" "$ACTUAL_PLAN"
 }
 
-# data.js 超過上限就照 JQ_SHRINK 的順序一級一級丟，直到放得下（四級都丟完仍超過就照寫，另加一則「仍超過上限」）。
+# data.js 超過上限就照 JQ_SHRINK 的順序一級一級丟，直到放得下（五級都丟完仍超過就照寫，另加一則「仍超過上限」）。
 # 常態只多一次 wc：放得下就什麼都不做。80 是 data.js 外殼（註解行＋賦值）的位元組數。
 shrink_data() {
     local level size
     size=$(wc -c < "$TMP/data.json")
     [ $((size + 80)) -le "$MAX_BYTES" ] && return 0
     cp -f "$TMP/data.json" "$TMP/view.json"
-    for level in 1 2 3 4 5; do
+    for level in 1 2 3 4 5 6; do
         ( cd "$TMP" && LC_ALL=C.UTF-8 jq -c --argjson level "$level" --argjson kb $((MAX_BYTES / 1024)) \
             -f shrink.jq view.json > shrunk.json 2> err ) || return 1
         mv -f "$TMP/shrunk.json" "$TMP/view.json"
