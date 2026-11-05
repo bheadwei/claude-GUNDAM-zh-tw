@@ -150,6 +150,13 @@ claude_v2026/
 建立 handoff，`post-agent-report.sh` 掃到 pending 交接即注入提示。編排劇本見
 `.claude/rules/agent-orchestration.md`。
 
+**專案圖解**：用瀏覽器看整個專案的兩張圖——**專案地圖**（架構文件的模組＋燈號＋本次改動）
+與**任務圖**（每份 plan 的部件做了沒）。網址由 `/task-status` 最後一行印出
+（或 `bash .claude/scripts/overview.sh --print-path`）。不用手動重產：寫 wbs／plan／架構文件時
+hook 在背景更新，畫面每 3 秒自己重讀；產物在 `taskmaster-data/overview/`，不進 git。
+關閉用環境變數 `OVERVIEW=off`。使用方式見 `.claude/guides/WORKFLOW.md`「想看整體長什麼樣」，
+產生器與設定見 `.claude/scripts/overview.sh` 檔頭。
+
 ### 指令速查（29 個）
 
 | 階段 | 指令 | 用途 |
