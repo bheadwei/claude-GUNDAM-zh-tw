@@ -7,7 +7,8 @@
 #       記進 .doc-impact 並在本任務第一次命中時注入提醒。
 #       /verify 在標記 WBS ✅ 前必須處理這份清單。
 #   (3) 前端寫入檢查：寫死色碼、動畫等級不符、AI 痕跡（P0）→ lib/ui-lint.sh（只提醒，不擋）
-#   (4) 專案圖解觸發：寫 wbs／plan／架構文件後在背景跑 scripts/overview.sh（不輸出）
+#   (4) 專案圖解觸發：寫 wbs／plan／架構文件後在背景跑 scripts/overview.sh（不輸出）；
+#       寫程式碼檔時節流重掃（30 秒內只觸發一次）
 #
 # 為什麼需要 (2)：新需求／客戶 CR 的程式都會寫出來，但文件常常沒跟上。
 # 原因是 documentation-specialist 在「任務完成路徑」上完全沒有位置——
@@ -62,7 +63,15 @@ REL="${NORM#"$ROOT_NORM"/}"
 # stdout，用 $(…) 擷取輸出的呼叫端（測試）會等完整支腳本（階段 1 實測多等 5 秒）。
 # 工作目錄用參數傳。放在 .suggest-mode 之前：那是建議密度開關，圖不是建議。
 #
-# 逃生門：OVERVIEW=off（腳本自己也認）；OVERVIEW_SYNC=1 改前景執行（測試用）
+# 寫程式碼檔也重產（地圖骨架來自程式碼），但要節流：連續改檔時每次都重掃太貴。
+# 戳記 .scan-at 是共享產物，放主 checkout——從 WORK_ROOT 的 .git 檔讀出來，不開 git 行程。
+# 視窗內只用 bash 內建（printf %()T、read、重導向）：這段在每次寫程式碼檔時都會跑。
+# 視窗內的改動留 .dirty：正在跑的 overview.sh 會再跑一輪；沒在跑的話等下一次視窗外的寫入。
+#
+# 逃生門：OVERVIEW=off（腳本自己也認）；OVERVIEW_SYNC=1 改前景執行（測試用）；
+# 節流秒數 OVERVIEW_THROTTLE_SEC（預設 30）
+# 與 scripts/overview-scan.sh 的同名常數相同（測試會比對）
+OVERVIEW_CODE_EXT="py ts tsx js jsx mjs cjs vue svelte go java kt cs rs"
 if [ "${OVERVIEW:-on}" != "off" ]; then
     OV_HIT=0
     case "$NORM" in
@@ -71,8 +80,50 @@ if [ "${OVERVIEW:-on}" != "off" ]; then
     case "$REL" in
         docs/*architecture*.md|docs/tech-spec.md) OV_HIT=1 ;;
     esac
+    if [ "$OV_HIT" -eq 0 ] && [ "$REL" != "$NORM" ]; then
+        case "$REL" in
+            .claude/*|docs/*|node_modules/*) ;;
+            *.*) OV_EXT=${REL##*.}; [[ " $OVERVIEW_CODE_EXT " == *" ${OV_EXT,,} "* ]] && OV_HIT=2 ;;
+        esac
+    fi
     OV_SH="$MAIN_CLAUDE/scripts/overview.sh"
-    if [ "$OV_HIT" -eq 1 ] && [ -f "$OV_SH" ] \
+    if [ "$OV_HIT" -ne 0 ] && [ -f "$OV_SH" ] \
+       && { [ -f "$MAIN_CLAUDE/taskmaster-data/project.json" ] || [ -f "$WORK_CLAUDE/taskmaster-data/project.json" ]; }; then
+        if [ "$OV_HIT" -eq 2 ]; then
+            OV_MAIN="$WORK_ROOT"
+            if [ -f "$WORK_ROOT/.git" ]; then
+                OV_GD=""
+                IFS= read -r OV_GD < "$WORK_ROOT/.git"
+                OV_GD=${OV_GD#gitdir: }; OV_GD=${OV_GD%$'\r'}
+                case "$OV_GD" in
+                    /*|[A-Za-z]:*) ;;
+                    *) OV_GD="$WORK_ROOT/$OV_GD" ;;
+                esac
+                case "$OV_GD" in */.git/worktrees/*) OV_MAIN=${OV_GD%/.git/worktrees/*} ;; esac
+            fi
+            OV_DIR="$OV_MAIN/.claude/taskmaster-data/overview"
+            OV_AT=0
+            [ -f "$OV_DIR/.scan-at" ] && IFS= read -r OV_AT < "$OV_DIR/.scan-at"
+            [[ $OV_AT =~ ^[0-9]+$ ]] || OV_AT=0
+            OV_WIN=${OVERVIEW_THROTTLE_SEC:-30}
+            [[ $OV_WIN =~ ^[0-9]+$ ]] || OV_WIN=30
+            if (( BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 2) )); then
+                printf -v OV_NOW '%(%s)T' -1
+            else
+                OV_NOW=$(date +%s)
+            fi
+            if (( OV_NOW - OV_AT < OV_WIN )); then
+                [ -d "$OV_DIR" ] && : > "$OV_DIR/.dirty" 2>/dev/null
+                OV_HIT=0
+            else
+                if [ ! -d "$OV_DIR" ]; then
+                    mkdir -p "$OV_DIR" 2>/dev/null && printf '*\n' > "$OV_DIR/.gitignore" 2>/dev/null
+                fi
+                printf '%s\n' "$OV_NOW" > "$OV_DIR/.scan-at" 2>/dev/null
+            fi
+        fi
+    fi
+    if [ "$OV_HIT" -ne 0 ] && [ -f "$OV_SH" ] \
        && { [ -f "$MAIN_CLAUDE/taskmaster-data/project.json" ] || [ -f "$WORK_CLAUDE/taskmaster-data/project.json" ]; }; then
         if [ "${OVERVIEW_SYNC:-}" = "1" ]; then
             bash "$OV_SH" "$WORK_ROOT" </dev/null >/dev/null 2>&1
