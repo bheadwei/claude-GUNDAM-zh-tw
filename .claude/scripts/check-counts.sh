@@ -440,19 +440,22 @@ if [ -f "$OVSH" ]; then
     fi
 fi
 
+# docs-init 的架構文件步驟：指向 05 範本、不內嵌模組表
+#
+# 為什麼：模組表只該出現在架構文件第 4 節的自動段。指令裡再抄一份表頭，
+# 照抄的專案就會手寫模組表，跟自動段兩份漂開。
 DOCSINIT=.claude/commands/docs-init.md
 if [ -f "$DOCSINIT" ]; then
-    PATHB=$(awk '/^#### 路徑 B/{s=1; next} s && /^#### /{exit} s{print}' "$DOCSINIT")
+    ARCHSTEP=$(awk '/^### 步驟 [0-9]+：架構文件/{s=1; next} s && /^### /{exit} s{print}' "$DOCSINIT")
     CHECKED=$((CHECKED + 1))
-    if ! printf '%s' "$PATHB" | grep -q '05_architecture_and_design_document\.md' \
-       || ! printf '%s' "$PATHB" | grep -q '5\.5'; then
+    if ! printf '%s' "$ARCHSTEP" | grep -q '05_architecture_and_design_document\.md'; then
         FAIL=$((FAIL + 1))
-        printf '  %s docs-init.md 路徑 B 沒有指向 05 範本的 5.5（模組表的唯一來源）\n' "$(red '✗')"
+        printf '  %s docs-init.md 的「架構文件」步驟沒有指向 05 範本（格式的唯一來源）\n' "$(red '✗')"
     fi
     CHECKED=$((CHECKED + 1))
-    if printf '%s\n' "$PATHB" | grep -qE '^\|[[:space:]]*id[[:space:]]*\|'; then
+    if printf '%s\n' "$ARCHSTEP" | grep -qE '^\|[[:space:]]*id[[:space:]]*\|'; then
         FAIL=$((FAIL + 1))
-        printf '  %s docs-init.md 路徑 B 內嵌了模組表表頭（`| id |`）——改成指向 05 範本 5.5，不要留第二份\n' "$(red '✗')"
+        printf '  %s docs-init.md 的「架構文件」步驟內嵌了模組表表頭（`| id |`）——模組表由自動段產生，不要留第二份\n' "$(red '✗')"
     fi
 fi
 
