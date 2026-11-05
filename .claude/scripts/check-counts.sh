@@ -388,6 +388,35 @@ if [ -f "$PFSKILL" ]; then
         FAIL=$((FAIL + 1))
         printf '  %s plan-format 範例的階段標題下一行必須是「- **依賴**：」：%s\n' "$(red '✗')" "${NO_DEP:-（範例沒有任何階段）}"
     fi
+    CHECKED=$((CHECKED + 1))
+    DF_PLAN=$(awk '/^wbs_task:/{f=1} f && /^```/{exit}
+                   f && /^### PRD 情境變更/{seen=1}
+                   f && /^### 資料流變更/{if(!seen){print "順序錯：在 PRD 情境變更之前"} has=1; s=1; next}
+                   s && /^#/{s=0}
+                   s && /^- /{n++; if ($0 !~ /^- (ADDED|MODIFIED|REMOVED) /) print "項目開頭錯：" $0}
+                   END{if(!has) print "沒有「### 資料流變更」"; else if(n==0) print "「### 資料流變更」底下沒有項目"}' "$PFSKILL")
+    if [ -n "$DF_PLAN" ]; then
+        FAIL=$((FAIL + 1))
+        printf '  %s plan-format 範例要在「### PRD 情境變更」之後有「### 資料流變更」，項目以 ADDED／MODIFIED／REMOVED 開頭：%s\n' "$(red '✗')" "$(printf '%s' "$DF_PLAN" | tr '\n' ';')"
+    fi
+fi
+
+# 05 範本的資料流節：位在自動段之前、至少一張 sequenceDiagram、每個小標題以全形括號結尾
+#
+# 為什麼：圖要連到 PRD 情境（括號裡的編號）；節放在自動段之後會被「手改會被覆蓋」的說明吃掉。
+TPL05=.claude/skills/project-docs/templates/05_architecture_and_design_document.md
+if [ -f "$TPL05" ]; then
+    CHECKED=$((CHECKED + 1))
+    DF_TPL=$(awk '/^<!-- overview:generated:start -->/{if(!has) print "資料流節在自動段標記之後或不存在"; exit}
+                  /^## [0-9]+\. 資料流/{has=1; s=1; next}
+                  s && /^## /{s=0}
+                  s && /^```mermaid/{getline nx; if (nx ~ /^sequenceDiagram/) seq++}
+                  s && /^### /{if ($0 !~ /）$/) print "小標題沒有以「）」結尾：" $0}
+                  END{if(has && seq==0) print "節內沒有首行為 sequenceDiagram 的 mermaid 區塊"}' "$TPL05")
+    if [ -n "$DF_TPL" ]; then
+        FAIL=$((FAIL + 1))
+        printf '  %s 05 範本要在自動段之前有「## N. 資料流」節（含 sequenceDiagram、小標題以全形括號結尾）：%s\n' "$(red '✗')" "$(printf '%s' "$DF_TPL" | tr '\n' ';')"
+    fi
 fi
 
 # 專案圖解畫面：≤ 50KB、不載 CDN、不用 module script（file:// 下會被 CORS 擋）
