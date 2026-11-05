@@ -4,7 +4,7 @@ slug: "docs-system"
 created: "2026-11-05"
 updated: "2026-11-06"
 status: "🔄 進行中"
-current_phase: 1
+current_phase: 3
 mode: "standard"
 files:
   # 階段 1：範本與 plan 格式（審閱前；2026-11-06 補資料流節，檔案範圍不變）
@@ -166,7 +166,7 @@ flowchart LR
 
 平行時各線用 worktree，程序照 `worktree-orchestration` skill；本 plan 與地圖 plan 在開 worktree 前要已 commit（`plans/` 在 `.git/info/exclude`，要 `git add -f`）。
 
-### 階段 1: 範本與 plan 格式（D1 前半） 🔄
+### 階段 1: 範本與 plan 格式（D1 前半） ✅
 
 - **依賴**：無
 - [ ] 改寫 `02_project_brief_and_prd.md`（檔名不變）：上半 brief 骨架（保留 `## 一句話` 標題——地圖的一頁現況讀它）、下半 PRD 骨架照 ADR-005（用語表在最前；功能依領域分節、節標題括號寫模組分組名；`#### <代碼>-<序號> 標題`＋假設／當／那麼；非功能需求選填；待確認）；每份「不寫什麼」照提案第 3.2 節 — 驗證：`bash .claude/scripts/check-counts.sh`
@@ -215,7 +215,7 @@ flowchart LR
   - 自動段維持第 4 節、不改號；資料流節在 end 標記之後，`--sync-arch` 只改標記之間、碰不到它；ADR-007 的表照舊正確，不必改任何節號引用
   - 第二次補做是照使用者在審閱 v3 給的原話實作，**不再回階段 2 另審一輪**：使用者給完兩點修改後指示「繼續做」，主模型照原話改並發審閱頁第 4 版，視為確認（見階段 2 與「發現與決策」2026-11-06）。第二次補做合併後，主模型統一更新階段 1、2 的狀態與 `current_phase`
 
-### 階段 2: 範本審閱檢查點 ⏳
+### 階段 2: 範本審閱檢查點 ✅
 
 - **依賴**：階段 1
 - [x] 主模型讀階段 1 寫好的 02、04、05、14 範本與 plan-format，用 `.claude/context/planning/overview-shop-clean-reference.md` 的範例電商寫一套 mock：brief → PRD（用語表＋至少 2 個領域、每領域 2 條「假設／當／那麼」情境）→ 架構文件（第 1–3 節＋第 4 節自動段範例＋第 5 節資料流（至少一張帶 `alt` 的圖，例：結帳 orders → inventory → 金流商（外部）→ 通知佇列，`alt` 缺貨分支））→ WBS 片段 → plan（新四段、每階段有 `- **依賴**：`、「可平行」行、PRD 情境變更、資料流變更）→ ADR 一份。mock 只放 `.claude/tmp/`，不進 repo
