@@ -59,7 +59,8 @@ TTL_HOURS="${TASKMODE_TTL_HOURS:-8}"
 
 log() {
     printf -v _ts '%(%Y-%m-%d %H:%M:%S)T' -1
-    echo "[$_ts] pre-tool${IN_WORKTREE:+[wt]}: $*" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
+    local wt=""; [ "$IN_WORKTREE" = 1 ] && wt="[wt]"
+    echo "[$_ts] pre-tool$wt: $*" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
 }
 
 # jq 不可用 → 只 log 不攔（避免因環境缺依賴而擋住所有寫入）
