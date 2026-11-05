@@ -4,7 +4,7 @@ slug: "docs-system"
 created: "2026-11-05"
 updated: "2026-11-06"
 status: "🔄 進行中"
-current_phase: 3
+current_phase: 4
 mode: "standard"
 files:
   # 階段 1：範本與 plan 格式（審閱前；2026-11-06 補資料流節，檔案範圍不變）
@@ -229,7 +229,7 @@ flowchart LR
   - 使用者選「確認」→ `qa-history` 有 `*-docs-template-review.md`，結論為確認；之後階段 3、4 才可標 🔄
 - **注意**：mock 用的是通用電商詞彙，不得出現實測專案的名稱、客戶、產業
 
-### 階段 3: 範本收斂與指令、agent 接線（D1 後半） ⏳
+### 階段 3: 範本收斂與指令、agent 接線（D1 後半） ✅
 
 - **依賴**：階段 2
 - [ ] 刪除淘汰的 13 份範本（01、03、06、07、08、09、11、13、15、16、18、19、21）；`templates/INDEX.md` 改成 5 份＋UI 鏈 2 份
