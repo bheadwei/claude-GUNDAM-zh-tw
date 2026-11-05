@@ -297,6 +297,7 @@ flowchart LR
 - [ ] 跑：`bash .claude/scripts/check-counts.sh`（agent 數 15 → 14）、`bash .claude/hooks/tests/run-tests.sh --changed <本階段起點>`（背景）、`bash .claude/tests/skill-compliance/run-compliance.sh`（改了 `using-taskmaster` 與關鍵字路由的注入，跑一輪）
 - **預估**：3.5h（不含整套 hook 測試的等待時間）
 - **驗收**：
+  - `documentation-specialist.md` 不含「模組表（5.5）」「tech-spec.md」「docs/05_architecture.md」，也不叫它同步 5.5 的「路徑」欄（2026-11-06 階段 3 審查 MEDIUM：第 78–97 行那節要在本階段整節改寫）
   - `.claude/agents/workflow-template-manager.md` 不存在；`check-counts.sh` 的 agent 數為 14，`README.md`、`.claude/README.md` 寫的都是 14 → 通過
   - 在 `.claude/{agents,commands,rules,skills,guides,hooks,scripts,templates}`、`.claude/README.md`、`.claude/context/decisions/README.md`、`README.md` 搜 `workflow-template-manager` → 0 筆
   - `user-prompt-submit.sh` 收到「幫我寫一份 PRD」→ 注入含 `/docs-init`、不含 `workflow-template-manager`
