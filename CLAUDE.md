@@ -14,16 +14,17 @@
 | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `workshop/VibeCoding_Workshop.pptx`         | **由使用者手動編輯。** 不要跑 `generate_pptx.py` 重生，會洗掉手改內容                                           |
 | `.claude/context/`、`.claude/coordination/` | 執行時產物，已排除複製。修改 agent 的報告/交接格式時記得對應更新`_REPORT_TEMPLATE.md` 與 `_HANDOFF_TEMPLATE.md` |
+| `.claude/taskmaster-data/overview/`         | 專案圖解的產物，不進 git、hook 會在背景重產。**要改畫面就改 `.claude/templates/overview/index.html`**，改產物會被下一次重產蓋掉 |
 
 ## 改動時的連帶檢查
 
 - **要加或改 `.claude/` 底下任何東西** → **先讀 `writing-extensions` skill**（五層決策表）。這個模板踩過四次「選錯層」，都是把該用 hook 的事寫成文字規則
-- **改了注入內容**（`using-taskmaster`、關鍵字路由、rules）→ 跑一輪 `.claude/tests/skill-compliance/run-compliance.sh`。991 個 hook 測試證明不了「模型會不會照做」
+- **改了注入內容**（`using-taskmaster`、關鍵字路由、rules）→ 跑一輪 `.claude/tests/skill-compliance/run-compliance.sh`。hook 測試證明不了「模型會不會照做」
 - **新增 agent／skill／command／rule** → 跑 `bash .claude/scripts/check-counts.sh`，它會列出所有該同步卻沒同步的計數（CI 也會跑）
 - **改 `.claude/` 的目錄結構** → 同步 `scripts/copy-template.sh` 的 `EXCLUDES` **和** `scripts/copy-template.ps1` 的 `$excludeDirs` / `$excludeFiles`（兩份要一致，容易漏改 ps1）
 - **新增 skill** → 更新 `.claude/skills/INDEX.md`，否則沒人知道它存在
 - **新增 `.claude/ui/` 風格** → 一律用 `scripts/sync-ui-sources.sh --import <來源>:<id>`（自己抽的照 `_sources.json` 的 `self-extracted` 欄位定義手寫 `SOURCE.json`），再補 `CATALOG.md` 兩處（分類索引＋清單，附繁中一句話）；來源是新的上游時，同步 `_sources.json` 與 `_licenses/`。`check-counts.sh` 會擋缺 `SOURCE.json`、沒列進 CATALOG、抽不到配色或字型段落的風格。AI 痕跡判準見 `ui-style-compliance/anti-ai.md`
-- **改 hook** → `.claude/hooks/tests/run-tests.sh` 有測試。語法壞掉會由 `post-write.sh` 在寫入當下印出 `bash -n` 的錯誤（只出聲不擋；`post-write.sh` 自己壞掉時無人可報，那無解）
+- **改 hook** → 跑 `bash .claude/hooks/tests/run-tests.sh --changed <起點>`（只跑改到的節，放背景）。整套在 Windows 約 50 分鐘，只在 pre-pr 與 CI 跑；何時跑整套見 `commands/verify.md` 步驟 4（唯一來源）。新分支要補案例。語法壞掉會由 `post-write.sh` 在寫入當下印出 `bash -n` 的錯誤（只出聲不擋；`post-write.sh` 自己壞掉時無人可報，那無解）
 - **寫「那件事做完了沒」的閘門** → **`PostToolUse` 只代表工具呼叫返回了**。`Agent` 是非同步的（tool response 帶 `async_launched`），拿它當完成訊號會讓計數恆為 0 而且完全無聲——`pre-agent-gate.sh` 這樣壞了一整段時間。真正的結束事件是 `SubagentStop`。先用一筆真實資料對時間差再寫測試（見 `context/learned/2026-09-11-async-dispatch-breaks-posttooluse-gates.md`）
 - **新增 hook 事件接線** → 同步 `.claude/settings.json` **和** `.claude/hooks/README.md`（檔案結構樹 + 各 hook 功能表）。hook 腳本數沒變時 `check-counts.sh` 不會提醒你
 - **改 agent 的報告落點或 handoff 行為** → `post-agent-report.sh` 的 `AREA` 對應表要同步，**否則稽核永遠找不到報告**
@@ -43,6 +44,12 @@
   - `-p` 非互動模式拿不到權限提示 → 受測 session 寫不了 `.claude/**`、跑不了 Bash 腳本
   - 已驗出的結論：反向題 2/2 PASS（注入沒硬到壓過使用者指示）、任務分級與升級有效；**文件路由（01／02）兩次都沒走**，證實了 Red Flags 表「最常被漏掉的一棒」那句判斷
 - **衝突檔本身是 live hook 時，「委派 `conflict-resolver`」的注入靜默失效**（2026-09-11 實測）。衝突標記讓 hook 語法壞掉 → PostToolUse 只噴語法錯誤，該出現的提示沒出現。這推翻了「hook 一定會提醒你委派」這個隱含假設，而本模板最常做的事就是改 hook。沒有簡單解；務實做法是**衝突檔含 `.claude/hooks/**` 時不要等提示，自己看 `git status`**
+- **hook 已知但暫不修的五個問題**（2026-11-05 確認仍在程式裡，使用者決定先不處理）：
+  - `lib/resolve-roots.sh` 在 `claude -w` 開的 session 裡把 worktree 當成主 checkout：`CLAUDE_PROJECT_DIR` 本身就指向 worktree，只比對它就判成 `IN_WORKTREE=0`，短命旗標與共享產物會落在同一邊
+  - `pre-tool-use.sh` 的 log 用 `${IN_WORKTREE:+[wt]}`，而 `IN_WORKTREE` 不是 0 就是 1、永遠非空 → `hooks.log` 每一行都帶 `[wt]`，看 log 分不出是不是在 worktree
+  - hook 在 Windows 慢：每個 `bash`／`jq` 子行程約 170ms，整套測試約 50 分鐘
+  - `lib/full-suite-gate.sh` 把 `bash -n …/run-tests.sh`（只檢查語法）當成跑整套，在 worktree 裡會擋一次
+  - `post-bash.sh` 不檢查合併是不是發生在本 repo：在 repo 外（`git -C` 別處、`cd` 到別的 repo）跑 `git merge` 也會記進 `.merge-pending`，擋下下一次合併
 
 ### 已修的落差
 

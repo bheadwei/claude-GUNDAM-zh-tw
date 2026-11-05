@@ -25,14 +25,9 @@
 
 ## 3. Context 系統
 
-4 個專業 agent 在執行前後自動讀寫 context：
-
-| Agent | Area |
-|---|---|
-| code-quality-specialist | `context/quality/` |
-| security-infrastructure-auditor | `context/security/` |
-| test-automation-engineer | `context/testing/` |
-| e2e-validation-specialist | `context/e2e/` |
+11 個專業 agent 在執行前後自動讀寫 context。哪個 agent 寫到哪個 area，唯一來源是
+`hooks/post-agent-report.sh` 的 `AREA` 對應表（報告稽核照它找檔）；誰會建 handoff 見
+`rules/agent-orchestration.md`「哪些 agent 實作了接力」。
 
 **運作**：Agent 啟動時讀最新報告 + handoffs → 結束時寫新報告 → 需後續處理則建立 handoff。
 **清理**：`bash .claude/scripts/context-gc.sh`（每個 agent 留最新 5 份；`decisions/`、`learned/` 不動；規則見腳本檔頭）

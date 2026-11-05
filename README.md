@@ -93,7 +93,7 @@ claude_v2026/
     ├── commands/     (29 個)         # Slash Commands
     ├── skills/       (28 個)         # 按需載入（不佔常駐 context）
     ├── hooks/                        # Hook 腳本 + lib/ + 991 案例回歸測試
-    ├── scripts/                      # context-gc.sh（報告輪替）、check-counts.sh（文件計數一致性）
+    ├── scripts/                      # context-gc.sh（報告輪替）、check-counts.sh（文件計數一致性）、overview.sh（專案圖解）
     ├── ui/           (104 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │
     ├── guides/                       # 參考文件（不自動載入）
@@ -108,11 +108,12 @@ claude_v2026/
     │   ├── decisions/                # ADR（architect 自動產出 + /adr）
     │   └── learned/                  # 踩過的坑、可重用 pattern（長期累積）
     ├── coordination/                 # Agent 間工作交接（handoff）
-    ├── taskmaster-data/              # WBS、plans/、時間日誌
+    ├── taskmaster-data/              # WBS、plans/、時間日誌、overview/（專案圖解產物，不進 git）
     ├── sessions/                     # /save-session 儲存
     ├── qa-history/                   # 問答紀錄
     ├── logs/                         # Hook 執行 log
-    ├── templates/                    # 初始化與 WBS 版面範本（/task-init、WBS 相關指令讀）
+    ├── templates/                    # 初始化與 WBS 版面範本（/task-init、WBS 相關指令讀）、overview/（圖解畫面原檔）
+    ├── tests/skill-compliance/       # 壓力測試：模型會不會照 skill 做
 ```
 
 ---
@@ -133,7 +134,7 @@ claude_v2026/
      ↓
   quick     → 直接寫 → /verify quick
   standard  → /plan → /tdd → /verify
-  critical  → /plan → /tdd → /code-review → /verify pre-pr
+  critical  → /plan → /tdd（每階段加安全審查）→ /verify pre-pr
      ↓
 /verify  →  標 WBS ✅ + plan 歸檔  →  /pr  →  /deploy
 ```
@@ -153,7 +154,8 @@ claude_v2026/
 **專案圖解**：用瀏覽器看整個專案的兩張圖——**專案地圖**（架構文件的模組＋燈號＋本次改動）
 與**任務圖**（每份 plan 的部件做了沒）。網址由 `/task-status` 最後一行印出
 （或 `bash .claude/scripts/overview.sh --print-path`）。不用手動重產：寫 wbs／plan／架構文件時
-hook 在背景更新，畫面每 3 秒自己重讀；產物在 `taskmaster-data/overview/`，不進 git。
+hook 在背景更新，畫面每 3 秒自己重讀。地圖可拖曳平移、縮放（放大會顯示更多細節）、
+雙擊模組聚焦，左下角有小地圖可跳轉；產物在 `taskmaster-data/overview/`，不進 git。
 關閉用環境變數 `OVERVIEW=off`。使用方式見 `.claude/guides/WORKFLOW.md`「想看整體長什麼樣」，
 產生器與設定見 `.claude/scripts/overview.sh` 檔頭。
 
@@ -232,7 +234,7 @@ hook 在背景更新，畫面每 3 秒自己重讀；產物在 `taskmaster-data/
 | **task-mode** | 任務分級 quick / standard / critical，由 `pre-tool-use.sh` 硬性強制 |
 | **git-workflow** | 先開分支再寫程式、多 session ref 驗證、destructive 前打 backup tag（由 `lib/git-backup-gate.sh` 強制） |
 | **agent-orchestration** | 何時委派哪個 agent、標準鏈、handoff 接力、安全平行 |
-| **coding-style** | 克制原則、**註解預設不寫**、不可變性、檔案 < 800 行、函式 < 50 行 |
+| **coding-style** | 克制原則、**註解預設不寫**、不可變性、依職責拆檔（800 行只是警訊）、函式 < 50 行 |
 | **interactive-qa** | `AskUserQuestion` 一次一題、問答歷史落檔 |
 | **security** | commit 前安全檢查清單、秘密管理、事件回應 |
 
@@ -257,6 +259,7 @@ hook 在背景更新，畫面每 3 秒自己重讀；產物在 `taskmaster-data/
 ## Skills（28 個，按需載入）
 
 不佔常駐 context，由 `description` 的觸發條件決定何時載入。**唯一例外是第一個**。
+下面只列常用的幾個，完整清單見 `.claude/skills/INDEX.md`（唯一來源）。
 
 ### 常駐注入
 
