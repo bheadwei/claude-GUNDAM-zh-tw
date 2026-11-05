@@ -12,8 +12,10 @@
 
 | 平台 | 必要軟體 |
 |---|---|
-| Windows | **Git Bash**（Git for Windows 附帶）+ `jq`（`winget install jqlang.jq`） |
-| Linux / macOS | `bash`（系統內建）+ `jq`（`apt/brew install jq`） |
+| Windows | **Git Bash**（Git for Windows 附帶）+ `jq` **1.7.1 以上**（`winget install jqlang.jq`） |
+| Linux / macOS | `bash`（系統內建）+ `jq` **1.7.1 以上**（`apt/brew install jq`） |
+
+> jq 最低 1.7.1，`session-start.sh` 版本過舊時會警告。Debian 12、Ubuntu 22.04 以前 apt 只有 1.6，要從 [jq releases](https://github.com/jqlang/jq/releases) 手動下載執行檔放進 PATH；Ubuntu 24.04 起 apt 版本即為 1.7.1。
 
 > `.claude/hooks/*.sh` 與 `statusline.sh` 皆為 bash 腳本。Windows 原生 PowerShell 無法執行，**必須裝 Git Bash**。
 
@@ -92,7 +94,7 @@ claude_v2026/
     ├── agents/       (15 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
     ├── skills/       (28 個)         # 按需載入（不佔常駐 context）
-    ├── hooks/                        # Hook 腳本 + lib/ + 994 案例回歸測試
+    ├── hooks/                        # Hook 腳本 + lib/ + 1002 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）、check-counts.sh（文件計數一致性）、overview.sh（專案圖解）
     ├── ui/           (104 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │

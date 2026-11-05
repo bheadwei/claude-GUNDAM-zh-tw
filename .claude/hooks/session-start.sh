@@ -152,10 +152,21 @@ ${CONTEXT_NOTES}"
 
 finish() { emit_context; exit 0; }
 
-# 依賴健檢：多個 hook（agent-monitor、handoff 注入、意圖路由）依賴 jq；缺少時提示使用者
+# 依賴健檢：多個 hook（agent-monitor、handoff 注入、意圖路由、專案地圖）依賴 jq，最低要 1.7.1
+JQ_INSTALL_HINT="安裝：Windows \`winget install jqlang.jq\`、macOS \`brew install jq\`、Ubuntu 24.04+ \`apt install jq\`；Debian 12／Ubuntu 22.04 以前 apt 只有 1.6，要從 https://github.com/jqlang/jq/releases 下載執行檔放進 PATH。"
 if ! command -v jq >/dev/null 2>&1; then
     log "⚠️ jq 未安裝：agent 監控與 handoff 自動注入將靜默停用"
-    note "⚠️ jq 未安裝 — agent 監控與 handoff 自動注入會停用。安裝：Windows \`winget install jqlang.jq\`、macOS \`brew install jq\`、Linux \`apt install jq\`。"
+    note "⚠️ jq 未安裝（最低要求 1.7.1）— agent 監控與 handoff 自動注入會停用。$JQ_INSTALL_HINT"
+else
+    _jq_ver=$(jq --version 2>/dev/null)
+    # 解析不出版本就不警告：寧可漏報也不誤報
+    if [[ "$_jq_ver" =~ ([0-9]+)\.([0-9]+)(\.([0-9]+))? ]]; then
+        _jq_n=$(( BASH_REMATCH[1] * 1000000 + BASH_REMATCH[2] * 1000 + ${BASH_REMATCH[4]:-0} ))
+        if [ "$_jq_n" -lt 1007001 ]; then
+            log "⚠️ jq 版本過舊：$_jq_ver（最低要求 1.7.1）"
+            note "⚠️ jq 版本 $_jq_ver 太舊（最低要求 1.7.1）— hook 與專案地圖可能出錯或靜默失效。$JQ_INSTALL_HINT"
+        fi
+    fi
 fi
 
 # ============================================================================
