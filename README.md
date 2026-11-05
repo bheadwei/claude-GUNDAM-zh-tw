@@ -125,9 +125,9 @@ claude_v2026/
 ```
 /task-init                                          ← 第一題：demo / mvp / full
     │
-    ├─ demo  → /docs-init --demo  → docs/prd.md
-    ├─ mvp   → /docs-init --mvp   → docs/tech-spec.md
-    └─ full  → /docs-init --full  → docs/01_prd.md, 02_bdd.md ...
+    ├─ demo  → /docs-init --demo  → docs/00_brief.md
+    ├─ mvp   → /docs-init --mvp   → ＋ docs/prd.md、docs/architecture.md
+    └─ full  → /docs-init --full  → 同 mvp（碰認證／金流／個資時加威脅模型；可選 runbook）
          ↓
    WBS（從文件反推，避免發散）
          ↓
@@ -192,7 +192,7 @@ hook 在背景更新，畫面每 3 秒自己重讀。地圖可拖曳平移、縮
 | 輔助 | `/hub-delegate` | 手動委派單一 Agent |
 | | `/agent-log` | 查看 subagent 活動軌跡與交接決策 |
 | | `/suggest-mode` | 調整建議/注入密度（off / low / medium / high） |
-| | `/template-check` | VibeCoding 模板合規檢查 |
+| | `/template-check` | 檢查專案文件是否符合 project-docs 範本 |
 
 > 程式碼審查用 **Claude Code 內建的 `/code-review`**（支援 `ultra` 多 agent 雲端審查、
 > `--fix`、`--comment`、指定 PR/分支）。本模板不自建，舊有的 `/review-code` 已刪除。
