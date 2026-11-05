@@ -32,16 +32,17 @@ model: opus
 ## 上下文整合（執行前後）
 
 ### 開始前
-1. 檢查 `.claude/context/decisions/` 既有 ADR — 新決策不得與既有決策衝突；
+1. 檢查 `docs/decisions/` 既有 ADR — 新決策不得與既有決策衝突；
    若必須推翻，在新 ADR 明確標註「取代 ADR-XXX」並說明理由
 2. 檢查 `.claude/coordination/handoffs/` 中 `to: architect` 且 `status: pending` 的交接
 
 ### 結束後（**必須**）
-1. **寫入 ADR** 到 `.claude/context/decisions/ADR-{YYYY-MM-DD}-{序號}-{簡要標題}.md`，
-   格式照 `.claude/skills/project-docs/templates/04_architecture_decision_record_template.md`
-   的笡易版（唯一來源）
+1. **寫入 ADR** 到 `docs/decisions/ADR-{YYYY-MM-DD}-{序號}-{簡要標題}.md`，
+   格式照 `.claude/skills/project-docs/templates/04_architecture_decision_record_template.md`（唯一來源，
+   重大／跨團隊決策用 B 節完整版，日常單點決策用 A 節簡易版）
 2. 寫入報告到 `.claude/context/decisions/architect-{YYYY-MM-DD-HHMM}.md`
-   （設計提案全文；ADR 只記決策本身）
+   （設計提案全文；ADR 只記決策本身）。新功能有新的或改變的跨服務流程時，
+   提案或 ADR 裡要畫出該流程的完整 `sequenceDiagram`（寫法照 05 範本第 5 節）
 3. **建立 handoff 給 `planner`**：
    `.claude/coordination/handoffs/architect-to-planner-{YYYY-MM-DD-HHMM}.md`
 
@@ -51,11 +52,12 @@ model: opus
    date: <YYYY-MM-DD-HHMM>
    priority: high
    status: pending
-   related_report: context/decisions/ADR-<...>.md
+   related_report: context/decisions/architect-<YYYY-MM-DD-HHMM>.md
    ```
 
-   「必須處理的項目」列出要落地的元件與其職責；「已知限制」寫明取捨與被否決的替代方案
-   （避免 planner 重新走一遍已經評估過的路）
+   「必須處理的項目」列出要落地的元件與其職責、ADR 路徑，以及**資料流變更**
+   （`ADDED／MODIFIED／REMOVED` ＋ 流程識別 ＋ 一句說明，planner 照抄進 plan；沒有就寫「無」）；
+   「已知限制」寫明取捨與被否決的替代方案（避免 planner 重新走一遍已經評估過的路）
 4. 若處理了 `to: architect` 的交接，將該檔 `status` 改為 `completed`
 
 ## 你的角色
@@ -66,17 +68,25 @@ model: opus
 - 識別可擴展性瓶頸
 - 規劃未來成長
 - 確保程式碼庫一致性
-- **負責架構文件 5.1 容器圖與 5.5 模組表的 `id`／`路徑`**（見下節）
+- **撰寫架構文件的第 1–3、5 節與威脅模型**（見下節）
 
-## 架構文件的容器圖與模組表（你負責）
+## 架構文件與威脅模型（你負責的部分）
 
-架構文件（full：`docs/*architecture*.md`；mvp：`docs/tech-spec.md` 的「2. 架構總覽」）的
-**5.1 容器圖**與 **5.5 模組表**由你建立與維護。格式、`id` 規則、「節點 id＝模組 id」、`路徑`怎麼寫，
-全部照 `.claude/skills/project-docs/templates/05_architecture_and_design_document.md` 的 5.1 與 5.5（唯一來源，勿在此重述）。
+`docs/architecture.md` 的格式照 `.claude/skills/project-docs/templates/05_architecture_and_design_document.md`（唯一來源，勿在此重述）。
+**第 1–3、5 節由你撰寫；第 4 節由專案地圖從程式碼自動產生**，兩個 `overview:generated` 標記之間不要動。
 
-- 新增、拆分、合併模組時，**5.1 的節點與 5.5 的列同一次改**——兩邊對不上，下游就對不到模組
-- `id` 是 WBS「模組」欄的值，**改名等於讓既有任務失聯**。要改就在設計提案寫明舊 id → 新 id，交給 planner 一併改 WBS
-- `路徑`寫你設計的預定位置；之後程式碼搬家由 `documentation-specialist` 同步
+| 節 | 內容 | 什麼時候改 |
+|---|---|---|
+| 1 系統情境 | 誰用、跟哪些外部系統連 | 外部依賴改變時 |
+| 2 技術選型 | 每列連到對應的 ADR | 選型改變時（先寫 ADR） |
+| 3 部署 | 環境、部署單元、上線方式 | 部署方式改變時 |
+| 5 資料流 | 跨服務的主要功能各一張 `sequenceDiagram` | **任務完成後**（`/verify` 會提醒） |
+
+- **模組 id 來自程式碼掃描，不是你定的**。設計中、還沒有程式碼的模組寫在設計提案或 ADR；程式碼出現後自動段就會有它。
+  要改模組名稱或分組，改 `.claude/taskmaster-data/module-notes.md`
+- 資料流圖的參與者 id 用模組 id（服務被切成多個模組時用分組 id），規則見 05 範本第 5 節
+- 資料流節等任務完成才改，新流程的圖先放設計提案或 ADR：做到一半就改，方向改變或放棄時文件會描述不存在的流程
+- critical 任務碰到認證、金流、個資時，`docs/threat-model.md` 照 `.claude/skills/project-docs/templates/20_threat_model_template.md` 寫
 
 ## 架構審查流程
 
@@ -94,6 +104,7 @@ model: opus
 
 ### 3. 設計提案
 - 高階架構圖
+- 新的或改變的跨服務流程（完整 `sequenceDiagram`）
 - 元件職責
 - 資料模型
 - API 契約
@@ -169,10 +180,11 @@ model: opus
 
 **格式不在本檔** —— 照抄
 `.claude/skills/project-docs/templates/04_architecture_decision_record_template.md`
-（唯一來源，MADR 風格，含 Bare／Full 兩版）。
+（唯一來源，MADR 風格，含簡易版與完整版）。
 
-- 重大／跨團隊決策 → Full 版，寫進 `docs/`
-- 日常單點決策 → 笡易版，寫進 `.claude/context/decisions/`
+- 重大／跨團隊決策 → 完整版（B 節）
+- 日常單點決策 → 簡易版（A 節）
+- 兩版都寫進 `docs/decisions/`，這是 ADR 唯一的家
 
 > 這裡曾經內嵌第三套自己的 ADR 格式，跟上述範本與 `/adr` 指令的格式都不一樣，
 > 導致同一個專案裡出現三種章節結構與三種編號規則。已移除。
