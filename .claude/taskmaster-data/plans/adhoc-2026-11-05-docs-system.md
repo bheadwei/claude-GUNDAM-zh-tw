@@ -4,10 +4,10 @@ slug: "docs-system"
 created: "2026-11-05"
 updated: "2026-11-06"
 status: "🔄 進行中"
-current_phase: 2
+current_phase: 1
 mode: "standard"
 files:
-  # 階段 1：範本與 plan 格式（審閱前）
+  # 階段 1：範本與 plan 格式（審閱前；2026-11-06 補資料流節，檔案範圍不變）
   - ".claude/skills/project-docs/templates/02_project_brief_and_prd.md"
   - ".claude/skills/project-docs/templates/04_architecture_decision_record_template.md"
   - ".claude/skills/project-docs/templates/05_architecture_and_design_document.md"
@@ -66,16 +66,22 @@ files:
 ADR-2026-11-05-004～008 已定案：文件只有 6 份、PRD 用編號情境並由 `/verify` 套回、plan 四段且階段可平行、
 架構文件會過期的部分由地圖資料產生、舊文件按需盤點。這份計畫把它們落到範本、指令、skill、agent 的文字上；
 所有 `overview.sh` 的改動都在地圖計畫（`adhoc-2026-11-05-overview-from-code.md`），這裡只動 md 與 `check-counts.sh`。
+範本審閱時又發現沒有任何一份文件畫「一個功能的資料怎麼跨服務流動」，ADR-2026-11-06-001 補上：架構文件人寫的第 4 節「資料流」、
+自動段改第 5 節、plan 多一小節「資料流變更」、`/verify` 只提醒不改圖。
 
 ### PRD 情境變更
 
 無（模板 repo 沒有 `docs/prd.md`）。
 
+### 資料流變更
+
+無（模板 repo 沒有跨服務流程）。
+
 ## 怎麼做
 
 **可平行**：階段 3 與階段 4（D2）——依賴分別是階段 2 與階段 1、2，檔案不重疊；階段 4（D2）與階段 5（D3）——依賴分別是階段 1、2 與階段 3，檔案不重疊。階段 1、2、3 與 6 都循序（審閱點、同改 `check-counts.sh`、同改 `documentation-specialist.md`）。兩組都還要先滿足下方「兩份計畫的順序」裡地圖計畫的前置條件。
 
-**預估**：合計 18h（1：3.5h／2：0.5h／3：4h／4：4.5h／5：3.5h／6：2h）
+**預估**：合計 20h（1：4.5h／2：0.75h／3：4.5h／4：4.75h／5：3.5h／6：2h）
 
 ### 一眼看懂
 
@@ -86,6 +92,7 @@ flowchart LR
     p1["brief＋PRD 範本（02）"]
     p2["架構文件範本（05）與 runbook（14）、ADR 落點（04）"]
     p3["plan-format 四段＋依賴行"]
+    p13["資料流節（05）＋plan「資料流變更」"]
   end
   subgraph s2["階段 2 範本審閱"]
     p4["範例電商 mock 的 artifact＋使用者確認"]
@@ -96,7 +103,7 @@ flowchart LR
     p7["planner／architect／spec-convergence"]
   end
   subgraph s4["階段 4 D2 流程文字"]
-    p8["/verify 文件同步三項"]
+    p8["/verify 文件同步四項"]
     p9["/tdd 階段平行選項、/task-next 粗估"]
   end
   subgraph s5["階段 5 D3 agent 調整"]
@@ -109,6 +116,7 @@ flowchart LR
   p1 -.-> p4
   p2 -.-> p4
   p3 -.-> p4
+  p13 -.-> p4
   p4 -.-> p5
   p4 -.-> p6
   p4 -.-> p7
@@ -117,7 +125,7 @@ flowchart LR
   p5 -.-> p10
   p10 -.-> p11
   p11 -.-> p12
-  class p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11,p12 planned
+  class p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11,p12,p13 planned
 ```
 
 | id | 部件 | 階段 | 檔案 | 驗收 |
@@ -125,11 +133,12 @@ flowchart LR
 | p1 | brief＋PRD 範本（02） | 1 | `.claude/skills/project-docs/templates/02_project_brief_and_prd.md` | 02 範本刪掉「## 用語表」→ `check-counts.sh` 失敗 |
 | p2 | 架構文件範本（05）與 runbook（14）、ADR 落點（04） | 1 | `.claude/skills/project-docs/templates/05_architecture_and_design_document.md`, `.claude/skills/project-docs/templates/14_deployment_and_operations_guide.md`, `.claude/skills/project-docs/templates/04_architecture_decision_record_template.md` | 05 範本恰好一行 `<!-- overview:generated:start -->`、一行 `end`，start 在前 |
 | p3 | plan-format 四段＋依賴行 | 1 | `.claude/skills/plan-format/SKILL.md`, `.claude/scripts/check-counts.sh` | 範例某個 `### 階段 N` 下一行不是 `- **依賴**：` → `check-counts.sh` 失敗 |
+| p13 | 資料流節（05）＋plan「資料流變更」 | 1 | `.claude/skills/project-docs/templates/05_architecture_and_design_document.md`, `.claude/skills/plan-format/SKILL.md`, `.claude/scripts/check-counts.sh` | 05 範本的資料流節搬到 `<!-- overview:generated:start -->` 之後 → `check-counts.sh` 失敗 |
 | p4 | 範例電商 mock 的 artifact＋使用者確認 | 2 | `.claude/qa-history/*-docs-template-review.md` | 使用者選「確認」→ 問答紀錄存在且結論為確認 |
 | p5 | 淘汰 13 份範本與殘留檢查 | 3 | `.claude/skills/project-docs/**`, `.claude/scripts/check-counts.sh`, `README.md`, `.claude/skills/INDEX.md` | 在任一 command 寫入 `06_api_design_specification.md` → `check-counts.sh` 失敗並指出檔名 |
 | p6 | docs-init／task-init／task-add 新流程 | 3 | `.claude/commands/docs-init.md`, `.claude/commands/task-init.md`, `.claude/commands/task-add.md`, `.claude/templates/CLAUDE-md.template.md`, `.claude/templates/wbs.template.md`, `.claude/guides/WORKFLOW.md`, `CLAUDE.md` | `docs-init.md` 的產出表不含 `tech-spec.md`、`01_prd.md` |
 | p7 | planner／architect／spec-convergence | 3 | `.claude/agents/planner.md`, `.claude/agents/architect.md`, `.claude/agents/documentation-specialist.md`, `.claude/skills/spec-convergence/SKILL.md`, `.claude/commands/adr.md`, `.claude/commands/template-check.md` | `planner.md` 不含 `## 風險與緩解 / 驗收標準（整體）`、含 plan-format 的完整路徑 |
-| p8 | /verify 文件同步三項 | 4 | `.claude/commands/verify.md`, `.claude/commands/task-status.md` | 文件同步關卡的三項依序為 PRD 套回、`--sync-arch`、`.doc-impact` |
+| p8 | /verify 文件同步四項 | 4 | `.claude/commands/verify.md`, `.claude/commands/task-status.md` | 文件同步關卡的四項依序為 PRD 套回、`--sync-arch`、資料流提醒、`.doc-impact` |
 | p9 | /tdd 階段平行選項、/task-next 粗估 | 4 | `.claude/commands/tdd.md`, `.claude/commands/task-next.md` | `tdd.md`「選執行方式」含「用 worktree 同時跑」選項與重算判準的指標 |
 | p10 | workflow-template-manager 退場 | 5 | `.claude/agents/workflow-template-manager.md`, `.claude/rules/agent-orchestration.md`, `.claude/skills/using-taskmaster/SKILL.md`, `.claude/hooks/user-prompt-submit.sh`, `.claude/hooks/pre-agent-gate.sh`, `.claude/hooks/post-write.sh`, `.claude/hooks/lib/agent-inflight.sh`, `.claude/hooks/README.md`, `.claude/hooks/tests/run-tests.sh`, `.claude/commands/hub-delegate.md`, `.claude/guides/MECHANISMS.md`, `.claude/guides/MODELS.md`, `.claude/README.md`, `.claude/context/decisions/README.md`, `.claude/scripts/check-counts.sh`, `README.md` | 使用者訊息「幫我寫 PRD」→ `user-prompt-submit.sh` 注入不含 `workflow-template-manager` |
 | p11 | documentation-specialist、deployment-expert 職責 | 5 | `.claude/agents/documentation-specialist.md`, `.claude/agents/deployment-expert.md` | `documentation-specialist.md` 不含 `CODEMAPS` |
@@ -149,15 +158,15 @@ flowchart LR
 | 1 | 地圖 0 → 地圖 1 | **文件 1** 範本與 plan 格式 | 可平行：檔案不重疊 |
 | 2 | （地圖 1 繼續） | **文件 2** 範本審閱 | 文件 1 合併後由主模型做；使用者確認前文件 3、4 不開工 |
 | 3 | 地圖 2（含 A3–A5） | **文件 3** 範本收斂與接線 | 可平行：檔案不重疊 |
-| 4 | 地圖 3（含畫面審閱）∥ 地圖 4 | — | **文件 1、3 都已合併才開地圖 3**（三者都改 `check-counts.sh`）；文件 3 合併後才開地圖 4（都改 `documentation-specialist.md`） |
-| 5 | — | **文件 4（D2）** | 地圖 2（`--sync-arch`）與地圖 4（`task-status.md`）合併之後 |
-| 6 | 地圖 5 | — | 依賴文件 1 寫好的 05 範本標記 |
-| 7 | — | **文件 5（D3）**，可與文件 4 平行 | 地圖 5 之後（`documentation-specialist.md`、`run-tests.sh`、`hooks/README.md`、`check-counts.sh`、`README.md` 地圖都會改） |
+| 4 | 地圖 3（含畫面審閱）∥ 地圖 4 | — | **文件 1、3 都已合併才開地圖 3**（三者都改 `check-counts.sh`）；文件 3 合併後才開地圖 4（都改 `documentation-specialist.md`）；地圖 6 可在地圖 3 合併後開工（不必等地圖 4） |
+| 5 | 地圖 5 模組展開資料 ∥ 地圖 6 模組展開畫面（含畫面審閱） | **文件 4（D2）** | 地圖 5：地圖 2、4 與文件 1（含資料流節）已合併；地圖 6：地圖 3 已合併；文件 4：地圖 2（`--sync-arch`）與地圖 4（`task-status.md`）合併之後。三條檔案無交集 |
+| 6 | 地圖 7 收尾 | — | 依賴地圖 2–6，與文件 1 寫好的 05 範本標記、資料流節名 |
+| 7 | — | **文件 5（D3）**，可與文件 4 平行 | 地圖 7 之後（`documentation-specialist.md`、`run-tests.sh`、`hooks/README.md`、`check-counts.sh`、`README.md` 地圖都會改） |
 | 8 | — | **文件 6（D4）** | 文件 5 之後（都改 `documentation-specialist.md`） |
 
 平行時各線用 worktree，程序照 `worktree-orchestration` skill；本 plan 與地圖 plan 在開 worktree 前要已 commit（`plans/` 在 `.git/info/exclude`，要 `git add -f`）。
 
-### 階段 1: 範本與 plan 格式（D1 前半） ✅
+### 階段 1: 範本與 plan 格式（D1 前半） 🔄
 
 - **依賴**：無
 - [ ] 改寫 `02_project_brief_and_prd.md`（檔名不變）：上半 brief 骨架（保留 `## 一句話` 標題——地圖的一頁現況讀它）、下半 PRD 骨架照 ADR-005（用語表在最前；功能依領域分節、節標題括號寫模組分組名；`#### <代碼>-<序號> 標題`＋假設／當／那麼；非功能需求選填；待確認）；每份「不寫什麼」照提案第 3.2 節 — 驗證：`bash .claude/scripts/check-counts.sh`
@@ -165,7 +174,14 @@ flowchart LR
 - [ ] `14_deployment_and_operations_guide.md` 精簡成 runbook（吸收 19 的 SLO 要點）；`04_…` 兩版落點都寫 `docs/decisions/`
 - [ ] `plan-format` SKILL：ADR-006 的四段骨架（為什麼做＋PRD 情境變更／怎麼做＋可平行行＋一眼看懂＋階段／改善了什麼／發現與決策；critical 多「回滾」「威脅」）；status 只准 `⏳ 未開始`、`🔄 進行中`、`🚫 阻塞`、`✅ 完成` 且不加附註；歸檔後不續寫；每個階段標題下一行 `- **依賴**：階段 X, Y`（無依賴寫「無」，讀取另一階段產出的型別／介面／schema／fixture 也算）；可平行判準（依賴都完成＋部件表「檔案」無交集；沒列檔案就不可平行）；舊 plan 沒有依賴行視為依賴前一階段；`OVERVIEW_COLS_PART` 表頭、`overview:actual` 節不動
 - [ ] `check-counts.sh`：刪第 302–346 行的 05 範本 5.1／5.5 檢查，與第 375 行 `OVERVIEW_COLS_MODULE:H55`、`OVERVIEW_COLS_MODULE_OPT:H55` 兩組比對（見「發現與決策」）；新增 02 範本 PRD 骨架有「用語表」「功能」兩節、範例情境編號符合 `^[A-Z]+-[0-9]+`；plan-format 範例的 `status:` 是四值之一；範例每個 `### 階段 N` 的下一行是 `- **依賴**：`
-- **預估**：3.5h
+
+**補做：資料流節（2026-11-06，ADR-2026-11-06-001；上面已完成的項目不重做）**
+
+- [ ] `05_architecture_and_design_document.md`：在自動段之前新增 `## 4. 資料流`——規則照 ADR-2026-11-06-001 決策 2（一張圖＝一個服務或主要功能的一條流程；小標題 `### <主要模組 id> <功能> — <流程名>（<PRD 情境編號>、…）`，背景流程括號寫觸發來源；系統內服務的參與者 id＝模組 id、被切成多個模組時寫分組 id，**所有參與者都用 `participant`／`actor` 宣告**；畫什麼／不畫什麼；一張圖 ≤ 8 個參與者、≤ 15 條訊息；只有一個服務時寫「無跨服務或跨系統的流程」、節保留）＋範例電商一張帶 `alt` 的 `sequenceDiagram`（ADR 決策 2 的結帳範例）。原 `## 4. 模組與依賴` 改 `## 5. 模組與依賴`（標記不動）；第 3 行「前三節…第 4 節」→「前四節…第 5 節」；第 55 行「第 4 節」→「第 5 節」；「本檔不寫」表加一列「服務內部的函式呼叫、檔案結構 → 程式碼／專案地圖的模組展開」 — 驗證：`bash .claude/scripts/check-counts.sh`
+- [ ] `plan-format` SKILL：範例在 `### PRD 情境變更` 之後加 `### 資料流變更`（ADDED／MODIFIED／REMOVED 三行，照 ADR 決策 3 的範例）；規則段加一點：每行 `ADDED／MODIFIED／REMOVED`＋流程識別（＝架構文件小標題去掉括號那段）＋一句說明、不貼整張圖；沒動到跨服務流動寫「無」；舊 plan 沒有這一小節視同「無」；新流程的完整圖放 architect 的設計提案或 ADR，plan 只寫一句並連結 — 驗證：`bash .claude/scripts/check-counts.sh`
+- [ ] `check-counts.sh` 新增兩項：(1) 05 範本有 `^## [0-9]+\. 資料流` 一節、位在 `<!-- overview:generated:start -->` 之前，節內至少一個首行為 `sequenceDiagram` 的 mermaid 區塊，節內每個 `###` 小標題以全形括號 `）` 結尾；(2) `plan-format` 範例在 `### PRD 情境變更` 之後有 `### 資料流變更`，其下每個項目以 `- ADDED `／`- MODIFIED `／`- REMOVED ` 開頭 — 驗證：`bash .claude/scripts/check-counts.sh`
+
+- **預估**：4.5h（原 3.5h，補做 1h）
 - **驗收**：
   - 02 範本刪掉「## 用語表」→ `check-counts.sh` 失敗並指出 02 範本；改回後通過
   - 02 範本的範例情境標題改成 `#### ord-1 正常結帳` → `check-counts.sh` 失敗
@@ -176,18 +192,32 @@ flowchart LR
   - plan-format 範例刪掉任一 `### 階段 N` 下一行的 `- **依賴**：` → `check-counts.sh` 失敗
   - plan-format 範例部件表表頭仍是 `| id | 部件 | 階段 | 檔案 | 驗收 |`（`OVERVIEW_COLS_PART` 比對照過）
   - 04 範本裡的 ADR 落點只出現 `docs/decisions/`，不出現 `.claude/context/decisions/`
-- **注意**：本階段**不刪**淘汰範本、不改 SKILL／INDEX 的範本數（那些在審閱之後的階段 3）；範本數維持 20，`check-counts.sh` 的計數檢查照過
+  - 05 範本刪掉 `## 4. 資料流` 整節 → `check-counts.sh` 失敗並指出 05 範本；改回後通過
+  - 05 範本的資料流節搬到 `<!-- overview:generated:start -->` 之後 → `check-counts.sh` 失敗
+  - 05 範本資料流節的 mermaid 區塊首行改成 `flowchart LR`（節內沒有其他 `sequenceDiagram`）→ `check-counts.sh` 失敗
+  - 05 範本資料流節某個 `###` 小標題刪掉結尾的全形括號 → `check-counts.sh` 失敗
+  - 05 範本恰好一組 `overview:generated` 標記，且 start 標記之前最近的 `## ` 標題是 `## 5. 模組與依賴`
+  - 05 範本不含「前三節」，第 3 行含「前四節」與「第 5 節」；「本檔不寫」表有一列含「模組展開」
+  - 05 範本資料流節的範例圖裡，每個出現在訊息行的參與者 id 都有對應的 `participant`／`actor` 宣告行
+  - `plan-format` 範例刪掉 `### 資料流變更` → `check-counts.sh` 失敗；改回後通過
+  - `plan-format` 範例的資料流變更某行改成 `- ADD orders 結帳…` → `check-counts.sh` 失敗
+  - `plan-format` 規則段含「視同「無」」與「設計提案或 ADR」
+- **注意**：
+  - 本階段**不刪**淘汰範本、不改 SKILL／INDEX 的範本數（那些在審閱之後的階段 3）；範本數維持 20，`check-counts.sh` 的計數檢查照過
+  - 原第 4 節改號只動文字：`--sync-arch` 與 `check-counts.sh` 認的是標記字串，不是節號；ADR-007 的表不改（它的「相關」已加一行指向 ADR-2026-11-06-001）
+  - 補做在新分支，合併後階段 2 的審閱重做（只需確認資料流部分，見階段 2）
 
 ### 階段 2: 範本審閱檢查點 ⏳
 
 - **依賴**：階段 1
-- [ ] 主模型讀階段 1 寫好的 02、04、05、14 範本與 plan-format，用 `.claude/context/planning/overview-shop-clean-reference.md` 的範例電商寫一套 mock：brief → PRD（用語表＋至少 2 個領域、每領域 2 條「假設／當／那麼」情境）→ 架構文件（人寫三節＋自動段範例）→ WBS 片段 → plan（新四段、每階段有 `- **依賴**：`、「可平行」行、PRD 情境變更）→ ADR 一份。mock 只放 `.claude/tmp/`，不進 repo
+- [ ] 主模型讀階段 1 寫好的 02、04、05、14 範本與 plan-format，用 `.claude/context/planning/overview-shop-clean-reference.md` 的範例電商寫一套 mock：brief → PRD（用語表＋至少 2 個領域、每領域 2 條「假設／當／那麼」情境）→ 架構文件（人寫四節＋自動段範例；第 4 節至少一張帶 `alt` 的資料流圖，例：結帳 orders → inventory → 金流商（外部）→ 通知佇列，`alt` 缺貨分支）→ WBS 片段 → plan（新四段、每階段有 `- **依賴**：`、「可平行」行、PRD 情境變更、資料流變更）→ ADR 一份。mock 只放 `.claude/tmp/`，不進 repo
 - [ ] 主模型產 artifact：上半是 6 份文件的架構（各回答什麼、誰在何時更新、彼此怎麼引用），下半是上面那套 mock
-- [ ] `AskUserQuestion`：確認敘述方式（Recommended）／要改（直接輸入要改的地方）。選「要改」→ 階段 1 回到 🔄、改完重新產 artifact 再問
-- [ ] 問答照 `rules/interactive-qa.md` 一次寫入 `.claude/qa-history/<時間>-docs-template-review.md`
-- **預估**：0.5h（不含使用者審閱時間）
+- [ ] `AskUserQuestion`：確認敘述方式（Recommended）／要改（直接輸入要改的地方）。選「要改」→ 階段 1 回到 🔄、改完重新產 artifact 再問。第二輪（階段 1 補資料流節之後）artifact 照整套重產，但問題聚焦在資料流節與 plan 的「資料流變更」——六份分工與 mock 寫法第一輪已確認
+- [ ] 問答照 `rules/interactive-qa.md` 一次寫入 `.claude/qa-history/<時間>-docs-template-review.md`（第一輪的問答沒有另外落檔時，兩輪寫在同一份）
+- **預估**：0.75h（原 0.5h，資料流圖與重產 +0.25h；不含使用者審閱時間）
 - **驗收**：
   - artifact 裡看得到 6 份文件的名稱與路徑、PRD 的用語表與至少 4 條帶編號的情境、plan 的四個二級標題與每個階段的依賴行
+  - artifact 裡看得到架構文件第 4 節至少一張含 `alt` 的資料流圖（`sequenceDiagram` 已渲染），以及 mock plan 的「資料流變更」小節
   - 使用者選「確認」→ `qa-history` 有 `*-docs-template-review.md`，結論為確認；之後階段 3、4 才可標 🔄
 - **注意**：mock 用的是通用電商詞彙，不得出現實測專案的名稱、客戶、產業
 
@@ -198,17 +228,17 @@ flowchart LR
 - [ ] `project-docs` SKILL 改寫：description 改成觸發條件；6 份文件表、寫作標準、各份「不寫什麼」（提案第 3 節）；demo／mvp／full 只決定先產哪幾份（提案 3.4）
 - [ ] `check-counts.sh`：`N_DOCTPL` 不計 `12_*`、`17_*`（範本數＝5）；新增淘汰範本檔名殘留檢查——在 `.claude/{agents,commands,rules,skills,guides,hooks,scripts,templates}`、`.claude/README.md`、`README.md` 搜 13 份範本的檔名主幹，**暫時排除 `agents/workflow-template-manager.md`**（階段 5 刪檔時一併拿掉例外）
 - [ ] 範本數改成 5：`README.md` 第 288、318–330 行（範本節改成 6 份文件對 5 份範本）、`.claude/skills/INDEX.md` 第 47、94 行
-- [ ] `docs-init.md` 照提案第 5 節的新流程（步驟 1 的盤點分支留給階段 6）；`project.json` 寫 `docs.set`、`mode` 只准 `demo／mvp／full`；產出表不再有 `tech-spec.md` 與編號文件
+- [ ] `docs-init.md` 照提案第 5 節的新流程（步驟 1 的盤點分支留給階段 6）；`project.json` 寫 `docs.set`、`mode` 只准 `demo／mvp／full`；產出表不再有 `tech-spec.md` 與編號文件；架構文件產出說明寫「人寫四節」；資料流（ADR-2026-11-06-001 決策 5）：mvp／full 依 PRD 的領域為跨服務的主要功能先畫流程，demo 只放 `## 4. 資料流` 標題與「尚無」一行
 - [ ] `task-init.md`：2.7b brief 骨架改成指向 02 範本上半（唯一來源）；第 212、226 行的產出說明；第 248 行與 `task-add.md` 第 74 行「模組欄取 5.5」改成取 `docs/architecture.md` 自動段模組表的 `id`／`路徑`（舊專案沒有自動段但有 5.5 → 照舊讀 5.5；都沒有 → `—`）
 - [ ] `CLAUDE-md.template.md`：刪「## 專案結構」、「## 技術棧」改「## 程式碼看不出來的事」、加「## 文件在哪」（6 份路徑＋「專案地圖：`/task-status`」，不寫數字）
 - [ ] `wbs.template.md` 第 133 行「下一任務 plan 的『風險與緩解』」改成「下一任務 plan 的『發現與決策』或該階段的『注意』」
-- [ ] `planner.md`：骨架改指向 plan-format（不再內嵌）；寫「PRD 情境變更」；同情境編號在其他進行中 plan 出現時提一句；「怎麼做」開頭寫 `**可平行**：…`（沒有寫「無」）
-- [ ] `architect.md`：ADR 落點 `docs/decisions/`（第 35、40、54、175 行）；寫架構文件人寫三節與威脅模型；刪「負責 5.1／5.5 的 id／路徑」節（第 69–77 行）；報告仍寫 `context/decisions/architect-*.md`（`post-agent-report.sh` 的 AREA 不變）
+- [ ] `planner.md`：骨架改指向 plan-format（不再內嵌）；寫「PRD 情境變更」與「資料流變更」（沒有就寫「無」）；同情境編號在其他進行中 plan 出現時提一句；「怎麼做」開頭寫 `**可平行**：…`（沒有寫「無」）
+- [ ] `architect.md`：ADR 落點 `docs/decisions/`（第 35、40、54、175 行）；寫架構文件人寫四節與威脅模型；刪「負責 5.1／5.5 的 id／路徑」節（第 69–77 行）；報告仍寫 `context/decisions/architect-*.md`（`post-agent-report.sh` 的 AREA 不變）；新增職責（ADR-2026-11-06-001 決策 5）：新功能的設計提案或 ADR 裡畫新流程的完整 `sequenceDiagram`、交棒給 planner 時列出資料流變更、架構文件的資料流節在任務完成後才改（`/verify` 會提醒）
 - [ ] `spec-convergence` SKILL 照提案 4.3；`adr.md`、`template-check.md` 的範本清單與落點
 - [ ] `documentation-specialist.md` 第 76–78 行指向淘汰範本的三句改成指向 `project-docs` SKILL（其餘職責留給階段 5）
 - [ ] `guides/WORKFLOW.md` 第 27–28 行模式表改成提案 3.4
 - [ ] 根目錄 `CLAUDE.md`「目錄地雷」或連帶檢查加一句：模板 repo 自己的 ADR 仍放 `.claude/context/decisions/`（ADR-004 的例外）
-- **預估**：4h
+- **預估**：4.5h（原 4h，資料流接線 +0.5h）
 - **驗收**：
   - `find .claude/skills/project-docs/templates -name '*.md' ! -name INDEX.md` → 恰好 02、04、05、12、14、17、20 七個檔
   - `check-counts.sh` 的「文件範本」計數為 5，SKILL、templates/INDEX、skills/INDEX、README 四處寫的都是 5 → 通過
@@ -218,23 +248,28 @@ flowchart LR
   - `task-init.md` 不含 `## 要解決的問題` 這類 brief 小節（`grep -c '^## 一句話' task-init.md` → 0），並含 02 範本的完整路徑
   - `task-init.md`、`task-add.md` 不再寫「讀架構文件的 5.5 模組表」作為唯一來源，含「自動段」
   - `CLAUDE-md.template.md` 沒有「## 專案結構」；「## 文件在哪」一節不含 `[0-9]+ ?(份|個)`
-  - `planner.md` 不含 `## 風險與緩解 / 驗收標準（整體）`，含 `.claude/skills/plan-format/SKILL.md`
+  - `planner.md` 不含 `## 風險與緩解 / 驗收標準（整體）`，含 `.claude/skills/plan-format/SKILL.md` 與「資料流變更」
   - `architect.md` 不含「5.5 模組表」字樣；ADR 落點只寫 `docs/decisions/`（模板 repo 例外的說法除外）
+  - `architect.md` 含「人寫四節」、「資料流」、`sequenceDiagram`，不含「人寫三節」
+  - `docs-init.md` 含 `## 4. 資料流` 與「尚無」，不含「人寫三節」
   - `project-docs` SKILL 的 description 以觸發條件開頭，不含「20 種」
 - **注意**：`update-template` 不會刪掉既有專案裡已淘汰的範本檔，SKILL 寫明「不再被引用」即可；`/ui-site` 產的 `docs/12_*`、`docs/17_*` 路徑一律不動
 
 ### 階段 4: 流程文字（D2） ⏳
 
 - **依賴**：階段 1, 2；跨計畫：地圖 2（`--sync-arch`）、地圖 4（`task-status.md`）已合併
-- [ ] `verify.md`「文件同步關卡」（第 335–369 行）改成三項，順序固定：1 PRD 情境套回（主模型改 `docs/prd.md`、小節末加 `已套回 PRD（YYYY-MM-DD）`；worktree、無進行中 plan、情境變更為「無」、已有「已套回」行時跳過）→ 2 `bash .claude/scripts/overview.sh --sync-arch`（worktree 或沒有標記時跳過）→ 3 `.doc-impact`（選項說明的「codemap／API 文檔」改成「README、架構文件人寫部分、runbook」）；第 1、2 項不另外問，做完印 PRD 的 diff 摘要
+- [ ] `verify.md`「文件同步關卡」（第 335–369 行）改成四項，順序固定：1 PRD 情境套回（主模型改 `docs/prd.md`、小節末加 `已套回 PRD（YYYY-MM-DD）`；worktree、無進行中 plan、情境變更為「無」、已有「已套回」行時跳過）→ 2 `bash .claude/scripts/overview.sh --sync-arch`（worktree 或沒有標記時跳過）→ 3 資料流提醒（照 ADR-2026-11-06-001 決策 4，見下一項）→ 4 `.doc-impact`（選項說明的「codemap／API 文檔」改成「README、架構文件人寫部分、runbook」）；第 1、2 項不另外問，做完印 PRD 的 diff 摘要
+- [ ] 資料流提醒的寫法：跳過條件同第 1 項（worktree、沒有進行中 plan、plan 沒有「資料流變更」或寫「無」）；本任務分岔點以來 `docs/architecture.md` 的改動落在「資料流」節 → 印「資料流節已更新」；否則印 ADR 決策 4 的提醒（列出 plan 的資料流變更各行、新流程圖所在的設計提案或 ADR 路徑、「可委派 architect 改」）；架構文件沒有資料流節 → 改印「架構文件沒有資料流節，見 05 範本」。**不問問題、不擋完成、不改任何檔**
 - [ ] `verify.md`「Plan 驗收標準比對」（第 182–199 行）與「最後一個合併」第 1 點（第 276–280 行）：有「驗收標準（整體）」的舊 plan 照舊；新 plan 比對各階段驗收與 PRD 情境
 - [ ] `verify.md`「標記與歸檔」：修正「改善了什麼」、status 寫 `✅ 完成` 不加附註、歸檔後不續寫
 - [ ] `tdd.md` 第 84–100 行「選執行方式」：依 plan-format 判準重算，「依賴已完成、可同時開工」的階段 ≥ 2 個時多一個選項「階段 N、M 用 worktree 同時跑」；程序**指向** `worktree-orchestration` 與 `subagent-execution`、不重寫；寫明 implementer 帶 `isolation: "worktree"`（`pre-agent-gate.sh` 依既有規則放行）、會讀整個 repo 的審查 agent 在該階段的 worktree 裡審、plan 與帳本只由主模型在主 checkout 改（開 worktree 前 plan 已 commit、合併一條驗一條、合併後才標 ✅）、同時進行的階段都標 🔄 且 `current_phase` 寫最小未完成階段、摘要行與重算不一致時以重算為準並指出
 - [ ] `task-next.md` 第 83–95 行「平行任務偵測」：候選任務沒有 plan 時，WBS 有模組欄且兩個 ready 任務的模組不同（非空、非 `—`）→ 選項說明提示「可能可平行，先 `/plan` 兩個再確認」，不提供平行選項；有 plan 且有 `files:` 的照現行
 - [ ] `task-status.md` 第 185–187 行：「驗收標準（整體）」「風險與緩解」的去處改成該 plan 的「發現與決策」或該階段的「注意」
-- **預估**：4.5h
+- **預估**：4.75h（原 4.5h，資料流提醒 +0.25h）
 - **驗收**：
-  - `verify.md` 文件同步關卡內，`PRD`、`--sync-arch`、`.doc-impact` 三個字串依序出現，且前兩項各有一句 worktree 跳過的條件
+  - `verify.md` 文件同步關卡內，`PRD`、`--sync-arch`、`資料流`、`.doc-impact` 四個字串依序出現，且前兩項各有一句 worktree 跳過的條件
+  - `verify.md` 的資料流提醒那項寫明「不改」任何檔、不問問題，含跳過條件「資料流變更」為「無」與「資料流節已更新」
+  - `verify.md` 含「架構文件沒有資料流節，見 05 範本」
   - `verify.md` 不含 `codemap`
   - `verify.md` 的驗收比對同時寫到「驗收標準（整體）」（舊格式）與「PRD 情境」（新格式）兩條路徑
   - `tdd.md`「選執行方式」含「用 worktree 同時跑」、`isolation: "worktree"`、`worktree-orchestration`、`subagent-execution`，且不含 `git worktree add`（程序沒有重寫進來）
@@ -244,7 +279,7 @@ flowchart LR
 
 ### 階段 5: agent 調整（D3） ⏳
 
-- **依賴**：階段 3；跨計畫：地圖 5 已合併
+- **依賴**：階段 3；跨計畫：地圖 7 已合併
 - [ ] 刪 `agents/workflow-template-manager.md`；同步：`rules/agent-orchestration.md`（終端節點名單與 8＋1＋1＋4 → 8＋1＋1＋3＝13，`conflict-resolver` 成為第 14 個）、`skills/using-taskmaster/SKILL.md` 第 46 行路由（PRD → `/docs-init`／`project-docs`，ADR → `/adr` 或 `architect`）、`commands/hub-delegate.md` 第 71 行、`guides/MECHANISMS.md` 第 84–85 行、`guides/MODELS.md` 第 20、36、39 行、`.claude/README.md` 第 59 行、`README.md` 第 92、217 行、`context/decisions/README.md`
 - [ ] hook 只刪改字串：`user-prompt-submit.sh` 第 165–169 行改成「PRD → `/docs-init`／`project-docs`，ADR → `/adr` 或 `architect`」、第 171 行拿掉「codemap」說法；`lib/agent-inflight.sh` 第 43 行唯讀名單刪名字；`pre-agent-gate.sh` 第 78–80 行註解；`post-write.sh` 第 213 行「下一任務 plan 的『風險與緩解』」改成「『發現與決策』或該階段的『注意』」；`hooks/README.md` 第 60 行
 - [ ] `hooks/tests/run-tests.sh` 第 607 行（PRD/ADR 路由預期）、第 2877 行（唯讀名單迴圈）
@@ -287,7 +322,8 @@ flowchart LR
 | 新專案跑 `/docs-init --mvp` | 產一份合併 02＋05＋06＋08 的 `tech-spec.md`；full 產十幾份編號文件 | 產 `00_brief.md`、`prd.md`、`architecture.md`（加 WBS），full 碰認證金流個資時多威脅模型 |
 | 範本 | 20 份 | 5 份（另有 UI 鏈 2 份） |
 | PRD | 寫完不再更新，落差只被報告 | 帶情境變更的 plan 在 `/verify` 時套回 PRD |
-| 架構文件的模組表 | 人手寫 5.1／5.5，會過期 | 人寫三節，模組與依賴由地圖資料改寫標記之間 |
+| 架構文件的模組表 | 人手寫 5.1／5.5，會過期 | 人寫四節，模組與依賴由地圖資料改寫標記之間 |
+| 一個功能跨哪些服務 | 看不到 | 架構文件資料流節一張圖，plan 寫明改了哪條流程 |
 | ADR | `docs/` 與 `context/decisions/` 兩處、兩套編號 | 只在 `docs/decisions/` |
 | plan | 8 段、status 自由文字 | 四段、status 只有四個值 |
 | plan 的階段平行 | 使用者要特別說才會考慮 | `/tdd` 依依賴與檔案重算，主動提供「用 worktree 同時跑」 |
@@ -308,3 +344,7 @@ flowchart LR
 - 2026-11-05 handoff 沒列、併入階段 5：`user-prompt-submit.sh` 第 171 行的 codemap 說法、`post-write.sh` 第 213 行的「風險與緩解」
 - 2026-11-05 模組欄來源（`task-init`、`task-add`）：新架構文件沒有手寫 5.5 → 改取自動段模組表；新專案還沒有程式碼時填 `—`，之後由地圖計畫的任務推斷與 `/task-status` 回寫補上（待使用者確認，見回報）
 - 2026-11-05 `architect` 的報告落點不變（`context/decisions/`），只有 ADR 本體搬到 `docs/decisions/`，所以 `post-agent-report.sh` 的 AREA 不必改
+- 2026-11-06 範本審閱（階段 2）發現沒有地方畫跨服務資料流 → [ADR-2026-11-06-001](../../context/decisions/ADR-2026-11-06-001-architecture-doc-data-flows.md)：架構文件第 4 節人寫資料流、自動段改第 5 節、plan 多「資料流變更」、`/verify` 只提醒。照階段 2「要改」的路徑，階段 1 回到 🔄 補做（已完成項目不重做）、`current_phase` 1；階段 2 審閱重做；階段 3、4 各補文字。合計 18h → 20h。來源 `coordination/handoffs/architect-to-planner-2026-11-06-1100.md`
+- 2026-11-06 階段 2 第一輪審閱：使用者已確認六份分工與 mock 寫法，只剩資料流要看；第二輪 artifact 仍整套重產，問題聚焦資料流
+- 2026-11-06 地圖計畫新增階段 5、6（模組展開，ADR-2026-11-06-002），原地圖 5（收尾）改號地圖 7：本計畫「兩份計畫的順序」與階段 5 的跨計畫依賴同步改；地圖 6 只依賴地圖 3，不新增跨計畫限制
+- 2026-11-06 `check-counts.sh` 檢查資料流節與「資料流變更」放階段 1（範本與範例在同一階段寫）；`overview.sh` 的資料流節名常數 `OVERVIEW_FLOW_SECTION` 與 05 範本的比對放地圖 7（常數在 `overview.sh`，比照 A7）

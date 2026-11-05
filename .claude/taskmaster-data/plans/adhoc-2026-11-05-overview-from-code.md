@@ -27,31 +27,38 @@ files:
   # 階段 4：說明層
   - ".claude/agents/documentation-specialist.md"
   - ".claude/skills/project-docs/module-notes.md"
-  # 階段 5：收尾
+  # 階段 5、6：模組展開（5 只動上面已列的 overview-scan.sh、overview.sh、run-tests.sh、fixtures/overview/make-fixture.sh；6 只動 index.html、qa-check.js、check-counts.sh，另多一份問答紀錄）
+  - ".claude/qa-history/*-overview-expand-review.md"
+  # 階段 7：收尾
   - ".claude/guides/WORKFLOW.md"
   - "README.md"
   - ".claude/README.md"
   - ".claude/tests/skill-compliance/**"
 ---
 
-# 專案圖解改以程式碼為準（骨架掃描、落差、plan 疊層、架構自動段、畫面、說明層）
+# 專案圖解改以程式碼為準（骨架掃描、落差、plan 疊層、架構自動段、畫面、說明層、模組展開）
 
 ## 為什麼做
 
 沒照模板格式寫架構文件的既有專案（Python 後端＋TS 前端、文件放在 `docs/architecture/`、WBS 沒有模組欄），專案地圖畫不出來或全灰，
 因為地圖骨架讀的是架構文件的手寫模組表，而那份表不是真實狀態。ADR-2026-11-05-001～003 改成由程式碼掃出骨架、
 文件與程式對不上的地方列成落差、按需寫模組說明；ADR-007 再要求同一份地圖資料順帶產生架構文件的自動段、一頁現況，
-以及「本次 plan 預計會動哪些模組」這一層。
+以及「本次 plan 預計會動哪些模組」這一層。ADR-2026-11-06-002 再加「點模組展開」：看模組內部的檔案、import 關係、
+框外碰了哪些模組／資料庫／套件，以及它參與架構文件資料流節（ADR-2026-11-06-001）的哪些流程。
 
 ### PRD 情境變更
 
 無（模板 repo 沒有 `docs/prd.md`）。
 
+### 資料流變更
+
+無（模板 repo 沒有跨服務流程）。
+
 ## 怎麼做
 
-**可平行**：階段 2 與 3（依賴都只到階段 1，部件表檔案不重疊）；階段 3 與 4（階段 2 合併後若 3 還在跑）。階段 2 與 4 不可（4 依賴 2，且同改 `overview.sh`、`post-write.sh`、`task-status.md`）。階段 3 另有跨計畫條件，見「平行開發」。
+**可平行**：階段 2 與 3（依賴都只到階段 1，部件表檔案不重疊）；階段 3 與 4（階段 2 合併後若 3 還在跑）；階段 6 與 2、4、5（只依賴階段 3，部件表檔案無交集）。階段 2 與 4 不可（4 依賴 2，且同改 `overview.sh`、`post-write.sh`、`task-status.md`）；4 → 5、2 → 5、3 → 6 循序。階段 3、5 另有跨計畫條件，見「平行開發」。
 
-**預估**：合計 40.5h（0：3h／1：8h／2：12.5h／3：8h／4：6h／5：3h）。比 standard 一般的量大，**每個階段各自合併**。
+**預估**：合計 48.5h（0：3h／1：8h／2：12.5h／3：8h／4：6h／5：3.5h／6：4h／7：3.5h）。比 standard 一般的量大，**每個階段各自合併**。
 
 ### 一眼看懂
 
@@ -84,7 +91,15 @@ flowchart LR
     p11["說明驗證與寫入當下回饋"]
     p12["過期判定與 /task-status 入口"]
   end
-  subgraph s5["階段 5 收尾"]
+  subgraph s5["階段 5 模組展開資料"]
+    p18["檔案層級 import 與框外歸類（fileEdges）"]
+    p19["模組內部圖資料與資料流連結（inner、flows）"]
+  end
+  subgraph s6["階段 6 模組展開畫面＋審閱"]
+    p20["點進模組的內部圖與資料流清單"]
+    p21["展開畫面審閱"]
+  end
+  subgraph s7["階段 7 收尾"]
     p13["文件同步與 CI 常數檢查"]
   end
   p1 -.-> p3
@@ -106,7 +121,14 @@ flowchart LR
   p15 -.-> p13
   p17 -.-> p13
   p12 -.-> p13
-  class p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11,p12,p13,p14,p15,p16,p17 planned
+  p8 -.-> p18
+  p18 -.-> p19
+  p12 -.-> p19
+  p17 -.-> p20
+  p20 -.-> p21
+  p19 -.-> p13
+  p21 -.-> p13
+  class p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11,p12,p13,p14,p15,p16,p17,p18,p19,p20,p21 planned
 ```
 
 | id | 部件 | 階段 | 檔案 | 驗收 |
@@ -127,14 +149,18 @@ flowchart LR
 | p17 | 虛線框、plan 階段、頁首現況＋畫面審閱 | 3 | `.claude/templates/overview/index.html`, `.claude/qa-history/*-overview-page-review.md` | 使用者在 AskUserQuestion 選「確認」→ 才合併階段 3 |
 | p11 | 說明驗證與寫入當下回饋 | 4 | `.claude/scripts/overview.sh`, `.claude/hooks/post-write.sh`, `.claude/skills/project-docs/module-notes.md` | 寫入含 `Server=db01` 的 module-notes.md → post-write 的 `additionalContext` 列出該列 |
 | p12 | 過期判定與 /task-status 入口 | 4 | `.claude/scripts/overview.sh`, `.claude/commands/task-status.md`, `.claude/agents/documentation-specialist.md` | `based_on` 之後改過模組 A 的檔 → A 的 `description.stale` 為 true、B 為 false |
-| p13 | 文件同步與 CI 常數檢查 | 5 | `.claude/scripts/check-counts.sh`, `.claude/guides/WORKFLOW.md`, `README.md` | 05 範本的自動段標記與 `overview.sh` 的常數不同 → `check-counts.sh` 失敗 |
+| p18 | 檔案層級 import 與框外歸類（fileEdges） | 5 | `.claude/scripts/overview-scan.sh` | `api.py` 寫 `from sqlalchemy.orm import Session`、`import httpx`、`import os` → `orders` 的 `inner.out` 含 `db:sqlalchemy`、`pkg:httpx`，不含 `os` |
+| p19 | 模組內部圖資料與資料流連結（inner、flows） | 5 | `.claude/scripts/overview.sh`, `.claude/hooks/tests/run-tests.sh`, `.claude/hooks/tests/fixtures/overview/make-fixture.sh` | 資料流節一條流程宣告 `participant orders`、`participant pay` → `flows[0].modules` 為 `["orders"]` |
+| p20 | 點進模組的內部圖與資料流清單 | 6 | `.claude/templates/overview/index.html`, `.claude/hooks/tests/fixtures/overview/qa-check.js`, `.claude/scripts/check-counts.sh` | `index.html` 65537 bytes → `check-counts.sh` 失敗 |
+| p21 | 展開畫面審閱 | 6 | `.claude/qa-history/*-overview-expand-review.md` | 使用者在 AskUserQuestion 選「確認」→ 才合併階段 6 |
+| p13 | 文件同步與 CI 常數檢查 | 7 | `.claude/scripts/check-counts.sh`, `.claude/guides/WORKFLOW.md`, `README.md` | 05 範本的自動段標記與 `overview.sh` 的常數不同 → `check-counts.sh` 失敗 |
 
 ### 共同門檻與限制
 
 每個階段（不另列在驗收裡）：`bash .claude/hooks/tests/run-tests.sh overview post-write` 全綠、
 `bash .claude/scripts/check-counts.sh` 全綠（新增的測試案例數依提示同步到文件）、中文＋空格的主 checkout 路徑案例通過。
 審查照 `rules/task-mode.md`：standard 每階段 `code-quality-specialist`。
-驗收只到本 repo 的自動測試、`check-counts.sh`、`skill-compliance` 與階段 3 的畫面審閱；在真實專案的實測由使用者自己做，不排進本計畫。
+驗收只到本 repo 的自動測試、`check-counts.sh`、`skill-compliance` 與階段 3、6 的畫面審閱；在真實專案的實測由使用者自己做，不排進本計畫。
 
 寫程式時的限制（原「技術依賴」）：
 - 只用 bash、awk、jq、git（hook 本來就需要），不新增依賴；新腳本只有 `overview-scan.sh`，其餘都是 `overview.sh` 的新出口，不加 hook
@@ -145,7 +171,7 @@ flowchart LR
 - 節流只用 bash 內建：`printf '%(%s)T' -1`、`read -r < 檔`、`printf > 檔`；bash < 4.2 退回 `date +%s`
 - 主 checkout 一律用 `git rev-parse --git-common-dir` 算；骨架、節流戳記、`skeleton.json` 屬「共享產物」，放主 checkout 的 `taskmaster-data/overview/`
 - hook 不寫模型會 Edit 的檔：notes、wbs、plan、架構文件都不寫（架構文件自動段只由 `/verify`、`/task-status` 呼叫 `--sync-arch` 改寫）
-- 依據：提案 `.claude/context/decisions/architect-2026-11-05-1500.md`（下稱「提案」）與 `architect-2026-11-05-1730.md` 第 7、8 節；ADR-001～003、007；定案問答 `.claude/qa-history/2026-11-05-153000-overview-from-code-adr.md`；坑 `context/learned/2026-11-04-jq-windows-non-ascii-path.md`、`2026-11-05-jq16-reserved-word-variable.md`
+- 依據：提案 `.claude/context/decisions/architect-2026-11-05-1500.md`（下稱「提案」）與 `architect-2026-11-05-1730.md` 第 7、8 節；ADR-001～003、007；模組展開（階段 5、6）依 ADR-2026-11-06-002 與 `architect-2026-11-06-1100.md` 第 3、4 節；定案問答 `.claude/qa-history/2026-11-05-153000-overview-from-code-adr.md`；坑 `context/learned/2026-11-04-jq-windows-non-ascii-path.md`、`2026-11-05-jq16-reserved-word-variable.md`
 
 ### 平行開發（含與文件計畫的順序）
 
@@ -156,10 +182,10 @@ flowchart LR
 | 1 | 地圖 0 → 地圖 1 | 文件 1 範本與 plan 格式 | 可平行：檔案不重疊 |
 | 2 | （地圖 1 繼續） | 文件 2 範本審閱 | — |
 | 3 | 地圖 2（含 A3–A5） | 文件 3 範本收斂與接線 | 可平行：檔案不重疊 |
-| 4 | 地圖 3（含畫面審閱）∥ 地圖 4 | — | **文件 1、3 都已合併才開地圖 3**（都改 `check-counts.sh`）；文件 3 合併後才開地圖 4（都改 `documentation-specialist.md`） |
-| 5 | — | 文件 4（D2） | 地圖 2（`--sync-arch`）與地圖 4（`task-status.md`）合併之後 |
-| 6 | 地圖 5 | — | 依賴地圖 2、3、4 與文件 1 的 05 範本標記 |
-| 7 | — | 文件 5（D3）∥ 文件 4 | 地圖 5 之後 |
+| 4 | 地圖 3（含畫面審閱）∥ 地圖 4 | — | **文件 1、3 都已合併才開地圖 3**（都改 `check-counts.sh`）；文件 3 合併後才開地圖 4（都改 `documentation-specialist.md`）；地圖 6 可在地圖 3 合併後開工（不必等地圖 4） |
+| 5 | 地圖 5 模組展開資料 ∥ 地圖 6 模組展開畫面（含畫面審閱） | 文件 4（D2） | 地圖 5：地圖 2、4 與文件 1（含資料流節）已合併；地圖 6：地圖 3 已合併；文件 4：地圖 2（`--sync-arch`）與地圖 4（`task-status.md`）合併之後。三條檔案無交集 |
+| 6 | 地圖 7 收尾 | — | 依賴地圖 2–6，與文件 1 寫好的 05 範本標記、資料流節名 |
+| 7 | — | 文件 5（D3）∥ 文件 4 | 地圖 7 之後 |
 | 8 | — | 文件 6（D4） | 文件 5 之後 |
 
 本計畫內：
@@ -169,8 +195,11 @@ flowchart LR
 | 0 → 1 | 循序 | 1 要用 0 的產生器與 golden |
 | 1 → 2 | 循序 | 都改 `overview.sh`、`overview-scan.sh`、`run-tests.sh` |
 | 2 → 4 | 循序 | 都改 `overview.sh`、`post-write.sh`、`run-tests.sh`、`task-status.md` |
+| 2 → 5、4 → 5 | 循序 | 5 要用 2 的 http 邊（X6）與 `overview-scan.sh` 的改動；4、5 同改 `overview.sh`、`run-tests.sh`、`make-fixture.sh` |
+| 3 → 6 | 循序 | 同改 `index.html`、`qa-check.js`、`check-counts.sh`；6 要用 3 的 token 與雙主題 |
 | **3 ∥ 2、3 ∥ 4** | **可平行** | 見下 |
-| 5 | 最後 | 依賴 2、3、4 |
+| **6 ∥ 2、6 ∥ 4、6 ∥ 5** | **可平行** | 只依賴 3、檔案無交集；6 只讀 ADR-2026-11-06-002 定死的欄位合約。條件見下 |
+| 7 | 最後 | 依賴 2–6 |
 
 階段 3 平行開工的條件（全部成立才派）：
 
@@ -178,9 +207,18 @@ flowchart LR
 2. 文件計畫的文件 1、3 已合併（`check-counts.sh`）
 3. 階段 0、1 的產物與**本 plan 檔**已 commit（`plans/` 在 `.git/info/exclude`，要 `git add -f`）；worktree 從本地 HEAD 開分支
 4. 用 `Agent` 派 `ui-builder` 時帶 `isolation: "worktree"`（它的 frontmatter 沒有設 isolation）
-5. 階段 3 只寫 `index.html`、`qa-check.js`、`check-counts.sh`；階段 2、4 不得碰這三個檔（notes 常數與自動段標記的檢查因此排在階段 5）
-6. 階段 3 需要的落差、說明、plan 疊層、現況資料用 `.claude/tmp/` 裡手補的 data.js；最終以真資料重跑的驗收排在階段 5
+5. 階段 3 只寫 `index.html`、`qa-check.js`、`check-counts.sh`；階段 2、4、5 不得碰這三個檔（notes 常數、自動段標記、資料流節名的檢查因此排在階段 7）
+6. 階段 3 需要的落差、說明、plan 疊層、現況資料用 `.claude/tmp/` 裡手補的 data.js；最終以真資料重跑的驗收排在階段 7
 7. 合併順序：先合先完成的那條（階段 3 要先過畫面審閱）；兩邊沒有共同檔，預期零衝突。合併前跑 `run-tests.sh overview`
+
+階段 6 平行開工的條件（全部成立才派）：
+
+1. 階段 3 已合併（含畫面審閱「確認」）
+2. 本 plan 檔已 commit（`git add -f`）；worktree 從本地 HEAD 開分支
+3. 用 `Agent` 派 `ui-builder` 時帶 `isolation: "worktree"`
+4. 階段 6 只寫 `index.html`、`qa-check.js`、`check-counts.sh` 與一份 `qa-history`；階段 2、4、5 不得碰這三個檔
+5. 資料用 `.claude/tmp/` 手補的 data.js，欄位名照 ADR-2026-11-06-002 決策 1（`modules[].inner`、`modules[].flows`、頂層 `flows`）；最終以真資料重跑的驗收排在階段 7
+6. 合併順序：先合先完成的那條（階段 6 要先過展開畫面審閱）；合併前跑 `run-tests.sh overview`
 
 ### 階段 0: 實測、fixture 產生器、jq 1.6 CI ✅
 
@@ -281,6 +319,7 @@ flowchart LR
   - `find_arch` 的 `docs/**` 不要靠 `globstar`（bash 3.2 沒有），用一次 `find docs -name '*architecture*.md'` 排序後過濾
   - post-write 改壞 → 所有寫入的 hook 失效：靠 `post-write.sh` 的語法檢查與 `run-tests.sh` 全體語法節；節流段在視窗內只用內建指令
   - 自動切出的模組粒度不符直覺 → 上限 40、`overview.scan.roots`／`depth` 覆寫；5.5 有效時以它為準
+  - import 解析寫成兩步：**先逐檔產生紀錄（來源檔、目標檔或套件名、`import`／`http`）→ 再彙總成模組邊**，不要在解析時就彙總、也不要在逐檔那一步丟掉第三方 import（模組邊照舊不收）。階段 5 要從這份中間結果多輸出 `fileEdges`（ADR-2026-11-06-002）；本階段範圍與驗收不變
 
 ### 階段 2: 落差、任務推斷、前後端連線、plan 疊層、架構自動段、一頁現況 ⏳
 
@@ -412,22 +451,86 @@ flowchart LR
   - 說明可能寫進客戶機密：樣式檢查＋寫入當下注入＋附屬檔禁寫清單＋`based_on` 供抽查；`overview.notes: off` 可整個關掉。建議本階段另請 `security-infrastructure-auditor` 看一次樣式清單（選配）
   - notes 檔的讀取照 learned 的做法走 stdin 或暫存 ASCII 檔名
 
-### 階段 5: 文件同步與 CI 常數檢查 ⏳
+### 階段 5: 模組展開——資料 ⏳
 
-- **依賴**：階段 2, 3, 4；跨計畫：文件 1 已合併（05 範本的自動段標記）
-- [ ] `check-counts.sh`：`OVERVIEW_COLS_NOTES` 對 `project-docs/module-notes.md` 範例表頭；`documentation-specialist.md` 寫到的附屬檔路徑存在；**A7** `overview.sh` 的自動段標記常數對 05 範本裡的兩行標記
-- [ ] `.claude/guides/WORKFLOW.md`、`README.md`、`.claude/README.md`：專案圖解改成「骨架掃程式碼、進度看 WBS／plan、說明按需、架構文件自動段與一頁現況由同一份資料產生」；寫明 SSH 遠端怎麼開（VS Code Remote 開遠端的 `overview/index.html`，或把 `overview/` 整個下載回本機）——不做匯出功能
+- **依賴**：階段 2, 4；跨計畫：文件 1（補資料流節後）已合併
+- [ ] `overview-scan.sh`：在既有那一趟 awk 解析 import／http 時多輸出一種行，`skeleton.json` 加 `fileEdges[]`：`{from: 路徑, to: 路徑或 null, ext: "db:<名>"／"pkg:<名>" 或 null, source: "import"／"http"}`（ADR-2026-11-06-002 決策 1）；**不加行程**；`scan.truncated` 時沒有 `fileEdges`（同現行沒有邊） — 驗證：`bash .claude/hooks/tests/run-tests.sh overview`
+- [ ] 框外歸類照決策 2 的順序，先符合者為準：解析到 repo 內另一模組的檔（含 X6 的 http 對到後端路由）→ `to` 填路徑，由 `overview.sh` 對成 `m:<模組 id>`；套件名在 `SCAN_DB_PKGS`（＋`project.json` 的 `overview.scan.dbPackages`）→ `db:<名>`；在 `SCAN_STD_PY`／`SCAN_STD_JS`、屬 Go 標準庫、`java.`／`javax.`／`kotlin.`、`System.`（不在 db 清單者）→ 丟掉；其他 → `pkg:<名>`。套件名取法：Python 第一段、TS／JS 第一段（scoped 取兩段、去 `node:`）、Go 前三段、Java／C# 前兩段；兩份清單的起始內容照決策 2，標準庫約 50 個不追求完整 — 驗證：同上
+- [ ] `overview.sh` 產 `modules[].inner`（`root`、`nodes`、`folded`、`edges`、`out`、`outMore`，欄位名照決策 1 定死）：常數 `OVERVIEW_INNER_MAX_NODES=60`、`OVERVIEW_INNER_MAX_EDGES=200`、`OVERVIEW_INNER_MAX_OUT=15`（環境變數可覆寫）；摺疊三步（逐檔 → 超過時根下一層子目錄各併成 `<名>/` 節點、根目錄的檔照舊 → 仍超過時依進出邊數留前 59 個、其餘計入 `folded`，碰到被併檔案的模組內邊丟掉）；模組內邊依次數留前 200；框外依「其他模組 → 資料庫 → 外部套件」、同類依次數留前 15，其餘計入 `outMore`；測試目錄不進 `inner`；掃描截斷時 `inner: null` — 驗證：同上
+- [ ] `overview.sh` 解析資料流節（決策 3）：找 `^## [0-9]+\. <OVERVIEW_FLOW_SECTION>` 一節（常數 `OVERVIEW_FLOW_SECTION="資料流"`，不綁節號）；節內每個 `###` 是一條流程，只讀其後 mermaid 區塊的 `participant`／`actor` 宣告行取 id；id 等於模組 id → 該模組、等於分組 id → 該分組全部模組；產頂層 `flows[]`（`title`、`line`、`participants`、`modules`）與 `modules[].flows`（索引，沒有時 `[]`）；一條流程沒有任何參與者對得到模組 → notice「資料流「<標題>」對不到任何模組（模組改名？）」；沒有架構文件或沒有資料流節 → `flows: []`、不出 notice；`sequenceDiagram` 不參與 5.1 容器圖的挑選（加測試鎖住） — 驗證：同上
+- [ ] `shrink_data` 加兩級：**最先**丟「`planned` 為 false 且沒有本次改動」的模組的 `inner`；既有四級都丟完仍超過 → **最後**丟全部 `inner`
+- [ ] `make-fixture.sh`：shop-clean、messy-fullstack 都加資料庫（`sqlalchemy`／`pg`）、外部套件（`httpx`／`axios`）與標準庫（`os`／`node:fs`）的 import；messy-fullstack 加一個 > 60 個檔、分在 3 個子目錄的模組；兩組的架構文件加資料流節——shop-clean 的流程參與者都對得到模組，messy-fullstack 有一條流程的參與者全部對不到模組
+- [ ] `run-tests.sh` 的 overview 節加下面驗收的案例
+- **預估**：3.5h
+- **驗收**：
+  - `backend/app/orders/api.py` 寫 `from app.orders.service import x`、`from sqlalchemy.orm import Session`、`import httpx`、`import os` → `orders` 的 `inner.edges` 有一條 api→service；`inner.out` 含 `db:sqlalchemy` 與 `pkg:httpx`，不含任何指向 `os` 的項目
+  - 前端 `import x from '@/stores/cart'`（stores 是另一模組）→ 該檔所在模組的 `inner.out` 有一筆 `m:stores`、`"import"`
+  - X6 的前端 fetch 對到後端路由 → 前端模組的 `inner.out` 有一筆 `m:<後端模組 id>`、`"http"`
+  - 模組有 61 個檔、分在 3 個子目錄 → `inner.nodes` 含 3 個以 `/` 結尾的節點
+  - `gen-large.sh 5000` → 每個模組 `inner.nodes` ≤ 60、`inner.edges` ≤ 200、`inner.out` ≤ 15；`skeleton.json` 的 `fileEdges` 數 ≥ data.js 各模組 `inner.edges`＋`inner.out` 筆數的總和
+  - `import React from 'react'` → 模組層 `edges[]` 與加入本功能前相同（階段 1 驗收照過），該模組 `inner.out` 多一筆 `pkg:react`
+  - `project.json` 設 `overview.scan.dbPackages: ["mydb"]`、程式寫 `import mydb` → `inner.out` 含 `db:mydb`、不含 `pkg:mydb`
+  - `OVERVIEW_SCAN_MAX_FILES=10` → 所有模組的 `inner` 為 null、`skeleton.json` 沒有 `fileEdges` 項目
+  - `OVERVIEW_MAX_BYTES` 設成容不下全部 `inner` → `planned` 為 false 且沒有本次改動的模組 `inner` 為 null，`planned: true` 的模組 `inner` 仍在；再調小到既有四級都丟完仍超過 → 全部 `inner` 為 null
+  - 架構文件資料流節有一條流程宣告 `participant orders`、`participant pay` → `flows[0].modules` 為 `["orders"]`、`orders` 的 `flows` 含 0
+  - 流程參與者 id 等於分組 id → 該分組每個模組的 `flows` 都含該流程的索引
+  - 一條流程的參與者全部對不到模組 → notices 有一則含該流程標題與「對不到任何模組」；只有部分對不到（外部系統、佇列）→ 沒有這則
+  - 架構文件沒有資料流節 → `flows` 為 `[]`、notices 沒有資料流相關的項目
+  - 架構文件唯一的 mermaid 區塊是資料流節的 `sequenceDiagram` → 不被當成 5.1 容器圖（容器圖相關欄位與拿掉該區塊時相同）
+  - data.js 的 `schema` 仍為 2
+  - [實測] `gen-large.sh 5000`：`overview-scan.sh` 的行程數與本階段前相同；`overview.sh` 整條在 Windows 多花 ≤ 1 秒（數字寫進「發現與決策」）
+- **不可退化**：階段 1、2、4 的驗收全部照過（模組層 `edges[]` 不變；shop-clean golden 照過）；`--sync-arch` 產的自動段不含檔案層級（模組表列數、mermaid 節點數與本階段前相同）；`--sync-arch` 前後架構文件資料流節的位元組相同
+- **注意**：
+  - 欄位名在 ADR-2026-11-06-002 定死，本階段只填值不改名（階段 6 可能正在平行做畫面）
+  - fixture 加檔不得改變既有驗收的數字：> 60 檔的模組只加在 messy-fullstack、不掛任何 WBS 任務、shop-clean 不加新模組；既有測試若斷言 messy-fullstack 的 notices 總數，改成斷言特定 notice（多出的資料流 notice 照 X10 的做法逐條列進「發現與決策」）
+  - `inner.nodes` 的檔名可能含中文：字數與排序走 jq，awk 照 `LC_ALL=C` 逐位元組；fileEdges 走 stdin，不用 `--rawfile`／`--slurpfile` 讀中文路徑
+  - 「本次改動」沿用既有 git diff 的結果，不另跑 git
+
+### 階段 6: 模組展開——畫面（ui-builder，可與階段 2、4、5 平行）＋畫面審閱 ⏳
+
+- **依賴**：階段 3
+- [ ] 右側欄（點模組時）多兩樣：「展開內部」按鈕、「參與的資料流」清單（標題＋`docs/architecture.md` 第 N 行，連到該檔；`flows` 為空時整塊不出現）
+- [ ] 展開＝畫布切換成該模組的內部圖，頁首麵包屑「全圖 › <模組名>」，`Esc` 或點「全圖」返回；平移、縮放、小地圖沿用
+- [ ] 內部圖：模組框內是檔案節點，依 import 方向分層由左到右排（環狀依賴略過回邊）；框外右側分「其他模組／資料庫／外部套件」三欄、虛線連過去；`folded`、`outMore` 各畫成一個「其他 N 檔」「其他 N 個」節點；本次改動碰到的檔帶既有的改動標記；點檔案節點，右側欄列出它 import 誰、被誰 import
+- [ ] 沒有內部資料時的文字（X14）：data.js 沒有 `inner` 欄位 → 「沒有內部資料」；`scan.truncated` 為 true → 「檔案數超過掃描上限，沒有內部資料」；其他 `inner` 為 null → 「資料量超過上限，未保留內部細節（調高 `OVERVIEW_MAX_BYTES`）」
+- [ ] `qa-check.js`：在內部圖狀態下也能量同樣六項（必要時加參數指定量哪個畫布）
+- [ ] `check-counts.sh`：`index.html` 上限 51200 → 65536（第 402 行），第 393 行註解與第 404 行訊息的「50KB」改「64KB」；`index.html` 頁首註解同步
+- [ ] 資料：`.claude/tmp/` 手補的 data.js，欄位名照 ADR-2026-11-06-002 決策 1；**不得**要求 `overview.sh` 改欄位名，需要的欄位不在合約裡 → 回報 `NEEDS_CONTEXT`
+- [ ] **畫面審閱（合併前，主模型做，ADR-2026-11-06-002 決策 5）**：ui-builder 回報後，主模型用 shop-clean 的 data.js 手補展示資料——一個 5 個檔的小模組、一個超過 60 個檔而摺疊成子目錄＋「其他 N 檔」的模組、框外三類各至少一個、`outMore` > 0、兩條資料流——內嵌進 worktree 裡 `index.html` 的一份複本，發成 artifact → `AskUserQuestion`：確認（Recommended）／要改（直接輸入要改的地方）。選「要改」→ 回到 ui-builder 修，修完再發一次。問答一次寫入 `.claude/qa-history/<時間>-overview-expand-review.md`
+- **預估**：4h（含審閱 artifact 0.5h，不含使用者審閱時間）
+- **驗收**：
+  - `index.html` 為 65537 bytes → `check-counts.sh` 失敗；65536 bytes → 這一項通過
+  - shop-clean 與 messy-fullstack × 390／1440 × 淺色／深色共 8 種組合，各展開一個模組後在內部圖跑 `qa-check.js`，六項全為 0 或 false
+  - 在內部圖按 `Esc` → 回到全圖，模組卡片位置與展開前相同（`browser_evaluate` 比對座標）
+  - 餵沒有 `inner` 欄位的 data.js → 點「展開內部」後頁面出現「沒有內部資料」（`browser_evaluate` 找得到該文字）
+  - 審閱 artifact 裡看得到：麵包屑、框內分層的檔案節點、框外三欄虛線、「其他 N 檔」與「其他 N 個」節點、改動標記、右側欄的資料流清單
+  - 使用者選「確認」→ `qa-history` 有 `*-overview-expand-review.md`、結論為確認；**之後才合併階段 6、才標 ✅**
+- **不可退化**：全圖的互動模型與階段 3 完成時相同（不在全圖原地展開）；階段 3 的 8 種組合在全圖跑 `qa-check.js` 照過；`overview.sh` 測試中「overview/index.html 與畫面原檔相同」照過；token 區塊外沒有 hex 色碼、沒有外部網址
+- **注意**：
+  - 做完仍超過 64KB → 回報，不自行再調上限（ADR-003 原訂 80KB 是天花板，再調要另開決策）
+  - Playwright 開 `file://` 時非 ASCII 路徑要先 percent-encode；在 worktree 跑時用 worktree 自己的 `.claude/tmp/`
+  - ui-builder 是 subagent：**本 plan 檔只讀**，階段狀態由主模型改；審閱 artifact 由主模型做，不交給 ui-builder
+  - 階段報告附 `anti-ai.md` 產出後清單的逐項對照
+
+### 階段 7: 文件同步與 CI 常數檢查 ⏳
+
+- **依賴**：階段 2, 3, 4, 5, 6；跨計畫：文件 1 已合併（05 範本的自動段標記與資料流節名）
+- [ ] `check-counts.sh`：`OVERVIEW_COLS_NOTES` 對 `project-docs/module-notes.md` 範例表頭；`documentation-specialist.md` 寫到的附屬檔路徑存在；**A7** `overview.sh` 的自動段標記常數對 05 範本裡的兩行標記；`overview.sh` 的 `OVERVIEW_FLOW_SECTION` 對 05 範本的資料流節名（比照 A7）
+- [ ] `.claude/guides/WORKFLOW.md`、`README.md`、`.claude/README.md`：專案圖解改成「骨架掃程式碼、進度看 WBS／plan、說明按需、架構文件自動段與一頁現況由同一份資料產生」；地圖說明加「點模組展開看內部、看參與的資料流」；寫明 SSH 遠端怎麼開（VS Code Remote 開遠端的 `overview/index.html`，或把 `overview/` 整個下載回本機）——不做匯出功能
 - [ ] `documentation-specialist.md`「沒有架構文件時：從程式碼反推草稿」節：改成選配，觸發來源不再是 `--print-path` 的提示
 - [ ] `hooks/tests/README.md`：fixture 產生器與 `qa-check.js` 的用法
 - [ ] 壓力測試題 `.claude/tests/skill-compliance/prompts/11-overview-old-project.txt` 與評分標準改成新行為（看地圖、落差與一頁現況，會提議寫說明而不是要求補架構文件）
-- [ ] 2、3、4 都合併後用真資料重跑 `qa-check.js`
-- **預估**：3h
+- [ ] 2–6 都合併後用真資料重跑 `qa-check.js`（全圖與內部圖）
+- **預估**：3.5h（原 3h，資料流節名檢查與展開說明 +0.5h）
 - **驗收**：
   - 把 `module-notes.md` 附屬檔的表頭「依據」改成「來源」→ `check-counts.sh` 失敗並指出 `OVERVIEW_COLS_NOTES`；改回後通過
   - `documentation-specialist.md` 裡的附屬檔路徑改錯一個字 → `check-counts.sh` 失敗
   - 把 05 範本的 `<!-- overview:generated:start -->` 改成 `<!-- overview:gen:start -->` → `check-counts.sh` 失敗並指出 `overview.sh` 的標記常數；改回後通過
+  - 把 05 範本的 `## 4. 資料流` 改成 `## 4. 跨服務流程` → `check-counts.sh` 失敗並指出 `OVERVIEW_FLOW_SECTION`；改回後通過
+  - 把 `overview.sh` 的 `OVERVIEW_FLOW_SECTION` 改成 `"流程"` → `check-counts.sh` 失敗；改回後通過
   - `WORKFLOW.md` 有一段 SSH 遠端用 VS Code Remote 開畫面（grep 得到 `VS Code`、`overview/index.html`）
-  - 2、3、4 合併後，兩組 fixture × 4 種組合重跑 `qa-check.js` 全為 0／false
+  - `WORKFLOW.md`、`README.md` 的地圖說明各有一句同時含「展開」與「資料流」
+  - 2–6 合併後，兩組 fixture × 4 種組合在全圖與一個模組的內部圖重跑 `qa-check.js`，全為 0／false
   - `run-compliance.sh 11` 跑完，結果寫進 results 目錄的判讀
 - **不可退化**：`check-counts.sh` 既有檢查全部仍在；CI 既有 job 全綠；`run-tests.sh` 整套在 Ubuntu、Windows 兩個 CI job 都綠
 - **注意**：`skill-compliance` 第 11 題在模板 repo 跑不到正向情境（CLAUDE.md「已知落差」）；結果只當參考，正向驗證由使用者在自己的專案做
@@ -445,6 +548,7 @@ flowchart LR
 | 「現在做到哪」 | `/task-status` 自己拼 | `overview.sh --status` 印一頁現況（≤ 30 行），畫面頁首同一份資料 |
 | 髒資料下的畫面 | 疊卡、溢出、`<br/>` 原樣出現 | 不疊、不溢出、標籤乾淨，深淺雙主題 |
 | 模組的白話說明 | 沒有 | 使用者同意後由 documentation-specialist 寫，過期才重寫 |
+| 模組裡面長什麼樣 | 地圖只到模組 | 點進模組看檔案、import、框外的模組／資料庫／套件，以及參與的資料流 |
 
 ## 發現與決策
 
@@ -462,15 +566,20 @@ flowchart LR
 | 2026-11-05 | X8 | 標籤正規化與卡片說明的資料欄位歸在畫面階段 | 腳本端正規化移到階段 1；畫面階段只碰 `index.html`、`qa-check.js`、`check-counts.sh` | 階段 3 才能和 2、4 平行 |
 | 2026-11-05 | X9 | ADR-003 寫頁面上限 80KB | 沿用 `check-counts.sh` 現行的 **50KB** | 預估 40–45KB 放得下 |
 | 2026-11-05 | X10 | 既有測試只有「架構草稿不畫地圖」要改 | 另有 `schema 為 1` 的 6 處、「寫一般程式檔 → 不產生」、`--print-path` 的提示（清單見階段 1） | 逐條讀過 `run-tests.sh` 第 3258–3772 行 |
-| 2026-11-05 | X11 | （ADR-007 與 `architect-2026-11-05-1730.md` 8.1 的 A1–A7） | A1 `find_arch` 順序、A2 schema 2 多四組欄位放階段 1；A3 plan 疊層、A4 `--sync-arch`、A5 `--status` 放階段 2；A6 畫面放階段 3；A7 把「05 範本 5.5 改選配」與「`architect.md`」移到文件計畫，`files:` 刪這兩個路徑，階段 5 改成比對自動段標記 | 來源是 ADR-007；腳本改動集中在本計畫，文件計畫只動 md 與 `check-counts.sh`，兩邊不互相 rebase |
+| 2026-11-05 | X11 | （ADR-007 與 `architect-2026-11-05-1730.md` 8.1 的 A1–A7） | A1 `find_arch` 順序、A2 schema 2 多四組欄位放階段 1；A3 plan 疊層、A4 `--sync-arch`、A5 `--status` 放階段 2；A6 畫面放階段 3；A7 把「05 範本 5.5 改選配」與「`architect.md`」移到文件計畫，`files:` 刪這兩個路徑，階段 7（原 5）改成比對自動段標記 | 來源是 ADR-007；腳本改動集中在本計畫，文件計畫只動 md 與 `check-counts.sh`，兩邊不互相 rebase |
 | 2026-11-06 | X12 | jq 只用 1.6 語法、CI 用 jq 1.6 把關 | **模板最低要求 jq 1.7.1**，拿掉階段 0 加的 `hooks-jq16` job（合併後另一個 commit 移除） | 遷就 1.6 仍然漏（`overview.sh` 的 `{module, file}` 物件簡寫在 1.6 語法錯誤）；使用者可升級，Ubuntu 24.04 apt 即 1.7.1。版本檢查在 `fix/jq-min-version` 分支 |
+| 2026-11-06 | X13 | （ADR-2026-11-06-002：地圖點模組展開看內部；`architect-2026-11-06-1100.md` 第 4 節） | 新增階段 5「模組展開——資料」（3.5h）、階段 6「模組展開——畫面＋審閱」（4h）；原階段 5（收尾）改號 7、多兩項（`OVERVIEW_FLOW_SECTION` 對 05 範本、地圖說明加展開與資料流），3h → 3.5h；X9 的 50KB 在階段 6 改 64KB；階段 1 的 import 解析寫成「逐檔紀錄 → 彙總」兩步（不改範圍）。合計 40.5h → 48.5h。本表 X7 的「階段 5」是提案的編號，不改 | 資料與畫面拆開，階段 6 在階段 3 合併後就能和 2、4、5 同時跑；合成一個階段要等階段 4 做完（約多 4h 牆鐘時間）。64KB 仍在 ADR-003 原訂的 80KB 內 |
+| 2026-11-06 | X14 | ADR-2026-11-06-002：`inner` 在掃描截斷或被大小上限丟掉時為 null，被丟的顯示「資料量超過上限…」 | 畫面依 `scan.truncated` 分兩種文字：true →「檔案數超過掃描上限，沒有內部資料」；否則 null →「資料量超過上限，未保留內部細節（調高 `OVERVIEW_MAX_BYTES`）」；沒有 `inner` 欄位 →「沒有內部資料」 | ADR 只寫了被丟的那種；兩種原因的解法不同（調 `OVERVIEW_SCAN_MAX_FILES` 還是 `OVERVIEW_MAX_BYTES`），`scan.truncated` 階段 1 就有，不用新欄位 |
 
 其他：
 
-- 2026-11-05 改成 ADR-006 的四段格式：原「目標」→「為什麼做」；「WBS 連結」刪（ad-hoc，完成後 `/verify` 會問要不要補登）；「技術依賴」與依據收進「怎麼做」的「共同門檻與限制」小節；「風險與緩解」各列搬進對應階段的「注意」；「驗收標準（整體）」的 CI 三個 job 全綠搬進階段 5 的不可退化。「共同門檻與限制」「平行開發」兩個小節是 ADR-006 沒列的，不是 `### 階段` 標題，不影響 `overview.sh` 與 statusline 的解析
+- 2026-11-05 改成 ADR-006 的四段格式：原「目標」→「為什麼做」；「WBS 連結」刪（ad-hoc，完成後 `/verify` 會問要不要補登）；「技術依賴」與依據收進「怎麼做」的「共同門檻與限制」小節；「風險與緩解」各列搬進對應階段的「注意」；「驗收標準（整體）」的 CI 三個 job 全綠搬進階段 5（現為階段 7）的不可退化。「共同門檻與限制」「平行開發」兩個小節是 ADR-006 沒列的，不是 `### 階段` 標題，不影響 `overview.sh` 與 statusline 的解析
 - 2026-11-05 每個階段補「依賴」行，與「平行開發」表一致；跨計畫的條件寫在依賴行的分號後
-- 2026-11-05 使用者補充：畫面做好後由主模型用範例電商資料發 artifact 審閱，確認前不合併 → 放進階段 3 最後一步，階段 5 依賴階段 3 所以也在審閱之後；原本的「8 張截圖並排給使用者確認」併進這次審閱
-- 2026-11-05 使用者補充：驗收只到本 repo 的自動測試、`check-counts.sh`、`skill-compliance` 與畫面審閱 → 刪掉階段 4「在 messy-fullstack 上實跑 documentation-specialist、人工抽查」與階段 5「使用者在真實專案跑 update-template＋/task-status」兩條 [M]；階段 3 的畫面檢查改成 `qa-check.js`／`browser_evaluate` 的量測與審閱 artifact 的檢查項
+- 2026-11-05 使用者補充：畫面做好後由主模型用範例電商資料發 artifact 審閱，確認前不合併 → 放進階段 3 最後一步，階段 7（原 5）依賴階段 3 所以也在審閱之後；原本的「8 張截圖並排給使用者確認」併進這次審閱
+- 2026-11-05 使用者補充：驗收只到本 repo 的自動測試、`check-counts.sh`、`skill-compliance` 與畫面審閱 → 刪掉階段 4「在 messy-fullstack 上實跑 documentation-specialist、人工抽查」與階段 5（現為階段 7）「使用者在真實專案跑 update-template＋/task-status」兩條 [M]；階段 3 的畫面檢查改成 `qa-check.js`／`browser_evaluate` 的量測與審閱 artifact 的檢查項
 - 2026-11-05 階段 1 加一步：拿掉 `overview.sh` 第 848 行「找不到架構文件…畫不出專案地圖」的 warn——地圖不再依賴架構文件，留著會和「`--print-path` 不再提示」矛盾
 - 2026-11-05 階段 2 加了 A3–A5 後是 12.5h；拆成 2-A／2-B／2-C 三個 commit，不拆成兩個階段：拆了也同改 `overview.sh`、不能平行，還會讓文件計畫寫的「地圖 2」「地圖 4」對不上
 - 2026-11-05 選做項目不排入本計畫（外部系統欄、codegraph adapter、增量掃描），等完成後照 ADR-001「何時該重新考慮」決定；增量掃描若階段 0 實測超標則提前到階段 1
+- 2026-11-06 使用者要求：模組展開的畫面開發時一樣先預覽給使用者看 → 階段 6 最後一步是主模型發 artifact＋`AskUserQuestion`（ADR-2026-11-06-002 決策 5），沒有「確認」不合併、不標 ✅
+- 2026-11-06 部件表的檔案用具體檔名（階段 5 寫 `make-fixture.sh`、階段 6 寫 `qa-check.js`），不寫 `fixtures/overview/**`——寫 glob 會讓 `/tdd` 把 5、6 判成檔案有交集而不給平行。來源 `coordination/handoffs/architect-to-planner-2026-11-06-1100.md`
+- 2026-11-06 階段 4 的 `make-fixture.sh` 加選項，但部件表 p11 沒列它；4 → 5 本來就循序，不影響平行判斷，沿用
