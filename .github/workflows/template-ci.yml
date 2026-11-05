@@ -42,31 +42,6 @@ jobs:
           echo "cases=$cases" >> "$GITHUB_OUTPUT"
           echo "實跑案例數：$cases"
 
-  # overview.sh 的 jq 程式要在 jq 1.6 上也能跑（Ubuntu 22.04 的 apt 版本；1.6 不接受保留字當變數名、
-  # 沒有 1.7 之後的內建函式）。用官方執行檔放到 PATH 前面，不靠 runner 預裝的版本。
-  hooks-jq16:
-    name: overview 與 post-write 在 jq 1.6 上（Ubuntu）
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: 安裝官方 jq 1.6 並放到 PATH 前面
-        run: |
-          mkdir -p "$RUNNER_TEMP/jq16"
-          curl -fsSL -o "$RUNNER_TEMP/jq16/jq" https://github.com/jqlang/jq/releases/download/jq-1.6/jq-linux64
-          echo "af986793a515d500ab2d35f8d2aecd656e764504b789b66d7e1a0b727a124c44  $RUNNER_TEMP/jq16/jq" | sha256sum -c -
-          chmod +x "$RUNNER_TEMP/jq16/jq"
-          echo "$RUNNER_TEMP/jq16" >> "$GITHUB_PATH"
-
-      - name: 確認用的是 jq 1.6
-        run: |
-          v=$(jq --version)
-          echo "$v"
-          [ "$v" = "jq-1.6" ]
-
-      - name: 跑 overview 與 post-write 兩節
-        run: bash .claude/hooks/tests/run-tests.sh overview post-write
-
   hooks-windows:
     name: Hook 回歸測試（Windows / Git Bash）
     runs-on: windows-latest

@@ -2,9 +2,9 @@
 wbs_task: "none"
 slug: "docs-system"
 created: "2026-11-05"
-updated: "2026-11-05"
-status: "⏳ 未開始"
-current_phase: 0
+updated: "2026-11-06"
+status: "🔄 進行中"
+current_phase: 2
 mode: "standard"
 files:
   # 階段 1：範本與 plan 格式（審閱前）
@@ -157,7 +157,7 @@ flowchart LR
 
 平行時各線用 worktree，程序照 `worktree-orchestration` skill；本 plan 與地圖 plan 在開 worktree 前要已 commit（`plans/` 在 `.git/info/exclude`，要 `git add -f`）。
 
-### 階段 1: 範本與 plan 格式（D1 前半） ⏳
+### 階段 1: 範本與 plan 格式（D1 前半） ✅
 
 - **依賴**：無
 - [ ] 改寫 `02_project_brief_and_prd.md`（檔名不變）：上半 brief 骨架（保留 `## 一句話` 標題——地圖的一頁現況讀它）、下半 PRD 骨架照 ADR-005（用語表在最前；功能依領域分節、節標題括號寫模組分組名；`#### <代碼>-<序號> 標題`＋假設／當／那麼；非功能需求選填；待確認）；每份「不寫什麼」照提案第 3.2 節 — 驗證：`bash .claude/scripts/check-counts.sh`

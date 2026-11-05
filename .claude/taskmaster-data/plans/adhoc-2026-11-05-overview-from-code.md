@@ -2,9 +2,9 @@
 wbs_task: "none"
 slug: "overview-from-code"
 created: "2026-11-05"
-updated: "2026-11-05"
-status: "⏳ 未開始"
-current_phase: 0
+updated: "2026-11-06"
+status: "🔄 進行中"
+current_phase: 1
 mode: "standard"
 files:
   # 階段 0：fixture 產生器、效能實測、jq 1.6 CI
@@ -131,14 +131,14 @@ flowchart LR
 
 ### 共同門檻與限制
 
-每個階段（不另列在驗收裡）：`bash .claude/hooks/tests/run-tests.sh overview post-write` 全綠、同一組在 jq 1.6 下也全綠（階段 0 起有 CI job）、
+每個階段（不另列在驗收裡）：`bash .claude/hooks/tests/run-tests.sh overview post-write` 全綠、
 `bash .claude/scripts/check-counts.sh` 全綠（新增的測試案例數依提示同步到文件）、中文＋空格的主 checkout 路徑案例通過。
 審查照 `rules/task-mode.md`：standard 每階段 `code-quality-specialist`。
 驗收只到本 repo 的自動測試、`check-counts.sh`、`skill-compliance` 與階段 3 的畫面審閱；在真實專案的實測由使用者自己做，不排進本計畫。
 
 寫程式時的限制（原「技術依賴」）：
 - 只用 bash、awk、jq、git（hook 本來就需要），不新增依賴；新腳本只有 `overview-scan.sh`，其餘都是 `overview.sh` 的新出口，不加 hook
-- **jq 只用 1.6 語法**：不用保留字當變數名、不用 1.7 之後的內建函式（`trim`、`ltrim`、`abs`、`toarray`、`pick`…，要用就自己 `def`）
+- **jq 最低 1.7.1**（2026-11-06 使用者決定，X12）：不再遷就 1.6；session-start 會對低於 1.7.1 的 jq 印警告
 - **jq 不用 `--rawfile`／`--slurpfile`／`-f` 讀含中文的絕對路徑**：掃描結果一律走 stdin，或照 `generate()` 複製到暫存目錄用 ASCII 相對檔名
 - **awk 有兩種**：Git Bash 是 gawk、Ubuntu CI 是 mawk。不讓 awk 直接以 `\0` 切欄；兩種都要在 CI 跑過；雜湊取模避免超過 2^31
 - 中文路徑：`git -c core.quotepath=off` ＋ `-z`；awk 用 `LC_ALL=C` 逐位元組；**字數一律用 jq 的 `length` 算**
@@ -182,7 +182,7 @@ flowchart LR
 6. 階段 3 需要的落差、說明、plan 疊層、現況資料用 `.claude/tmp/` 裡手補的 data.js；最終以真資料重跑的驗收排在階段 5
 7. 合併順序：先合先完成的那條（階段 3 要先過畫面審閱）；兩邊沒有共同檔，預期零衝突。合併前跑 `run-tests.sh overview`
 
-### 階段 0: 實測、fixture 產生器、jq 1.6 CI ⏳
+### 階段 0: 實測、fixture 產生器、jq 1.6 CI ✅
 
 - **依賴**：無
 - [ ] `.claude/hooks/tests/fixtures/overview/make-fixture.sh <shop-clean|messy-fullstack> <目標目錄>`：把檔案寫進目標目錄（不 `git init`，由呼叫端決定）
@@ -429,7 +429,7 @@ flowchart LR
   - `WORKFLOW.md` 有一段 SSH 遠端用 VS Code Remote 開畫面（grep 得到 `VS Code`、`overview/index.html`）
   - 2、3、4 合併後，兩組 fixture × 4 種組合重跑 `qa-check.js` 全為 0／false
   - `run-compliance.sh 11` 跑完，結果寫進 results 目錄的判讀
-- **不可退化**：`check-counts.sh` 既有檢查全部仍在；CI 六個 job（加階段 0 的 jq 1.6 job）全綠；`run-tests.sh` 整套在 Ubuntu、Windows、jq 1.6 三個 CI job 都綠
+- **不可退化**：`check-counts.sh` 既有檢查全部仍在；CI 既有 job 全綠；`run-tests.sh` 整套在 Ubuntu、Windows 兩個 CI job 都綠
 - **注意**：`skill-compliance` 第 11 題在模板 repo 跑不到正向情境（CLAUDE.md「已知落差」）；結果只當參考，正向驗證由使用者在自己的專案做
 
 ## 改善了什麼
@@ -463,6 +463,7 @@ flowchart LR
 | 2026-11-05 | X9 | ADR-003 寫頁面上限 80KB | 沿用 `check-counts.sh` 現行的 **50KB** | 預估 40–45KB 放得下 |
 | 2026-11-05 | X10 | 既有測試只有「架構草稿不畫地圖」要改 | 另有 `schema 為 1` 的 6 處、「寫一般程式檔 → 不產生」、`--print-path` 的提示（清單見階段 1） | 逐條讀過 `run-tests.sh` 第 3258–3772 行 |
 | 2026-11-05 | X11 | （ADR-007 與 `architect-2026-11-05-1730.md` 8.1 的 A1–A7） | A1 `find_arch` 順序、A2 schema 2 多四組欄位放階段 1；A3 plan 疊層、A4 `--sync-arch`、A5 `--status` 放階段 2；A6 畫面放階段 3；A7 把「05 範本 5.5 改選配」與「`architect.md`」移到文件計畫，`files:` 刪這兩個路徑，階段 5 改成比對自動段標記 | 來源是 ADR-007；腳本改動集中在本計畫，文件計畫只動 md 與 `check-counts.sh`，兩邊不互相 rebase |
+| 2026-11-06 | X12 | jq 只用 1.6 語法、CI 用 jq 1.6 把關 | **模板最低要求 jq 1.7.1**，拿掉階段 0 加的 `hooks-jq16` job（合併後另一個 commit 移除） | 遷就 1.6 仍然漏（`overview.sh` 的 `{module, file}` 物件簡寫在 1.6 語法錯誤）；使用者可升級，Ubuntu 24.04 apt 即 1.7.1。版本檢查在 `fix/jq-min-version` 分支 |
 
 其他：
 
