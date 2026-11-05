@@ -165,6 +165,43 @@ foreach ($f in $seedRootFiles) {
     }
 }
 
+# .gitignore 不能整份覆寫（專案自己加過規則、根目錄檔案沒備份），但模板新增的短命狀態檔
+# （.last-verify、.merge-round-open…）不補進去的話會被 commit。所以只做一件事：
+# 模板 .gitignore 裡 `.claude/taskmaster-data/` 開頭的行，目標沒有的才接在檔尾。
+# 既有的行一行都不動、不排序、不去重；換行符照目標原本的（CRLF 就補 CRLF）。update-template.sh 要一致
+Write-Host "▶ 補 .gitignore 的執行時短命狀態（只補缺少的行，不動既有的）..." -ForegroundColor Green
+$giSrc = Join-Path $srcRootU '.gitignore'
+$giDst = Join-Path $destPath '.gitignore'
+if ($ClaudeOnly) {
+    Write-Host "   ⏭  -ClaudeOnly：跳過" -ForegroundColor DarkGray
+} elseif (Test-Path -LiteralPath $giSrc) {
+    $utf8 = New-Object System.Text.UTF8Encoding $false
+    $dstText = ''
+    if (Test-Path -LiteralPath $giDst) { $dstText = [System.IO.File]::ReadAllText($giDst, $utf8) }
+    # gitignore 區分大小寫，不能用 PowerShell 預設不分大小寫的 hashtable
+    $have = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
+    foreach ($l in ($dstText -split "`n")) { [void]$have.Add($l.TrimEnd()) }
+    $giMissing = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($l in [System.IO.File]::ReadAllLines($giSrc, $utf8)) {
+        $t = $l.TrimEnd()
+        if ($t.StartsWith('.claude/taskmaster-data/', [System.StringComparison]::Ordinal) -and $have.Add($t)) { $giMissing.Add($t) }
+    }
+    if ($giMissing.Count -eq 0) {
+        Write-Host "   ✓ 已齊全" -ForegroundColor DarkGray
+    } elseif ($DryRun) {
+        Write-Host "   [dry] 會補進 .gitignore：$($giMissing -join ' ')" -ForegroundColor DarkGray
+    } else {
+        $nl = if ($dstText.Contains("`r`n")) { "`r`n" } else { "`n" }
+        $add = ''
+        # 檔尾沒有換行就先補一個，免得第一行接到別人的規則後面
+        if ($dstText.Length -gt 0 -and -not $dstText.EndsWith("`n")) { $add += $nl }
+        $add += $nl + '# 執行時短命狀態（update-template 補上；理由見模板的 .gitignore）' + $nl
+        foreach ($l in $giMissing) { $add += $l + $nl }
+        [System.IO.File]::AppendAllText($giDst, $add, $utf8)
+        Write-Host "   ✚ 已補 $($giMissing.Count) 行：$($giMissing -join ' ')" -ForegroundColor Cyan
+    }
+}
+
 Write-Host "▶ MERGE 骨架目錄（保留執行資料）..." -ForegroundColor Green
 # 只補骨架檔（README.md / _*.md / .gitkeep）與目錄結構。
 #
@@ -230,6 +267,8 @@ if (-not $DryRun) {
     Write-Host ""
     Write-Host "👉 下一步：到目標專案開 Claude Code 跑一次 /task-status" -ForegroundColor Cyan
     Write-Host "   若 wbs.md 還是舊版面（沒有「現況」區），它會提議轉換成新版面（一次性遷移，長內容搬出不丟資料）"
+    Write-Host "   專案圖解在開 session 時自動產生，/task-status 最後一行印畫面路徑；"
+    Write-Host "   沒有架構文件時它會多印一行提示，說明怎麼請 documentation-specialist 反推草稿"
 }
 Write-Host ""
 

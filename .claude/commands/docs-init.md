@@ -83,6 +83,9 @@ description: 依開發情境產出規格文件（demo / mvp / full）。demo 產
 
 **產出**：`docs/prd.md`
 
+demo 沒有架構文件，所以 WBS 的模組欄一律 `—`，之後的專案圖解只顯示任務圖、沒有專案地圖。
+要有地圖就升級到 mvp。
+
 ```markdown
 # PRD — {專案名稱}
 
@@ -146,7 +149,8 @@ description: 依開發情境產出規格文件（demo / mvp / full）。demo 產
 
 ## 2. 架構總覽（來自 05）
 - 系統 Context（C4 Level 1）
-- 主要元件與職責
+- 容器圖（mermaid，照 05 的 5.1）
+- 模組表（照 05 的 5.5）
 - 關鍵技術選型
 
 ## 3. API 設計（來自 06）
@@ -161,6 +165,10 @@ description: 依開發情境產出規格文件（demo / mvp / full）。demo 產
 
 要升級為完整文件集請執行 `/docs-init --full`
 ```
+
+「2. 架構總覽」的容器圖與模組表**格式照 `.claude/skills/project-docs/templates/05_architecture_and_design_document.md`
+的 5.1 與 5.5（唯一來源，勿在此重述欄位）**。這兩塊不能省：WBS 的模組欄填的就是這張模組表的 id，
+專案圖解也從這裡畫地圖。
 
 #### 路徑 C：full 模式
 

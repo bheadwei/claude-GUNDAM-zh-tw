@@ -1,12 +1,19 @@
 # Hooks 回歸測試
 
 ```bash
-bash .claude/hooks/tests/run-tests.sh
+bash .claude/hooks/tests/run-tests.sh                    # 整套
+bash .claude/hooks/tests/run-tests.sh --changed <起點>   # 依改動挑節；判成整套時 worktree 裡要加 --full
+bash .claude/hooks/tests/run-tests.sh overview post-write   # 只跑標題含關鍵字的節
+bash .claude/hooks/tests/run-tests.sh --list             # 列出所有節；任何形式加 --dry-run 只印會跑哪些節
 ```
 
-812 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。
-**Windows Git Bash 上約需 12 分鐘**（2026-09-17 實測 356 案例；2026-09-09 的 320 案例
-是 5 分鐘，案例增加時這個數字會繼續往上）——大量 `bash` + `jq` 子行程，
+991 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。只跑部分節時結尾寫
+「部分執行（N 節／共 M 節，不是整套）… 通過數 X」——刻意不用「通過 X」，CI 與 `check-counts.sh --tests`
+的 regex 抓不到。改動檔對應到哪些節的規則只寫在 `run-tests.sh` 的 `_changed_rule`（唯一來源）；
+什麼時候跑整套見 `commands/verify.md` 步驟 4。在 worktree 裡不帶參數跑整套會被 `full-suite-gate` 擋一次。
+
+**整套在 Windows Git Bash 上約需 50 分鐘**（2026-11-04 實測 869 案例 51 分鐘；2026-09-17 的
+356 案例是 12 分鐘，案例增加時這個數字會繼續往上）——大量 `bash` + `jq` 子行程，
 process spawn 是主要成本。**看起來像掛住其實只是慢**：用背景執行並把輸出重導到檔案，
 不要 `| tail`（管線會把輸出憋到最後，中途看不到進度，也就看不出它到底跑到哪）。
 

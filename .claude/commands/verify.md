@@ -28,7 +28,7 @@ description: 對當前程式碼庫狀態執行全面驗證檢查。
 | 情境 | 跑什麼 | `Tests:` 欄註明 |
 |---|---|---|
 | `quick` profile | 只跑這次改到的測試檔（見「參數」） | — |
-| **在 worktree 裡**（判斷方式見「標記與歸檔」） | 只跑**這條線改到的**測試（找法見下） | `本線相關，整套留給合併後` |
+| **在 worktree 裡**（判斷方式見「標記與歸檔」） | 只跑**這條線改到的**測試（找法見下）。`pre-pr` 也一樣 | `本線相關，整套留給合併後` |
 | 主 checkout、`.merge-pending` 非空、判為**中間合併** | 只跑這次合併帶進來的檔案對應的測試（見「合併驗證關卡」） | `本次合併相關，整套留給最後一個合併` |
 | 其他（主 checkout） | 整套 | — |
 
@@ -47,6 +47,40 @@ else { git diff --name-only "$START"; git ls-files --others --exclude-standard; 
 印出 `START: unknown`（取不到分支起點，例如主 checkout 是 detached HEAD）→ **跑整套**
 （指令尾端加 `# full-suite`，否則 `full-suite-gate` 會擋一次），`Tests:` 欄註明「取不到分支起點，改跑整套」。
 寧可多跑，不要因為起點不明而少跑。這些指令都帶了路徑，`full-suite-gate` 不攔，不需要 `# full-suite`。
+
+#### 唯一的例外：模板 repo 自己的 hook 測試依改動挑節
+
+**只在模板 repo 本身適用**，判斷：根目錄有 `scripts/sync-ui-sources.sh`（與 `session-start.sh` 判斷
+「這是模板 repo」用同一個檔；`copy-template` 不帶根目錄的 `scripts/`，新專案永遠不成立）。
+**新專案一律照上表**——一般專案的整套幾十秒，依改動挑反而會漏測。
+這裡例外是因為模板 repo 的測試是 hook 測試（`.claude/hooks/tests/run-tests.sh`）＋`check-counts.sh`，
+整套在 Windows/Git Bash 上約 50 分鐘。
+
+| 情境 | 跑什麼 |
+|---|---|
+| 主 checkout 的 `pre-pr` | `bash .claude/hooks/tests/run-tests.sh` 整套 |
+| 其他所有情境（worktree、中間合併、最後一個合併） | `bash .claude/hooks/tests/run-tests.sh --changed <起點>`：worktree 用上方的分支起點；中間合併用 `ORIG_HEAD`（cherry-pick 用 `'HEAD@{1}'`）；主 checkout 其他情境用下方的起點 |
+
+`check-counts.sh` 每次都跑。改動檔→節的對應表只寫在 `run-tests.sh` 的 `_changed_rule`。
+
+主 checkout 的起點＝有合併時是**本輪第一個合併執行前的 HEAD**（`merge-gate.sh` 在合併前記下），
+否則是**分支起點**：
+
+```bash
+TD="$(git rev-parse --show-toplevel)/.claude/taskmaster-data"
+if [ -e "$TD/.merge-round-start" ]; then S=$(head -1 "$TD/.merge-round-start")
+else
+  DEF=$(git symbolic-ref -q --short refs/remotes/origin/HEAD | sed 's@^origin/@@')
+  S=$(git merge-base HEAD "${DEF:-main}" 2>/dev/null)
+  # 站在預設分支上（分支起點就是 HEAD）→ 從上一次涵蓋過的驗證點算
+  [ "$S" = "$(git rev-parse HEAD)" ] && S=$(sed -nE 's/^sha=([0-9a-f]+) result=PASS clean=yes suite=(full|changed) .*/\1/p' "$TD/.last-verify" 2>/dev/null)
+fi
+[ -n "$S" ] && git merge-base --is-ancestor "$S" HEAD 2>/dev/null && echo "START: $S" || echo "START: unknown"
+```
+
+`START: unknown` → 跑整套。`--changed` 印「→ 整套」（或跑整套的任何情境）→ **放背景執行**：
+Bash 工具單次最長 10 分鐘，整套約 50 分鐘。在 worktree 裡它會拒絕（exit 3），確定要跑才加 `--full`。
+印「不跑」就只跑 `check-counts.sh`。主 checkout 依改動挑、起點不是 `unknown` 時，「記下這次驗證」的 `suite` 填 `changed`。
 
 - 報告通過/失敗數量，失敗只附摘要——不要把整份輸出讀進來（格式見 `testing-standards` skill 的「執行測試」）
 - 報告覆蓋率：只對照**這次改到的檔**（門檻見 `testing-standards` skill）
@@ -96,19 +130,20 @@ LV="$TD/.last-verify"
 SCOPE=(':(top)' ':(top,exclude).claude/taskmaster-data' ':(top,exclude).claude/context' ':(top,exclude).claude/coordination' ':(top,exclude).claude/qa-history')
 CLEAN=yes
 [ -n "$(git status --porcelain -- "${SCOPE[@]}")" ] && CLEAN=no
-RESULT=<PASS|FAIL> SUITE=<full|partial>
+RESULT=<PASS|FAIL> SUITE=<full|changed|partial>
 printf 'sha=%s result=%s clean=%s suite=%s secrets=%s spec=%s profile=%s at=%s\n' \
   "$(git rev-parse HEAD)" "$RESULT" "$CLEAN" "$SUITE" <yes|no> <yes|no> <profile> \
   "$(date '+%Y-%m-%dT%H:%M')" > "$LV"
-[ "$RESULT $CLEAN $SUITE" = "PASS yes full" ] && echo "CLOSE-ROUND: yes"
+case "$RESULT $CLEAN $SUITE" in "PASS yes full"|"PASS yes changed") echo "CLOSE-ROUND: yes" ;; esac
 ```
 
-印出 `CLOSE-ROUND: yes` → 接著**單獨**跑一條 `rm -f .claude/taskmaster-data/.merge-round-open`
+印出 `CLOSE-ROUND: yes` → 接著**單獨**跑 `rm -f .claude/taskmaster-data/.merge-round-open`，
+再**單獨**跑 `rm -f .claude/taskmaster-data/.merge-round-start`
 （從 repo 根目錄、字面路徑——含 `$` 或混了其他指令的 `rm`，`rm-state-gate` 會改成問使用者）。
 
 | 欄 | 填什麼 |
 |---|---|
-| `suite` | 步驟 4 跑了整套才填 `full`；`quick`、worktree 內、中間合併一律 `partial` |
+| `suite` | 步驟 4 跑了整套才填 `full`；模板 repo 主 checkout 依改動挑、起點不是 `unknown` 填 `changed`（見步驟 4 的例外）；`quick`、worktree 內、中間合併一律 `partial`。`/pr` 只沿用 `full` |
 | `secrets` | 步驟 7 跑了而且沒找到秘密才填 `yes` |
 | `spec` | 本次跑了 `spec-convergence`（最後一個合併、`pre-pr`）才填 `yes` |
 
@@ -125,6 +160,24 @@ printf 'sha=%s result=%s clean=%s suite=%s secrets=%s spec=%s profile=%s at=%s\n
 後三個**進版控**，少排除任何一個，agent 一寫報告就讓 `clean=no`，第 0 步永遠過不了、重跑也沒用。
 
 清掉 `.merge-round-open` 的理由：整套在乾淨工作區通過，本輪合併的結果就被整套涵蓋了（旗標見「中間合併：快檢」）。
+
+## 寫回 plan 的「計畫 vs 實際」
+
+緊接在「記下這次驗證」之後、**歸檔 plan 之前**（PASS 或 FAIL 都做；worktree 裡也做，寫的是 worktree 那份 plan）。
+對應的 plan 照下方「Plan 驗收標準比對」的找法（`.current-task` → `plans/<值>.md` 或 `<值>-*.md`）；
+找不到 plan 就跳過這一步，在輸出寫一句「無對應 plan，未寫回計畫 vs 實際」。
+
+```bash
+bash .claude/scripts/overview.sh --actual .claude/taskmaster-data/plans/<plan 檔名> --result <PASS|FAIL> --reason "<一句>"
+```
+
+- `--reason` 只有 FAIL 要帶，寫**一句**使用者看得懂的失敗原因（例：`2 個測試失敗：token 過期判斷用了本地時區`）；
+  FAIL 沒帶 reason 腳本會 exit 2、不寫
+- 腳本只改 plan 裡 `<!-- overview:actual:start -->` 到 `end` 之間的文字（再跑是取代），並重產專案圖解。
+  區塊格式見 `plan-format` skill 的「計畫 vs 實際」節（唯一來源）
+- 印出 `已寫入「計畫 vs 實際」…` 就完成，**不要 Read 剛寫的區塊來檢查**；之後要 Edit 這份 plan（勾 checklist、
+  歸檔改 frontmatter）前照常先重讀，因為檔案剛被腳本改過
+- exit 非 0 → 把它印的原因放進驗證報告，**不因此把驗證結果改成 FAIL**（這是圖解，不是驗證本身）
 
 ## Plan 驗收標準比對
 
@@ -209,7 +262,7 @@ touch "$(git rev-parse --show-toplevel)/.claude/taskmaster-data/.merge-round-ope
 然後**單獨**跑 `rm -f .claude/taskmaster-data/.merge-pending`（從 repo 根目錄、字面路徑，`rm-state-gate`
 才會自動放行）。先 touch 後 rm：中途斷掉的話留下的是「旗標在、清單也在」，往多驗的方向錯。
 
-`.merge-round-open` 由「記下這次驗證」在整套乾淨通過時清掉；它存在就讓「標記與歸檔」第 0 步生效。
+`.merge-round-open` 由「記下這次驗證」在整套（模板 repo 的 `changed` 也算）乾淨通過時清掉；它存在就讓「標記與歸檔」第 0 步生效。
 
 > **為什麼中間可以只快檢**：每條線在 worktree 裡已經跑過自己的相關測試、每階段過了兩道審查；
 > 合併新增的只有「兩邊碰面」的互動。快檢抓得到碰在同一批檔案上的互動；碰在別處的，
@@ -218,7 +271,7 @@ touch "$(git rev-parse --show-toplevel)/.claude/taskmaster-data/.merge-round-ope
 
 ### 最後一個合併：整套＋收斂
 
-步驟 1-7 全做（步驟 4 跑整套），另外：
+步驟 1-7 全做（步驟 4 跑整套；模板 repo 照步驟 4 的例外，從本輪起點依改動挑），另外：
 
 1. **比對本輪每一個已合併任務的 plan 驗收標準**（**有 plan 才做**）—— 不只當前 `.current-task`。
    平行開發合了 N 個分支就有 N 份 plan，每一份的「驗收標準（整體）」都要過。
@@ -359,7 +412,7 @@ commit。本輪 ≤4 個合併最多 2 步。**先在 `ROUND_BASE` 跑一次那�
    SHA=$(sed -n 's/^sha=\([0-9a-f]*\) .*/\1/p' "$LV" 2>/dev/null)
    if [ ! -e "$TD/.merge-round-open" ] && [ ! -s "$TD/.merge-pending" ]; then
      echo "FULL-COVERED: n/a（本輪沒有未涵蓋的合併）"
-   elif [ -n "$SHA" ] && grep -q ' result=PASS clean=yes suite=full ' "$LV" 2>/dev/null \
+   elif [ -n "$SHA" ] && grep -qE ' result=PASS clean=yes suite=(full|changed) ' "$LV" 2>/dev/null \
       && git merge-base --is-ancestor "$SHA" HEAD 2>/dev/null \
       && D=$(git diff --name-only "$SHA" HEAD -- "${SCOPE[@]}" 2>/dev/null) && [ -z "$D" ]; then
      echo "FULL-COVERED: yes"
@@ -438,7 +491,8 @@ commit。本輪 ≤4 個合併最多 2 步。**先在 `ROUND_BASE` 跑一次那�
 ```
 
 - **補登為已完成**（Recommended）— 追加一行到 `wbs.md` 的當前里程碑節，狀態直接標 `✅ MM-DD`，
-  負責欄填 `—`、連結欄填 `[計畫](plans/archive/<filename>)`，並重算「現況」區（版面見 `.claude/templates/wbs.template.md`）
+  模組欄與負責欄填 `—`、連結欄填 `[計畫](plans/archive/<filename>)`，並重算「現況」區（版面見 `.claude/templates/wbs.template.md`）。
+  寫入前先讀該節表頭，依該表頭的欄位寫；表頭沒有「模組」欄就不寫那一格（範本第 2 節「依表頭寫入」）
 - **不用，這是一次性的** — 不動 WBS
 - **補登並順便加後續任務** — 補登後接 `/task-add` 流程
 
@@ -450,7 +504,8 @@ $ARGUMENTS 可以是：
 - `quick` - 建置 + 型別 + **只跑這次改到的測試檔**（`git diff --name-only` 裡的測試檔，以及和被改檔案對應的測試檔）。quick 要求寫的那 1 個 happy-path 測試就是在這裡被執行；一個都找不到就在報告寫 `Tests: none` 並提醒補上（純文案／樣式改動除外）
 - `full` - 所有檢查（預設）
 - `pre-commit` - 與 commit 相關的檢查
-- `pre-pr` - 完整檢查加安全掃描，**再跑規格收斂的 A+B**（載入 `spec-convergence` skill；跳過檢查 C，太慢）
+- `pre-pr` - 完整檢查加安全掃描，**再跑規格收斂的 A+B**（載入 `spec-convergence` skill；跳過檢查 C，太慢）。
+  **在 worktree 裡跑時不跑整套**（照步驟 4 的 worktree 那列），輸出的 `Tests:` 要寫明「worktree 內，這次沒跑整套」
 
 ## 自動 Profile 選擇（依任務模式）
 
@@ -480,4 +535,5 @@ $ARGUMENTS 可以是：
 | `.pitfall-seen` | 不需清 —— 它由 `session-start.sh` 每個 session 重置 |
 | `.report-expectations.jsonl` | 不需清 —— 由稽核器自己按 deadline 汰除 |
 | `.last-verify` | 不需清 —— 它綁 HEAD sha，程式碼一動就自動失效。清掉反而讓最常見的「`/verify` → 標 ✅ → `/pr`」必須重跑整套 |
-| `.merge-round-open` | **不要手動清** —— 只由「記下這次驗證」在整套乾淨通過時清。手動刪等於跳過第 0 步 |
+| `.merge-round-open` | **不要手動清** —— 只由「記下這次驗證」在整套（模板 repo 的 `changed` 也算）乾淨通過時清。手動刪等於跳過第 0 步 |
+| `.merge-round-start` | **不要手動清** —— 跟 `.merge-round-open` 同時清（`CLOSE-ROUND: yes`）。它是 `merge-gate.sh` 在本輪第一個合併前記下的起點 |

@@ -5,7 +5,16 @@
 # 誤擋（所有程式碼寫入被 deny）或靜默失效（該擋沒擋，就像當初 .current-task-mode
 # 沒人清那個 bug，壞了半年沒發現）。這些測試把每個分支釘住。
 #
-# 用法：bash .claude/hooks/tests/run-tests.sh
+# 用法：
+#   bash .claude/hooks/tests/run-tests.sh                    整套（何時跑見 commands/verify.md 步驟 4）
+#   bash .claude/hooks/tests/run-tests.sh <關鍵字>...        只跑標題含任一關鍵字的節（不分大小寫）
+#                                                            例：run-tests.sh overview post-write
+#   bash .claude/hooks/tests/run-tests.sh --changed <起點>   依 git diff --name-only <起點>（含未追蹤檔）挑節，
+#                                                            對應表見下方 _changed_rule（唯一來源）
+#   bash .claude/hooks/tests/run-tests.sh --changed -        改動清單從 stdin 讀（一行一個 repo 相對路徑）
+#   bash .claude/hooks/tests/run-tests.sh --list             列出所有節
+#   加 --dry-run                                             只印會跑哪些節，不跑
+#   加 --full                                                --changed 判成整套時照跑（worktree 裡不加就拒絕，exit 3）
 # 需求：bash + jq（無 jq 時 hooks 會軟降級，測試會提示跳過相關案例）
 #
 # 隔離：所有測試在 mktemp 沙箱內跑（CLAUDE_PROJECT_DIR 指向沙箱），
@@ -16,6 +25,238 @@ set -uo pipefail
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PASS=0
 FAIL=0
+
+# ---------------------------------------------------------------- 選節
+#
+# 為什麼要：整套在 Windows/Git Bash 上要跑約 50 分鐘（開一個程序 ~0.14 秒，跑一次
+# post-write.sh ~3 秒），只改一支 hook 也跑整套，合併後的 /verify 就卡在這裡。
+#
+# 為什麼不是讓 section() 設旗標：節的本體是直接寫在頂層的指令，旗標擋不住它們執行，
+# 只會讓 ok/ng 不計數——該開的程序一個也沒省。所以選節時改成讀本檔、按 `section "` 開頭
+# 的行切塊：選中的塊 eval，沒選中的塊只取出**頂層的函式定義與純變數指派**。
+# 後面的節會用前面節定義的輔助函式（fs、gbo、mk_handoff…）與路徑變數（MP_FILE、AG_LOG…），
+# 整塊跳過會讓它們壞掉；而只取定義不會開任何程序，也不會動到沙箱。
+#
+# 單獨跑某一節而它依賴前面節留下的**檔案狀態**（不是函式或變數）時會紅——方向是吵，不是靜默；
+# 修法是讓那一節自己 reset／setup。整套模式（不帶參數）完全不經過這段，行為與以往相同。
+
+# 改動檔 → 要跑的節（唯一來源；commands/verify.md 步驟 4 依改動挑節時用的就是這張表）
+#
+# 由上往下，第一個符合的規則生效。輸出：
+#   ALL       跑整套
+#   NONE      不跑 hook 測試（/verify 只跑 check-counts）
+#   =<字串>   標題或節內文提到這個字串的節——新增的節只要寫到那支 hook 的檔名就自動被挑到，
+#             不必回來改這張表
+#   SELF      本檔：用 `git diff -U0` 的行號找出改到哪幾節，只跑那幾節（加上呼叫了那幾節所
+#             定義函式的節）。改到第一個 section 之前的框架（含 section() 與共用函式）或結尾
+#             統計 → ALL。改動清單從 stdin 來（沒有起點可比）→ ALL
+# 只要有一個檔是 ALL 就跑整套；其餘結果取聯集，再加上「全體 hooks」那節（語法檢查）。
+_changed_rule() {
+    case "$1" in
+        .claude/hooks/tests/run-tests.sh) echo SELF ;;
+        # 共用程式：影響面從檔名看不出來
+        .claude/hooks/lib/*|.claude/settings.json) echo ALL ;;
+        # 測試會讀進沙箱的非程式檔——必須排在下面的 *.md 之前
+        .claude/skills/using-taskmaster/SKILL.md)            echo "=using-taskmaster" ;;
+        .claude/coordination/handoffs/_HANDOFF_TEMPLATE.md)  echo "=_HANDOFF_TEMPLATE.md" ;;
+        .claude/ui/_sources.json)                            echo "=_sources.json" ;;
+        scripts/copy-template.sh)                            echo "=copy-template.sh" ;;
+        .claude/templates/overview/*)                        echo "=overview.sh" ;;
+        # hook 與被測的腳本：跑提到它的節
+        .claude/hooks/*.sh|.claude/scripts/overview.sh)      echo "=${1##*/}" ;;
+        # 不被 hook 測試執行的東西
+        *.md|docs/*|workshop/*|.claude/templates/*|.claude/ui/*|.claude/skills/*|.claude/output-styles/*) echo NONE ;;
+        .claude/context/*|.claude/coordination/*|.claude/qa-history/*|.claude/taskmaster-data/*|.claude/logs/*) echo NONE ;;
+        .claude/scripts/*|scripts/*|.claude/tests/skill-compliance/*|.github/*|.claude/statusline*.sh) echo NONE ;;
+        .gitignore|.worktreeinclude|.mcp.json.*|LICENSE)     echo NONE ;;
+        # 對應不到的：保守跑整套
+        *) echo ALL ;;
+    esac
+}
+
+_SEL_KEYS=() _SEL_CHANGED="" _SEL_DRY=0 _SEL_LIST=0 _SEL_MODE=0 _SEL_FULL=0
+_root="$(cd "$HOOK_DIR/../.." && pwd)"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --changed)
+            [ $# -ge 2 ] || { echo "✗ --changed 要帶起點（commit／分支），或 - 從 stdin 讀清單" >&2; exit 2; }
+            _SEL_CHANGED="$2"; shift 2 ;;
+        --dry-run) _SEL_DRY=1; shift ;;
+        --full)    _SEL_FULL=1; shift ;;
+        --list)    _SEL_LIST=1; shift ;;
+        -*) echo "✗ 不認得的選項：$1（用法見本檔開頭）" >&2; exit 2 ;;
+        *)  _SEL_KEYS+=("$1"); shift ;;
+    esac
+done
+if [ -n "$_SEL_CHANGED" ] && [ ${#_SEL_KEYS[@]} -gt 0 ]; then
+    echo "✗ --changed 與節關鍵字不能同時用" >&2; exit 2
+fi
+
+_SEC_TITLES=() _SEC_BODIES=() _SEC_ON=() _SEC_START=() _EPI_LINE=0
+_load_sections() {
+    local __l __t="" __b="" __in=0 __n=0
+    while IFS= read -r __l || [ -n "$__l" ]; do
+        __n=$((__n + 1))
+        if [[ $__l == 'section "'* ]]; then
+            [ "$__in" = 1 ] && { _SEC_TITLES+=("$__t"); _SEC_BODIES+=("$__b"); }
+            _SEC_START+=("$__n")
+            __t=${__l#section \"}; __t=${__t%\"*}; __b=""; __in=1
+            continue
+        fi
+        [ "$__l" = finish_tests ] && { _EPI_LINE=$__n; break; }
+        [ "$__in" = 1 ] && __b+="$__l"$'\n'
+    done < "${BASH_SOURCE[0]}"
+    [ "$_EPI_LINE" -gt 0 ] || _EPI_LINE=$((__n + 1))
+    [ "$__in" = 1 ] && { _SEC_TITLES+=("$__t"); _SEC_BODIES+=("$__b"); }
+    local __i; for __i in "${!_SEC_TITLES[@]}"; do _SEC_ON[$__i]=0; done
+}
+
+# _sel_title <關鍵字> —— 標題含關鍵字（不分大小寫）的節全部選上；一個都沒有回 1
+_sel_title() {
+    local __i __hit=1 __k="${1,,}"
+    for __i in "${!_SEC_TITLES[@]}"; do
+        [[ ${_SEC_TITLES[$__i],,} == *"$__k"* ]] && { _SEC_ON[$__i]=1; __hit=0; }
+    done
+    return $__hit
+}
+
+# _sel_mention <字串> —— 標題或內文提到字串的節全部選上；一個都沒有回 1
+_sel_mention() {
+    local __i __hit=1
+    for __i in "${!_SEC_TITLES[@]}"; do
+        case "${_SEC_TITLES[$__i]}"$'\n'"${_SEC_BODIES[$__i]}" in
+            *"$1"*) _SEC_ON[$__i]=1; __hit=0 ;;
+        esac
+    done
+    return $__hit
+}
+
+# _sel_self_diff <起點> —— 本檔被改了：依 `git diff -U0` 的新檔行號選出改到的節。
+# 回 1 = 判斷不了或改到框架／結尾統計 → 呼叫端當成整套；原因放 _SELF_WHY。
+# 被改的節若定義了輔助函式，呼叫那些函式的節也一起選（後面的節會共用前面節的 helper；
+# 寧可多挑——判斷「這次改的是不是 helper 本體」不值得那份複雜度）。
+_sel_self_diff() {
+    local __d __l __s __e __i __end __first="${_SEC_START[0]:-0}" __re='^@@ -[0-9,]+ \+([0-9]+)(,([0-9]+))? @@'
+    local -a __hit=()
+    _SELF_WHY=""
+    __d=$(git -C "$_root" diff -U0 --no-renames "$1" -- .claude/hooks/tests/run-tests.sh 2>/dev/null) \
+        || { _SELF_WHY="取不到本檔的 diff"; return 1; }
+    while IFS= read -r __l; do
+        [[ $__l =~ $__re ]] || continue
+        __s=${BASH_REMATCH[1]}; __e=${BASH_REMATCH[3]:-1}
+        if [ "$__e" -eq 0 ]; then __e=$__s; else __e=$((__s + __e - 1)); fi   # 純刪除：落在第 s 行之後
+        if [ "$__s" -lt "$__first" ] || [ "$__e" -ge "$_EPI_LINE" ]; then
+            _SELF_WHY="改到第一節之前的框架或結尾統計（第 $__s 行）"; return 1
+        fi
+        for __i in "${!_SEC_START[@]}"; do
+            __end=$(( ${_SEC_START[$((__i + 1))]:-$_EPI_LINE} - 1 ))
+            [ "$__s" -le "$__end" ] && [ "$__e" -ge "${_SEC_START[$__i]}" ] && __hit[$__i]=1
+        done
+    done <<< "$__d"
+    [ ${#__hit[@]} -gt 0 ] || { _SELF_WHY="diff 裡沒有可對應的行"; return 1; }
+    local __fn __j
+    for __i in "${!__hit[@]}"; do
+        _SEC_ON[$__i]=1
+        printf '  .claude/hooks/tests/run-tests.sh → 改到「%s」\n' "${_SEC_TITLES[$__i]}"
+        while IFS= read -r __l; do
+            [[ $__l =~ ^([A-Za-z_][A-Za-z0-9_]*)\(\) ]] || continue
+            __fn=${BASH_REMATCH[1]}
+            for __j in "${!_SEC_TITLES[@]}"; do
+                [ "$__j" = "$__i" ] && continue
+                [[ ${_SEC_BODIES[$__j]} =~ (^|[^A-Za-z0-9_-])$__fn([^A-Za-z0-9_-]|$) ]] && _SEC_ON[$__j]=1
+            done
+        done <<< "${_SEC_BODIES[$__i]}"
+    done
+    return 0
+}
+
+_in_worktree() {
+    case "$(git -C "$_root" rev-parse --git-dir 2>/dev/null)" in */worktrees/*) return 0 ;; esac
+    return 1
+}
+
+if [ "$_SEL_LIST" = 1 ]; then
+    _load_sections
+    for _si in "${!_SEC_TITLES[@]}"; do printf '%2d  %s\n' "$((_si + 1))" "${_SEC_TITLES[$_si]}"; done
+    exit 0
+fi
+
+if [ -n "$_SEL_CHANGED" ]; then
+    _load_sections
+    if [ "$_SEL_CHANGED" = - ]; then
+        _files=$(cat)
+    else
+        if ! _files=$(git -C "$_root" -c core.quotepath=off diff --name-only --no-renames "$_SEL_CHANGED" -- 2>/dev/null); then
+            echo "⚠ 取不到改動清單（起點：$_SEL_CHANGED）→ 跑整套"
+            _files="__UNKNOWN__"
+        else
+            _files+=$'\n'$(git -C "$_root" -c core.quotepath=off ls-files --others --exclude-standard 2>/dev/null)
+        fi
+    fi
+    _all="" _none=0 _nfiles=0
+    while IFS= read -r _f; do
+        _f=${_f%$'\r'}
+        [ -n "$_f" ] || continue
+        _nfiles=$((_nfiles + 1))
+        if [ "$_f" = __UNKNOWN__ ]; then _all="取不到改動清單"; continue; fi
+        _r=$(_changed_rule "$_f")
+        case "$_r" in
+            SELF) if [ "$_SEL_CHANGED" = - ]; then
+                      printf '  %s → 整套（清單從 stdin 來，沒有起點可比行號）\n' "$_f"; _all="${_all:-$_f}"
+                  elif ! _sel_self_diff "$_SEL_CHANGED"; then
+                      printf '  %s → 整套（%s）\n' "$_f" "$_SELF_WHY"; _all="${_all:-$_f}"
+                  fi ;;
+            ALL)  printf '  %s → 整套\n' "$_f"; _all="${_all:-$_f}" ;;
+            NONE) _none=$((_none + 1)) ;;
+            =*)   if _sel_mention "${_r#=}"; then printf '  %s → 提到「%s」的節\n' "$_f" "${_r#=}"
+                  else printf '  %s → 沒有節提到「%s」，只跑語法檢查\n' "$_f" "${_r#=}"; fi ;;
+        esac
+    done <<< "$_files"
+    [ "$_none" -gt 0 ] && printf '  （另有 %d 個檔不需要 hook 測試：文件／範本／執行時產物）\n' "$_none"
+
+    if [ -n "$_all" ]; then
+        printf '依改動挑節：%s → 整套\n' "$_all"
+        # worktree 裡不默默跑整套：N 條線各跑一份就是 full-suite-gate 要擋的事故，
+        # 而 --changed 帶了參數，閘門從指令上看不出它會變成整套
+        if [ "$_SEL_FULL" != 1 ] && _in_worktree; then
+            echo "✗ 在 worktree 裡，不自動跑整套（Windows 上約 50 分鐘）。"
+            echo "  確定要跑：同一條指令加 --full，放背景執行（full-suite-gate 會再擋一次，重試即放行）。"
+            echo "  或者改成只跑幾節：run-tests.sh <節關鍵字>...（--list 看全部）"
+            [ "$_SEL_DRY" = 1 ] && exit 0
+            exit 3
+        fi
+        [ "$_SEL_DRY" = 1 ] && exit 0
+        _SEC_ON=()                                    # 走下面的整套路徑
+    elif [ "$_nfiles" -eq 0 ]; then
+        echo "依改動挑節：沒有改動檔 → 不跑 hook 測試"
+        exit 0
+    elif [ "$_nfiles" -eq "$_none" ]; then
+        printf '依改動挑節：%d 個改動檔都不需要 hook 測試 → 不跑（只跑 check-counts）\n' "$_nfiles"
+        exit 0
+    else
+        _sel_title "全體 hooks" || { echo "✗ 找不到「全體 hooks」那節（改了標題要同步這裡）" >&2; exit 2; }
+        _SEL_MODE=1
+    fi
+elif [ ${#_SEL_KEYS[@]} -gt 0 ]; then
+    _load_sections
+    _miss=()
+    for _k in "${_SEL_KEYS[@]}"; do _sel_title "$_k" || _miss+=("$_k"); done
+    if [ ${#_miss[@]} -gt 0 ]; then
+        echo "✗ 沒有任何節的標題含：${_miss[*]}（--list 看全部）" >&2; exit 2
+    fi
+    _SEL_MODE=1
+fi
+
+_SEC_NRUN=0
+if [ "$_SEL_MODE" = 1 ]; then
+    for _si in "${!_SEC_ON[@]}"; do [ "${_SEC_ON[$_si]}" = 1 ] && _SEC_NRUN=$((_SEC_NRUN + 1)); done
+    printf '部分執行：%d 節／共 %d 節\n' "$_SEC_NRUN" "${#_SEC_TITLES[@]}"
+    for _si in "${!_SEC_ON[@]}"; do [ "${_SEC_ON[$_si]}" = 1 ] && printf '  - %s\n' "${_SEC_TITLES[$_si]}"; done
+    [ "$_SEL_DRY" = 1 ] && exit 0
+elif [ "$_SEL_DRY" = 1 ]; then
+    printf '整套：%d 節\n' "$(grep -c '^section "' "${BASH_SOURCE[0]}")"
+    exit 0
+fi
 
 if ! command -v jq >/dev/null 2>&1; then
     echo "✗ 找不到 jq — hooks 會軟降級成不攔截，測試無意義。請先安裝 jq。"
@@ -80,6 +321,61 @@ w()  { printf '{"tool_name":"Write","tool_input":{"file_path":"%s"}}' "$1"; }
 e()  { printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$1"; }
 b()  { jq -nc --arg c "$1" '{tool_name:"Bash",tool_input:{command:$c}}'; }
 p()  { jq -nc --arg t "$1" '{prompt:$t}'; }
+
+# 結尾統計。CI 與 check-counts --tests 用 regex 抓整套那行的「通過 N」；部分執行改用「通過數」，
+# 抓不到就不會被誤當成整套的案例數
+finish_tests() {
+    if [ "$_SEL_MODE" = 1 ]; then
+        printf '\n\033[1m部分執行（%d 節／共 %d 節，不是整套）\033[0m  通過數 %d ・ 失敗數 %d\n\n' \
+            "$_SEC_NRUN" "${#_SEC_TITLES[@]}" "$PASS" "$FAIL"
+    else
+        printf '\n\033[1m結果\033[0m  通過 %d ・ 失敗 %d\n\n' "$PASS" "$FAIL"
+    fi
+    [ "$FAIL" -eq 0 ] || exit 1
+    exit 0
+}
+
+# _hoist_defs <節內容> —— 只執行沒選中那節的頂層函式定義與純變數指派（理由見檔頭「選節」）。
+# 靠 bash 自己的 parser：把整節包成函式再 declare -f，輸出是正規化過的（頂層述句固定縮排 4 格），
+# 不必自己處理引號與 heredoc。變數只收「整行就是一個指派」的：`X=1 cmd` 這種前綴指派會執行
+# cmd，值裡有 $( 或反引號也會執行東西（`$(printf …)` 例外），兩者都不收。
+_hoist_defs() {
+    local __l __o="" __fn=0 __r
+    local __dq='"[^"]*"' __sq="'[^']*'" __bare='[^[:space:];"'"'"'`]*' __pf='\$\(printf [^`]*\)'
+    local __re="^    [A-Za-z_][A-Za-z0-9_]*=($__dq|$__sq|$__bare|$__pf);\$"
+    eval "__hoist_probe() {
+$1
+}" 2>/dev/null || { echo "✗ 節的內容解析失敗（bash -n 看看語法）" >&2; exit 2; }
+    while IFS= read -r __l; do
+        if [ "$__fn" = 1 ]; then
+            __o+="$__l"$'\n'
+            [[ $__l =~ ^\ {4}\}\;?$ ]] && __fn=0
+            continue
+        fi
+        if [[ $__l =~ ^\ {4}(function\ )?[A-Za-z_][A-Za-z0-9_]*\ \(\)\ *$ ]]; then
+            __fn=1; __o+="$__l"$'\n'; continue
+        fi
+        if [[ $__l =~ $__re ]]; then
+            __r=${__l/'$(printf '/}
+            case "$__r" in *'$('*|*'`'*) continue ;; esac
+            __o+="$__l"$'\n'
+        fi
+    done <<< "$(declare -f __hoist_probe)"
+    unset -f __hoist_probe
+    set +u; eval "$__o"; set -u
+}
+
+if [ "$_SEL_MODE" = 1 ]; then
+    for _si in "${!_SEC_TITLES[@]}"; do
+        if [ "${_SEC_ON[$_si]}" = 1 ]; then
+            section "${_SEC_TITLES[$_si]}"
+            eval "${_SEC_BODIES[$_si]}"
+        else
+            _hoist_defs "${_SEC_BODIES[$_si]}"
+        fi
+    done
+    finish_tests
+fi
 
 # =========================================================================
 section "pre-tool-use.sh — 任務模式閘門（無模式檔）"
@@ -1161,7 +1457,7 @@ expect_contains "訊息指向 testing-standards 的完整路徑"     ".claude/sk
 expect_contains "訊息給出 /deps 等的合法出口"               "# full-suite"                              "$FS_MSG"
 # worktree 裡的 /verify 不跑整套（commands/verify.md 步驟 4），訊息不能再把它列成合法出口
 expect_not_contains "訊息不再把 /verify 列為整套出口"       '`/verify`、`/deps`'                        "$FS_MSG"
-expect_contains "訊息說整套留給合併後"                      "整套留給合併回主 checkout 之後"            "$FS_MSG"
+expect_contains "訊息把「何時跑整套」指向 verify.md"       "什麼時候跑整套見 \`commands/verify.md\` 步驟 4" "$FS_MSG"
 expect_contains "訊息寫出逃生門"                            "FULL_SUITE_GATE=off"                       "$FS_MSG"
 expect_contains "vitest 給 vitest 的範例"                   "vitest run src/order/refund.test.ts"       "$(fs_msg 'npx vitest run')"
 
@@ -1186,6 +1482,21 @@ EOF')"
 expect_decision "commit 訊息提到 pytest → 放行"             allow "$(fs1 'git commit -m "test: uv run pytest 只跑相關檔"')"
 expect_decision "echo pytest → 放行"                        allow "$(fs1 'echo pytest')"
 [ -f "$FS_FLAG" ] && ng "放行的指令不寫標記" "無 .full-suite-warned" "有" || ok "放行的指令不寫標記"
+
+# ---- 本模板自己的 hook 測試：整套在 Windows 上約 50 分鐘，worktree 裡不帶參數就擋
+expect_decision "run-tests.sh 不帶參數 → 擋"                deny  "$(fs1 'bash .claude/hooks/tests/run-tests.sh')"
+expect_decision "run-tests.sh 接管線也擋"                   deny  "$(fs1 'bash .claude/hooks/tests/run-tests.sh 2>&1 | tail -5')"
+expect_decision "直接執行 ./…/run-tests.sh 也擋"            deny  "$(fs1 './.claude/hooks/tests/run-tests.sh')"
+expect_decision "run-tests.sh --changed <起點> → 放行"      allow "$(fs1 'bash .claude/hooks/tests/run-tests.sh --changed main')"
+expect_decision "run-tests.sh <節關鍵字> → 放行"            allow "$(fs1 'bash .claude/hooks/tests/run-tests.sh overview')"
+expect_decision "run-tests.sh # full-suite → 放行"          allow "$(fs1 'bash .claude/hooks/tests/run-tests.sh  # full-suite')"
+expect_decision "專案自己的 scripts/run-tests.sh 不管"      allow "$(fs1 'bash scripts/run-tests.sh')"
+expect_decision "run-tests.sh --full → 擋（它就是整套）"   deny  "$(fs1 'bash .claude/hooks/tests/run-tests.sh --changed main --full')"
+expect_decision "bash -x run-tests.sh → 擋"                 deny  "$(fs1 'bash -x .claude/hooks/tests/run-tests.sh')"
+expect_decision "nohup bash run-tests.sh … & → 擋"          deny  "$(fs1 'nohup bash .claude/hooks/tests/run-tests.sh > /tmp/t.log 2>&1 &')"
+expect_decision "引號包住的 run-tests.sh 路徑 → 擋"         deny  "$(fs1 'bash ".claude/hooks/tests/run-tests.sh"')"
+expect_decision "引號包住的路徑＋節關鍵字 → 放行"           allow "$(fs1 'bash ".claude/hooks/tests/run-tests.sh" overview')"
+expect_contains "run-tests.sh 的訊息給依改動挑節的範例"     "run-tests.sh --changed <起點>" "$(fs_msg 'bash .claude/hooks/tests/run-tests.sh')"
 
 # ---- deny-once（消耗性）
 rm -f "$FS_FLAG"
@@ -1215,6 +1526,103 @@ expect_decision "主 checkout：uv run pytest -q → 放行"      allow "$(fs 'u
 expect_decision "主 checkout：npm test → 放行"              allow "$(fs 'npm test' "$SANDBOX")"
 expect_decision "沒有 cwd 欄位 → 放行"                      allow "$(run pre-tool-use.sh "$(b 'uv run pytest -q')")"
 expect_decision "worktree 子目錄也認得是 worktree"          deny  "$(fs1 'uv run pytest -q' "$WT/src/deep")"
+reset
+
+# =========================================================================
+section "run-tests.sh 選節 — 關鍵字、依改動挑節、跳過的節只取定義"
+# =========================================================================
+# 對應表（_changed_rule）是 /verify 依改動挑節的唯一來源，挑錯的方向是「該跑的沒跑」——
+# 靜默的那種。這裡釘住每一類規則。
+#
+# hook 檔名刻意拆成兩段字串（"post-""write.sh"）：依改動挑節會選上「內文提到那支 hook」的節，
+# 本節若照寫檔名，改那支 hook 時本節也會被挑進去，而「沒有節提到」那條案例會永遠不成立。
+RT="$HOOK_DIR/tests/run-tests.sh"
+sel() { printf '%s\n' "$1" | bash "$RT" --changed - --dry-run 2>&1; }
+
+expect_contains "只改文件／範本 → 不跑 hook 測試" "不跑" \
+    "$(sel $'README.md\ndocs/a.md\n.claude/commands/verify.md\n.claude/templates/wbs.template.md\n.claude/ui/x/DESIGN.md')"
+SEL_PW=$(sel ".claude/hooks/post-""write.sh")
+expect_contains "改一支 hook → 部分執行"               "部分執行"                    "$SEL_PW"
+expect_contains "改一支 hook → 挑到標題是它的節"       "post-""write.sh — 文件影響偵測" "$SEL_PW"
+expect_contains "改一支 hook → 挑到只在內文提到它的節" "worktree 感知 — 狀態隔離邊界" "$SEL_PW"
+expect_contains "改一支 hook → 附帶全體 hooks 語法檢查" "全體 hooks — 語法與健壯性"   "$SEL_PW"
+expect_not_contains "改一支 hook → 不挑沒提到它的節"   "合併閘門 — 合併未驗證前"     "$SEL_PW"
+expect_contains "overview 的畫面範本 → 挑 overview 那節" "專案地圖" "$(sel .claude/templates/overview/index.html)"
+expect_contains "會被讀進沙箱的 .md 排在 *.md 規則之前" "session-""start.sh — 委派指示注入" \
+    "$(sel ".claude/skills/using-""taskmaster/SKILL.md")"
+expect_contains "hooks/lib/ 共用程式 → 整套"            "→ 整套" "$(sel .claude/hooks/lib/cmd-segments.sh)"
+expect_contains "run-tests.sh 本身、清單從 stdin 來 → 整套" "沒有起點可比行號" "$(sel .claude/hooks/tests/run-tests.sh)"
+expect_contains "settings.json → 整套"                  "→ 整套" "$(sel .claude/settings.json)"
+expect_contains "對應不到規則的檔 → 整套（保守）"       "→ 整套" "$(sel $'docs/a.md\n.gitattributes')"
+expect_contains "沒有節提到的 hook → 只跑語法檢查"      "只跑語法檢查" "$(sel ".claude/hooks/zz-no""body.sh")"
+expect_contains "改動清單是空的 → 不跑"                 "沒有改動檔"   "$(printf '' | bash "$RT" --changed - --dry-run 2>&1)"
+expect_contains "起點取不到 → 整套"                     "取不到改動清單" "$(bash "$RT" --changed zz-no-such-ref --dry-run 2>&1)"
+expect_contains "關鍵字選節 → 寫明部分執行節數"         "部分執行：1 節" "$(bash "$RT" '裸 cd' --dry-run 2>&1)"
+bash "$RT" zz-no-such-title --dry-run >/dev/null 2>&1
+expect_eq "關鍵字一節都對不到 → exit 2（不默默跑 0 節）" 2 "$?"
+expect_eq "--list 列出每一節" "$(grep -c '^section "' "$RT")" "$(bash "$RT" --list 2>/dev/null | grep -c .)"
+
+# 跳過的節只取定義：用一支迷你測試檔（本檔的框架＋四節）驗。
+# 節的內容用 printf 寫，不用 heredoc——heredoc 內行首的 section 會被本檔的切節當成真的節
+RT_FAKE="$SANDBOX/rtfake/tests/run-tests.sh"
+RT_PROBE="$SANDBOX/rtprobe"
+mkdir -p "${RT_FAKE%/*}" "$RT_PROBE"
+{ sed '/^section "/,$d' "$RT"
+  printf '%s\n' \
+    'section "甲 — 定義"' \
+    '# 甲-mark' \
+    'helper_a() { echo A; }' \
+    'VAR_A="va"' \
+    'HOIST_X=1 touch "$RT_PROBE/prefix-ran"' \
+    'VAR_B=$(touch "$RT_PROBE/subst-ran"; echo b)' \
+    'ok "甲"' \
+    'section "乙 — 使用"' \
+    '[ "$(helper_a 2>&1)" = A ] && ok "函式" || ng "函式" A "$(helper_a 2>&1)"' \
+    '[ "${VAR_A:-}" = va ] && ok "變數" || ng "變數" va "${VAR_A:-}"' \
+    '[ -z "${HOIST_X:-}" ] && ok "前綴指派不留下" || ng "前綴指派不留下" 空 "$HOIST_X"' \
+    'section "丙 — 獨立"' \
+    '# 丙-mark' \
+    'ok "丙"' \
+    'section "全體 hooks — 假"' \
+    'ok "全體"' \
+    'finish_tests'
+} > "$RT_FAKE"
+RT_OUT=$(RT_PROBE="$RT_PROBE" bash "$RT_FAKE" 乙 2>&1)
+expect_contains "跳過的節：後面的節拿得到它的函式與變數" "通過數 3 ・ 失敗數 0" "$RT_OUT"
+expect_contains "部分執行的結尾寫明節數"                 "部分執行（1 節／共 4 節" "$RT_OUT"
+printf '%s' "$RT_OUT" | grep -qE '通過 [0-9]' && ng "部分執行的結尾抓不到「通過 N」" "抓不到" "抓得到" \
+    || ok "部分執行的結尾抓不到「通過 N」（CI／check-counts 的 regex 不會誤讀）"
+[ -e "$RT_PROBE/prefix-ran" ] && ng "跳過的節：前綴指派的指令沒執行" "沒執行" "執行了" || ok "跳過的節：前綴指派的指令沒執行"
+[ -e "$RT_PROBE/subst-ran" ]  && ng "跳過的節：指派裡的 \$( ) 沒執行"  "沒執行" "執行了" || ok "跳過的節：指派裡的 \$( ) 沒執行"
+RT_OUT=$(RT_PROBE="$RT_PROBE" bash "$RT_FAKE" 2>&1)
+expect_contains "不帶參數照舊跑整套"                     "通過 6 ・ 失敗 0" "$RT_OUT"
+expect_not_contains "整套的結尾不寫部分執行"             "部分執行"         "$RT_OUT"
+
+# 改到本檔：用 git diff -U0 的行號只挑改到的節。迷你測試檔放進一個真的 repo
+RG="$SANDBOX/rtrepo"; RGF="$RG/.claude/hooks/tests/run-tests.sh"; RGW="$SANDBOX/rtwt"
+rgq() { git -C "$RG" -c user.email=t@t -c user.name=t "$@" >/dev/null 2>&1; }
+rg_sel() { bash "$RGF" --changed HEAD --dry-run 2>&1; }
+rg_edit() { sed -i "s/$1/$1 x/" "$RGF"; }   # 改一行
+rg_undo() { rgq checkout -- .claude/hooks/tests/run-tests.sh; }
+mkdir -p "${RGF%/*}"; cp "$RT_FAKE" "$RGF"
+rgq init -q; rgq add -A; rgq commit -qm init
+rg_edit '# 丙-mark'; RT_OUT=$(rg_sel); rg_undo
+expect_contains "改到本檔某一節 → 只挑那一節"            "改到「丙 — 獨立」" "$RT_OUT"
+expect_contains "改到本檔某一節 → 部分執行"              "部分執行"           "$RT_OUT"
+expect_not_contains "改到本檔某一節 → 不挑別的節"        "乙 — 使用"          "$RT_OUT"
+rg_edit '# 甲-mark'; RT_OUT=$(rg_sel); rg_undo
+expect_contains "改到定義 helper 的節 → 呼叫它的節一起挑" "乙 — 使用"         "$RT_OUT"
+rg_edit '# 隔離：所有測試'; RT_OUT=$(rg_sel); rg_undo
+expect_contains "改到框架（第一節之前）→ 整套"           "框架或結尾統計"     "$RT_OUT"
+
+# worktree 裡 --changed 判成整套：不默默跑，要 --full
+rgq worktree add -q "$RGW" -b rtwt
+RT_OUT=$(printf '.claude/hooks/lib/x.sh\n' | bash "$RGW/.claude/hooks/tests/run-tests.sh" --changed - 2>&1); rc=$?
+expect_eq "worktree 裡判成整套 → exit 3"                 3 "$rc"
+expect_contains "worktree 裡判成整套 → 說要加 --full"     "--full" "$RT_OUT"
+RT_OUT=$(printf '.claude/hooks/lib/x.sh\n' | RT_PROBE="$RT_PROBE" bash "$RGW/.claude/hooks/tests/run-tests.sh" --changed - --full 2>&1)
+expect_contains "加了 --full → 照跑整套"                  "通過 6 ・ 失敗 0" "$RT_OUT"
+rgq worktree remove --force "$RGW"; rm -rf "$RG" "$RGW"
 reset
 
 # =========================================================================
@@ -1456,8 +1864,25 @@ expect_decision "無關指令放行"                   allow "$(bg 'git status')
 MG_MSG=$(bg 'git merge --no-ff worktree-cart' | jq -r '.hookSpecificOutput.permissionDecisionReason')
 expect_contains "deny 訊息說中間合併只快檢"      "只快檢"       "$MG_MSG"
 expect_contains "deny 訊息說快檢通過也清清單"    "快檢通過也算" "$MG_MSG"
+expect_contains "deny 訊息把測試範圍指向 verify.md" "\`commands/verify.md\`「合併驗證關卡」" "$MG_MSG"
+
+# 本輪起點：合併**執行前**記下 HEAD（不事後讀會被 reset／rebase 改寫的 ORIG_HEAD）
+RS_FILE="$SANDBOX/.claude/taskmaster-data/.merge-round-start"
+rs_repo() { ( cd "$SANDBOX" && { [ -d .git ] || git init -q . ; } \
+    && { git rev-parse -q --verify HEAD >/dev/null || { echo x > seed && git add seed \
+         && git -c user.email=t@t -c user.name=t commit -qm init; }; } ) >/dev/null 2>&1; }
+reset; rs_repo; bg 'git merge --no-ff feature/x' >/dev/null
+expect_eq "合併前記下本輪起點（HEAD）"           "$(git -C "$SANDBOX" rev-parse HEAD 2>/dev/null)" "$(cat "$RS_FILE" 2>/dev/null)"
+reset; mkdir -p "${RS_FILE%/*}"; echo abc123 > "$RS_FILE"; bg 'git merge --no-ff feature/y' >/dev/null
+expect_eq "本輪起點已有內容不覆寫"               abc123 "$(cat "$RS_FILE" 2>/dev/null)"
+reset; bg 'git status' >/dev/null
+[ -e "$RS_FILE" ] && ng "不是合併的 git 指令不記起點" "無檔" "有" || ok "不是合併的 git 指令不記起點"
+reset; mkdir -p "$(dirname "$MP_FILE")"; echo '[merge] a' > "$MP_FILE"; bg 'git merge --no-ff feature/z' >/dev/null
+[ -e "$RS_FILE" ] && ng "被擋下的合併不記起點" "無檔" "有" || ok "被擋下的合併不記起點"
 reset
-expect_contains "合併成功訊息說最後一個才跑整套" "最後一個才跑整套" "$(pbash 'git merge --no-ff worktree-search')"
+PB_MSG=$(pbash 'git merge --no-ff worktree-search')
+expect_contains "合併成功訊息說中間只快檢" "中間的只快檢" "$PB_MSG"
+expect_contains "合併成功訊息把各驗什麼指向 verify.md" "\`commands/verify.md\`「合併驗證關卡」" "$PB_MSG"
 reset; mkdir -p "$(dirname "$MP_FILE")"; echo 'git merge --no-ff worktree-search' > "$MP_FILE"
 # 指令帶 --no-ff：關掉 MERGE_GATE 之後**下一道** lib 閘門（merge-noff-gate）
 # 仍然在線，裸的 `git merge x` 會被它擋下，那不是本案例要測的事。
@@ -2823,6 +3248,564 @@ expect_eq "docker rm 後面接 rm -rf src → ask"            ask   "$(rmd 'dock
 expect_eq "settings.json 已沒有 rm 的 ask 規則"       "" "$(jq -r '.permissions.ask // [] | map(select(startswith("Bash(rm"))) | .[]' "$HOOK_DIR/../settings.json")"
 
 # =========================================================================
+section "overview.sh — 專案地圖"
+# =========================================================================
+# 產生器在沙箱裡跑：把 overview.sh 與畫面原檔複製進沙箱的 .claude（post-write 找的是
+# $MAIN_CLAUDE/scripts/overview.sh，而沙箱就是主 checkout），改原檔的測試才不會碰到真的範本。
+OV_SRC="$HOOK_DIR/../scripts/overview.sh"
+OV_TPL="$HOOK_DIR/../templates/overview/index.html"
+OVD="$SANDBOX/.claude/taskmaster-data"
+OVO="$OVD/overview"
+
+# 背景模式不得等腳本：放一支睡 10 秒的假腳本，hook 要遠早於它返回。
+# 用獨立的子目錄，免得假腳本還在跑時後面的 reset 刪不掉它（Windows 會鎖住執行中的檔）。
+# 放在本節最前面，後面的案例跑完時它早已結束。
+T21="$SANDBOX/t21"
+mkdir -p "$T21/.claude/scripts" "$T21/.claude/taskmaster-data"
+printf '#!/bin/bash\nsleep 10\n' > "$T21/.claude/scripts/overview.sh"
+echo '{"name":"t","mode":"mvp"}' > "$T21/.claude/taskmaster-data/project.json"
+SECONDS=0
+out=$(run post-write.sh "$(w "$T21/.claude/taskmaster-data/plans/1.1-x.md")" CLAUDE_PROJECT_DIR="$T21")
+t21=$SECONDS
+[ "$t21" -lt 8 ] && ok "背景模式 hook 不等產生器（${t21} 秒，假腳本睡 10 秒）" \
+    || ng "背景模式 hook 不等產生器" "< 8 秒" "${t21} 秒"
+expect_empty "背景模式 hook 沒有輸出" "$out"
+
+ov_reset() {
+    reset
+    rm -rf "$SANDBOX/docs" "$SANDBOX/src"
+    ( cd "$SANDBOX" && { [ -d .git ] || git init -q . ; } \
+      && { git rev-parse -q --verify HEAD >/dev/null || { echo x > seed && git add seed \
+           && git -c user.email=t@t -c user.name=t commit -qm init; }; } \
+      && git worktree prune ) >/dev/null 2>&1
+    mkdir -p "$SANDBOX/.claude/scripts" "$SANDBOX/.claude/templates/overview" "$SANDBOX/docs"
+    cp "$OV_SRC" "$SANDBOX/.claude/scripts/overview.sh"
+    cp "$OV_TPL" "$SANDBOX/.claude/templates/overview/index.html"
+}
+ov()      { bash "$SANDBOX/.claude/scripts/overview.sh" "$SANDBOX" >/dev/null 2>&1; }
+ov_data() { sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$OVO/data.js" 2>/dev/null; }
+ovq()     { ov_data | jq -r "$1" 2>/dev/null; }
+ov_proj() { printf '{"name":"測試專案","mode":"%s"}\n' "${1:-mvp}" > "$OVD/project.json"; }
+# 架構文件：5.1 三個節點（web→api→db）、5.5 三列。$1 附加在 mermaid 內、$2 附加在模組表後
+# （造不一致用）；OV_ARCH_HEAD 放在檔頭（草稿標記用）
+ov_arch() {
+    {
+        echo "${OV_ARCH_HEAD:-}"
+        echo "# 架構"; echo; echo "### 5.1 容器圖"; echo; echo '```mermaid'; echo "graph TD"
+        echo '    subgraph g1["用戶端"]'; echo "        web[Web App]"; echo "    end"
+        echo '    subgraph g2["服務層"]'; echo "        api[API 服務]"; echo "    end"
+        echo '    subgraph g3["資料層"]'; echo "        db[(資料庫)]"; echo "    end"
+        echo "    web --> api"; echo "    api --> db"
+        [ -n "${1:-}" ] && echo "$1"
+        echo '```'; echo; echo "### 5.5 MVP 範圍與模組清單"; echo
+        echo "| id | 模組 | 路徑 | 對應 BDD | 職責 | API 設計 | 資料模型 |"
+        echo "|---|---|---|---|---|---|---|"
+        echo '| web | Web App | `src/web/**` | — | 前端 | — | — |'
+        echo '| api | API 服務 | `src/api/**` | — | 對外 REST | — | — |'
+        echo '| db | 資料庫 | `migrations/**` | — | 持久化 | — | — |'
+        [ -n "${2:-}" ] && echo "$2"
+    } > "$SANDBOX/docs/05_architecture.md"
+}
+# 每個參數一列「編號|模組|狀態」；OV_NOCOL=1 時用沒有模組欄的舊表頭
+ov_wbs() {
+    {
+        echo "# WBS — 測試"; echo; echo "## M1 基礎"; echo
+        if [ -n "${OV_NOCOL:-}" ]; then echo "| # | 任務 | 狀態 | 優先 |"; echo "|---|---|---|---|"
+        else echo "| # | 任務 | 模組 | 狀態 | 優先 |"; echo "|---|---|---|---|---|"; fi
+        local r id mod st
+        for r in "$@"; do
+            IFS='|' read -r id mod st <<< "$r"
+            if [ -n "${OV_NOCOL:-}" ]; then echo "| $id | 任務 $id | $st | 高 |"
+            else echo "| $id | 任務 $id | $mod | $st | 高 |"; fi
+        done
+    } > "$OVD/wbs.md"
+}
+
+ov_reset; ov_arch; ov_wbs "1.1|api|✅ 11-01"
+ov; rc=$?
+expect_eq "沒有 project.json → exit 0" 0 "$rc"
+[ ! -e "$OVO" ] && [ ! -e "$OVD/overview.md" ] && ok "沒有 project.json → 不建 overview/ 也不建 overview.md（模板 repo 不被污染）" \
+    || ng "沒有 project.json → 不建任何檔" "沒有 overview/、overview.md" "$(ls "$OVD")"
+
+ov_reset; ov_proj demo; ov
+expect_eq "demo → modules 為空"                 0 "$(ovq '.modules | length')"
+expect_eq "demo → notices 指向 /docs-init --mvp" 1 "$(ovq '[.notices[] | select(.action == "/docs-init --mvp")] | length')"
+
+ov_reset; ov_proj; ov_arch; ov_wbs
+ov
+expect_eq "三個模組、WBS 無任務 → 都是 todo" "todo todo todo" "$(ovq '[.modules[].status] | join(" ")')"
+expect_contains "overview.md 含 class web todo" "class web todo" "$(cat "$OVO/overview.md" 2>/dev/null)"
+expect_contains "產生的 mermaid 連線箭頭兩端留空格" "  web --> api" "$(cat "$OVO/overview.md" 2>/dev/null)"
+expect_eq "版面依 5.1 群組排欄（web／api／db 各一欄）" "0 1 2" "$(ovq '[.modules[].pos.col] | map(tostring) | join(" ")')"
+
+ov_wbs "1.1|api|✅ 11-01" "1.2|api|🔄 進行中"; ov
+expect_eq "api 有 ✅ 與 🔄 → wip" wip "$(ovq '.modules[] | select(.id == "api") | .status')"
+
+ov_wbs "1.1|api|✅ 11-01" "1.3|db|🚫 阻塞"; ov
+expect_eq       "db 只有 🚫 → issue"          issue "$(ovq '.modules[] | select(.id == "db") | .status')"
+expect_contains "issue 的 statusReason 含 1.3" "1.3"  "$(ovq '.modules[] | select(.id == "db") | .statusReason')"
+
+ov_wbs "2.1|web|✅ 11-01" "2.2|web|⏭️ 跳過"; ov
+expect_eq "全 ✅／⏭️（至少一個 ✅）→ done" done "$(ovq '.modules[] | select(.id == "web") | .status')"
+
+OV_NOCOL=1 ov_wbs "1.1||✅ 11-01" "1.2||⏳ 待處理"; ov; rc=$?
+expect_eq       "WBS 舊格式（沒有模組欄）→ 不報錯"        0 "$rc"
+expect_eq       "沒有模組欄 → 任務全進 unmappedTasks"    "1.1 1.2" "$(ovq '.unmappedTasks | join(" ")')"
+expect_contains "沒有模組欄 → notices 說明"              "WBS 沒有模組欄" "$(ovq '[.notices[].text] | join("\n")')"
+
+ov_wbs "1.1|api|✅ 11-01"; ov; cp "$OVO/overview.md" "$SANDBOX/ov-first.md" 2>/dev/null
+mkdir -p "$SANDBOX/src/api"; echo x > "$SANDBOX/src/api/new.ts"
+ov
+cmp -s "$SANDBOX/ov-first.md" "$OVO/overview.md" && ok "同一組輸入連跑兩次 → overview.md 相同（工作區的改動不進 md）" \
+    || ng "同一組輸入連跑兩次 → overview.md 相同" "cmp 相同" "$(diff "$SANDBOX/ov-first.md" "$OVO/overview.md" | head -5)"
+expect_eq "data.js 去掉賦值外殼後可被 jq 解析，schema 為 1" 1 "$(ovq '.schema')"
+expect_eq "data.js 只有一句賦值（畫面靠它判斷寫到一半）" 1 "$(grep -cv '^//' "$OVO/data.js" 2>/dev/null)"
+expect_eq "未追蹤的新檔歸到路徑對得上的模組" "api true" "$(ovq '.changes[] | select(.file == "src/api/new.ts") | "\(.module) \(.new)"')"
+expect_eq "模組的 changed 計數" 1 "$(ovq '.modules[] | select(.id == "api") | .changed')"
+
+expect_eq "overview/.gitignore 內容恰為 *" "*" "$(cat "$OVO/.gitignore" 2>/dev/null)"
+expect_eq "git status 不出現 overview/ 底下的檔" "" \
+    "$(cd "$SANDBOX" && git status --porcelain --untracked-files=all 2>/dev/null | grep 'taskmaster-data/overview/' || true)"
+[ -f "$OVO/overview.md" ] && [ ! -e "$OVD/overview.md" ] && ok "overview.md 寫在 overview/ 裡、舊位置 taskmaster-data/overview.md 不再產生" \
+    || ng "overview.md 寫在 overview/ 裡" "overview/overview.md 有、taskmaster-data/overview.md 沒有" "$(ls "$OVD" "$OVO")"
+
+# md.jq 失敗：兩份都保留上一版、錯誤寫進 .last-error（不再被 2>/dev/null 吞掉）。
+# 用 PATH 前面的假 jq 只讓 md.jq 那一支失敗，data.js 那一支照常——這正是舊寫法會讓兩份不同步的情況。
+OVFAKE="$SANDBOX/fakejq"; mkdir -p "$OVFAKE"
+printf '#!/bin/bash\ncase "$*" in *md.jq*) echo "boom: md.jq 壞了" >&2; exit 5 ;; esac\nexec %q "$@"\n' "$(command -v jq)" > "$OVFAKE/jq"
+chmod +x "$OVFAKE/jq"
+cp "$OVO/data.js" "$SANDBOX/ov-prev.js"; cp "$OVO/overview.md" "$SANDBOX/ov-prev.md"
+ov_wbs "1.1|api|✅ 11-01" "1.2|web|🚫 阻塞"
+PATH="$OVFAKE:$PATH" bash "$SANDBOX/.claude/scripts/overview.sh" "$SANDBOX" >/dev/null 2>&1
+cmp -s "$SANDBOX/ov-prev.js" "$OVO/data.js" && ok "md.jq 失敗 → 保留上一份 data.js（兩份不會一新一舊）" \
+    || ng "md.jq 失敗 → 保留上一份 data.js" "cmp 相同" "data.js 被換成新的"
+cmp -s "$SANDBOX/ov-prev.md" "$OVO/overview.md" && ok "md.jq 失敗 → 保留上一份 overview.md" \
+    || ng "md.jq 失敗 → 保留上一份 overview.md" "cmp 相同" "不同或不存在"
+expect_contains "md.jq 失敗 → stderr 寫進 .last-error" "boom: md.jq 壞了" "$(cat "$OVO/.last-error" 2>/dev/null)"
+ov
+[ ! -e "$OVO/.last-error" ] && ok "下一次成功 → .last-error 被清掉" || ng "下一次成功 → .last-error 被清掉" "沒有 .last-error" "還在"
+expect_eq "下一次成功 → data.js 反映新輸入" issue "$(ovq '.modules[] | select(.id == "web") | .status')"
+
+cmp -s "$OV_TPL" "$OVO/index.html" && ok "overview/index.html 與畫面原檔相同" \
+    || ng "overview/index.html 與畫面原檔相同" "cmp 相同" "不同或不存在"
+echo "<!-- v2 -->" >> "$SANDBOX/.claude/templates/overview/index.html"; ov
+cmp -s "$SANDBOX/.claude/templates/overview/index.html" "$OVO/index.html" && ok "畫面原檔改了 → 下一次被覆蓋成新版" \
+    || ng "畫面原檔改了 → 下一次被覆蓋成新版" "cmp 相同" "仍是舊版"
+touch -d '2000-01-01' "$OVO/index.html"; touch -d '2010-01-01' "$SANDBOX/.claude/templates/overview/index.html"; ov
+[ "$OVO/index.html" -nt "$SANDBOX/.claude/templates/overview/index.html" ] && ok "畫面原檔內容沒變、只有時間較新 → index.html 仍更新時間（開 session 才不會每次重產）" \
+    || ng "畫面原檔內容沒變、只有時間較新 → index.html 仍更新時間" "index.html 比原檔新" "仍比原檔舊"
+expect_contains "--print-path 印出 file:// 路徑" "taskmaster-data/overview/index.html" \
+    "$(bash "$SANDBOX/.claude/scripts/overview.sh" --print-path "$SANDBOX" 2>/dev/null)"
+
+# 鎖：兩支同時跑 → 結果合法、鎖不殘留；過期的鎖要接手；新鮮的鎖讓位並留下 .dirty
+rm -f "$OVO/data.js"
+ov & ov & wait
+expect_eq "兩個 overview.sh 同時跑 → data.js 合法" 1 "$(ovq '.schema')"
+[ ! -e "$OVO/.lock" ] && ok "同時跑完後鎖目錄不存在" || ng "同時跑完後鎖目錄不存在" "沒有 .lock" "還在"
+rm -f "$OVO/data.js"; mkdir -p "$OVO/.lock"; echo $(( $(date +%s) - 300 )) > "$OVO/.lock/at"; ov
+expect_eq "鎖超過 120 秒 → 視為過期並接手產生" 1 "$(ovq '.schema')"
+# --actual 最多等 60 秒；過期門檻若不比它長，等鎖的那支會把還活著的持鎖者當成過期搶走
+expect_eq "鎖的過期門檻（LOCK_STALE_SEC）比 --actual 的等待時間（60 秒）長" 1 \
+    "$(awk -F= '/^LOCK_STALE_SEC=/ { print ($2 + 0 > 60) ? 1 : 0 }' "$OV_SRC")"
+rm -f "$OVO/data.js" "$OVO/.dirty"; mkdir -p "$OVO/.lock"; date +%s > "$OVO/.lock/at"; ov
+[ ! -e "$OVO/data.js" ] && [ -e "$OVO/.dirty" ] && ok "鎖還新 → 讓位、留下 .dirty 給持鎖者重跑" \
+    || ng "鎖還新 → 讓位、留下 .dirty" "沒有 data.js、有 .dirty" "$(ls -a "$OVO")"
+rm -rf "$OVO/.lock"
+
+ov_reset; ov_proj; OV_ARCH_HEAD='<!-- overview: draft -->' ov_arch; ov_wbs; ov
+expect_eq       "架構草稿 → 不產生地圖"               0    "$(ovq '.modules | length')"
+expect_eq       "架構草稿 → architectureDraft 為 true" true "$(ovq '.project.architectureDraft')"
+expect_contains "架構草稿 → notices 為「架構草稿待確認」" "架構草稿待確認" "$(ovq '[.notices[].text] | join("\n")')"
+
+ov_reset; ov_proj; ov_wbs
+ov_arch "    api --> cache[(快取)]" '| search | 搜尋 | `src/search/**` | — | 搜尋 | — | — |'
+ov
+expect_eq       "5.1 有、5.5 沒有的節點照畫並標成未宣告" false "$(ovq '.modules[] | select(.id == "cache") | .declared')"
+expect_contains "5.1 有、5.5 沒有 → notices 列出"        "cache" "$(ovq '[.notices[].text] | join("\n")')"
+expect_eq       "5.5 有、5.1 沒有 → 放進未分組"          _ungrouped "$(ovq '.modules[] | select(.id == "search") | .group')"
+expect_eq       "未分組群組存在且標為「未分組」"          未分組 "$(ovq '.groups[] | select(.id == "_ungrouped") | .label')"
+
+ov_reset; ov_proj; ov_wbs; ov_arch "    cache -- 讀取 --> db"; ov
+expect_eq "「a -- 文字 --> b」畫成連線，文字不會變成節點名稱" "1 cache" \
+    "$(ovq '"\([.edges[] | select(.from == "cache" and .to == "db")] | length) \(.modules[] | select(.id == "cache") | .name)"')"
+
+# post-write 觸發段（OVERVIEW_SYNC=1 讓它前景跑，才能斷言）
+ov_reset; ov_proj; ov_arch; ov_wbs
+out=$(run post-write.sh "$(w "$SANDBOX/.claude/taskmaster-data/plans/1.2-x.md")" OVERVIEW_SYNC=1)
+expect_empty "寫 plan → post-write 沒有輸出" "$out"
+[ -f "$OVO/data.js" ] && ok "寫 plan → data.js 被產生" || ng "寫 plan → data.js 被產生" "有 data.js" "沒有"
+
+ov_reset; ov_proj; ov_arch; ov_wbs
+run post-write.sh "$(w "$SANDBOX/src/app.ts")" OVERVIEW_SYNC=1 >/dev/null
+[ ! -e "$OVO/data.js" ] && ok "寫一般程式檔 → 不產生" || ng "寫一般程式檔 → 不產生" "沒有 data.js" "有"
+run post-write.sh "$(w "$SANDBOX/src/docs/architecture.md")" OVERVIEW_SYNC=1 >/dev/null
+[ ! -e "$OVO/data.js" ] && ok "docs/ 比對錨定開頭（src/docs/ 不算）" || ng "docs/ 比對錨定開頭" "沒有 data.js" "有"
+run post-write.sh "$(w "$SANDBOX/.claude/taskmaster-data/plans/1.2-x.md")" OVERVIEW_SYNC=1 OVERVIEW=off >/dev/null
+[ ! -e "$OVO/data.js" ] && ok "OVERVIEW=off → 不產生" || ng "OVERVIEW=off → 不產生" "沒有 data.js" "有"
+echo off > "$SM_FILE"
+run post-write.sh "$(w "$SANDBOX/docs/05_architecture.md")" OVERVIEW_SYNC=1 >/dev/null
+[ -f "$OVO/data.js" ] && ok ".suggest-mode=off 仍會產生（圖不是建議）" || ng ".suggest-mode=off 仍會產生" "有 data.js" "沒有"
+
+ov_reset; ov_proj; ov_arch; ov_wbs
+OVWT="$SANDBOX/.claude/worktrees/ovwt"
+( cd "$SANDBOX" && git worktree add -q -B ovwt "$OVWT" ) >/dev/null 2>&1
+mkdir -p "$OVWT/.claude/taskmaster-data/plans"
+run post-write.sh "$(wcwd "$OVWT/.claude/taskmaster-data/plans/1.2-x.md" "$OVWT")" OVERVIEW_SYNC=1 >/dev/null
+[ -f "$OVO/data.js" ] && ok "worktree 裡寫 plan → data.js 寫在主 checkout" || ng "worktree 裡寫 plan → data.js 寫在主 checkout" "主 checkout 有 data.js" "沒有"
+[ ! -e "$OVWT/.claude/taskmaster-data/overview" ] && ok "worktree 底下沒有 overview/" || ng "worktree 底下沒有 overview/" "沒有" "有"
+( cd "$SANDBOX" && git worktree remove --force "$OVWT" && git branch -D ovwt ) >/dev/null 2>&1
+
+# 主 checkout 路徑含中文與空格（這個模板自己就在 D:\模板\…）：從它底下的 worktree 觸發，
+# CLAUDE_PROJECT_DIR 指向 worktree（`claude -w` 的實況），產物要落在主 checkout。
+ov_reset; ov_proj; ov_arch; ov_wbs "1.1|api|✅ 11-01"
+OVCJK="$SANDBOX/中文 目錄/模板 專案"
+rm -rf "$SANDBOX/中文 目錄"
+mkdir -p "$OVCJK/.claude/taskmaster-data" "$OVCJK/docs"
+cp -r "$SANDBOX/.claude/scripts" "$SANDBOX/.claude/templates" "$OVCJK/.claude/"
+cp "$OVD/project.json" "$OVD/wbs.md" "$OVCJK/.claude/taskmaster-data/"
+cp "$SANDBOX/docs/05_architecture.md" "$OVCJK/docs/"
+OVCJKWT="$OVCJK/.claude/worktrees/工作 樹"
+( cd "$OVCJK" && git init -q . && git add -A && git -c user.email=t@t -c user.name=t commit -qm init \
+  && git worktree add -q -b cjkwt "$OVCJKWT" ) >/dev/null 2>&1
+mkdir -p "$OVCJKWT/.claude/taskmaster-data/plans"
+run post-write.sh "$(wcwd "$OVCJKWT/.claude/taskmaster-data/plans/1.2-x.md" "$OVCJKWT")" \
+    OVERVIEW_SYNC=1 CLAUDE_PROJECT_DIR="$OVCJKWT" >/dev/null
+OVCJKO="$OVCJK/.claude/taskmaster-data/overview"
+expect_eq "主 checkout 路徑含中文與空格 → data.js 寫在主 checkout、三個模組都在" 3 \
+    "$(sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$OVCJKO/data.js" 2>/dev/null | jq -r '.modules | length' 2>/dev/null)"
+expect_contains "主 checkout 路徑含中文與空格 → overview.md 有內容" "class api done" "$(cat "$OVCJKO/overview.md" 2>/dev/null)"
+[ ! -e "$OVCJKWT/.claude/taskmaster-data/overview" ] && ok "主 checkout 路徑含中文與空格 → worktree 底下沒有 overview/" \
+    || ng "主 checkout 路徑含中文與空格 → worktree 底下沒有 overview/" "沒有" "有"
+expect_contains "主 checkout 路徑含中文與空格 → --print-path 保留原字元" "模板 專案/.claude/taskmaster-data/overview/index.html" \
+    "$(bash "$OVCJK/.claude/scripts/overview.sh" --print-path "$OVCJKWT" 2>/dev/null)"
+( cd "$OVCJK" && git worktree remove --force "$OVCJKWT" ) >/dev/null 2>&1
+rm -rf "$SANDBOX/中文 目錄"
+
+# ---- 任務圖（階段 4）
+# 獨立的假專案、每個案例重開 repo（沙箱根目錄有別節留下的檔，會混進「計畫外」）。
+# 路徑刻意含中文與空格：jq 讀中文絕對路徑會失敗（context/learned/2026-11-04-jq-windows-non-ascii-path.md）。
+TG="$SANDBOX/任務 圖/專 案"; TGD="$TG/.claude/taskmaster-data"; TGO="$TGD/overview"
+tg_git()  { git -C "$TG" -c user.email=t@t -c user.name=t "$@" >/dev/null 2>&1; }
+tg_ov()   { bash "$TG/.claude/scripts/overview.sh" "$TG" >/dev/null 2>&1; }
+tgq()     { sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$TGO/data.js" 2>/dev/null | jq -r "$1" 2>/dev/null; }
+tgp()     { tgq ".plans[] | select(.file == \"plans/${2:-1.2-x.md}\") | $1"; }
+tg_reset() {
+    rm -rf "$SANDBOX/任務 圖"
+    mkdir -p "$TG/.claude/scripts" "$TG/.claude/templates/overview" "$TGD/plans" "$TG/docs" "$TG/src/api" "$SANDBOX/docs"
+    cp "$OV_SRC" "$TG/.claude/scripts/overview.sh"; cp "$OV_TPL" "$TG/.claude/templates/overview/index.html"
+    printf '{"name":"任務圖","mode":"mvp"}\n' > "$TGD/project.json"
+    ov_arch; cp "$SANDBOX/docs/05_architecture.md" "$TG/docs/"
+    OVD="$TGD" ov_wbs "${@:-1.2|api|🔄 進行中}"
+    printf '1\n2\n' > "$TG/src/api/old.ts"
+    git -C "$TG" init -q -b main; tg_git add -A; tg_git commit -qm init; tg_git checkout -q -b feat/x
+}
+# plan：p1（階段 1）、p2（階段 2）；$2 $3 是兩個階段的狀態；TP_A／TP_B 換掉兩個部件的檔案
+tg_plan() {
+    local a="${TP_A:-src/api/a.ts}" b="${TP_B:-src/api/b.ts}"
+    { echo '---'; echo "wbs_task: \"${TP_TASK:-1.2}\""; echo "status: \"${TP_STATUS:-⏳ 未開始}\""; echo 'current_phase: 1'
+      echo 'mode: "standard"'; echo 'files:'; echo "  - \"$a\""; echo "  - \"$b\""; echo '---'; echo
+      echo '# 實作計畫：測試計畫'; echo; echo '## 一眼看懂'; echo
+      echo '| id | 部件 | 階段 | 檔案 | 驗收 |'; echo '|---|---|---|---|---|'
+      echo "| p1 | A 部件 | 1 | \`$a\` | 呼叫 a → 回 1 |"; echo "| p2 | B 部件 | 2 | \`$b\` | 呼叫 b → 回 2 |"; echo
+      echo '## 階段拆解'; echo; echo "### 階段 1: 介面 ${2:-⏳}"; echo; echo "### 階段 2: 核心 ${3:-⏳}"
+    } > "$TGD/plans/${1:-1.2-x.md}"
+}
+tg_actual() { bash "$TG/.claude/scripts/overview.sh" --actual "$TGD/plans/1.2-x.md" "$@" >/dev/null 2>&1; }
+# plan 拿掉 actual 區塊後的內容（驗「區塊外不動」用）
+tg_outside() { awk '/^<!-- overview:actual:start/ { s = 1 } !s { print } /^<!-- overview:actual:end/ { s = 0 }' "$TGD/plans/1.2-x.md"; }
+
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳; tg_ov
+expect_eq "兩階段都 ⏳ → 兩個部件都是 planned" "planned planned" "$(tgp '[.parts[].state] | join(" ")')"
+expect_contains "overview.md 任務圖：p1 是 planned" "class p1 planned" "$(cat "$TGO/overview.md" 2>/dev/null)"
+expect_contains "overview.md 任務圖：p2 是 planned" "class p2 planned" "$(cat "$TGO/overview.md" 2>/dev/null)"
+
+printf '1\n2\n3\n' > "$TG/src/api/a.ts"; printf 'x\n' > "$TG/src/api/c.ts"; printf '1\n' > "$TG/src/api/old.ts"
+tg_git add -A; tg_git commit -qm a
+tg_plan 1.2-x.md ✅ ⏳; tg_ov
+expect_eq "階段 1 ✅、src/api/a.ts 在 diff 裡 → p1 done" done "$(tgp '.parts[] | select(.id == "p1") | .state')"
+expect_eq "diff 裡有不在部件也不在 files: 的檔 → extra 部件、planned:false" "src/api/c.ts false" \
+    "$(tgp '.parts[] | select(.state == "extra" and .name == "src/api/c.ts") | "\(.name) \(.planned)"')"
+expect_eq "changes 的 +/− 等於 git diff --numstat <base>..HEAD" \
+    "$(git -C "$TG" diff --numstat main..HEAD -- . ':(exclude).claude' | awk '{ print $3 " " $1 " " $2 }' | sort | paste -sd, -)" \
+    "$(tgp '[.changes[] | "\(.file) \(.added) \(.removed)"] | sort | join(",")')"
+expect_eq "沒有帳本 → 基準是與預設分支的 merge-base" "$(git -C "$TG" rev-parse --short main)" "$(tgp '.base')"
+
+{ echo "# 執行帳本 — plan: x"; echo "## 階段 1: 介面"; echo "- 10:00 派工｜BASE=$(git -C "$TG" rev-parse HEAD)"
+  echo "- 10:20 階段完成 → plan 標 ✅｜摘要=新增 token 解析｜測試=12/12"; } > "$TGD/plans/1.2-x.progress.md"
+printf 'y\n' > "$TG/src/api/b.ts"; tg_git add -A; tg_git commit -qm b
+tg_ov
+expect_eq "帳本有 BASE= → 用它當基準（只剩之後的改動）" "$(git -C "$TG" rev-parse --short=7 HEAD~1) src/api/b.ts" \
+    "$(tgp '"\(.base) \([.changes[].file] | join(","))"')"
+expect_eq "帳本「階段完成」的摘要／測試 → 該階段部件的 ai" "新增 token 解析 12/12 phase" \
+    "$(tgp '.parts[] | select(.id == "p1") | "\(.ai.summary) \(.ai.tests) \(.ai.source)"')"
+echo "- 10:30 部件 p1 完成｜摘要=部件層摘要｜測試=3/3" >> "$TGD/plans/1.2-x.progress.md"; tg_ov
+expect_eq "帳本有「部件 p1 完成」行 → 以部件行為準" "部件層摘要 3/3 part" \
+    "$(tgp '.parts[] | select(.id == "p1") | "\(.ai.summary) \(.ai.tests) \(.ai.source)"')"
+
+tg_reset; tg_plan 1.2-x.md ✅ ⏳; tg_ov
+expect_eq "階段 1 ✅、但 p1 的檔案不在 diff 裡 → skipped" skipped "$(tgp '.parts[] | select(.id == "p1") | .state')"
+tg_git branch -m main trunk; tg_ov
+expect_eq "沒有帳本、也找不到預設分支 → changes 為空、base 為 null" "0 null" "$(tgp '"\(.changes | length) \(.base)"')"
+expect_contains "找不到基準 → notices 說明" "找不到比較基準" "$(tgq '[.notices[].text] | join("\n")')"
+
+tg_reset; tg_plan 1.2-x.md 🔄 ⏳; printf 'a\n' > "$TG/src/api/a.ts"; tg_git add -A; tg_git commit -qm a
+cp "$TGD/plans/1.2-x.md" "$SANDBOX/tg-plan-orig.md"
+tg_actual --result FAIL --reason "2 個測試失敗：token 過期"; rc=$?
+expect_eq "--actual FAIL → exit 0" 0 "$rc"
+expect_contains "--actual FAIL → plan 有 actual 區塊、含 ❌ FAIL 與原因" "❌ FAIL" "$(sed -n '/overview:actual:start/,/overview:actual:end/p' "$TGD/plans/1.2-x.md")"
+expect_contains "--actual FAIL → 區塊含原因" "token 過期" "$(sed -n '/overview:actual:start/,/overview:actual:end/p' "$TGD/plans/1.2-x.md")"
+expect_eq "--actual 第一次 → 原內容一字不差留在區塊前" "" \
+    "$(tg_outside | head -n "$(wc -l < "$SANDBOX/tg-plan-orig.md")" | cmp -s - "$SANDBOX/tg-plan-orig.md" || echo 不同)"
+expect_eq "plan 驗證 FAIL → 碰到的模組 status 為 issue" issue "$(tgq '.modules[] | select(.id == "api") | .status')"
+expect_contains "plan 驗證 FAIL → statusReason 含原因" "token 過期" "$(tgq '.modules[] | select(.id == "api") | .statusReason')"
+printf '\n## 區塊後面的手寫段落\n\n不能被動到。\n' >> "$TGD/plans/1.2-x.md"
+tg_outside > "$SANDBOX/tg-out1.md"
+tg_actual --result PASS
+expect_eq "再跑 --actual PASS → 區塊被取代（只剩一個）" 1 "$(grep -c 'overview:actual:start' "$TGD/plans/1.2-x.md")"
+expect_contains "再跑 --actual PASS → 內含 ✅ PASS" "✅ PASS" "$(sed -n '/overview:actual:start/,/overview:actual:end/p' "$TGD/plans/1.2-x.md")"
+tg_outside | cmp -s - "$SANDBOX/tg-out1.md" && ok "--actual 只動標記區塊內：區塊外（含區塊後的段落）前後相同" \
+    || ng "--actual 只動標記區塊內" "cmp 相同" "$(tg_outside | diff - "$SANDBOX/tg-out1.md" | head -5)"
+out=$(bash "$TG/.claude/scripts/overview.sh" --actual "$TGD/plans/1.2-x.md" --result FAIL 2>&1); rc=$?
+expect_eq "--actual FAIL 沒帶 --reason → exit 2、不寫" "2 1" "$rc $(grep -c 'overview:actual:start' "$TGD/plans/1.2-x.md")"
+
+# 標記壞掉（只有 start、兩組、end 在 start 前）→ 一個 byte 都不動、非 0 結束、說明怎麼修。
+# 曾經只有 start 時會從 start 一路跳到檔尾，把使用者寫在後面的段落整段刪掉還回報「已寫入」。
+tg_bad_markers() {
+    local name="$1"; shift
+    tg_plan 1.2-x.md 🔄 ⏳; printf '%s\n' "$@" >> "$TGD/plans/1.2-x.md"
+    cp "$TGD/plans/1.2-x.md" "$SANDBOX/tg-bad.md"
+    out=$(bash "$TG/.claude/scripts/overview.sh" --actual "$TGD/plans/1.2-x.md" --result PASS 2>&1); rc=$?
+    cmp -s "$TGD/plans/1.2-x.md" "$SANDBOX/tg-bad.md" && [ "$rc" -ne 0 ] && [[ $out == *標記* ]] \
+        && ok "--actual 遇到$name → 不寫、非 0、訊息指出標記" \
+        || ng "--actual 遇到$name → 不寫、非 0、訊息指出標記" "plan 不變、rc≠0、訊息含「標記」" \
+              "rc=$rc 不變=$(cmp -s "$TGD/plans/1.2-x.md" "$SANDBOX/tg-bad.md" && echo 是 || echo 否) $out"
+}
+tg_bad_markers "只有 start 沒有 end" '<!-- overview:actual:start -->' '舊區塊' '' '## 使用者寫在後面的段落' '不能被刪。'
+tg_bad_markers "兩組區塊" '<!-- overview:actual:start -->' 'a' '<!-- overview:actual:end -->' '中間' \
+    '<!-- overview:actual:start -->' 'b' '<!-- overview:actual:end -->'
+tg_bad_markers "end 在 start 前" '<!-- overview:actual:end -->' '中間' '<!-- overview:actual:start -->'
+
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳; echo 1.2 > "$TGD/.current-task"; tg_ov
+expect_eq "主 checkout 的 .current-task 是 1.2 → 任務 1.2 的模組 current:true" true "$(tgq '.modules[] | select(.id == "api") | .current')"
+rm -f "$TGD/.current-task"
+TP_TASK=1.3 TP_A=migrations/1.sql TP_B=migrations/2.sql tg_plan 1.3-y.md ⏳ ⏳
+touch -d '2020-01-01' "$TGD/plans/1.2-x.md"; OVD="$TGD" ov_wbs "1.2|api|⏳ 待處理" "1.3|db|⏳ 待處理"; tg_ov
+expect_eq "沒有 .current-task → 取 mtime 最新、還沒完成的 plan 當本次" "1.3 true false" \
+    "$(tgq '"\(.current.task) \(.modules[] | select(.id == "db") | .current) \(.modules[] | select(.id == "api") | .current)"')"
+
+tg_reset; mkdir -p "$TG/src/web"; TP_A=src/web/form.tsx TP_B=src/web/list.tsx tg_plan 1.2-x.md 🔄 ⏳
+printf 'f\n' > "$TG/src/web/form.tsx"; tg_git add -A; tg_git commit -qm web; tg_ov
+expect_eq "WBS 標 api、plan 只碰 web → api 帶 declared-not-touched" declared-not-touched "$(tgq '.modules[] | select(.id == "api") | .mismatch[0].kind')"
+expect_eq "WBS 標 api、plan 只碰 web → web 帶 touched-not-declared" touched-not-declared "$(tgq '.modules[] | select(.id == "web") | .mismatch[0].kind')"
+
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳; tg_git add -A; tg_git commit -qm plan
+TGWT="$TG/.claude/worktrees/wt1"
+tg_git worktree add -q -b wt1 "$TGWT"
+mkdir -p "$TGWT/.claude/taskmaster-data/plans"
+( TGD="$TGWT/.claude/taskmaster-data"; tg_plan 1.2-x.md ✅ 🔄 )
+OVD="$TGD" ov_wbs "1.2|api|🔄 進行中" "1.3|db|⏳ 待處理"
+echo 1.3 > "$TGD/.current-task"; echo 1.2 > "$TGWT/.claude/taskmaster-data/.current-task"
+mkdir -p "$TGWT/src/api"; printf 'w\n' > "$TGWT/src/api/w.ts"
+tg_ov
+expect_eq "worktree 的 plan 進度較新 → data.js 取 worktree 那份" "worktree:wt1 skipped" \
+    "$(tgp '"\(.source) \(.parts[] | select(.id == "p1") | .state)"')"
+expect_contains "worktree overlay 不進 overview.md（仍是主 checkout 的 planned）" "class p1 planned" "$(cat "$TGO/overview.md" 2>/dev/null)"
+expect_eq "主 checkout 與 worktree 各有 .current-task → 兩個本次都標出" "1.3 1.2 true true" \
+    "$(tgq '"\([.currents[].task] | join(" ")) \(.modules[] | select(.id == "db") | .current) \(.modules[] | select(.id == "api") | .current)"')"
+expect_eq "worktree 的改動出現在地圖的本次改動（帶來源）" "worktree:wt1 api" \
+    "$(tgq '.changes[] | select(.file == "src/api/w.ts") | "\(.source) \(.module)"')"
+tg_git worktree remove --force "$TGWT"
+
+# worktree 自己的 plan（隨版控帶進來、還沒改過）跑 --actual → 來源判成 worktree:<名>、寫在 worktree 那份、再跑是原地取代
+tg_reset; tg_plan 1.2-x.md 🔄 ⏳; tg_git add -A; tg_git commit -qm plan
+TGWT="$TG/.claude/worktrees/wt2"; TGWD="$TGWT/.claude/taskmaster-data"
+tg_git worktree add -q -b wt2 "$TGWT"
+bash "$TG/.claude/scripts/overview.sh" --actual "$TGWD/plans/1.2-x.md" --result FAIL --reason "第一次" >/dev/null 2>&1; rc1=$?
+bash "$TG/.claude/scripts/overview.sh" --actual "$TGWD/plans/1.2-x.md" --result PASS >/dev/null 2>&1; rc2=$?
+expect_eq "worktree 的 plan 跑 --actual 兩次 → exit 0、data.js 取 worktree:wt2、該份只有一個區塊且是 PASS、主 checkout 那份沒被寫" \
+    "0 0 worktree:wt2 1 PASS 0" \
+    "$rc1 $rc2 $(tgp '.source') $(grep -c 'overview:actual:start' "$TGWD/plans/1.2-x.md") $(tgp '.verify.result') $(grep -c 'overview:actual:start' "$TGD/plans/1.2-x.md")"
+tg_git worktree remove --force "$TGWT"
+
+# worktree 帶著主 checkout 已歸檔的 plan 副本（版控帶進來、沒改過）→ 不進 plans[]、不被猜成本次
+tg_reset; tg_plan 1.2-x.md 🔄 ⏳; tg_git add -A; tg_git commit -qm plan
+TGWT="$TG/.claude/worktrees/wt3"
+tg_git worktree add -q -b wt3 "$TGWT"
+mkdir -p "$TGD/plans/archive"; tg_git mv "$TGD/plans/1.2-x.md" "$TGD/plans/archive/1.2-x.md"; tg_git commit -qm archive
+tg_ov
+expect_eq "worktree 裡沒改過的版控 plan 副本（主 checkout 已歸檔）→ 不進 plans[]、currents 為空" "0 0" \
+    "$(tgq '"\([.plans[] | select(.file == "plans/1.2-x.md")] | length) \(.currents | length)"')"
+tg_git worktree remove --force "$TGWT"
+
+# 平行開發時 implementer 每完成一階段就在 worktree 分支上 commit（plan 狀態一起）：
+# 比的是與主 checkout HEAD 的 merge-base，不是 worktree 的 HEAD，否則一 commit 就從任務圖消失
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳; tg_git add -A; tg_git commit -qm plan
+TGWT="$TG/.claude/worktrees/wt4"
+tg_git worktree add -q -b wt4 "$TGWT"
+( TGD="$TGWT/.claude/taskmaster-data"; tg_plan 1.2-x.md ✅ 🔄 )
+git -C "$TGWT" -c user.email=t@t -c user.name=t commit -qam 階段1 >/dev/null 2>&1
+tg_ov
+expect_eq "worktree 改了 plan 並 commit 到自己的分支（工作區乾淨）→ 仍在 plans[]、來源是 worktree" \
+    "worktree:wt4 0" "$(tgp '.source') $(git -C "$TGWT" status --porcelain | wc -l)"
+tg_git worktree remove --force "$TGWT"
+
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳; mkdir -p "$TGD/plans/archive"
+printf -- '---\nwbs_task: "0.9"\nstatus: "✅ 完成"\nfiles:\n  - "src/api/old.ts"\n---\n\n# 實作計畫：舊的\n' > "$TGD/plans/archive/0.9-old.md"
+tg_ov
+expect_eq "已歸檔的 plan 不進 plans[]，只計入模組的完成數" "plans/1.2-x.md 1" \
+    "$(tgq '"\([.plans[].file] | join(",")) \(.modules[] | select(.id == "api") | .counts.archivedDone)"')"
+
+# ---- 階段 5：已歸檔完成數、大小上限、沒有 jq、畫不出地圖的提示、開 session 補產
+# wbs-archive.md：舊節沒有模組欄 → 歸「未標模組」；新節照模組欄；同一任務另有已歸檔 plan → 只算一次；
+# 沒有模組欄的那列有已歸檔 plan → 用 plan 的 files: 對模組；⏭️ 不算完成；WBS 還在的任務不重算。
+# 第二張表前面只有說明文字、沒有標題：驗「濾掉說明文字後兩張表不會黏成一張」
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳; mkdir -p "$TGD/plans/archive"
+{ echo "# WBS 歸檔"; echo; echo "## M0 舊節（還沒有模組欄）"; echo
+  echo "| # | 任務 | 狀態 | 優先 |"; echo "|---|---|---|---|"
+  echo "| 0.1 | 舊 a | ✅ 10-01 | 高 |"; echo "| 0.2 | 舊 b | ✅ 10-01 | 高 |"; echo "| 0.3 | 舊 c | ⏭️ 跳過 | 高 |"
+  echo; echo "中間的說明文字"; echo
+  echo "| # | 任務 | 模組 | 狀態 | 優先 | 實際 |"; echo "|---|---|---|---|---|---|"
+  echo "| 0.8 | 新 d | api | ✅ 10-02 | 高 | 1h |"; echo "| 0.9 | 新 e | api | ✅ 10-02 | 高 | 1h |"
+  echo "| 1.2 | 還在 WBS | api | ✅ 10-02 | 高 | 1h |"
+} > "$TGD/wbs-archive.md"
+for t in 0.9 0.2; do
+    printf -- '---\nwbs_task: "%s"\nstatus: "✅ 完成"\nfiles:\n  - "src/api/old.ts"\n---\n\n# 實作計畫：舊的\n' "$t" > "$TGD/plans/archive/$t-old.md"
+done
+tg_ov
+expect_eq "wbs-archive 舊節無模組欄不報錯；api 已歸檔完成 3（0.9 與 plan 去重、0.2 靠 plan 對到）、未標模組 1、共 4" \
+    "ok 3 1 4" "$([ -e "$TGO/.last-error" ] && echo err || echo ok) $(tgq '"\(.modules[] | select(.id == "api") | .counts.archivedDone) \(.archived.unmapped) \(.archived.done)"')"
+expect_contains "overview.md 說明已歸檔任務有幾個沒標模組" "1 個沒有標模組" "$(cat "$TGO/overview.md" 2>/dev/null)"
+
+# 改動超過 200 個：plan 與地圖都只列前 200（依檔名排序），其餘依第一層目錄彙總
+tg_reset; tg_plan 1.2-x.md 🔄 ⏳; mkdir -p "$TG/lib" "$TG/src/gen"
+for i in $(seq 1 100); do echo x > "$TG/lib/l$i.ts"; done
+for i in $(seq 1 150); do echo x > "$TG/src/gen/g$i.ts"; done
+tg_git add -A; tg_git commit -qm many; tg_ov
+expect_eq "250 個改動 → plan 列 200、其餘依第一層目錄彙總成 src/ 50 個（+50）、truncated" "200 src/:50:50 true" \
+    "$(tgp '"\(.changes | length) \([.changesRollup[] | "\(.dir):\(.files):\(.added)"] | join(","))"') $(tgq '.truncated')"
+expect_eq "地圖的本次改動同樣只列 200、其餘彙總" "200 50" "$(tgq '"\(.changes | length) \([.changesRollup[].files] | add)"')"
+expect_contains "overview.md 的任務圖列出彙總列" "未逐一列出" "$(cat "$TGO/overview.md" 2>/dev/null)"
+OVERVIEW_MAX_BYTES=20000 tg_ov
+expect_eq "超過 OVERVIEW_MAX_BYTES、只有本次 plan → 本次 plan 明細保留 200、地圖本次改動改彙總、四級丟完仍放不下 → 加一則 warn" "200 0 true" \
+    "$(tgp '.changes | length') $(tgq '.changes | length') $(tgq '[.notices[] | select(.level == "warn") | .text] | any(test("仍超過"))')"
+expect_contains "大小上限只動 data.js：overview.md 仍列得出彙總前的計畫外部件" "＋ 計畫外" "$(cat "$TGO/overview.md" 2>/dev/null)"
+TP_TASK=1.3 tg_plan 1.3-y.md 🔄 ⏳; echo 1.2 > "$TGD/.current-task"; OVD="$TGD" ov_wbs "1.2|api|🔄 進行中" "1.3|api|🔄 進行中"
+OVERVIEW_MAX_BYTES=40000 tg_ov
+expect_eq "超過上限、另有非本次 plan → 放得下、本次 plan 明細保留 200、非本次 plan 明細改彙總、沒有 warn" "1 200 0 false" \
+    "$([ "$(wc -c < "$TGO/data.js")" -le 40000 ] && echo 1 || echo 0) $(tgp '.changes | length') $(tgp '.changes | length' 1.3-y.md) $(tgq '[.notices[].level] | any(. == "warn")')"
+rm -f "$TGD/plans/1.3-y.md" "$TGD/.current-task"
+
+# 提案階段 5 驗收 1 的量級：300 個任務、20 份 plan、每份 500 個改動
+tg_reset
+OV_ROWS=(); for i in $(seq 1 300); do OV_ROWS+=("9.$i|api|⏳ 待處理"); done
+OVD="$TGD" ov_wbs "${OV_ROWS[@]}"
+for i in $(seq 1 20); do TP_TASK="9.$i" tg_plan "9.$i-p.md" 🔄 ⏳; done
+mkdir -p "$TG/src/big"; for i in $(seq 1 500); do echo x > "$TG/src/big/f$i.ts"; done
+tg_git add -A; tg_git commit -qm big; tg_ov
+expect_eq "300 任務・20 份 plan・每份 500 個改動 → data.js ≤ 512KB、truncated、20 份都是 changes ≤ 200 且明細＋彙總＝500" \
+    "1 true 20" "$([ "$(wc -c < "$TGO/data.js" 2>/dev/null || echo 999999999)" -le 524288 ] && echo 1 || echo 0) $(tgq '.truncated') $(tgq '[.plans[] | select((.changes | length) <= 200 and ((.changes | length) + ([.changesRollup[].files] | add // 0)) == 500)] | length')"
+
+# 沒有 jq：PATH 拿掉 jq 所在的目錄。jq 跟 bash 同一個目錄（Linux 的 /usr/bin）時，
+# 改放一個除了 jq 以外全部 symlink 過去的目錄頂替
+nojq_path() {
+    local d out="" farm="$SANDBOX/nojq-farm" parts
+    IFS=':' read -ra parts <<< "$PATH"
+    for d in "${parts[@]}"; do
+        if [ -e "$d/jq" ] || [ -e "$d/jq.exe" ]; then
+            if [ ! -d "$farm" ]; then
+                mkdir -p "$farm"
+                ln -s "$d"/* "$farm/" 2>/dev/null
+                rm -f "$farm/jq" "$farm/jq.exe"
+            fi
+            out="$out:$farm"
+        else
+            out="$out:$d"
+        fi
+    done
+    printf '%s' "${out#:}"
+}
+tg_reset; tg_plan 1.2-x.md 🔄 ⏳
+NOJQ_PATH=$(nojq_path)
+if env PATH="$NOJQ_PATH" "$BASH" -c 'command -v jq' >/dev/null 2>&1; then
+    ng "沒有 jq 的情境造不出來" "PATH 裡找不到 jq" "$(env PATH="$NOJQ_PATH" "$BASH" -c 'command -v jq')"
+else
+    env PATH="$NOJQ_PATH" "$BASH" "$TG/.claude/scripts/overview.sh" "$TG" >/dev/null 2>&1; rc=$?
+    expect_eq "沒有 jq → exit 0、data.js 只有 schema 1 與一則「需要 jq」、畫面照樣複製" "0 notices,schema 1 1 1" \
+        "$rc $(tgq 'keys | join(",")') $(tgq '.schema') $(tgq '[.notices[] | select(.text | startswith("需要 jq"))] | length') $(cmp -s "$OV_TPL" "$TGO/index.html" && echo 1 || echo 0)"
+    env PATH="$NOJQ_PATH" "$BASH" "$TG/.claude/scripts/overview.sh" --actual "$TGD/plans/1.2-x.md" --result PASS >/dev/null 2>&1; rc=$?
+    expect_eq "沒有 jq 時 --actual → exit 1（讓 /verify 知道沒寫）、plan 沒被動" "1 0" \
+        "$rc $(grep -c 'overview:actual:start' "$TGD/plans/1.2-x.md")"
+fi
+
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳
+tg_pp() { bash "$TG/.claude/scripts/overview.sh" --print-path "$TG" 2>/dev/null; }
+expect_eq "--print-path：有正式架構文件 → 只印路徑、沒有提示" 0 "$(tg_pp | grep -c '^提示：')"
+{ echo '<!-- overview: draft -->'; cat "$TG/docs/05_architecture.md"; } > "$SANDBOX/tg-arch.md" && mv "$SANDBOX/tg-arch.md" "$TG/docs/05_architecture.md"
+expect_contains "--print-path：架構是草稿 → 提示確認後移除標記" "是架構草稿" "$(tg_pp)"
+rm -f "$TG/docs/05_architecture.md"
+expect_contains "--print-path：找不到架構文件 → 提示委派 documentation-specialist 反推草稿" "documentation-specialist" "$(tg_pp)"
+printf '{"name":"x","mode":"demo"}\n' > "$TGD/project.json"
+expect_eq "--print-path：demo 沒有架構是正常的 → 不提示" 0 "$(tg_pp | grep -c '^提示：')"
+rm -rf "$SANDBOX/任務 圖"
+
+# 舊專案 update-template 之後還沒寫過 wbs／plan：開 session 就補產，使用者不用手動做任何事
+ov_reset; ov_proj; ov_arch; ov_wbs "1.1|api|✅ 11-01"
+out=$(run session-start.sh '{}' OVERVIEW_SYNC=1)
+expect_eq "有 project.json、還沒有 data.js → 開 session 就產生（stdout 仍是合法 JSON）" "1 1" \
+    "$(ovq '.schema') $(printf '%s' "$out" | jq -e . >/dev/null 2>&1 && echo 1 || echo 0)"
+echo sentinel > "$OVO/data.js"; touch -d '2000-01-01' "$SANDBOX/.claude/templates/overview/index.html"
+run session-start.sh '{}' OVERVIEW_SYNC=1 >/dev/null
+expect_eq "已經產過、畫面原檔沒有比較新 → 開 session 不重產" sentinel "$(cat "$OVO/data.js" 2>/dev/null)"
+touch -d '2099-01-01' "$SANDBOX/.claude/templates/overview/index.html"
+run session-start.sh '{}' OVERVIEW_SYNC=1 >/dev/null
+expect_eq "畫面原檔比現有的新（update-template 帶來新版畫面）→ 開 session 重產" 1 "$(ovq '.schema')"
+rm -f "$OVO/data.js"
+run session-start.sh '{}' OVERVIEW_SYNC=1 OVERVIEW=off >/dev/null
+[ ! -e "$OVO/data.js" ] && ok "OVERVIEW=off → 開 session 不補產" || ng "OVERVIEW=off → 開 session 不補產" "沒有 data.js" "有"
+
+# =========================================================================
+section "update-template — .gitignore 只補缺少的短命狀態行"
+# =========================================================================
+# 舊專案的 .gitignore 沒有後來新增的狀態檔（.last-verify 等）→ 會被 commit。
+# 用假模板跑（真模板整包同步太慢）：只放 update-template.sh、.gitignore、.worktreeinclude 與一個 agent
+UT_SRC="$HOOK_DIR/../../scripts/update-template.sh"
+UT_GI="$HOOK_DIR/../../.gitignore"
+if [ -f "$UT_SRC" ] && [ -f "$UT_GI" ]; then
+    for l in .full-suite-warned .last-verify .merge-round-open; do
+        grep -qxF ".claude/taskmaster-data/$l" "$UT_GI" && ok "模板 .gitignore 列了 $l" || ng "模板 .gitignore 列了 $l" "有這一行" "沒有"
+    done
+    UT="$SANDBOX/ut"; rm -rf "$UT"; mkdir -p "$UT/tpl/scripts" "$UT/tpl/.claude/agents" "$UT/dst/.claude" "$UT/dst2/.claude"
+    cp "$UT_SRC" "$UT/tpl/scripts/"; echo a > "$UT/tpl/.claude/agents/a.md"; echo x > "$UT/tpl/.worktreeinclude"
+    printf '# x\n.env\n.claude/taskmaster-data/.current-task\n.claude/taskmaster-data/.last-verify\n.claude/taskmaster-data/.merge-round-open\n.claude/taskmaster-data/.full-suite-warned\n.claude/worktrees/\n' > "$UT/tpl/.gitignore"
+    ut() { bash "$UT/tpl/scripts/update-template.sh" "$@" --no-backup </dev/null 2>&1; }
+    # 目標：CRLF、檔尾沒有換行、已經有 .current-task、還有一行自己的規則
+    printf 'node_modules/\r\n.claude/taskmaster-data/.current-task\r\nmy-rule' > "$UT/dst/.gitignore"
+    cp "$UT/dst/.gitignore" "$UT/gi-before"
+    out=$(ut "$UT/dst")
+    expect_contains "補上缺的三行並列出來" "已補 3 行" "$out"
+    expect_eq "原有內容一個 byte 都沒動（新內容只接在後面）" 0 \
+        "$(head -c "$(wc -c < "$UT/gi-before")" "$UT/dst/.gitignore" | cmp -s - "$UT/gi-before"; echo $?)"
+    expect_eq "補的是缺的那三行、已有的 .current-task 沒重複" "1 1 1 1" \
+        "$(for l in .current-task .last-verify .merge-round-open .full-suite-warned; do tr -d '\r' < "$UT/dst/.gitignore" | grep -cxF ".claude/taskmaster-data/$l"; done | paste -sd' ' -)"
+    UT_LINES=$(grep -c '' "$UT/dst/.gitignore"); UT_CR=$(tr -cd '\r' < "$UT/dst/.gitignore" | wc -c | tr -d ' ')
+    expect_eq "目標是 CRLF → 補的行也是 CRLF；原本檔尾沒換行的那行被補上換行" "0 my-rule" \
+        "$((UT_LINES - UT_CR)) $(tr -d '\r' < "$UT/dst/.gitignore" | sed -n '3p')"
+    cp "$UT/dst/.gitignore" "$UT/gi-after1"
+    out=$(ut "$UT/dst")
+    cmp -s "$UT/gi-after1" "$UT/dst/.gitignore" && expect_contains "再跑一次 → 已齊全、檔案不變" "已齊全" "$out" \
+        || ng "再跑一次 → 檔案不變" "cmp 相同" "$(diff "$UT/gi-after1" "$UT/dst/.gitignore" | head -5)"
+    ut "$UT/dst2" --dry-run >/dev/null
+    [ ! -e "$UT/dst2/.gitignore" ] && ok "--dry-run → 不寫" || ng "--dry-run → 不寫" "沒有 .gitignore" "有"
+    ut "$UT/dst2" --claude-only >/dev/null
+    [ ! -e "$UT/dst2/.gitignore" ] && ok "--claude-only → 不碰根目錄的 .gitignore" || ng "--claude-only → 不碰 .gitignore" "沒有 .gitignore" "有"
+    ut "$UT/dst2" >/dev/null
+    expect_eq "目標沒有 .gitignore → 建一份，只含這幾行" 4 "$(grep -c '^\.claude/taskmaster-data/' "$UT/dst2/.gitignore" 2>/dev/null)"
+    rm -rf "$UT"
+else
+    ok "（不是模板 repo，沒有 scripts/update-template.sh，略過）"
+fi
+
+# =========================================================================
 section "全體 hooks — 語法與健壯性"
 # =========================================================================
 for h in "$HOOK_DIR"/*.sh; do
@@ -2843,5 +3826,4 @@ for h in pre-tool-use.sh post-agent-report.sh user-prompt-submit.sh post-write.s
 done
 
 # =========================================================================
-printf '\n\033[1m結果\033[0m  通過 %d ・ 失敗 %d\n\n' "$PASS" "$FAIL"
-[ "$FAIL" -eq 0 ] || exit 1
+finish_tests

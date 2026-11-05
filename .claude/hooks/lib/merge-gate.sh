@@ -35,8 +35,14 @@ merge_gate() {
     [ "${MERGE_GATE:-on}" = "off" ] && return 0
     [ -n "$cmd" ] || return 0
 
-    local pending="$data_dir/.merge-pending"
-    [ -s "$pending" ] || return 0
+    local pending="$data_dir/.merge-pending" has_pending=0
+    [ -s "$pending" ] && has_pending=1
+
+    # 沒有待驗證的合併時，這裡只做一件事：記下本輪起點（見下方）。先用便宜的字串預篩，
+    # 免得每條 git 指令都切段（Windows 上每段一個行程）
+    if [ "$has_pending" = 0 ]; then
+        case "$cmd" in *merge*|*cherry-pick*|*rebase*) ;; *) return 0 ;; esac
+    fi
 
     # 缺共用切段函式就放行 —— 與本模板其他閘門「判斷不了就放行」一致
     declare -F cmd_segments >/dev/null 2>&1 || return 0
@@ -59,6 +65,17 @@ merge_gate() {
     done <<< "$segs"
     [ "$hit" -eq 1 ] || return 0
 
+    # 本輪起點：本輪第一個合併**執行之前**的 HEAD。/verify 在模板 repo 依改動挑 hook 測試時
+    # 從這裡算（commands/verify.md 步驟 4）。不事後讀 ORIG_HEAD：reset／rebase／pull 都會改寫它，
+    # 起點被悄悄推後就是少測而且沒有任何訊號。已有內容不覆寫；由 /verify 關閉本輪時刪除。
+    # 寫了但這次合併後來被別的閘門擋下 → 起點只會偏早，多測不會少測
+    if [ "$has_pending" = 0 ]; then
+        local rs="$data_dir/.merge-round-start"
+        [ -s "$rs" ] || { mkdir -p "$data_dir" 2>/dev/null
+                          git -C "${data_dir%/.claude/taskmaster-data}" rev-parse -q --verify HEAD > "$rs" 2>/dev/null; }
+        return 0
+    fi
+
     local n first
     n=$(grep -c . "$pending" 2>/dev/null)
     case "$n" in ''|*[!0-9]*) n=0 ;; esac
@@ -69,7 +86,7 @@ merge_gate() {
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "deny",
-        permissionDecisionReason: ("⛔ 上一次合併還沒驗證過，不能再合併下一個。\n\n待驗證：" + $n + " 筆，最早一筆是 `" + $first + "`\n\n**為什麼擋**：每個 worktree 自己 /verify 過，不代表合併結果是對的——各 worktree 看不到彼此，**合併才第一次讓兩邊的程式碼真的碰面**，那些互動是全新的、沒人驗過的。而且一次疊好幾個之後測試紅了，你得回頭二分找元凶。\n\n**照這個順序做：**\n\n1. 跑 `/verify`（中間的合併只快檢：建置／型別／這次帶進來的檔案的測試／plan 驗收；本輪最後一個才跑整套）\n2. **PASS** → `/verify` 自動清掉待驗證清單（快檢通過也算） → 回來繼續合下一個\n3. **FAIL** → 在主 checkout 修好再驗；修不動就 `git merge --abort` 退回\n\n（關閉：MERGE_GATE=off）")
+        permissionDecisionReason: ("⛔ 上一次合併還沒驗證過，不能再合併下一個。\n\n待驗證：" + $n + " 筆，最早一筆是 `" + $first + "`\n\n**為什麼擋**：每個 worktree 自己 /verify 過，不代表合併結果是對的——各 worktree 看不到彼此，**合併才第一次讓兩邊的程式碼真的碰面**，那些互動是全新的、沒人驗過的。而且一次疊好幾個之後測試紅了，你得回頭二分找元凶。\n\n**照這個順序做：**\n\n1. 跑 `/verify`（中間的合併只快檢；各驗什麼見 `commands/verify.md`「合併驗證關卡」）\n2. **PASS** → `/verify` 自動清掉待驗證清單（快檢通過也算） → 回來繼續合下一個\n3. **FAIL** → 在主 checkout 修好再驗；修不動就 `git merge --abort` 退回\n\n（關閉：MERGE_GATE=off）")
       }
     }' 2>/dev/null || true
     exit 0

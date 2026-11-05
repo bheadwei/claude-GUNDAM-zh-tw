@@ -31,6 +31,8 @@
 #   taskmaster-data/.doc-impact*     context/decisions/  ADR
 #   taskmaster-data/.pitfall-seen    coordination/       agent 交接
 #                                    logs/               log 集中一處才查得到
+#                                    taskmaster-data/overview/  專案圖解（scripts/overview.sh
+#                                                        自己用 git common dir 算主 checkout）
 #
 #   注意 wbs.md 與 plans/ **不在上表** —— 它們是 git 追蹤的檔案，
 #   worktree 會自然帶一份、改動由 git 合併，不需要 hook 介入選 root。

@@ -13,8 +13,8 @@
 #      branch-switch-gate（站在 topic 分支上不得直接開新分支）、
 #      merge-noff-gate（合併本地 topic 分支必須帶 --no-ff）、
 #      git-backup-gate（destructive 操作前 HEAD 必須有 backup/* tag 指著）
-#   6. 整套測試閘門（Bash／PowerShell，只在 worktree）—— 沒帶路徑的 pytest／vitest／jest
-#      擋一次，指向 testing-standards「執行測試」（lib/full-suite-gate.sh）
+#   6. 整套測試閘門（Bash／PowerShell，只在 worktree）—— 沒帶路徑的 pytest／vitest／jest、
+#      不帶參數的 hooks/tests/run-tests.sh 擋一次，指向 testing-standards「執行測試」（lib/full-suite-gate.sh）
 #   7. rm 權限（Bash）—— 只刪 hook 狀態檔 → allow，其他 rm → ask（lib/rm-state-gate.sh；
 #      取代 settings.json 的 `ask: Bash(rm:*)`，理由見該檔檔頭）
 #   8. 輕量 log

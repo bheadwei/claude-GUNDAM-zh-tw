@@ -299,6 +299,136 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     fi
 fi
 
+# 架構文件模組表與 WBS 模組欄的表頭
+#
+# 為什麼：05 範本 5.5 的 `id`／`路徑`、WBS 的「模組」是之後專案圖解產生器對模組的依據，
+# 也是 /task-init、/task-add 填模組欄的依據。表頭一改名，下游只會靜默抽不到東西。
+# 5.1 的節點 id 必須都在 5.5 的 id 欄——範本自己不自洽，照抄的專案一定對不上。
+# docs-init 的 mvp 骨架只准「指向」5.5，內嵌一份 `| id |` 表頭就是第二份副本（會漂）。
+TPL05=.claude/skills/project-docs/templates/05_architecture_and_design_document.md
+if [ -f "$TPL05" ]; then
+    H55=$(awk '/^### 5\.5/{s=1; next} s && /^##/{exit} s && /^\|/{print; exit}' "$TPL05")
+    for col in id 路徑; do
+        CHECKED=$((CHECKED + 1))
+        if ! printf '%s' "$H55" | tr '|' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -qx "$col"; then
+            FAIL=$((FAIL + 1))
+            printf '  %s 05 範本 5.5 模組表表頭缺「%s」欄：%s\n' "$(red '✗')" "$col" "$TPL05"
+        fi
+    done
+
+    IDS55=$(awk '/^### 5\.5/{s=1; next} s && /^##/{exit}
+                 s && /^\|/ { n++; if (n <= 2) next
+                              split($0, c, "|"); v = c[2]; gsub(/^[ \t]+|[ \t]+$/, "", v); print v }' "$TPL05")
+    NODES51=$(awk '/^### 5\.1/{s=1; next} s && /^##/{exit}
+                   s && /^```mermaid/{m=1; next} s && m && /^```/{m=0; next}
+                   s && m && !/^[ \t]*subgraph/ && match($0, /^[ \t]*[A-Za-z0-9_-]+[ \t]*[\[\(\{]/) {
+                       v = substr($0, RSTART, RLENGTH); gsub(/[ \t\[\(\{]/, "", v); print v }' "$TPL05" | sort -u)
+    # 先抓所有節點、再驗格式：只抓合格的 id 會讓 `Web`、`svc_a` 這種節點靜默漏掉
+    CHECKED=$((CHECKED + 1))
+    BAD_IDS=$(printf '%s\n' "$NODES51" | grep -v '^$' | grep -vxE '[a-z0-9-]+' || true)
+    RESERVED=$(printf '%s\n' "$NODES51" | grep -xE 'end|graph|subgraph|style|class' || true)
+    BAD_IDS=$(printf '%s\n%s\n' "$BAD_IDS" "$RESERVED" | grep -v '^$' | tr '\n' ' ' || true)
+    if [ -n "$BAD_IDS" ]; then
+        FAIL=$((FAIL + 1))
+        printf '  %s 05 範本 5.1 容器圖的節點 id 不合格（只准 [a-z0-9-]+，且不可是 mermaid 保留字）：%s\n' "$(red '✗')" "$BAD_IDS"
+    fi
+    CHECKED=$((CHECKED + 1))
+    MISSING=""
+    while IFS= read -r nid; do
+        [ -n "$nid" ] || continue
+        printf '%s\n' "$IDS55" | grep -qx "$nid" || MISSING="$MISSING $nid"
+    done <<< "$NODES51"
+    if [ -z "$NODES51" ] || [ -n "$MISSING" ]; then
+        FAIL=$((FAIL + 1))
+        printf '  %s 05 範本 5.1 容器圖的節點 id 不在 5.5 的 id 欄：%s\n' "$(red '✗')" "${MISSING:- （5.1 找不到任何節點）}"
+        printf '      範例要自洽：節點 id＝模組 id。\n'
+    fi
+fi
+
+WBST=.claude/templates/wbs.template.md
+if [ -f "$WBST" ]; then
+    CHECKED=$((CHECKED + 1))
+    BAD_HDR=$(grep -nE '^\| # \| 任務 \|' "$WBST" | grep -v '| 模組 |' || true)
+    if [ -z "$(grep -E '^\| # \| 任務 \|' "$WBST")" ] || [ -n "$BAD_HDR" ]; then
+        FAIL=$((FAIL + 1))
+        printf '  %s wbs.template.md 的任務表頭缺「模組」欄：\n' "$(red '✗')"
+        printf '      %s\n' "$(dim "${BAD_HDR:-找不到任務表頭}")"
+    fi
+    CHECKED=$((CHECKED + 1))
+    if ! awk '/^## 2\./{s=1; next} s && /^## /{exit} s && /^\| 模組 \|/{f=1} END{exit !f}' "$WBST"; then
+        FAIL=$((FAIL + 1))
+        printf '  %s wbs.template.md 第 2 節欄位規則缺「模組」列\n' "$(red '✗')"
+    fi
+fi
+
+# 專案圖解產生器的欄名常數 vs 範本表頭
+#
+# 為什麼：overview.sh 依欄名抽 5.5 模組表與 WBS 任務表。範本改了欄名、常數沒跟上，
+# 地圖會靜默變空白（不報錯）——跟孤兒 skill 同類的安靜失效，只有這裡擋得住。
+OVSH=.claude/scripts/overview.sh
+if [ -f "$OVSH" ]; then
+    cols_of() { printf '%s\n' "$1" | tr '|' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$'; }
+    ov_const() { sed -n "s/^$1=\"\([^\"]*\)\".*/\1/p" "$OVSH" | head -1; }
+    H55_COLS=$(cols_of "$(awk '/^### 5\.5/{s=1; next} s && /^##/{exit} s && /^\|/{print; exit}' "$TPL05" 2>/dev/null)")
+    WBS_COLS=$(cols_of "$(grep -m1 -E '^\| # \| 任務 \|' "$WBST" 2>/dev/null)")
+    PART_COLS=$(cols_of "$(grep -m1 -E '^\| id \| 部件 \|' .claude/skills/plan-format/SKILL.md 2>/dev/null)")
+    for pair in OVERVIEW_COLS_MODULE:H55 OVERVIEW_COLS_MODULE_OPT:H55 OVERVIEW_COLS_WBS:WBS OVERVIEW_COL_WBS:WBS OVERVIEW_COLS_PART:PART; do
+        name=${pair%:*}
+        case "${pair#*:}" in
+            H55) have=$H55_COLS; where="05 範本 5.5 模組表表頭" ;;
+            WBS) have=$WBS_COLS; where="wbs.template.md 任務表頭" ;;
+            *)   have=$PART_COLS; where="plan-format「一眼看懂」部件表表頭" ;;
+        esac
+        val=$(ov_const "$name")
+        miss=""
+        [ -n "$val" ] || miss=" （找不到這個常數）"
+        for c in $val; do printf '%s\n' "$have" | grep -qxF -- "$c" || miss="$miss $c"; done
+        CHECKED=$((CHECKED + 1))
+        if [ -n "$miss" ]; then
+            FAIL=$((FAIL + 1))
+            printf '  %s overview.sh 的 %s 有「%s」沒有的欄：%s\n' "$(red '✗')" "$name" "$where" "$miss"
+            printf '      改了範本欄名就同步 %s 的常數，否則地圖會靜默抽不到東西\n' "$OVSH"
+        fi
+    done
+fi
+
+# 專案圖解畫面：≤ 50KB、不載 CDN、不用 module script（file:// 下會被 CORS 擋）
+OVTPL=.claude/templates/overview/index.html
+if [ -f "$OVSH" ]; then
+    CHECKED=$((CHECKED + 1))
+    if [ ! -f "$OVTPL" ]; then
+        FAIL=$((FAIL + 1))
+        printf '  %s 缺專案圖解畫面原檔：%s（overview.sh 靠它複製到 taskmaster-data/overview/）\n' "$(red '✗')" "$OVTPL"
+    else
+        OVSIZE=$(wc -c < "$OVTPL" | tr -d ' ')
+        if [ "$OVSIZE" -gt 51200 ]; then
+            FAIL=$((FAIL + 1))
+            printf '  %s %s 有 %s bytes，超過 50KB 上限\n' "$(red '✗')" "$OVTPL" "$OVSIZE"
+        fi
+        CHECKED=$((CHECKED + 1))
+        if grep -qE 'type=["'"'"']module|(src|href)=["'"'"']https?:' "$OVTPL"; then
+            FAIL=$((FAIL + 1))
+            printf '  %s %s 用了 module script 或外部資源（離線 file:// 會打不開）\n' "$(red '✗')" "$OVTPL"
+        fi
+    fi
+fi
+
+DOCSINIT=.claude/commands/docs-init.md
+if [ -f "$DOCSINIT" ]; then
+    PATHB=$(awk '/^#### 路徑 B/{s=1; next} s && /^#### /{exit} s{print}' "$DOCSINIT")
+    CHECKED=$((CHECKED + 1))
+    if ! printf '%s' "$PATHB" | grep -q '05_architecture_and_design_document\.md' \
+       || ! printf '%s' "$PATHB" | grep -q '5\.5'; then
+        FAIL=$((FAIL + 1))
+        printf '  %s docs-init.md 路徑 B 沒有指向 05 範本的 5.5（模組表的唯一來源）\n' "$(red '✗')"
+    fi
+    CHECKED=$((CHECKED + 1))
+    if printf '%s\n' "$PATHB" | grep -qE '^\|[[:space:]]*id[[:space:]]*\|'; then
+        FAIL=$((FAIL + 1))
+        printf '  %s docs-init.md 路徑 B 內嵌了模組表表頭（`| id |`）——改成指向 05 範本 5.5，不要留第二份\n' "$(red '✗')"
+    fi
+fi
+
 # 測試案例數（需由呼叫端提供實跑結果）
 if [ -n "$TESTS_ACTUAL" ]; then
     verify "WORKFLOW 測試案例數" "$TESTS_ACTUAL" "$W" '[0-9]+ 個案例，全綠'
