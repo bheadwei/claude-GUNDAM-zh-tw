@@ -3827,6 +3827,12 @@ for h in "$HOOK_DIR"/lib/*.sh; do
     bash -n "$h" 2>/dev/null && ok "$n 語法正確" || ng "$n 語法正確" "可解析" "語法錯誤"
 done
 
+# jq 1.7 起才允許保留字當變數名（`... as $as`），jq 1.6 直接編譯失敗，而 Linux 伺服器常見的還是 1.6。
+# 開發機與 CI 都是 1.7+，實際執行抓不到，只能靜態掃（2026-11-05 overview.sh 的 $as 在 jq 1.6 從沒產生過圖）
+JQ_KW='as|def|if|then|elif|else|end|reduce|foreach|try|catch|label|import|include|and|or|not|__loc__'
+jq_kw_hits=$(grep -nE 'as \$('"$JQ_KW"')([^A-Za-z0-9_]|$)' "$HOOK_DIR"/*.sh "$HOOK_DIR"/lib/*.sh "$HOOK_DIR"/../scripts/*.sh 2>/dev/null)
+expect_empty "jq 程式不用保留字當變數名（jq 1.6 相容）" "$jq_kw_hits"
+
 reset
 for h in pre-tool-use.sh post-agent-report.sh user-prompt-submit.sh post-write.sh; do
     run "$h" '{}' >/dev/null 2>&1

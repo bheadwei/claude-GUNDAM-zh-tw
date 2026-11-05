@@ -567,10 +567,10 @@ def parse_plan($needPart):
        elif .inF and ($l | test("^\\s+-")) then .files += [$l | sub("^\\s+-\\s*"; "") | sub("\\s+#.*$"; "") | unq]
        else . end)) as $H
   # 與 actual_markers_bad 同一條假設：start、end 各一行且 start 在前才算有區塊；不成對就當作沒有
-  | ([range(0; $B | length) | select($B[.] | test("^<!-- overview:actual:start"))]) as $as
-  | ([range(0; $B | length) | select($B[.] | test("^<!-- overview:actual:end"))]) as $ae
-  | (if ($as | length) == 1 and ($ae | length) == 1 and $as[0] < $ae[0]
-     then {body: ($B[:$as[0]] + $B[$ae[0] + 1:]), blk: $B[$as[0] + 1:$ae[0]]}
+  | ([range(0; $B | length) | select($B[.] | test("^<!-- overview:actual:start"))]) as $starts
+  | ([range(0; $B | length) | select($B[.] | test("^<!-- overview:actual:end"))]) as $ends
+  | (if ($starts | length) == 1 and ($ends | length) == 1 and $starts[0] < $ends[0]
+     then {body: ($B[:$starts[0]] + $B[$ends[0] + 1:]), blk: $B[$starts[0] + 1:$ends[0]]}
      else {body: ($B | map(select(test("^<!-- overview:actual:(start|end)") | not))), blk: []} end) as $S
   | ([$S.blk[] | capture("^驗證：\\s*(✅|❌)?\\s*(?<r>PASS|FAIL)\\s*(（(?<at>[^）]*)）)?\\s*(—\\s*(?<reason>.*))?$")] | first) as $v
   | {fm: $H.fm, files: $H.files,
