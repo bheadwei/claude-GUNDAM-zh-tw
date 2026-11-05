@@ -1239,6 +1239,35 @@ expect_contains "注入含 documentation-specialist"  "documentation-specialist"
 expect_contains "注入含坑目錄指示"                 "context/learned"   "$sess_ctx"
 
 # =========================================================================
+section "session-start.sh — jq 最低版本 1.7.1"
+# =========================================================================
+#
+# 假 jq 放 PATH 前面：--version 印指定字串，其餘 exec 真的 jq（hook 其他地方還要用）。
+reset
+REAL_JQ=$(command -v jq)
+FAKE_JQ_DIR="$SANDBOX/fakejq"; mkdir -p "$FAKE_JQ_DIR"
+cat > "$FAKE_JQ_DIR/jq" <<FAKE
+#!/usr/bin/env bash
+[ "\$1" = "--version" ] && { echo "\$FAKE_JQ_VERSION"; exit 0; }
+exec "$REAL_JQ" "\$@"
+FAKE
+chmod +x "$FAKE_JQ_DIR/jq"
+jqv_ctx() {
+    run session-start.sh '{}' PATH="$FAKE_JQ_DIR:$PATH" FAKE_JQ_VERSION="$1"         | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null
+}
+JQV_MARK="最低要求 1.7.1"
+expect_contains     "jq-1.6 → 警告"                  "$JQV_MARK" "$(jqv_ctx jq-1.6)"
+expect_contains     "警告點名實際版本"                "jq-1.6"    "$(jqv_ctx jq-1.6)"
+expect_contains     "警告附手動下載連結"              "github.com/jqlang/jq/releases" "$(jqv_ctx jq-1.6)"
+expect_contains     "jq-1.7（兩段，第三段當 0）→ 警告" "$JQV_MARK" "$(jqv_ctx jq-1.7)"
+expect_not_contains "jq-1.7.1 → 不警告"              "$JQV_MARK" "$(jqv_ctx jq-1.7.1)"
+expect_not_contains "jq-1.8.1 → 不警告"              "$JQV_MARK" "$(jqv_ctx jq-1.8.1)"
+expect_not_contains "jq-1.7.1-dirty（尾綴）→ 不警告" "$JQV_MARK" "$(jqv_ctx jq-1.7.1-dirty)"
+expect_not_contains "jq-garbage（解析不出）→ 不警告" "$JQV_MARK" "$(jqv_ctx jq-garbage)"
+run session-start.sh '{}' PATH="$FAKE_JQ_DIR:$PATH" FAKE_JQ_VERSION=jq-1.6 >/dev/null
+expect_contains     "警告也寫進 hooks.log"           "$JQV_MARK" "$(cat "$SANDBOX/.claude/logs/hooks.log" 2>/dev/null)"
+
+# =========================================================================
 section "session-start.sh — 風格庫提醒只在模板 repo 出現"
 # =========================================================================
 #
@@ -3826,12 +3855,6 @@ for h in "$HOOK_DIR"/lib/*.sh; do
     n="lib/$(basename "$h")"
     bash -n "$h" 2>/dev/null && ok "$n 語法正確" || ng "$n 語法正確" "可解析" "語法錯誤"
 done
-
-# jq 1.7 起才允許保留字當變數名（`... as $as`），jq 1.6 直接編譯失敗，而 Linux 伺服器常見的還是 1.6。
-# 開發機與 CI 都是 1.7+，實際執行抓不到，只能靜態掃（2026-11-05 overview.sh 的 $as 在 jq 1.6 從沒產生過圖）
-JQ_KW='as|def|if|then|elif|else|end|reduce|foreach|try|catch|label|import|include|and|or|not|__loc__'
-jq_kw_hits=$(grep -nE 'as \$('"$JQ_KW"')([^A-Za-z0-9_]|$)' "$HOOK_DIR"/*.sh "$HOOK_DIR"/lib/*.sh "$HOOK_DIR"/../scripts/*.sh 2>/dev/null)
-expect_empty "jq 程式不用保留字當變數名（jq 1.6 相容）" "$jq_kw_hits"
 
 reset
 for h in pre-tool-use.sh post-agent-report.sh user-prompt-submit.sh post-write.sh; do
