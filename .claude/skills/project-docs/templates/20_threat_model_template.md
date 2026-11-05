@@ -3,7 +3,7 @@
 > **版本:** v5.0 | **更新:** 2026-07-24 | **狀態:** 範本
 > **方法論:** STRIDE | **工具:** OWASP pytm（Threat Model as Code）/ OWASP Threat Dragon（視覺化）
 
-> 本文件產出的緩解項需回饋至 13_security_and_readiness_checklists.md 對應章節（ASVS/Top 10:2025）追蹤修復狀態。
+> 條件式文件（`docs/threat-model.md`）：critical 任務碰到認證、金流、個資時必產。緩解項的修復狀態記在第 6 節，不另開清單。
 
 ---
 
@@ -65,7 +65,7 @@ flowchart TB
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- | :---: | :--- | :---: |
 | TH-01 | User → API Gateway | ✓ | | | | | | 使用者身分冒用（憑證竊取/重放） | High | MFA + 短 TTL token | ⏳ |
 | TH-02 | API Gateway → 訂單服務 | | ✓ | | | | | 內部呼叫被竄改 | Medium | mTLS + 訊息簽章 | ⏳ |
-| TH-03 | 訂單服務 → 訂單 DB | | | | ✓ | | | 資料庫存取憑證洩露導致資料外洩 | High | Secrets vault + 動態短期憑證（→ 詳見 13_security_and_readiness_checklists.md F 節） | ⏳ |
+| TH-03 | 訂單服務 → 訂單 DB | | | | ✓ | | | 資料庫存取憑證洩露導致資料外洩 | High | Secrets vault + 動態短期憑證 | ⏳ |
 | TH-04 | API Gateway | | | | | ✓ | | 缺乏速率限制導致阻斷服務 | Medium | 速率限制 + WAF | ⏳ |
 | TH-05 | 訂單服務 | | | | | | ✓ | 權限提升（普通使用者存取管理端點） | High | 物件/功能級授權檢查（ASVS V8） | ⏳ |
 
@@ -114,6 +114,5 @@ flowchart TB
 
 | 文件 | 關聯 |
 | :--- | :--- |
-| 13_security_and_readiness_checklists.md | 緩解措施對應 ASVS/Top 10:2025 章節，供上線審查追蹤 |
-| 05_architecture_and_design_document.md | DFD 節點對應系統架構圖（C4）中的元件與資料儲存 |
-| 19_observability_and_slo_spec.md | 高風險威脅（如 A09/A10）需確認對應告警已覆蓋 |
+| `docs/architecture.md` | DFD 節點對應第 1 節系統情境與第 5 節資料流的參與者 |
+| `docs/runbook.md`（若有） | 高風險威脅（如 A09/A10）需確認對應告警已覆蓋 |

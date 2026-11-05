@@ -28,11 +28,11 @@ description: 專案初始化，建立 WBS 任務清單、分析複雜度、選�
 
 | 選項 | 說明 |
 |------|------|
-| **demo** | 快速驗證想法、個人實驗、< 1 天完成。產精簡 PRD + WBS，文件最少 |
-| **mvp (Recommended)** | 內部工具、小型產品、< 1 週。產單檔 Tech Spec + WBS，文件先行避免發散 |
-| **full** | 正式產品、跨團隊協作、> 1 週。產 VibeCoding 完整文件集 + WBS |
+| **demo** | 快速驗證想法、個人實驗、< 1 天完成。產 brief + WBS，文件最少 |
+| **mvp (Recommended)** | 內部工具、小型產品、< 1 週。產 brief、PRD、架構文件 + WBS，文件先行避免發散 |
+| **full** | 正式產品、跨團隊協作、> 1 週。同 mvp，再依專案特性加威脅模型、runbook |
 
-**所有模式都會產出 PRD 與 WBS**，差別在深度與文件數量。這題答案影響：
+**所有模式都會產出 brief 與 WBS**，差別在先產哪幾份文件（見 `/docs-init` 的模式表）。這題答案影響：
 - 步驟 2 需求澄清的題數（demo 精簡、mvp/full 完整）
 - 步驟 4 自動執行階段是否先跑 `/docs-init`
 - 最終 WBS 的拆解顆粒度
@@ -50,7 +50,7 @@ description: 專案初始化，建立 WBS 任務清單、分析複雜度、選�
 
 同樣用 `AskUserQuestion` 逐題問，依步驟 1 答案調整問題內容。**題數依步驟 0 的情境選擇**：
 
-**demo 模式**（只問必要的，產精簡 PRD 用）：
+**demo 模式**（只問必要的，產 brief 用）：
 1. **核心問題** — 解決什麼問題？
 2. **核心功能** — 最重要的 3 個功能？
 3. **成功標準** — 用什麼判斷做出來了？（量化優先）
@@ -140,47 +140,12 @@ description: 專案初始化，建立 WBS 任務清單、分析複雜度、選�
 
 #### 2.7b 寫出 `docs/00_brief.md`
 
-把步驟 1、2、2.7a 的答案整理成一份簡短的 brief（**不是 PRD**，是 PRD 的輸入）：
+把步驟 1、2、2.7a 的答案整理成一份簡短的 brief（**不是 PRD**，是 PRD 的輸入）。
+骨架的唯一來源是 `.claude/skills/project-docs/templates/02_project_brief_and_prd.md` 的**上半**——先讀它再寫，勿在此重述。
 
-```markdown
-# 專案簡報 — [專案名稱]
-
-> 由 `/task-init` 步驟 2.7 產出，是 `/docs-init` 的輸入。
-> 這份是「我理解到的需求」，經使用者確認過。
-
-## 一句話
-[專案簡述]
-
-## 要解決的問題
-[核心問題]
-
-## 誰在用
-[使用者／角色。步驟 2 沒問到就寫「未釐清」，不要編]
-
-## 核心功能
-- [功能 1]
-- [功能 2]
-
-## 明確不做（non-goals）
-- [排除項 1]
-
-## 成功長什麼樣
-[量化優先。demo 模式的「成功標準」放這裡]
-
-## 最大的未知與風險
-| 風險 | 為什麼擔心 | 目前的想法 |
-|---|---|---|
-
-## 技術約束
-[語言、框架、部署環境、特殊限制]
-
-## 已否決的方案
-[替代方案與否決理由；沒有就寫「無」]
-
-## 仍未釐清
-[你問了但使用者說「還不確定」的事。**這段要誠實留著**，
- 不要為了讓文件好看而自己填答案]
-```
+- 步驟 2 沒問到的段寫「未釐清」，不要編
+- demo 模式的「成功標準」放進「成功長什麼樣」
+- 使用者說「還不確定」的事誠實留在「仍未釐清」，不要為了讓文件好看而自己填答案
 
 #### 2.7c 逐段回述並確認
 
@@ -209,7 +174,7 @@ description: 專案初始化，建立 WBS 任務清單、分析複雜度、選�
 複雜度：[依分析結果]
 UI 風格：[primary 或 未設定（使用 fallback）]
 Package Manager：[bun/pnpm/npm 或 未設定（首次 Node 指令時詢問）]
-文件產出：[docs/prd.md  或  docs/tech-spec.md  或  docs/01_prd.md...]
+文件產出：[demo：docs/00_brief.md ／ mvp、full：再加 docs/prd.md、docs/architecture.md]
 需求 brief：docs/00_brief.md（步驟 2.7 已確認）
 
 確認？(y/N)
@@ -222,9 +187,9 @@ Package Manager：[bun/pnpm/npm 或 未設定（首次 Node 指令時詢問）]
 1. **建立專案結構** — 參考 `.claude/templates/project-structures.md`，依步驟 3 選擇的類型套用
 2. **生成 CLAUDE.md** — 參考 `.claude/templates/CLAUDE-md.template.md`，**只填入專案獨有資訊**（不重複 rules 內容）
 3. **產出規格文件** — 依步驟 0 選擇的情境呼叫 `/docs-init`：
-   - `demo` → `/docs-init --demo`（產 `docs/prd.md`）
-   - `mvp` → `/docs-init --mvp`（產 `docs/tech-spec.md`）
-   - `full` → `/docs-init --full`（依 VibeCoding 順序產完整文件集）
+   - `demo` → `/docs-init --demo`（brief 已在步驟 2.7 產好，不再多產）
+   - `mvp` → `/docs-init --mvp`（產 `docs/prd.md`、`docs/architecture.md`）
+   - `full` → `/docs-init --full`（同 mvp，再依專案特性加威脅模型、runbook）
    - **以 `docs/00_brief.md` 為輸入**（步驟 2.7 產出且已逐段確認），docs-init 不重複問相同問題
 4. **建立 WBS 任務清單** — **以步驟 3 的文件為依據**拆解任務，避免從空想拆 WBS 造成發散
 5. **Python 專案環境初始化**（若主要語言為 Python）：
@@ -245,7 +210,7 @@ Package Manager：[bun/pnpm/npm 或 未設定（首次 Node 指令時詢問）]
    **格式的唯一來源是 `.claude/templates/wbs.template.md`——先讀它再寫，勿在此重述。**
    建立時要做到的三件事：
    - 任務**依里程碑分節**（demo 也至少一個 `M1`），連結欄一律 `—`；負責欄填 `—`（使用者指名時才填人名）
-   - **模組欄**填步驟 4 第 3 點剛產出的架構文件 5.5 模組表裡的 `id`（mvp 在 `docs/tech-spec.md` 的「2. 架構總覽」，full 在架構文件的 5.5）。任務落在哪個模組，就看它要動的程式落在 5.5 哪一列的「路徑」。demo 沒有架構文件 → 一律 `—`。填法見範本第 2 節「模組」列
+   - **模組欄**取 `docs/architecture.md` 自動段（第 4 節，兩個 `overview:generated` 標記之間）模組表的 `id`：任務要動的程式落在哪一列的 `路徑`，就填那一列的 `id`。新專案還沒有程式碼、自動段是空的 → 一律 `—`，等有程式碼後由專案地圖的任務推斷與 `/task-status` 補上。舊專案沒有自動段、但有手寫的 5.5 模組表 → 照舊讀 5.5；兩者都沒有（含 demo）→ `—`。填法見範本第 2 節「模組」列
    - 依範本第 3 節算好「現況」區與檔頭的「總進度」
    - 已自動完成的任務（專案初始化、需求分析）標 `✅ <今天 MM-DD>`，不要在格子裡寫「自動完成」這類說明
 
@@ -260,10 +225,12 @@ Package Manager：[bun/pnpm/npm 或 未設定（首次 Node 指令時詢問）]
   "wbsFile": ".claude/taskmaster-data/wbs.md",
   "docs": {
     "location": "docs/",
-    "files": ["prd.md"]
+    "set": ["00_brief.md", "prd.md", "architecture.md"]
   }
 }
 ```
+
+`docs` 欄沿用 `/docs-init` 步驟 7 已寫入的值（`set` 是實際產出的檔），不要覆蓋成別的清單。
 
 ## 使用方式
 

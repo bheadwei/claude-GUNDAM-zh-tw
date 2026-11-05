@@ -15,6 +15,7 @@
 | `workshop/VibeCoding_Workshop.pptx`         | **由使用者手動編輯。** 不要跑 `generate_pptx.py` 重生，會洗掉手改內容                                           |
 | `.claude/context/`、`.claude/coordination/` | 執行時產物，已排除複製。修改 agent 的報告/交接格式時記得對應更新`_REPORT_TEMPLATE.md` 與 `_HANDOFF_TEMPLATE.md` |
 | `.claude/taskmaster-data/overview/`         | 專案圖解的產物，不進 git、hook 會在背景重產。**要改畫面就改 `.claude/templates/overview/index.html`**，改產物會被下一次重產蓋掉 |
+| 本 repo 的 ADR                               | 模板 repo 沒有 `docs/`，自己的 ADR **仍放 `.claude/context/decisions/`**（ADR-2026-11-05-004 的例外）。`/adr`、`architect` 寫給新專案的落點是 `docs/decisions/`，在這個 repo 用它們時改寫到 `.claude/context/decisions/` |
 
 ## 改動時的連帶檢查
 

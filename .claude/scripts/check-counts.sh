@@ -69,9 +69,9 @@ N_CMDS=$(find .claude/commands -maxdepth 1 -name '*.md' 2>/dev/null | wc -l | tr
 N_RULES=$(find .claude/rules -maxdepth 1 -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
 # hook 腳本：watch-agents.sh 是 /agent-log 的輔助工具，不是 hook，不計入
 N_HOOKS=$(find .claude/hooks -maxdepth 1 -name '*.sh' ! -name 'watch-agents.sh' 2>/dev/null | wc -l | tr -d ' ')
-# project-docs 的 VibeCoding 範本：INDEX.md 本身不算範本
-# （曾經有兩處寫 21，就是把 INDEX 算進去了）
-N_DOCTPL=$(find .claude/skills/project-docs/templates -maxdepth 1 -name '*.md' ! -name 'INDEX.md' 2>/dev/null | wc -l | tr -d ' ')
+# project-docs 的文件範本：INDEX.md 本身不算範本（曾經有兩處寫 21，就是把 INDEX 算進去了）；
+# 12、17 是 /ui-site 的 UI 鏈，不算文件體系（ADR-2026-11-05-004）
+N_DOCTPL=$(find .claude/skills/project-docs/templates -maxdepth 1 -name '*.md' ! -name 'INDEX.md' ! -name '12_*' ! -name '17_*' 2>/dev/null | wc -l | tr -d ' ')
 
 echo ""
 echo "檔案系統實況"
@@ -105,12 +105,32 @@ verify "五層表 Agents"       "$N_AGENTS" "$W" '\*\*Agents\*\* \| [0-9]+ '
 
 verify "INDEX 開頭 skill 數" "$N_SKILLS" .claude/skills/INDEX.md '^[0-9]+ 個 skill'
 
-# VibeCoding 文件範本數（六處寫過這個數字，曾漂走兩處）
+# 文件範本數（六處寫過這個數字，曾漂走兩處）
 verify "範本數 project-docs skill" "$N_DOCTPL" .claude/skills/project-docs/SKILL.md '[0-9]+ 種文件範本|[0-9]+ 種範本'
 verify "範本數 skills/INDEX"       "$N_DOCTPL" .claude/skills/INDEX.md '[0-9]+ 種範本自帶'
 verify "範本數 README skill 表"    "$N_DOCTPL" README.md '[0-9]+ 份範本自帶'
-verify "範本數 README 章節標題"    "$N_DOCTPL" README.md 'VibeCoding 工作流模板（[0-9]+ 份）'
+verify "範本數 README 章節標題"    "$N_DOCTPL" README.md '專案文件範本（[0-9]+ 份）'
 verify "範本數 templates/INDEX"    "$N_DOCTPL" .claude/skills/project-docs/templates/INDEX.md '模板清單（[0-9]+ 份'
+
+# 淘汰範本的檔名不得殘留
+#
+# 為什麼：13 份範本已刪（ADR-2026-11-05-004）。指令或 agent 還寫著舊檔名，模型會去讀不存在的檔、
+# 或照舊流程產出已淘汰的文件，都不報錯。12、17 是 /ui-site 的 UI 鏈，不在名單裡。
+# workflow-template-manager.md 暫時例外：它退場時整檔刪除（文件計畫階段 5），屆時拿掉這個 --exclude。
+RETIRED_TPL='01_workflow_manual|03_behavior_driven_development_guide|06_api_design_specification|07_module_specification_and_tests|08_project_structure_guide|09_design_and_dependencies|11_code_review_and_refactoring_guide|13_security_and_readiness_checklists|15_documentation_and_maintenance_guide|16_wbs_development_plan_template|18_data_model_and_migration_spec|19_observability_and_slo_spec|21_ai_llm_integration_spec'
+CHECKED=$((CHECKED + 1))
+RESIDUE=$(grep -rnoE --exclude=check-counts.sh --exclude=workflow-template-manager.md "$RETIRED_TPL" \
+    .claude/agents .claude/commands .claude/rules .claude/skills .claude/guides .claude/hooks \
+    .claude/scripts .claude/templates .claude/README.md README.md 2>/dev/null || true)
+if [ -n "$RESIDUE" ]; then
+    FAIL=$((FAIL + 1))
+    printf '  %s 引用了已淘汰的文件範本：\n' "$(red '✗')"
+    while IFS= read -r rl; do
+        [ -n "$rl" ] || continue
+        printf '      %s\n' "$(dim "$rl")"
+    done <<< "$RESIDUE"
+    printf '      改成指向 .claude/skills/project-docs/SKILL.md（6 份文件與淘汰範本的去處）\n'
+fi
 
 # 每個 skill 目錄都要有 SKILL.md，且要在 INDEX 裡被提到
 for d in .claude/skills/*/; do
@@ -440,19 +460,22 @@ if [ -f "$OVSH" ]; then
     fi
 fi
 
+# docs-init 的架構文件步驟：指向 05 範本、不內嵌模組表
+#
+# 為什麼：模組表只該出現在架構文件第 4 節的自動段。指令裡再抄一份表頭，
+# 照抄的專案就會手寫模組表，跟自動段兩份漂開。
 DOCSINIT=.claude/commands/docs-init.md
 if [ -f "$DOCSINIT" ]; then
-    PATHB=$(awk '/^#### 路徑 B/{s=1; next} s && /^#### /{exit} s{print}' "$DOCSINIT")
+    ARCHSTEP=$(awk '/^### 步驟 [0-9]+：架構文件/{s=1; next} s && /^### /{exit} s{print}' "$DOCSINIT")
     CHECKED=$((CHECKED + 1))
-    if ! printf '%s' "$PATHB" | grep -q '05_architecture_and_design_document\.md' \
-       || ! printf '%s' "$PATHB" | grep -q '5\.5'; then
+    if ! printf '%s' "$ARCHSTEP" | grep -q '05_architecture_and_design_document\.md'; then
         FAIL=$((FAIL + 1))
-        printf '  %s docs-init.md 路徑 B 沒有指向 05 範本的 5.5（模組表的唯一來源）\n' "$(red '✗')"
+        printf '  %s docs-init.md 的「架構文件」步驟沒有指向 05 範本（格式的唯一來源）\n' "$(red '✗')"
     fi
     CHECKED=$((CHECKED + 1))
-    if printf '%s\n' "$PATHB" | grep -qE '^\|[[:space:]]*id[[:space:]]*\|'; then
+    if printf '%s\n' "$ARCHSTEP" | grep -qE '^\|[[:space:]]*id[[:space:]]*\|'; then
         FAIL=$((FAIL + 1))
-        printf '  %s docs-init.md 路徑 B 內嵌了模組表表頭（`| id |`）——改成指向 05 範本 5.5，不要留第二份\n' "$(red '✗')"
+        printf '  %s docs-init.md 的「架構文件」步驟內嵌了模組表表頭（`| id |`）——模組表由自動段產生，不要留第二份\n' "$(red '✗')"
     fi
 fi
 

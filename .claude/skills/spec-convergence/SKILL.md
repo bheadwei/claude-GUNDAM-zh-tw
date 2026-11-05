@@ -1,6 +1,6 @@
 ---
 name: spec-convergence
-description: Use when checking whether the codebase and WBS still match the original spec — after a milestone completes, before a PR, or when the user asks "還符合當初的需求嗎 / 規格有沒有跑掉 / CR 加了這麼多還對嗎". Compares docs/00_brief.md and the PRD against wbs.md, wbs-archive.md and completed plans, then reports gaps as proposed WBS rows. Never rewrites the PRD itself.
+description: Use when checking whether the codebase and WBS still match the original spec — after a milestone completes, before a PR, or when the user asks "還符合當初的需求嗎 / 規格有沒有跑掉 / CR 加了這麼多還對嗎". Compares docs/00_brief.md and the PRD against wbs.md, wbs-archive.md and completed plans, then reports gaps as proposed WBS rows and PRD 情境變更 drafts. Never rewrites the PRD or the brief itself.
 ---
 
 # 規格收斂（Spec Convergence）
@@ -13,6 +13,7 @@ description: Use when checking whether the codebase and WBS still match the orig
 
 **核心原則：報告落差，不自動改規格。** 方向判斷是人的事——
 客戶 CR 常常是「PRD 該更新」而不是「程式該改」。
+PRD 只透過 plan 的「PRD 情境變更」改（`/verify` 套回）；brief 只在方向改變時由使用者確認後改。本 skill 兩者都不直接寫。
 
 ---
 
@@ -35,7 +36,7 @@ description: Use when checking whether the codebase and WBS still match the orig
 
 1. **`docs/00_brief.md`** —— `/task-init` 步驟 2.7 產出、**使用者逐段確認過**的需求 brief。
    最可靠的基準，而且它有 `non-goals` 與「仍未釐清」兩段是別處沒有的
-2. **PRD** —— `docs/prd.md`（demo）／`docs/tech-spec.md`（mvp）／`docs/01_prd.md`（full）
+2. **PRD** —— `docs/prd.md`（編號情境＋用語表）。沒有時退回舊專案的 `docs/tech-spec.md` 或 `docs/01_prd.md`，並在報告開頭標明用的是舊格式
 3. **`wbs.md` ＋ `wbs-archive.md`** —— 打算做什麼、做完了什麼（歸檔的也要讀，否則會誤判成漏做）
 4. **`plans/archive/*.md`** —— 實際怎麼做的（含 `files:`，指出動過哪些檔案）
 5. 程式碼本身 —— 只在檢查 C 用
@@ -49,7 +50,7 @@ description: Use when checking whether the codebase and WBS still match the orig
 
 ### A. 漏做 —— 規格有寫，WBS 沒有
 
-逐一取 brief／PRD 的功能點，找 `wbs.md` 與 `wbs-archive.md` 有沒有對應任務。
+逐一取 brief 的核心功能與 PRD 的情境（`#### <代碼>-<序號>`），找 `wbs.md` 與 `wbs-archive.md` 有沒有對應任務。
 
 沒有對應的，**分三類，不要混在一起報**：
 
@@ -84,11 +85,11 @@ description: Use when checking whether the codebase and WBS still match the orig
 委派 `documentation-specialist`（`subagent_type: "documentation-specialist"`）——
 「文件與程式碼是否相符」正是它的職責，不要自己一個一個檔案讀。
 
-抽樣比對 PRD 裡**具體可驗證**的敘述：
+抽樣比對 PRD 情境（假設／當／那麼）裡**具體可驗證**的行為與程式碼：
 
-- 提到的 API 端點／路由 → 實際存在嗎？路徑與方法一致嗎？
-- 提到的資料模型／欄位 → schema 或 migration 對得上嗎？
-- 提到的頁面／流程 → 路由存在嗎？
+- 「當」描述的操作 → 有對應的頁面、路由或處理程式嗎？
+- 「那麼」描述的結果 → 程式真的這樣處理嗎？（例：缺貨時真的不建立訂單、有指出缺貨商品）
+- 「假設」裡的前提（已登入、庫存為 0）→ 程式有檢查這個條件嗎？
 - 提到的外部整合 → 程式碼裡真的接了嗎，還是還在 mock？
 
 **不要**比對散文式的描述（「提供良好的使用者體驗」）——那無法驗證，比了只會產生假警報。
@@ -103,7 +104,7 @@ description: Use when checking whether the codebase and WBS still match the orig
 ```markdown
 # 規格收斂檢查 — {日期}
 
-基準：docs/00_brief.md（已確認）＋ docs/01_prd.md
+基準：docs/00_brief.md（已確認）＋ docs/prd.md
 範圍：里程碑 M2 完成後 ／ 檢查 A+B+C
 {無 brief 時在此標明缺口}
 
@@ -119,7 +120,7 @@ description: Use when checking whether the codebase and WBS still match the orig
 |---|---|---|---|
 
 ## C. 描述失真
-| PRD 敘述 | 實際 | 差異 |
+| PRD 情境 | 實際 | 差異 |
 |---|---|---|
 
 ## 不需要動作的
@@ -130,13 +131,16 @@ description: Use when checking whether the codebase and WBS still match the orig
 
 ```
 收斂檢查找到 3 項落差。怎麼處理？
-  [Recommended] 把「漏做」加進 WBS，「蔓延」的提議回寫 PRD
-      漏做 → /task-add 追加任務；蔓延 → 列出該補進 PRD 的段落草稿供你確認
-  只加 WBS，PRD 我自己更新
+  [Recommended] 把「漏做」加進 WBS，「蔓延」寫成 PRD 情境變更草稿
+      漏做 → /task-add 追加任務；蔓延 → 列出 ADDED／MODIFIED 情境草稿供你確認
+  只加 WBS，PRD 我自己處理
   先看完整報告再決定
 ```
 
-**永遠不要自動改 PRD。** 產出草稿供確認可以，直接寫入不行——
+蔓延的草稿確認後，併進目前進行中 plan 的「PRD 情境變更」（沒有進行中的 plan 就用 `/task-add` 開一個補 PRD 的任務），
+由 `/verify` 套回 PRD。
+
+**永遠不要直接改 PRD 或 brief。** 產出草稿供確認可以，直接寫入不行——
 「這個 CR 該進 PRD」還是「這個 CR 當初就不該做」是人的判斷。
 
 ---
@@ -144,7 +148,7 @@ description: Use when checking whether the codebase and WBS still match the orig
 ## 反模式
 
 - ❌ 每個任務都跑收斂（噪音，且單一任務很少讓整份規格跑掉）
-- ❌ 自動改寫 PRD
+- ❌ 直接改寫 PRD 或 brief（PRD 只透過 plan 的情境變更改）
 - ❌ 比對散文式描述（「效能良好」）→ 假警報
 - ❌ 沒讀 `wbs-archive.md` → 把已完成歸檔的任務誤報成「漏做」
 - ❌ 沒有 brief 時假裝比對過 non-goals
@@ -155,5 +159,5 @@ description: Use when checking whether the codebase and WBS still match the orig
 
 - `.claude/commands/verify.md` — 里程碑完成與 `pre-pr` 的觸發點
 - `.claude/commands/task-add.md` — CR 追加入口
-- `project-docs` skill — PRD／Tech Spec 的範本與章節結構
+- `project-docs` skill — brief 與 PRD 的範本（02）、6 份文件的分工
 - `plan-format` skill — 已歸檔 plan 的 `files:` 欄

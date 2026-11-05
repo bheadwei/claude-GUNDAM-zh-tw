@@ -21,17 +21,19 @@
 /task-init          # 選情境 → 自動觸發 /docs-init → 從文件反推 WBS
 ```
 
-| 情境 | 適用 | 產出文件 |
+| 情境 | 適用 | `/docs-init` 先產 |
 |---|---|---|
-| **demo** | 快速驗證、< 1 天 | `docs/prd.md`（精簡 PRD） |
-| **mvp** | 內部工具、< 1 週 | `docs/tech-spec.md`（合併 Tech Spec） |
-| **full** | 正式產品、跨團隊 | `docs/01_prd.md`、`02_bdd.md`…（VibeCoding 完整集） |
+| **demo** | 快速驗證、< 1 天 | brief、WBS（PRD 等第一條情境出現才建） |
+| **mvp** | 內部工具、< 1 週 | brief、PRD、架構文件、WBS |
+| **full** | 正式產品、跨團隊 | 同 mvp；碰到認證、金流、個資時加威脅模型；詢問是否要 runbook |
+
+文件只有 6 份（brief、PRD、架構文件、WBS、plan、ADR），各份的路徑與分工見 `project-docs` skill。
 
 **核心原則**：文件先行，WBS 從文件反推，避免「越做越發散」。
 
 初始化過程會條件式分流：偵測到前端 → `/ui-style`；偵測到 Node → `/pm-choose`。
 
-獨立使用：`/docs-init [--demo|--mvp|--full] [--resume]`
+獨立使用：`/docs-init [--demo|--mvp|--full]`
 
 ---
 

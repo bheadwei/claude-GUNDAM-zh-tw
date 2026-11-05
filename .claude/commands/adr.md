@@ -1,13 +1,12 @@
 ---
-description: 記錄技術決策（ADR）。把「為什麼選 A 不選 B」寫進 context/decisions/，避免下個 session 重新爭論已經決定過的事。
+description: 記錄技術決策（ADR）。把「為什麼選 A 不選 B」寫進 docs/decisions/，避免下個 session 重新爭論已經決定過的事。
 ---
 
 # 技術決策記錄（ADR）
 
 ## 為什麼需要
 
-`.claude/context/decisions/` 的職責寫著「**主 Agent** 技術決策記錄」，
-但實際上只有 `architect` agent 會寫。**你我在對話中做的選型完全沒有留下**——
+沒有這個指令時，只有 `architect` agent 會寫 ADR。**你我在對話中做的選型完全沒有留下**——
 選了哪個函式庫、為什麼這樣切、哪個方案被否決過。
 
 下個 session 不知道理由，就會重新爭論、或推翻一個其實有理由的決定。
@@ -54,14 +53,14 @@ description: 記錄技術決策（ADR）。把「為什麼選 A 不選 B」寫�
 
 **格式的唯一來源是**
 `.claude/skills/project-docs/templates/04_architecture_decision_record_template.md`
-—— 用它的 **A 節（簡易版）**，落點 `.claude/context/decisions/`。
+—— 用它的 **A 節（簡易版）**，落點 `docs/decisions/`（ADR 唯一的家，不存在就建立）。
 編號與檔名規則也在那份範本裡（`ADR-{YYYY-MM-DD}-{當日序號}-{kebab-標題}.md`，
 掃目錄現有檔案決定序號）。
 
 **不要在這裡憑記憶重打格式。** 這個 repo 曾經有三套 ADR 格式、三種編號規則，
 產出長什麼樣取決於當時剛好讀到哪一份。動手前先讀那份範本。
 
-重大／跨團隊決策改用 B 節（完整版）並落在 `docs/`，那條路線走 `architect` agent。
+重大／跨團隊決策改用 B 節（完整版），同樣放 `docs/decisions/`，那條路線走 `architect` agent。
 
 ### 步驟 4：回報
 
@@ -95,6 +94,6 @@ description: 記錄技術決策（ADR）。把「為什麼選 A 不選 B」寫�
 
 ## 相關
 
-- `.claude/context/decisions/` — 存放位置
+- `docs/decisions/` — 存放位置
 - `architect` agent — 也會寫 ADR（架構層級的決策）
 - `.claude/skills/project-docs/templates/04_architecture_decision_record_template.md` — 完整版 ADR 範本（正式文件用）
