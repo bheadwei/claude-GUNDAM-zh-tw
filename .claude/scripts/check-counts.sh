@@ -299,52 +299,6 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     fi
 fi
 
-# 架構文件模組表與 WBS 模組欄的表頭
-#
-# 為什麼：05 範本 5.5 的 `id`／`路徑`、WBS 的「模組」是之後專案圖解產生器對模組的依據，
-# 也是 /task-init、/task-add 填模組欄的依據。表頭一改名，下游只會靜默抽不到東西。
-# 5.1 的節點 id 必須都在 5.5 的 id 欄——範本自己不自洽，照抄的專案一定對不上。
-# docs-init 的 mvp 骨架只准「指向」5.5，內嵌一份 `| id |` 表頭就是第二份副本（會漂）。
-TPL05=.claude/skills/project-docs/templates/05_architecture_and_design_document.md
-if [ -f "$TPL05" ]; then
-    H55=$(awk '/^### 5\.5/{s=1; next} s && /^##/{exit} s && /^\|/{print; exit}' "$TPL05")
-    for col in id 路徑; do
-        CHECKED=$((CHECKED + 1))
-        if ! printf '%s' "$H55" | tr '|' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -qx "$col"; then
-            FAIL=$((FAIL + 1))
-            printf '  %s 05 範本 5.5 模組表表頭缺「%s」欄：%s\n' "$(red '✗')" "$col" "$TPL05"
-        fi
-    done
-
-    IDS55=$(awk '/^### 5\.5/{s=1; next} s && /^##/{exit}
-                 s && /^\|/ { n++; if (n <= 2) next
-                              split($0, c, "|"); v = c[2]; gsub(/^[ \t]+|[ \t]+$/, "", v); print v }' "$TPL05")
-    NODES51=$(awk '/^### 5\.1/{s=1; next} s && /^##/{exit}
-                   s && /^```mermaid/{m=1; next} s && m && /^```/{m=0; next}
-                   s && m && !/^[ \t]*subgraph/ && match($0, /^[ \t]*[A-Za-z0-9_-]+[ \t]*[\[\(\{]/) {
-                       v = substr($0, RSTART, RLENGTH); gsub(/[ \t\[\(\{]/, "", v); print v }' "$TPL05" | sort -u)
-    # 先抓所有節點、再驗格式：只抓合格的 id 會讓 `Web`、`svc_a` 這種節點靜默漏掉
-    CHECKED=$((CHECKED + 1))
-    BAD_IDS=$(printf '%s\n' "$NODES51" | grep -v '^$' | grep -vxE '[a-z0-9-]+' || true)
-    RESERVED=$(printf '%s\n' "$NODES51" | grep -xE 'end|graph|subgraph|style|class' || true)
-    BAD_IDS=$(printf '%s\n%s\n' "$BAD_IDS" "$RESERVED" | grep -v '^$' | tr '\n' ' ' || true)
-    if [ -n "$BAD_IDS" ]; then
-        FAIL=$((FAIL + 1))
-        printf '  %s 05 範本 5.1 容器圖的節點 id 不合格（只准 [a-z0-9-]+，且不可是 mermaid 保留字）：%s\n' "$(red '✗')" "$BAD_IDS"
-    fi
-    CHECKED=$((CHECKED + 1))
-    MISSING=""
-    while IFS= read -r nid; do
-        [ -n "$nid" ] || continue
-        printf '%s\n' "$IDS55" | grep -qx "$nid" || MISSING="$MISSING $nid"
-    done <<< "$NODES51"
-    if [ -z "$NODES51" ] || [ -n "$MISSING" ]; then
-        FAIL=$((FAIL + 1))
-        printf '  %s 05 範本 5.1 容器圖的節點 id 不在 5.5 的 id 欄：%s\n' "$(red '✗')" "${MISSING:- （5.1 找不到任何節點）}"
-        printf '      範例要自洽：節點 id＝模組 id。\n'
-    fi
-fi
-
 WBST=.claude/templates/wbs.template.md
 if [ -f "$WBST" ]; then
     CHECKED=$((CHECKED + 1))
@@ -363,19 +317,17 @@ fi
 
 # 專案圖解產生器的欄名常數 vs 範本表頭
 #
-# 為什麼：overview.sh 依欄名抽 5.5 模組表與 WBS 任務表。範本改了欄名、常數沒跟上，
+# 為什麼：overview.sh 依欄名抽 WBS 任務表與 plan 部件表。範本改了欄名、常數沒跟上，
 # 地圖會靜默變空白（不報錯）——跟孤兒 skill 同類的安靜失效，只有這裡擋得住。
 OVSH=.claude/scripts/overview.sh
 if [ -f "$OVSH" ]; then
     cols_of() { printf '%s\n' "$1" | tr '|' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$'; }
     ov_const() { sed -n "s/^$1=\"\([^\"]*\)\".*/\1/p" "$OVSH" | head -1; }
-    H55_COLS=$(cols_of "$(awk '/^### 5\.5/{s=1; next} s && /^##/{exit} s && /^\|/{print; exit}' "$TPL05" 2>/dev/null)")
     WBS_COLS=$(cols_of "$(grep -m1 -E '^\| # \| 任務 \|' "$WBST" 2>/dev/null)")
     PART_COLS=$(cols_of "$(grep -m1 -E '^\| id \| 部件 \|' .claude/skills/plan-format/SKILL.md 2>/dev/null)")
-    for pair in OVERVIEW_COLS_MODULE:H55 OVERVIEW_COLS_MODULE_OPT:H55 OVERVIEW_COLS_WBS:WBS OVERVIEW_COL_WBS:WBS OVERVIEW_COLS_PART:PART; do
+    for pair in OVERVIEW_COLS_WBS:WBS OVERVIEW_COL_WBS:WBS OVERVIEW_COLS_PART:PART; do
         name=${pair%:*}
         case "${pair#*:}" in
-            H55) have=$H55_COLS; where="05 範本 5.5 模組表表頭" ;;
             WBS) have=$WBS_COLS; where="wbs.template.md 任務表頭" ;;
             *)   have=$PART_COLS; where="plan-format「一眼看懂」部件表表頭" ;;
         esac
@@ -390,6 +342,52 @@ if [ -f "$OVSH" ]; then
             printf '      改了範本欄名就同步 %s 的常數，否則地圖會靜默抽不到東西\n' "$OVSH"
         fi
     done
+fi
+
+# 02 範本的 PRD 骨架：用語表、功能兩節，範例情境編號 `<代碼>-<序號>`
+#
+# 為什麼：PRD 情境編號是 plan 的「PRD 情境變更」與 /verify 套回的對照鍵，
+# 範本範例寫成小寫或沒有序號，照抄的專案之後就沒有鍵可對。
+TPL02=.claude/skills/project-docs/templates/02_project_brief_and_prd.md
+if [ -f "$TPL02" ]; then
+    for sec in 用語表 功能; do
+        CHECKED=$((CHECKED + 1))
+        if ! grep -qE "^## $sec( |$)" "$TPL02"; then
+            FAIL=$((FAIL + 1))
+            printf '  %s 02 範本的 PRD 骨架缺「## %s」一節：%s\n' "$(red '✗')" "$sec" "$TPL02"
+        fi
+    done
+    CHECKED=$((CHECKED + 1))
+    SCN=$(grep -E '^#### ' "$TPL02" || true)
+    BAD_SCN=$(printf '%s\n' "$SCN" | grep -v '^$' | grep -vE '^#### [A-Z]+-[0-9]+( |$)' || true)
+    if [ -z "$SCN" ] || [ -n "$BAD_SCN" ]; then
+        FAIL=$((FAIL + 1))
+        printf '  %s 02 範本的範例情境標題要是「#### <大寫代碼>-<序號> 標題」：%s\n' "$(red '✗')" "${BAD_SCN:-（找不到任何情境）}"
+    fi
+fi
+
+# plan-format 範例：status 是四值之一、每個階段標題下一行是「依賴」
+#
+# 為什麼：status 加附註是 60 多種寫法的來源；依賴行是 /tdd 判斷哪些階段可平行的唯一依據。
+PFSKILL=.claude/skills/plan-format/SKILL.md
+if [ -f "$PFSKILL" ]; then
+    CHECKED=$((CHECKED + 1))
+    PF_STATUS=$(awk -F'"' '/^wbs_task:/{f=1} f && /^```/{exit} f && /^status:/{print $2; exit}' "$PFSKILL")
+    case "$PF_STATUS" in
+        "⏳ 未開始"|"🔄 進行中"|"🚫 阻塞"|"✅ 完成") ;;
+        *)
+            FAIL=$((FAIL + 1))
+            printf '  %s plan-format 範例的 status 只准 ⏳ 未開始／🔄 進行中／🚫 阻塞／✅ 完成（不加附註）：%s\n' "$(red '✗')" "${PF_STATUS:-（找不到）}"
+            ;;
+    esac
+    CHECKED=$((CHECKED + 1))
+    NO_DEP=$(awk '/^wbs_task:/{f=1} f && /^```/{exit}
+                  f && /^### 階段 [0-9]/{ t=$0; getline nx; if (nx !~ /^- \*\*依賴\*\*：/) print t }' "$PFSKILL")
+    N_PHASES=$(awk '/^wbs_task:/{f=1} f && /^```/{exit} f && /^### 階段 [0-9]/{n++} END{print n+0}' "$PFSKILL")
+    if [ "$N_PHASES" -eq 0 ] || [ -n "$NO_DEP" ]; then
+        FAIL=$((FAIL + 1))
+        printf '  %s plan-format 範例的階段標題下一行必須是「- **依賴**：」：%s\n' "$(red '✗')" "${NO_DEP:-（範例沒有任何階段）}"
+    fi
 fi
 
 # 專案圖解畫面：≤ 50KB、不載 CDN、不用 module script（file:// 下會被 CORS 擋）

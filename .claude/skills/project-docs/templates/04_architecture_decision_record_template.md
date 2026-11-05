@@ -10,7 +10,7 @@
 | | 簡易版（A 節） | 完整版（B 節） |
 |---|---|---|
 | 適用 | 日常單點決策（選套件、選寫法） | 重大／跨團隊／難回頭的決策 |
-| 落點 | `.claude/context/decisions/` | `docs/` |
+| 落點 | `docs/decisions/` | `docs/decisions/` |
 | 入口 | `/adr` 指令 | `architect` agent |
 
 ## 檔名與編號（兩版通用）
