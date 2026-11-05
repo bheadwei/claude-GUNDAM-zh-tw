@@ -44,7 +44,7 @@
 
 | Skill | 用途 | 啟動時機 |
 | :--- | :--- | :--- |
-| **project-docs** | 依 VibeCoding 範本產專案文件（20 種範本自帶於 skill 的 `templates/`），支援 demo/mvp/full 三檔深度 | `/docs-init` 觸發，或手動要求寫 PRD/架構/API 規格 |
+| **project-docs** | 6 份專案文件的分工、各份不寫什麼與範本（5 種範本自帶於 skill 的 `templates/`）；demo/mvp/full 只決定先產哪幾份 | `/docs-init`、`/task-init` 2.7b，或要寫 PRD／架構文件／ADR／威脅模型／runbook、要在 `docs/` 新增檔案時 |
 | **deep-research** | 多源深度研究（MCP 串接） | 複雜問題調查 |
 | **e2e-testing** | Playwright E2E 測試模式 | 測試關鍵使用者流程 |
 | **cost-aware-llm-pipeline** | LLM API 成本優化（模型路由 + 預算追蹤） | 開發 AI 應用 |
@@ -91,7 +91,7 @@ UI 與 Node 兩類另有 `user-prompt-submit.sh` 的關鍵字提示當第二層�
 
 | Skill | 帶的是什麼具體東西 |
 |---|---|
-| `project-docs` | 20 份 VibeCoding 範本的實際骨架與章節順序 |
+| `project-docs` | 6 份文件各回答什麼、各份不寫什麼，以及 PRD 情境、架構文件自動段與資料流的實際骨架 |
 | `database-migrations` | zero-downtime DDL 的實際步驟順序（先加欄位再回填再切換） |
 | `postgres-patterns` | RLS 政策與索引選擇的實際語法，不是「該加索引」這種通則 |
 | `sql-patterns` | 同一件事在三個引擎的實際差別（加欄位在 PG 可能瞬間完成、SQLite 要重建整表） |

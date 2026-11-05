@@ -287,7 +287,7 @@ hook 在背景更新，畫面每 3 秒自己重讀。地圖可拖曳平移、縮
 
 | Skill | 用途 |
 | :--- | :--- |
-| **project-docs** | 依 VibeCoding 範本產專案文件（**20 份範本自帶於 skill 內**），支援 demo/mvp/full 三檔深度 |
+| **project-docs** | 6 份專案文件（brief、PRD、架構文件、WBS、plan、ADR）的分工、各份不寫什麼與範本（**5 份範本自帶於 skill 內**）；demo/mvp/full 只決定先產哪幾份 |
 | **deep-research** | 多源深度研究（MCP 串接） |
 | **e2e-testing** | Playwright E2E 測試模式 |
 | **cost-aware-llm-pipeline** | LLM API 成本優化（模型路由 + 預算追蹤） |
@@ -317,19 +317,23 @@ hook 在背景更新，畫面每 3 秒自己重讀。地圖可拖曳平移、縮
 
 ---
 
-## VibeCoding 工作流模板（20 份）
+## 專案文件範本（5 份）
 
-自帶於 `project-docs` skill 的 `templates/`，由 `/docs-init` 依情境選用（編號無 `10`）。
+一個專案只有 6 份文件，各回答一個問題。範本自帶於 `project-docs` skill 的 `templates/`，
+由 `/docs-init` 依 demo／mvp／full 決定先產哪幾份（ADR-2026-11-05-004）。
 
-| 階段 | 模板 |
-| :--- | :--- |
-| 流程總覽 | `01` workflow_manual |
-| 規劃 | `02` PRD、`03` BDD |
-| 架構設計 | `04` ADR、`05` 架構、`06` API |
-| 詳細設計 | `07` 模組與測試、`08` 專案結構、`09` 設計與依賴、`18` 資料模型與 migration |
-| 開發品質 | `11` Code Review、`12` 前端架構、`17` 前端 IA |
-| 安全部署 | `13` 安全與就緒清單、`20` 威脅模型、`14` 部署維運、`19` 可觀測性與 SLO |
-| 維護管理 | `15` 文檔維護、`16` WBS、`21` AI/LLM 整合 |
+| 文件 | 路徑 | 範本 |
+| :--- | :--- | :--- |
+| brief | `docs/00_brief.md` | `02` 上半 |
+| PRD | `docs/prd.md` | `02` 下半（編號情境＋用語表） |
+| 架構文件 | `docs/architecture.md` | `05`（第 1–3、5 節由 architect 撰寫；第 4 節由專案地圖從程式碼自動產生） |
+| WBS | `.claude/taskmaster-data/wbs.md` | `.claude/templates/wbs.template.md` |
+| plan | `.claude/taskmaster-data/plans/` | `plan-format` skill |
+| ADR | `docs/decisions/` | `04` |
+| 威脅模型（條件式） | `docs/threat-model.md` | `20` |
+| runbook（選配） | `docs/runbook.md` | `14` |
+
+`12`、`17` 屬 `/ui-site` 的 UI 鏈，不算文件體系。
 
 ---
 
