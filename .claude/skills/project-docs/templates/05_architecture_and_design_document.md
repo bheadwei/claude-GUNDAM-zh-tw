@@ -1,6 +1,6 @@
 # 架構與設計文件範本（`docs/architecture.md`）
 
-> 前四節由人寫（`architect`），只寫程式碼看不出來的事；第 5 節由專案地圖產生。
+> 第 1–3、5 節由 `architect` 撰寫，只寫程式碼看不出來的事；第 4 節由專案地圖從程式碼自動產生，手改會被蓋掉。
 > 圖表抽象層級採 [C4 Model](https://c4model.com)。設計理由不放這裡，寫成 ADR（`04_architecture_decision_record_template.md`），本檔只連結。
 
 ---
@@ -40,7 +40,13 @@ graph TD
 
 細節（部署步驟、排障、SLO）在 `docs/runbook.md`（若有）。
 
-## 4. 資料流
+## 4. 模組與依賴
+
+<!-- overview:generated:start -->
+（此段由專案地圖產生，手改會被覆蓋。改模組名稱或分組請改 `.claude/taskmaster-data/module-notes.md`）
+<!-- overview:generated:end -->
+
+## 5. 資料流
 
 只畫跨服務、跨系統的流動。服務內部的函式呼叫看程式碼或專案地圖的模組展開。
 
@@ -72,19 +78,13 @@ sequenceDiagram
     end
 ```
 
-## 5. 模組與依賴
-
-<!-- overview:generated:start -->
-（此段由專案地圖產生，手改會被覆蓋。改模組名稱或分組請改 `.claude/taskmaster-data/module-notes.md`）
-<!-- overview:generated:end -->
-
 ---
 
 **本檔不寫**：
 
 | 不寫 | 它的唯一來源 |
 | :--- | :--- |
-| 模組清單、依賴圖、路由數 | 第 5 節（程式碼掃描產生） |
+| 模組清單、依賴圖、路由數 | 第 4 節（程式碼掃描產生） |
 | 服務內部的函式呼叫、檔案結構 | 程式碼／專案地圖的模組展開 |
 | 設計理由、替代方案比較 | ADR |
 | 系統行為、使用者情境 | PRD |

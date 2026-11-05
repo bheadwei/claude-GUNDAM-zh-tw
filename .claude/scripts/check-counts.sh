@@ -401,21 +401,21 @@ if [ -f "$PFSKILL" ]; then
     fi
 fi
 
-# 05 範本的資料流節：位在自動段之前、至少一張 sequenceDiagram、每個小標題以全形括號結尾
+# 05 範本的資料流節：位在自動段之後、至少一張 sequenceDiagram、每個小標題以全形括號結尾
 #
-# 為什麼：圖要連到 PRD 情境（括號裡的編號）；節放在自動段之後會被「手改會被覆蓋」的說明吃掉。
+# 為什麼：圖要連到 PRD 情境（括號裡的編號）；順序由大到小（模組與依賴在前、資料流在後）。
 TPL05=.claude/skills/project-docs/templates/05_architecture_and_design_document.md
 if [ -f "$TPL05" ]; then
     CHECKED=$((CHECKED + 1))
-    DF_TPL=$(awk '/^<!-- overview:generated:start -->/{if(!has) print "資料流節在自動段標記之後或不存在"; exit}
-                  /^## [0-9]+\. 資料流/{has=1; s=1; next}
+    DF_TPL=$(awk '/^<!-- overview:generated:end -->/{after=1; next}
+                  /^## [0-9]+\. 資料流/{has=1; s=1; if (!after) print "資料流節在自動段結束標記之前"; next}
                   s && /^## /{s=0}
                   s && /^```mermaid/{getline nx; if (nx ~ /^sequenceDiagram/) seq++}
-                  s && /^### /{if ($0 !~ /）$/) print "小標題沒有以「）」結尾：" $0}
-                  END{if(has && seq==0) print "節內沒有首行為 sequenceDiagram 的 mermaid 區塊"}' "$TPL05")
+                  s && /^### /{sub(/\r$/, ""); if ($0 !~ /）$/) print "小標題沒有以「）」結尾：" $0}
+                  END{if(!has) print "沒有資料流節"; else if(seq==0) print "節內沒有首行為 sequenceDiagram 的 mermaid 區塊"}' "$TPL05")
     if [ -n "$DF_TPL" ]; then
         FAIL=$((FAIL + 1))
-        printf '  %s 05 範本要在自動段之前有「## N. 資料流」節（含 sequenceDiagram、小標題以全形括號結尾）：%s\n' "$(red '✗')" "$(printf '%s' "$DF_TPL" | tr '\n' ';')"
+        printf '  %s 05 範本要在自動段之後有「## N. 資料流」節（含 sequenceDiagram、小標題以全形括號結尾）：%s\n' "$(red '✗')" "$(printf '%s' "$DF_TPL" | tr '\n' ';')"
     fi
 fi
 
