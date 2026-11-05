@@ -44,9 +44,8 @@
   - `-p` 非互動模式拿不到權限提示 → 受測 session 寫不了 `.claude/**`、跑不了 Bash 腳本
   - 已驗出的結論：反向題 2/2 PASS（注入沒硬到壓過使用者指示）、任務分級與升級有效；**文件路由（01／02）兩次都沒走**，證實了 Red Flags 表「最常被漏掉的一棒」那句判斷
 - **衝突檔本身是 live hook 時，「委派 `conflict-resolver`」的注入靜默失效**（2026-09-11 實測）。衝突標記讓 hook 語法壞掉 → PostToolUse 只噴語法錯誤，該出現的提示沒出現。這推翻了「hook 一定會提醒你委派」這個隱含假設，而本模板最常做的事就是改 hook。沒有簡單解；務實做法是**衝突檔含 `.claude/hooks/**` 時不要等提示，自己看 `git status`**
-- **hook 已知但暫不修的五個問題**（2026-11-05 確認仍在程式裡，使用者決定先不處理）：
+- **hook 已知但暫不修的四個問題**（2026-11-05 確認仍在程式裡，使用者決定先不處理）：
   - `lib/resolve-roots.sh` 在 `claude -w` 開的 session 裡把 worktree 當成主 checkout：`CLAUDE_PROJECT_DIR` 本身就指向 worktree，只比對它就判成 `IN_WORKTREE=0`，短命旗標與共享產物會落在同一邊
-  - `pre-tool-use.sh` 的 log 用 `${IN_WORKTREE:+[wt]}`，而 `IN_WORKTREE` 不是 0 就是 1、永遠非空 → `hooks.log` 每一行都帶 `[wt]`，看 log 分不出是不是在 worktree
   - hook 在 Windows 慢：每個 `bash`／`jq` 子行程約 170ms，整套測試約 50 分鐘
   - `lib/full-suite-gate.sh` 把 `bash -n …/run-tests.sh`（只檢查語法）當成跑整套，在 worktree 裡會擋一次
   - `post-bash.sh` 不檢查合併是不是發生在本 repo：在 repo 外（`git -C` 別處、`cd` 到別的 repo）跑 `git merge` 也會記進 `.merge-pending`，擋下下一次合併

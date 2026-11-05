@@ -11,6 +11,10 @@
 
 ---
 
+### 已修（2026-11-05）
+
+- ~~`hooks.log` 每一行都帶 `[wt]`~~ → `pre-tool-use.sh` 的 `log()` 原本用 `${IN_WORKTREE:+[wt]}`（只看有沒有值），而 `IN_WORKTREE` 一定是 0 或 1；改成判斷 `= 1`。回歸測試在 `run-tests.sh`「worktree 感知 — 狀態隔離邊界」節
+
 ### 已修（2026-10-20，流程鏈複查・文件線；hook 線另計）
 
 - ~~ad-hoc plan 是孤兒~~ → `/plan` 持久化後由主模型寫 `.current-task`（ad-hoc 寫檔名主幹，WBS 走 `/task-next`「狀態同步」）；`/tdd`／`/verify` 改搜 `<值>.md` 或 `<值>-*.md`；`/verify` 遇 `adhoc-` 不標 WBS；`/time-log` 不把 `adhoc-…` 當 WBS 編號

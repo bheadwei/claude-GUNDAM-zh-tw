@@ -1390,6 +1390,14 @@ expect_decision "worktree 有自己的模式檔就放行" allow \
 expect_decision "cwd 為子目錄仍解析到 worktree 根" allow \
     "$(run pre-tool-use.sh "$(wcwd "$WT/src/a.ts" "$WT/src/deep")")"
 
+# log 集中在主 checkout，[wt] 是唯一分得出來源的標記：IN_WORKTREE 一定是 0 或 1，不能用「有沒有值」判斷
+run pre-tool-use.sh "$(wcwd "$SANDBOX/src/a.ts" "$SANDBOX")" >/dev/null
+expect_eq "主 checkout 的 log 行不帶 [wt]" "pre-tool:" \
+    "$(grep -o 'pre-tool[^ ]*' "$SANDBOX/.claude/logs/hooks.log" 2>/dev/null | tail -1)"
+run pre-tool-use.sh "$(wcwd "$WT/src/a.ts" "$WT")" >/dev/null
+expect_eq "worktree 的 log 行帶 [wt]" "pre-tool[wt]:" \
+    "$(grep -o 'pre-tool[^ ]*' "$SANDBOX/.claude/logs/hooks.log" 2>/dev/null | tail -1)"
+
 # 坑紀錄是共享的：只放在主 checkout 也要在 worktree 生效
 setup_worktree
 echo standard > "$WT/.claude/taskmaster-data/.current-task-mode"
