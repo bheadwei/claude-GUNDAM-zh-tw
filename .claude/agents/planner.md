@@ -14,7 +14,8 @@ model: opus
 ### 開始前
 1. 檢查 `.claude/coordination/handoffs/` 中 `to: planner` 且 `status: pending` 的交接
    （常見來源：`architect` 的架構決策，需要落地為實作計畫）
-2. 若有，讀取其 `related_report` 指向的 ADR/設計文件，作為規劃的輸入前提
+2. 若有，讀取其 `related_report` 指向的設計提案與 ADR，作為規劃的輸入前提；
+   交接列了資料流變更的，照抄進 plan 的「資料流變更」並連到提案或 ADR 裡的圖
 3. 檢查 `.claude/context/planning/` 是否有同一任務的舊計畫報告 — 有則以其為基線
 
 ### 結束後（**必須**，在使用者確認並寫入 plan 檔之後）
@@ -81,41 +82,18 @@ model: opus
 
 ## 計畫檔格式
 
-**完整格式見** `plan-format` skill。核心結構：
+**格式的唯一來源是 `.claude/skills/plan-format/SKILL.md`**（四段：為什麼做／怎麼做／改善了什麼／發現與決策）。
+動手前讀它的範例照抄結構，不要憑記憶寫舊格式的段落。
 
-```markdown
----
-wbs_task: "2.1"
-slug: "auth-middleware"
-created: "YYYY-MM-DD"
-updated: "YYYY-MM-DD"
-status: "⏳ 未開始"
-current_phase: 0
-mode: "standard"        # quick / standard / critical，依 rules/task-mode.md 判定，放進草案讓使用者確認
-files:                  # 本任務會新增/修改的檔案或 glob；不確定就多列
-  - "src/..."
----
+寫的時候這幾件事最常漏：
 
-# 實作計畫：[標題]
-
-## 目標
-
-## 一眼看懂
-（部件表＋全虛線 mermaid；欄名與寫法見 plan-format 的「一眼看懂」節，唯一來源）
-
-## WBS 連結 / 技術依賴
-
-## 階段拆解
-### 階段 1: 介面與型別 ⏳
-- [ ] 具體步驟（含檔案路徑）
-- **預估**：30min
-- **驗收**：
-  - 在什麼情況下 → 會得到什麼結果（一條一個行為，能直接變成測試）
-
-### 階段 2-4: 核心 / 整合 / 打磨
-
-## 風險與緩解 / 驗收標準（整體）
-```
+- **「為什麼做」底下兩個小節都要有**：`### PRD 情境變更`（這次增、改、刪了哪幾條情境）與 `### 資料流變更`（這次改了哪條跨服務流程）。
+  沒有就寫「無」，不要刪掉小節
+- **同一個情境編號**：寫 PRD 情境變更前，grep `.claude/taskmaster-data/plans/` 裡其他進行中的 plan（不含 `archive/`）。
+  同一個編號也出現在別份 → 在本 plan 的「發現與決策」提一句（哪份 plan、哪個編號），不擋
+- **新的跨服務流程**：資料流變更只寫一句；完整的 `sequenceDiagram` 在 architect 的設計提案或 ADR，連過去即可，不要貼進 plan
+- **「怎麼做」開頭寫 `**可平行**：…`**：依各階段的依賴行與部件表「檔案」判斷（判準在 plan-format），沒有就寫「無」
+- **每個 `### 階段 N` 標題的下一行是 `- **依賴**：…`**：讀到另一階段產出的型別、介面、schema、fixture 也算依賴
 
 ## 持久化流程（使用者確認後執行）
 
