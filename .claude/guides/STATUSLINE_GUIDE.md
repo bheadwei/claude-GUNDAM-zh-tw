@@ -342,6 +342,7 @@ echo '{"model":{"display_name":"Test"},"context_window":{"context_window_size":1
 
 ```bash
 which jq || echo "jq 未安裝"
+jq --version   # 最低要 1.7.1；Debian 12／Ubuntu 22.04 以前 apt 只有 1.6，請從 https://github.com/jqlang/jq/releases 下載
 # Windows: winget install jqlang.jq
 # Ubuntu:  sudo apt install jq
 # RHEL:    sudo dnf install jq
