@@ -29,7 +29,7 @@ skill 寫了沒人喚起、description 是內容摘要、同一份模板散在�
 
 ### 結束後（**必須**）
 1. **跑 `bash .claude/scripts/check-counts.sh`，必須全部一致**才算完成
-2. 若動過 hook → 跑 `bash .claude/hooks/tests/run-tests.sh --changed <起點>`（依改動挑節，用背景執行）。
+2. 若動過 hook（**模板 repo 限定**：專案沒有 `hooks/tests/`，不跑）→ 跑 `bash .claude/hooks/tests/run-tests.sh --changed <起點>`（依改動挑節，用背景執行）。
    整套在 Windows 上約 50 分鐘，什麼時候跑見 `commands/verify.md` 步驟 4
 3. 寫報告到 `.claude/context/decisions/skill-curator-{YYYY-MM-DD-HHMM}.md`
 4. 清除 `.skill-impact`（已處理完）
@@ -128,7 +128,7 @@ skill 寫了沒人喚起、description 是內容摘要、同一份模板散在�
 
 `check-counts.sh` 證明**接線正確**，證明不了**模型會不會照做**。
 
-要驗行為改變，用 `.claude/tests/skill-compliance/`：寫一個真實開場 prompt
+要驗行為改變，用 `.claude/tests/skill-compliance/`（**模板 repo 限定**，專案沒有；沒有就在報告寫「未驗證行為改變」）：寫一個真實開場 prompt
 （**刻意不含 skill 名稱與關鍵字**），跑 `run-compliance.sh`，看模型有沒有載入。
 沒跑過就在報告裡**明確寫「未驗證行為改變」**，不要說「已完成」。
 

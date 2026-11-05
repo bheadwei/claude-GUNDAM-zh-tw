@@ -106,7 +106,7 @@
 - `post-write.sh`：寫 wbs／plan／架構文件後在背景重產專案圖解（`scripts/overview.sh`）、記錄文件債
 - `session-start.sh`：全文注入 `using-taskmaster`、補產專案圖解
 
-改了 hook 之後：`bash hooks/tests/run-tests.sh --changed <起點>` 只跑改到的節；
+改了 hook 之後（模板 repo 限定，專案不帶 `hooks/tests/`）：`bash hooks/tests/run-tests.sh --changed <起點>` 只跑改到的節；
 整套與何時跑見 `hooks/tests/README.md` 與 `commands/verify.md` 步驟 4。
 
 ## Context 系統（跨 Agent 共享）

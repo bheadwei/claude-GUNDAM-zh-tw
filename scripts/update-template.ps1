@@ -97,7 +97,7 @@ if (-not $DryRun -and -not $NoBackup -and (Test-Path (Join-Path $destPath '.clau
 # ============================================================================
 
 function Invoke-Sync {
-    param([string]$Src, [string]$Dst, [switch]$Mirror, [switch]$AdditiveOnly)
+    param([string]$Src, [string]$Dst, [switch]$Mirror, [switch]$AdditiveOnly, [string[]]$ExcludeDirs = @())
 
     if (-not (Test-Path $Src)) { return }   # 模板沒有就跳過
     New-Item -ItemType Directory -Path $Dst -Force | Out-Null
@@ -105,6 +105,8 @@ function Invoke-Sync {
     $rc = @($Src.TrimEnd('\'), $Dst.TrimEnd('\'), '/E', '/R:1', '/W:1', '/NP', '/NDL', '/NFL', '/NJH', '/NJS')
     if ($Mirror -and -not $AdditiveOnly) { $rc += '/PURGE' }   # /E + /PURGE = /MIR 效果
     if ($DryRun) { $rc += '/L' }
+    # /XD 給完整路徑才不會誤傷同名目錄；被排除的目錄 /PURGE 也不會刪，目標端既有的原樣留著
+    foreach ($x in $ExcludeDirs) { $rc += '/XD'; $rc += $x }
 
     & robocopy @rc | Out-Null
     if ($LASTEXITCODE -ge 8) {
@@ -136,7 +138,15 @@ Write-Host ""
 
 Write-Host "▶ SYNC 模板目錄..." -ForegroundColor Green
 foreach ($d in $syncClaudeDirs) {
-    Invoke-Sync (Join-Path $source ".claude\$d") (Join-Path $destPath ".claude\$d") -Mirror:$Prune
+    # hooks\tests 是模板自己的測試，不同步（copy-template.{sh,ps1}、update-template.sh 要一致）
+    $skip = @()
+    if ($d -eq 'hooks') { $skip = @((Join-Path $source '.claude\hooks\tests')) }
+    Invoke-Sync (Join-Path $source ".claude\$d") (Join-Path $destPath ".claude\$d") -Mirror:$Prune -ExcludeDirs $skip
+}
+foreach ($t in @('hooks\tests', 'tests')) {
+    if (Test-Path (Join-Path $destPath ".claude\$t")) {
+        Write-Host "   ℹ  .claude\$t\ 是模板自己的測試，已不再同步；可自行刪除" -ForegroundColor DarkGray
+    }
 }
 
 Write-Host "▶ SYNC 模板檔案..." -ForegroundColor Green

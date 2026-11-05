@@ -444,7 +444,9 @@ worktree 裡連 plan 都沒有，agent 不知道要實作什麼。
   SessionStart 注入的 skill（`using-taskmaster` 已示範這個路徑）。
 - **constitution（專案不變量）** —— `rules/` 是模板通用規範，缺「這個專案不可違反的原則」。
 
-## 改動 hook 之後
+## 改動 hook 之後（模板 repo 限定）
+
+專案不帶 `hooks/tests/`（copy／update-template 都排除），這節只適用於開發模板本身。
 
 ```bash
 bash .claude/hooks/tests/run-tests.sh --changed <起點>   # 依改動挑節

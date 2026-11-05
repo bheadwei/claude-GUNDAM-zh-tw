@@ -89,18 +89,25 @@ fi
 # ---- rsync 包裝（無 rsync 時 fallback 到 cp）----
 have_rsync=0; command -v rsync >/dev/null 2>&1 && have_rsync=1
 
-sync_dir() {  # $1=src $2=dst $3=mode(mirror|additive)
-  local src="$1" dst="$2" m="$3"
+sync_dir() {  # $1=src $2=dst $3=mode(mirror|additive) $4=不同步的頂層子目錄名（選填）
+  local src="$1" dst="$2" m="$3" skip="${4:-}"
   [ -d "$src" ] || return 0
   mkdir -p "$dst"
   if [ "$have_rsync" -eq 1 ]; then
     local flags=(-a)
     [ "$DRY_RUN" -eq 1 ] && flags+=(-n -v)
     [ "$m" = "mirror" ] && [ "$PRUNE" -eq 1 ] && flags+=(--delete)
+    # 只用 --exclude、不加 --delete-excluded：目標端既有的被排除目錄原樣留著
+    [ -n "$skip" ] && flags+=(--exclude="/$skip/")
     rsync "${flags[@]}" "$src/" "$dst/"
   else
     [ "$DRY_RUN" -eq 1 ] && { echo "   [dry] $dst/"; return 0; }
-    cp -a "$src/." "$dst/"
+    local e
+    for e in "$src"/* "$src"/.[!.]*; do
+      [ -e "$e" ] || continue
+      [ -n "$skip" ] && [ "$(basename "$e")" = "$skip" ] && continue
+      cp -a "$e" "$dst/"
+    done
   fi
 }
 
@@ -128,7 +135,16 @@ echo "   目標: $DEST"
 echo ""
 
 echo "▶ SYNC 模板目錄..."
-for d in "${SYNC_CLAUDE_DIRS[@]}"; do sync_dir "$SOURCE/.claude/$d" "$DEST/.claude/$d" mirror; done
+for d in "${SYNC_CLAUDE_DIRS[@]}"; do
+  skip=""
+  # hooks/tests/ 是模板自己的測試，不同步；目標端已有的不刪（專案裡的破壞性操作）。
+  # copy-template.{sh,ps1} 的排除、update-template.ps1 要一致
+  [ "$d" = "hooks" ] && skip="tests"
+  sync_dir "$SOURCE/.claude/$d" "$DEST/.claude/$d" mirror "$skip"
+done
+for t in hooks/tests tests; do
+  [ -d "$DEST/.claude/$t" ] && echo "   ℹ  .claude/$t/ 是模板自己的測試，已不再同步；可自行刪除"
+done
 
 echo "▶ SYNC 模板檔案..."
 for f in "${SYNC_CLAUDE_FILES[@]}"; do copy_file "$SOURCE/.claude/$f" "$DEST/.claude/$f"; done

@@ -37,7 +37,7 @@ description: Use when writing or fixing tests, about to run a test command, deci
 
 **第一列在 worktree 裡由 hook 強制**（`.claude/hooks/lib/full-suite-gate.sh`）：沒帶測試路徑、
 也沒有 `::`／`-k`／`-t` 這類篩選的 pytest／vitest／jest／`npm test`，以及不帶參數或帶 `--full` 的
-`.claude/hooks/tests/run-tests.sh` 會被擋一次，重試同一條即放行。
+`.claude/hooks/tests/run-tests.sh`（模板 repo 才有）會被擋一次，重試同一條即放行。
 worktree 裡整套是正當的只有上表第四列（`/deps`、`/refactor-clean` 的基準與每批），以及 `/verify`
 取不到分支起點時的退路（見 `commands/verify.md` 步驟 4）→
 指令尾端加註解 `# full-suite`（例：`uv run pytest -q  # full-suite`），閘門不攔。
