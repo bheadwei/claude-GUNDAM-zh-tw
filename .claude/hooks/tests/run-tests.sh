@@ -3291,6 +3291,7 @@ section "overview.sh — 專案地圖"
 # 產生器在沙箱裡跑：把 overview.sh 與畫面原檔複製進沙箱的 .claude（post-write 找的是
 # $MAIN_CLAUDE/scripts/overview.sh，而沙箱就是主 checkout），改原檔的測試才不會碰到真的範本。
 OV_SRC="$HOOK_DIR/../scripts/overview.sh"
+OV_SCAN="$HOOK_DIR/../scripts/overview-scan.sh"
 OV_TPL="$HOOK_DIR/../templates/overview/index.html"
 OVD="$SANDBOX/.claude/taskmaster-data"
 OVO="$OVD/overview"
@@ -3318,6 +3319,7 @@ ov_reset() {
       && git worktree prune ) >/dev/null 2>&1
     mkdir -p "$SANDBOX/.claude/scripts" "$SANDBOX/.claude/templates/overview" "$SANDBOX/docs"
     cp "$OV_SRC" "$SANDBOX/.claude/scripts/overview.sh"
+    cp "$OV_SCAN" "$SANDBOX/.claude/scripts/overview-scan.sh"
     cp "$OV_TPL" "$SANDBOX/.claude/templates/overview/index.html"
 }
 ov()      { bash "$SANDBOX/.claude/scripts/overview.sh" "$SANDBOX" >/dev/null 2>&1; }
@@ -3396,7 +3398,7 @@ mkdir -p "$SANDBOX/src/api"; echo x > "$SANDBOX/src/api/new.ts"
 ov
 cmp -s "$SANDBOX/ov-first.md" "$OVO/overview.md" && ok "同一組輸入連跑兩次 → overview.md 相同（工作區的改動不進 md）" \
     || ng "同一組輸入連跑兩次 → overview.md 相同" "cmp 相同" "$(diff "$SANDBOX/ov-first.md" "$OVO/overview.md" | head -5)"
-expect_eq "data.js 去掉賦值外殼後可被 jq 解析，schema 為 1" 1 "$(ovq '.schema')"
+expect_eq "data.js 去掉賦值外殼後可被 jq 解析，schema 為 2" 2 "$(ovq '.schema')"
 expect_eq "data.js 只有一句賦值（畫面靠它判斷寫到一半）" 1 "$(grep -cv '^//' "$OVO/data.js" 2>/dev/null)"
 expect_eq "未追蹤的新檔歸到路徑對得上的模組" "api true" "$(ovq '.changes[] | select(.file == "src/api/new.ts") | "\(.module) \(.new)"')"
 expect_eq "模組的 changed 計數" 1 "$(ovq '.modules[] | select(.id == "api") | .changed')"
@@ -3438,10 +3440,10 @@ expect_contains "--print-path 印出 file:// 路徑" "taskmaster-data/overview/i
 # 鎖：兩支同時跑 → 結果合法、鎖不殘留；過期的鎖要接手；新鮮的鎖讓位並留下 .dirty
 rm -f "$OVO/data.js"
 ov & ov & wait
-expect_eq "兩個 overview.sh 同時跑 → data.js 合法" 1 "$(ovq '.schema')"
+expect_eq "兩個 overview.sh 同時跑 → data.js 合法" 2 "$(ovq '.schema')"
 [ ! -e "$OVO/.lock" ] && ok "同時跑完後鎖目錄不存在" || ng "同時跑完後鎖目錄不存在" "沒有 .lock" "還在"
 rm -f "$OVO/data.js"; mkdir -p "$OVO/.lock"; echo $(( $(date +%s) - 300 )) > "$OVO/.lock/at"; ov
-expect_eq "鎖超過 120 秒 → 視為過期並接手產生" 1 "$(ovq '.schema')"
+expect_eq "鎖超過 120 秒 → 視為過期並接手產生" 2 "$(ovq '.schema')"
 # --actual 最多等 60 秒；過期門檻若不比它長，等鎖的那支會把還活著的持鎖者當成過期搶走
 expect_eq "鎖的過期門檻（LOCK_STALE_SEC）比 --actual 的等待時間（60 秒）長" 1 \
     "$(awk -F= '/^LOCK_STALE_SEC=/ { print ($2 + 0 > 60) ? 1 : 0 }' "$OV_SRC")"
@@ -3450,9 +3452,14 @@ rm -f "$OVO/data.js" "$OVO/.dirty"; mkdir -p "$OVO/.lock"; date +%s > "$OVO/.loc
     || ng "鎖還新 → 讓位、留下 .dirty" "沒有 data.js、有 .dirty" "$(ls -a "$OVO")"
 rm -rf "$OVO/.lock"
 
-ov_reset; ov_proj; OV_ARCH_HEAD='<!-- overview: draft -->' ov_arch; ov_wbs; ov
-expect_eq       "架構草稿 → 不產生地圖"               0    "$(ovq '.modules | length')"
+ov_reset; ov_proj; OV_ARCH_HEAD='<!-- overview: draft -->' ov_arch; ov_wbs
+mkdir -p "$SANDBOX/src/web"; echo 'export const a = 1' > "$SANDBOX/src/web/a.ts"; echo 'export const b = 2' > "$SANDBOX/src/web/b.ts"
+ov
+expect_eq       "架構草稿 → 地圖照畫（由程式碼掃出）"   true "$(ovq '.modules | length > 0')"
 expect_eq       "架構草稿 → architectureDraft 為 true" true "$(ovq '.project.architectureDraft')"
+expect_eq       "架構草稿 → 模組名稱不取自草稿（web 是目錄名，不是「Web App」）" "web dir" \
+    "$(ovq '.modules[] | select(.id == "web") | "\(.name) \(.nameSource)"')"
+rm -rf "$SANDBOX/src"
 expect_contains "架構草稿 → notices 為「架構草稿待確認」" "架構草稿待確認" "$(ovq '[.notices[].text] | join("\n")')"
 
 ov_reset; ov_proj; ov_wbs
@@ -3474,8 +3481,6 @@ expect_empty "寫 plan → post-write 沒有輸出" "$out"
 [ -f "$OVO/data.js" ] && ok "寫 plan → data.js 被產生" || ng "寫 plan → data.js 被產生" "有 data.js" "沒有"
 
 ov_reset; ov_proj; ov_arch; ov_wbs
-run post-write.sh "$(w "$SANDBOX/src/app.ts")" OVERVIEW_SYNC=1 >/dev/null
-[ ! -e "$OVO/data.js" ] && ok "寫一般程式檔 → 不產生" || ng "寫一般程式檔 → 不產生" "沒有 data.js" "有"
 run post-write.sh "$(w "$SANDBOX/src/docs/architecture.md")" OVERVIEW_SYNC=1 >/dev/null
 [ ! -e "$OVO/data.js" ] && ok "docs/ 比對錨定開頭（src/docs/ 不算）" || ng "docs/ 比對錨定開頭" "沒有 data.js" "有"
 run post-write.sh "$(w "$SANDBOX/.claude/taskmaster-data/plans/1.2-x.md")" OVERVIEW_SYNC=1 OVERVIEW=off >/dev/null
@@ -3484,6 +3489,41 @@ echo off > "$SM_FILE"
 run post-write.sh "$(w "$SANDBOX/docs/05_architecture.md")" OVERVIEW_SYNC=1 >/dev/null
 [ -f "$OVO/data.js" ] && ok ".suggest-mode=off 仍會產生（圖不是建議）" || ng ".suggest-mode=off 仍會產生" "有 data.js" "沒有"
 
+# 寫程式碼檔 → 節流重掃：替身 overview.sh 每被呼叫一次就記一行。路徑含中文與空格
+PW="$SANDBOX/節流 測試"; PWO="$PW/.claude/taskmaster-data/overview"
+pw_reset() {
+    rm -rf "$PW"; mkdir -p "$PW/.claude/scripts" "$PW/.claude/taskmaster-data/plans"
+    printf '#!/bin/bash\necho x >> "%s"\n' "$PW/calls" > "$PW/.claude/scripts/overview.sh"
+    echo '{"name":"t","mode":"mvp"}' > "$PW/.claude/taskmaster-data/project.json"
+    git -C "$PW" init -q >/dev/null 2>&1
+}
+pw_calls() { if [ -f "$PW/calls" ]; then grep -c . "$PW/calls"; else echo 0; fi; }
+pw_write() { local f="$1"; shift; run post-write.sh "$(w "$PW/$f")" CLAUDE_PROJECT_DIR="$PW" OVERVIEW_SYNC=1 "$@"; }
+pw_ago()   { mkdir -p "$PWO"; echo $(( $(date +%s) - $1 )) > "$PWO/.scan-at"; rm -f "$PW/calls"; }
+pw_reset
+out=$(pw_write src/app.py)
+expect_eq "寫程式碼檔、沒有 .scan-at → 呼叫 overview.sh 1 次、主 checkout 出現 .scan-at" "1 1" \
+    "$(pw_calls) $([ -f "$PWO/.scan-at" ] && echo 1 || echo 0)"
+pw_ago 5; out=$(pw_write src/app.py)
+expect_eq "寫程式碼檔、.scan-at 是 5 秒前 → 不呼叫、hook 沒有輸出" "0 " "$(pw_calls) $out"
+pw_ago 31; pw_write src/app.py >/dev/null
+expect_eq "寫程式碼檔、.scan-at 是 31 秒前 → 呼叫 1 次" 1 "$(pw_calls)"
+pw_ago 5; rm -f "$PWO/.dirty"; mkdir -p "$PWO/.lock"; pw_write src/app.py >/dev/null
+[ -e "$PWO/.dirty" ] && ok "節流視窗內、overview/.lock 存在 → 留下 overview/.dirty（持鎖者會再跑一輪）" \
+    || ng "節流視窗內、.lock 存在 → 留下 .dirty" "有 .dirty" "$(ls -a "$PWO")"
+rm -rf "$PWO/.lock"
+pw_ago 5; pw_write .claude/taskmaster-data/plans/1.1-x.md >/dev/null
+expect_eq "節流視窗內寫 plan → 仍會觸發（不受節流）" 1 "$(pw_calls)"
+for f in .claude/scripts/x.py docs/x.py src/readme.md; do
+    rm -rf "$PWO" "$PW/calls"; pw_write "$f" >/dev/null
+    expect_eq "寫 $f → 不觸發" 0 "$(pw_calls)"
+done
+rm -rf "$PWO" "$PW/calls"; pw_write src/app.ts OVERVIEW=off >/dev/null
+expect_eq "OVERVIEW=off → 寫程式碼檔不觸發" 0 "$(pw_calls)"
+expect_eq "post-write 與 overview-scan.sh 的 OVERVIEW_CODE_EXT 相同" \
+    "$(grep -m1 '^OVERVIEW_CODE_EXT=' "$OV_SCAN")" "$(grep -m1 '^OVERVIEW_CODE_EXT=' "$HOOK_DIR/post-write.sh")"
+rm -rf "$PW"
+
 ov_reset; ov_proj; ov_arch; ov_wbs
 OVWT="$SANDBOX/.claude/worktrees/ovwt"
 ( cd "$SANDBOX" && git worktree add -q -B ovwt "$OVWT" ) >/dev/null 2>&1
@@ -3491,6 +3531,10 @@ mkdir -p "$OVWT/.claude/taskmaster-data/plans"
 run post-write.sh "$(wcwd "$OVWT/.claude/taskmaster-data/plans/1.2-x.md" "$OVWT")" OVERVIEW_SYNC=1 >/dev/null
 [ -f "$OVO/data.js" ] && ok "worktree 裡寫 plan → data.js 寫在主 checkout" || ng "worktree 裡寫 plan → data.js 寫在主 checkout" "主 checkout 有 data.js" "沒有"
 [ ! -e "$OVWT/.claude/taskmaster-data/overview" ] && ok "worktree 底下沒有 overview/" || ng "worktree 底下沒有 overview/" "沒有" "有"
+rm -f "$OVO/data.js" "$OVO/.scan-at"
+run post-write.sh "$(wcwd "$OVWT/src/app.py" "$OVWT")" OVERVIEW_SYNC=1 >/dev/null
+expect_eq "worktree 裡寫程式碼檔 → .scan-at 與 data.js 都寫在主 checkout、worktree 底下沒有 overview/" "1 1 0" \
+    "$([ -f "$OVO/.scan-at" ] && echo 1 || echo 0) $([ -f "$OVO/data.js" ] && echo 1 || echo 0) $([ -e "$OVWT/.claude/taskmaster-data/overview" ] && echo 1 || echo 0)"
 ( cd "$SANDBOX" && git worktree remove --force "$OVWT" && git branch -D ovwt ) >/dev/null 2>&1
 
 # 主 checkout 路徑含中文與空格（這個模板自己就在 D:\模板\…）：從它底下的 worktree 觸發，
@@ -3530,7 +3574,8 @@ tgp()     { tgq ".plans[] | select(.file == \"plans/${2:-1.2-x.md}\") | $1"; }
 tg_reset() {
     rm -rf "$SANDBOX/任務 圖"
     mkdir -p "$TG/.claude/scripts" "$TG/.claude/templates/overview" "$TGD/plans" "$TG/docs" "$TG/src/api" "$SANDBOX/docs"
-    cp "$OV_SRC" "$TG/.claude/scripts/overview.sh"; cp "$OV_TPL" "$TG/.claude/templates/overview/index.html"
+    cp "$OV_SRC" "$TG/.claude/scripts/overview.sh"; cp "$OV_SCAN" "$TG/.claude/scripts/overview-scan.sh"
+    cp "$OV_TPL" "$TG/.claude/templates/overview/index.html"
     printf '{"name":"任務圖","mode":"mvp"}\n' > "$TGD/project.json"
     ov_arch; cp "$SANDBOX/docs/05_architecture.md" "$TG/docs/"
     OVD="$TGD" ov_wbs "${@:-1.2|api|🔄 進行中}"
@@ -3768,7 +3813,7 @@ if env PATH="$NOJQ_PATH" "$BASH" -c 'command -v jq' >/dev/null 2>&1; then
     ng "沒有 jq 的情境造不出來" "PATH 裡找不到 jq" "$(env PATH="$NOJQ_PATH" "$BASH" -c 'command -v jq')"
 else
     env PATH="$NOJQ_PATH" "$BASH" "$TG/.claude/scripts/overview.sh" "$TG" >/dev/null 2>&1; rc=$?
-    expect_eq "沒有 jq → exit 0、data.js 只有 schema 1 與一則「需要 jq」、畫面照樣複製" "0 notices,schema 1 1 1" \
+    expect_eq "沒有 jq → exit 0、data.js 只有 schema 2 與一則「需要 jq」、畫面照樣複製" "0 notices,schema 2 1 1" \
         "$rc $(tgq 'keys | join(",")') $(tgq '.schema') $(tgq '[.notices[] | select(.text | startswith("需要 jq"))] | length') $(cmp -s "$OV_TPL" "$TGO/index.html" && echo 1 || echo 0)"
     env PATH="$NOJQ_PATH" "$BASH" "$TG/.claude/scripts/overview.sh" --actual "$TGD/plans/1.2-x.md" --result PASS >/dev/null 2>&1; rc=$?
     expect_eq "沒有 jq 時 --actual → exit 1（讓 /verify 知道沒寫）、plan 沒被動" "1 0" \
@@ -3779,9 +3824,9 @@ tg_reset; tg_plan 1.2-x.md ⏳ ⏳
 tg_pp() { bash "$TG/.claude/scripts/overview.sh" --print-path "$TG" 2>/dev/null; }
 expect_eq "--print-path：有正式架構文件 → 只印路徑、沒有提示" 0 "$(tg_pp | grep -c '^提示：')"
 { echo '<!-- overview: draft -->'; cat "$TG/docs/05_architecture.md"; } > "$SANDBOX/tg-arch.md" && mv "$SANDBOX/tg-arch.md" "$TG/docs/05_architecture.md"
-expect_contains "--print-path：架構是草稿 → 提示確認後移除標記" "是架構草稿" "$(tg_pp)"
+expect_contains "--print-path：架構是草稿 → 提示不拿它覆寫模組名稱、確認後移除標記" "不拿它覆寫模組名稱" "$(tg_pp)"
 rm -f "$TG/docs/05_architecture.md"
-expect_contains "--print-path：找不到架構文件 → 提示委派 documentation-specialist 反推草稿" "documentation-specialist" "$(tg_pp)"
+expect_eq "--print-path：沒有架構文件 → 不提示（地圖改由程式碼掃出）" 0 "$(tg_pp | grep -c '^提示：')"
 printf '{"name":"x","mode":"demo"}\n' > "$TGD/project.json"
 expect_eq "--print-path：demo 沒有架構是正常的 → 不提示" 0 "$(tg_pp | grep -c '^提示：')"
 rm -rf "$SANDBOX/任務 圖"
@@ -3789,14 +3834,14 @@ rm -rf "$SANDBOX/任務 圖"
 # 舊專案 update-template 之後還沒寫過 wbs／plan：開 session 就補產，使用者不用手動做任何事
 ov_reset; ov_proj; ov_arch; ov_wbs "1.1|api|✅ 11-01"
 out=$(run session-start.sh '{}' OVERVIEW_SYNC=1)
-expect_eq "有 project.json、還沒有 data.js → 開 session 就產生（stdout 仍是合法 JSON）" "1 1" \
+expect_eq "有 project.json、還沒有 data.js → 開 session 就產生（stdout 仍是合法 JSON）" "2 1" \
     "$(ovq '.schema') $(printf '%s' "$out" | jq -e . >/dev/null 2>&1 && echo 1 || echo 0)"
 echo sentinel > "$OVO/data.js"; touch -d '2000-01-01' "$SANDBOX/.claude/templates/overview/index.html"
 run session-start.sh '{}' OVERVIEW_SYNC=1 >/dev/null
 expect_eq "已經產過、畫面原檔沒有比較新 → 開 session 不重產" sentinel "$(cat "$OVO/data.js" 2>/dev/null)"
 touch -d '2099-01-01' "$SANDBOX/.claude/templates/overview/index.html"
 run session-start.sh '{}' OVERVIEW_SYNC=1 >/dev/null
-expect_eq "畫面原檔比現有的新（update-template 帶來新版畫面）→ 開 session 重產" 1 "$(ovq '.schema')"
+expect_eq "畫面原檔比現有的新（update-template 帶來新版畫面）→ 開 session 重產" 2 "$(ovq '.schema')"
 rm -f "$OVO/data.js"
 run session-start.sh '{}' OVERVIEW_SYNC=1 OVERVIEW=off >/dev/null
 [ ! -e "$OVO/data.js" ] && ok "OVERVIEW=off → 開 session 不補產" || ng "OVERVIEW=off → 開 session 不補產" "沒有 data.js" "有"
@@ -3846,7 +3891,7 @@ fx_repo "$FXR/messy"
 expect_contains "messy-fullstack → 有路徑含非 ASCII 字元，core.quotepath=off 列得出原字元" "報表匯出與排程作業" \
     "$(cd "$FXR/messy" && git -c core.quotepath=off ls-files)"
 bash "$OV_SRC" "$FXR/messy" >/dev/null 2>&1
-expect_eq "messy-fullstack → 現行 overview.sh 跑得出來（schema 1）、沒有 .last-error" "1 0" \
+expect_eq "messy-fullstack → 現行 overview.sh 跑得出來（schema 2）、沒有 .last-error" "2 0" \
     "$(fx_ovq "$FXR/messy" '.schema') $([ -e "$FXR/messy/.claude/taskmaster-data/overview/.last-error" ] && echo 1 || echo 0)"
 
 out=$(bash "$FXD/make-fixture.sh" 不存在的名稱 "$FXR/x" 2>&1 >/dev/null); rc=$?
@@ -3874,6 +3919,141 @@ out=$(printf '%s\n' .claude/scripts/overview-scan.sh | bash "$HOOK_DIR/tests/run
 expect_contains "--changed：overview-scan.sh 挑到 overview 的節（不是 NONE）" "overview fixture" "$out"
 out=$(printf '%s\n' .claude/hooks/tests/fixtures/overview/make-fixture.sh | bash "$HOOK_DIR/tests/run-tests.sh" --changed - --dry-run 2>&1)
 expect_contains "--changed：fixtures/overview 底下的檔挑到 overview 的節（含地圖節）" "overview.sh — 專案地圖" "$out"
+
+# =========================================================================
+section "overview-scan.sh — 骨架掃描與 5.5 合併"
+# =========================================================================
+# 每組資料一個獨立 repo，放在含中文與空格的目錄（主 checkout 在 D:\模板\… 的實況）。
+# 跑的是 repo 裡的 overview.sh（它從自己的目錄找 overview-scan.sh）。
+FXD="$HOOK_DIR/tests/fixtures/overview"
+SC="$SANDBOX/掃描 測試"
+rm -rf "$SC"; mkdir -p "$SC"
+sc_ov()  { bash "$OV_SRC" "$SC/$1" >/dev/null 2>&1; }
+sc_q()   { sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$SC/$1/.claude/taskmaster-data/overview/data.js" 2>/dev/null | jq -r "$2" 2>/dev/null; }
+sc_sk()  { jq -r "$2" < "$SC/$1/.claude/taskmaster-data/overview/skeleton.json" 2>/dev/null; }
+sc_fx()  { rm -rf "$SC/$2"; bash "$FXD/make-fixture.sh" "$1" "$SC/$2" >/dev/null 2>&1; }
+sc_git() { ( cd "$SC/$1" && git init -q . 2>/dev/null; git add -A && git -c user.email=t@t -c user.name=t commit -qm base ) >/dev/null 2>&1; }
+sc_new() { rm -rf "$SC/$1"; mkdir -p "$SC/$1/.claude/taskmaster-data" "$SC/$1/docs"; echo '{"name":"掃描","mode":"mvp"}' > "$SC/$1/.claude/taskmaster-data/project.json"; }
+# sc_put <repo> <檔> <內容（printf 格式）>
+sc_put() { mkdir -p "$(dirname "$SC/$1/$2")"; printf "$3" > "$SC/$1/$2"; }
+sc_err() { [ -e "$SC/$1/.claude/taskmaster-data/overview/.last-error" ] && cat "$SC/$1/.claude/taskmaster-data/overview/.last-error" || echo none; }
+
+# ---- shop-clean：5.5 有效 → id 照 5.5，與階段 0 的 golden 相同
+sc_fx shop-clean shop; sc_git shop; sc_ov shop
+expect_eq "shop-clean（5.5 有效）→ 模組 id 排序後與 shop-clean.golden 相同、unmappedTasks 為空" \
+    "$(awk '$1 == "module" { print $2 }' "$FXD/shop-clean.golden" | tr -d '\r' | sort | paste -sd' ' -) 0" \
+    "$(sc_q shop '[.modules[].id] | sort | join(" ")') $(sc_q shop '.unmappedTasks | length')"
+expect_eq "shop-clean → 每個模組的 source 都是 both" both "$(sc_q shop '[.modules[].source] | unique | join(",")')"
+expect_eq "shop-clean → 沒有 .last-error" none "$(sc_err shop)"
+expect_eq "data.js schema 2 合約：drift 五個 key 都是陣列、模組 description null／planned false、currents 的 phase／phases null 與 activePhases []、status null" \
+    "2 codeNotInDoc,docNotInCode,taskModuleMismatch,tasksInferred,wbsUnknownModule true true true true" \
+    "$(sc_q shop '"\(.schema) \(.drift | keys | join(",")) \(.drift | [.[] | type == "array"] | all) \(all(.modules[]; .description == null and .planned == false)) \((.currents | length > 0) and all(.currents[]; .phase == null and .phases == null and .activePhases == [])) \(has("status") and .status == null)"')"
+sc_put shop src/search/a.py 'def a():\n    return 1\n'; sc_put shop src/search/b.py 'def b():\n    return 2\n'
+printf '| legacy | 舊系統 | `src/legacy/**` | 已停用 |\n' >> "$SC/shop/docs/05_architecture.md"
+sc_ov shop
+expect_eq "5.5 多一列 src/legacy/**、沒有對應檔 → legacy 存在且 source:doc" "doc 0" \
+    "$(sc_q shop '.modules[] | select(.id == "legacy") | "\(.source) \(.fileCount)"')"
+expect_eq "程式多一個 src/search/（2 個檔）、5.5 沒寫 → search 模組 source:scan" "scan 2" \
+    "$(sc_q shop '.modules[] | select(.id == "search") | "\(.source) \(.fileCount)"')"
+
+# ---- 快取
+SCK="$SC/shop/.claude/taskmaster-data/overview/skeleton.json"
+touch -d '2001-01-01 00:00:00' "$SCK"; sck0=$(stat -c %Y "$SCK"); sc_ov shop
+expect_eq "第二次執行、HEAD 與工作區都沒變 → skeleton.json 的 mtime 不變、scan.cached 為 true" "$sck0 true" \
+    "$(stat -c %Y "$SCK") $(sc_q shop '.scan.cached')"
+scf0=$(sc_q shop '.scan.files'); [[ $scf0 =~ ^[0-9]+$ ]] || scf0=-1; sc_put shop src/search/c.py 'from src.db.session import connect\n'; sc_ov shop
+expect_eq "新增一個程式檔 → scan.cached 為 false、scan.files 加 1" "false $((scf0 + 1))" "$(sc_q shop '"\(.scan.cached) \(.scan.files)"')"
+touch -d '2001-01-01 00:00:00' "$SC/shop/.claude/taskmaster-data/overview/.scan-files"
+sc_put shop src/search/a.py 'from src.cache.client import get\n'; sc_ov shop
+expect_eq "已在改動清單裡的檔再改一次（清單沒變）→ 仍重掃、新的 import 進得來" "false 1" \
+    "$(sc_q shop '"\(.scan.cached) \([.edges[] | select(.from == "search" and .to == "cache")] | length)"')"
+
+# ---- messy-fullstack：沒有 5.5 → 完全用掃描結果
+sc_fx messy-fullstack messy
+sc_put messy docs/gen.py 'x = 1\n'; sc_put messy .claude/hooks/tool.py 'y = 2\n'
+sc_put messy backend/app/api/orders.py 'from app.services.orders import create\n\ndef post():\n    return create()\n'
+sc_put messy backend/app/services/orders.py 'def create():\n    return 1\n'
+sc_put messy frontend/src/pages/Cart.tsx "import React from 'react'\nimport { useCart } from '@/stores/cart'\n\nexport const Cart = () => useCart()\n"
+sc_put messy frontend/src/stores/cart.ts 'export const useCart = () => 1\n'
+sc_git messy; sc_ov messy
+expect_eq "messy-fullstack → 主 checkout 路徑含中文與空格，掃描與合併成功、沒有 .last-error" "none true" "$(sc_err messy) $(sc_q messy '.modules | length > 0')"
+expect_eq "messy-fullstack → 模組含 backend-api 與 frontend-api（跨套件撞名加套件目錄名）" "true true" \
+    "$(sc_q messy '[.modules[].id] | "\(index("backend-api") != null) \(index("frontend-api") != null)"')"
+expect_eq "messy-fullstack → 沒有 fileCount 為 0 的模組（C4 的使用者、LDAP、MSSQL、Redis 不畫）" 0 \
+    "$(sc_q messy '[.modules[] | select(.fileCount == 0)] | length')"
+expect_eq "messy-fullstack → 沒有以 tests／__tests__ 結尾的模組，測試檔只計數" "0 4" \
+    "$(sc_q messy '[.modules[].id | select(test("(tests|__tests__)$"))] | length') $(sc_q messy '.scan.tests')"
+expect_eq "messy-fullstack → 掃描的檔案不含 docs/、.claude/ 底下的檔" 0 \
+    "$(sc_sk messy '[.files | keys[] | select(startswith("docs/") or startswith(".claude/"))] | length')"
+scid=$(sc_q messy '.modules[] | select(.name == "報表匯出與排程作業") | .id')
+rm -f "$SC/messy/.claude/taskmaster-data/overview/skeleton.json"; sc_ov messy
+expect_eq "中文目錄 → id 符合 ^[a-z0-9-]+\$、name 是原目錄名、重掃後 id 相同" "1 $scid" \
+    "$(printf '%s' "$scid" | grep -cE '^[a-z0-9-]+$') $(sc_q messy '.modules[] | select(.name == "報表匯出與排程作業") | .id')"
+expect_eq "只有 1 個檔的目錄（utils）→ 不單獨成模組，檔案計入 other" "0 other" \
+    "$(sc_q messy '[.modules[] | select(.name == "utils")] | length') $(sc_sk messy '.files["backend/app/utils/helpers.py"]')"
+expect_eq "api/orders.py 寫 from app.services.orders import create → backend-api→services、source:import 的邊" 1 \
+    "$(sc_q messy '[.edges[] | select(.from == "backend-api" and .to == "services" and .source == "import")] | length')"
+expect_eq "Cart.tsx 寫 import … from '@/stores/cart' → pages→stores 的邊；import React from 'react' 不產生邊" "1 0" \
+    "$(sc_q messy '[.edges[] | select(.from == "pages" and .to == "stores")] | length') $(sc_q messy '[.modules[].id] as $ids | [.edges[] | select(.from as $f | .to as $t | ($ids | index($f)) == null or ($ids | index($t)) == null)] | length')"
+expect_eq "逐檔紀錄保留第三方 import（給階段 5 的 fileEdges）" 1 \
+    "$(sc_sk messy '[.imports[] | select(. == ["frontend/src/pages/Cart.tsx", "pkg:react", "import"])] | length')"
+OVERVIEW_SCAN_MAX_FILES=10 bash "$OV_SRC" "$SC/messy" >/dev/null 2>&1
+expect_eq "OVERVIEW_SCAN_MAX_FILES=10 → import 邊 0、scan.truncated true、notices 有一則說明" "0 true 1" \
+    "$(sc_q messy '[.edges[] | select(.source == "import")] | length') $(sc_q messy '.scan.truncated') $(sc_q messy '[.notices[] | select(.text | test("掃描上限"))] | length')"
+
+# ---- 找架構文件（A1）
+printf '%s' "$(jq -c 'del(.overview)' < "$SC/messy/.claude/taskmaster-data/project.json")" > "$SC/messy/.claude/taskmaster-data/project.json"
+sc_ov messy
+expect_eq "架構文件在 docs/architecture/x_architecture.md、project.json 沒有覆寫 → 自動指向它" \
+    "docs/architecture/01_system_architecture.md" "$(sc_q messy '.project.architectureDoc')"
+sc_new arch; sc_put arch docs/12_frontend_architecture.md '# 前端\n'; sc_put arch docs/architecture.md '# 系統\n'; sc_git arch; sc_ov arch
+expect_eq "docs/12_frontend_architecture.md 與 docs/architecture.md 並存 → 用 docs/architecture.md" docs/architecture.md "$(sc_q arch '.project.architectureDoc')"
+echo '{"name":"掃描","mode":"mvp","overview":{"architectureDoc":"docs/my.md"}}' > "$SC/arch/.claude/taskmaster-data/project.json"
+sc_put arch docs/my.md '# 自訂\n'; sc_ov arch
+expect_eq "project.json 設 overview.architectureDoc → 優先用它（docs/architecture.md 也在）" docs/my.md "$(sc_q arch '.project.architectureDoc')"
+sc_new arch; sc_put arch docs/12_frontend_architecture.md '# 前端\n'; sc_git arch; sc_ov arch
+expect_eq "只有 docs/12_frontend_architecture.md → architectureDoc 為 null" null "$(sc_q arch '.project.architectureDoc')"
+expect_eq "沒有任何架構文件 → notices 沒有「找不到架構文件」" 0 "$(sc_q arch '[.notices[] | select(.text | test("找不到架構文件"))] | length')"
+
+# ---- 標籤正規化（X8）
+sc_new lab; sc_put lab src/ord/a.py 'x = 1\n'; sc_put lab src/ord/b.py 'y = 2\n'
+{ echo '# 架構'; echo; echo '### 5.1 容器圖'; echo; echo '```mermaid'; echo 'graph TD'
+  echo '    subgraph g1["前端&amp;<b>後端</b>"]'; echo '        ord["訂單<br/>處理&amp;出貨"]'; echo '    end'; echo '```'; echo
+  echo '### 5.5 模組'; echo; echo '| id | 模組 | 路徑 | 職責 |'; echo '|---|---|---|---|'; echo '| ord |  | `src/ord/**` | 訂單 |'
+} > "$SC/lab/docs/architecture.md"
+sc_git lab; sc_ov lab
+expect_eq "5.1 標籤 訂單<br/>處理&amp;出貨 → 名稱為「訂單 處理&出貨」" "訂單 處理&出貨" "$(sc_q lab '.modules[] | select(.id == "ord") | .name')"
+expect_eq "data.js 的 name、label 都不含 <、&lt;、換行" 0 "$(sc_q lab '[.. | objects | (.name?, .label?) | strings | select(test("<|&lt;|\n"))] | length')"
+
+# ---- 路由、上限、其他語言
+sc_new rt
+sc_put rt src/orders/api.py 'from fastapi import APIRouter\n\nrouter = APIRouter(prefix="/orders")\n\n@router.get("")\ndef list_all():\n    return []\n\n@router.post("")\ndef create():\n    return 1\n\n@router.get("/{order_id}")\ndef one(order_id: int):\n    return 1\n'
+sc_put rt src/orders/models.py 'class Order:\n    id = 0\n'
+sc_git rt; sc_ov rt
+expect_eq "模組裡 3 個 FastAPI decorator → routes.count 3、sample 含 GET /orders" "3 true" \
+    "$(sc_q rt '.modules[] | select(.id == "orders") | "\(.routes.count) \(.routes.sample | index("GET /orders") != null)"')"
+
+sc_new big; bash "$FXD/gen-large.sh" 300 "$SC/big" >/dev/null 2>&1; sc_git big; sc_ov big
+expect_eq "60 個各 ≥ 2 檔的目錄 → 模組 40 個，其中一個是 other" "40 1" "$(sc_q big '"\(.modules | length) \([.modules[] | select(.id == "other")] | length)"')"
+
+sc_new poly
+sc_put poly go.mod 'module example.com/shop\n\ngo 1.22\n'
+sc_put poly gosvc/a.go 'package gosvc\n\nimport (\n\t"fmt"\n\t"example.com/shop/gostore"\n)\n\nfunc A() { fmt.Println(gostore.S) }\n'
+sc_put poly gosvc/b.go 'package gosvc\n'; sc_put poly gostore/s.go 'package gostore\n\nvar S = 1\n'; sc_put poly gostore/t.go 'package gostore\n'
+sc_put poly jorder/OrderController.java 'package com.shop.jorder;\n\nimport com.shop.jstore.Repo;\n\n@RequestMapping("/api/orders")\npublic class OrderController {\n    @GetMapping("/{id}")\n    public Repo one() { return null; }\n}\n'
+sc_put poly jorder/Order.java 'package com.shop.jorder;\n'; sc_put poly jstore/Repo.java 'package com.shop.jstore;\npublic class Repo {}\n'; sc_put poly jstore/Db.java 'package com.shop.jstore;\n'
+sc_put poly csorders/OrdersController.cs 'using Shop.CsStore;\n\nnamespace Shop.CsOrders;\n\n[Route("api/[controller]")]\npublic class OrdersController {\n    [HttpGet("{id}")]\n    public int One() => 1;\n}\n'
+sc_put poly csorders/X.cs 'namespace Shop.CsOrders;\n'; sc_put poly csstore/Repo.cs 'namespace Shop.CsStore;\n'; sc_put poly csstore/Y.cs 'namespace Shop.CsStore;\n'
+sc_put poly web/server.js "const router = require('express').Router()\n\nrouter.get('/items', (req, res) => res.json([]))\n"
+sc_put poly web/util.js 'module.exports = {}\n'
+sc_git poly; sc_ov poly
+scedges=$(sc_q poly '[.edges[] | select(.source == "import") | "\(.from)>\(.to)"] | join(" ")')
+expect_contains "Go：依 go.mod 的 module 前綴 → gosvc→gostore" "gosvc>gostore" "$scedges"
+expect_contains "Java：package／import 對照 → jorder→jstore" "jorder>jstore" "$scedges"
+expect_contains "C#：namespace／using 對照 → csorders→csstore" "csorders>csstore" "$scedges"
+expect_eq "路由：Express、Spring、ASP.NET 各 1 條" "GET /items|GET /api/orders/{id}|GET /api/Orders/{id}" \
+    "$(sc_q poly '[(.modules[] | select(.id == "web") | .routes.sample[0]), (.modules[] | select(.id == "jorder") | .routes.sample[0]), (.modules[] | select(.id == "csorders") | .routes.sample[0])] | join("|")')"
+rm -rf "$SC"
 
 # =========================================================================
 section "update-template — .gitignore 只補缺少的短命狀態行"
