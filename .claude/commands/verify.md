@@ -184,15 +184,19 @@ bash .claude/scripts/overview.sh --actual .claude/taskmaster-data/plans/<plan �
 若當前 `.current-task` 對應的 plan 存在（`.claude/taskmaster-data/plans/<值>.md` 或 `<值>-*.md`，
 值可能是 WBS id 或 `adhoc-…` 檔名主幹），在步驟 1-7 驗證後：
 
-1. 讀取 plan 檔的「驗收標準（整體）」checklist
+1. 依 plan 的格式取要比對的條目：
+   - **舊格式**（有「驗收標準（整體）」節）→ 照舊，比那節的 checklist
+   - **新格式**（沒有那節，四段骨架見 `plan-format` skill）→ 每個 `### 階段 N` 的「驗收」條目，加上
+     **PRD 情境**：「PRD 情境變更」裡 ADDED／MODIFIED 每一條的「那麼」成立、REMOVED 的行為不再出現
+     （小節寫「無」就沒有這部分）。另外固定比下面三項
 2. 逐項比對前面驗證結果：
    - 「測試覆蓋率達門檻」→ 由步驟 4 結果填入，門檻依任務模式（見 `testing-standards` skill）
-   - 「所有階段狀態為 ✅」→ 讀 plan frontmatter `status`
+   - 「所有階段狀態為 ✅」→ 舊格式讀 plan frontmatter `status`；新格式讀每個 `### 階段 N` 標題的狀態
    - 「階段審查無未解的 CRITICAL/HIGH」→ 讀帳本（`<plan 同名>.progress.md`）或 `context/quality/`、
      `context/security/` 本任務的報告；審查節奏見 `rules/task-mode.md`。**`/verify` 不另派審查**
-   - 其他自訂條件 → 呈現給使用者確認
-3. **Plan 檔內的 checklist 同步勾選**（已通過的標 `[x]`）
-4. 若全部 checklist 通過 → 視為整體驗收 PASS
+   - 驗收句或情境對得到步驟 4 的測試 → 由測試結果判；對不到、或其他自訂條件 → 呈現給使用者確認
+3. **舊格式的 checklist 同步勾選**（已通過的標 `[x]`）；新格式的驗收條目不是 checkbox，結果只寫進輸出
+4. 全部通過 → 視為整體驗收 PASS
 
 **在 worktree 裡**：`.current-task` 是 worktree 自己那份（不跟主 checkout 共用），
 由派工的第一步寫入（見 `worktree-orchestration` skill 的「派工」）。沒寫就對不到 plan——
@@ -274,7 +278,8 @@ touch "$(git rev-parse --show-toplevel)/.claude/taskmaster-data/.merge-round-ope
 步驟 1-7 全做（步驟 4 跑整套；模板 repo 照步驟 4 的例外，從本輪起點依改動挑），另外：
 
 1. **比對本輪每一個已合併任務的 plan 驗收標準**（**有 plan 才做**）—— 不只當前 `.current-task`。
-   平行開發合了 N 個分支就有 N 份 plan，每一份的「驗收標準（整體）」都要過。
+   平行開發合了 N 個分支就有 N 份 plan，每一份都照上方「Plan 驗收標準比對」過一次
+   （有「驗收標準（整體）」的舊 plan 照舊；新 plan 比各階段驗收與 PRD 情境）。
    對應的 plan 從 WBS 找：狀態不是 ✅ 但分支已合進來的那些；ad-hoc 的從
    `plans/INDEX.md` 找。**一份 plan 都對不到**（例如模板維護、臨時分支）→ 跳過這一步，
    在輸出寫明「無對應 plan，只做收斂檢查」，不要因此卡住。
@@ -337,6 +342,66 @@ commit。本輪 ≤4 個合併最多 2 步。**先在 `ROUND_BASE` 跑一次那�
 > 這一節**不依賴** `.current-task`，理由同上方合併關卡：沒有進行中任務時（合完分支直接
 > `/verify`、ad-hoc 修改）清單一樣會累積，放在「任務完成銜接」底下就永遠不會被問到。
 
+四項，**順序固定**。第 1、2 項不另外問，兩項做完印一段摘要：PRD 套回了哪幾條（`ADDED／MODIFIED／REMOVED` ＋編號）
+與 `git diff --stat -- docs/prd.md docs/architecture.md`。第 3 項只印，第 4 項清單非空時問一題。
+
+「本任務的 plan」＝`.current-task` 對應的 plan（找法同「Plan 驗收標準比對」）；最後一個合併時是本輪每一份已合併任務的 plan
+（找法同「最後一個合併」第 1 點），每一份各做第 1、3 項。
+
+### 1. PRD 情境套回（ADR-2026-11-05-005）
+
+**跳過**（任一成立）：在 worktree（判斷方式見「標記與歸檔」；合併回主 checkout 後的 `/verify` 才套）、沒有進行中 plan、
+plan 的「PRD 情境變更」寫「無」或沒有這一小節、該小節末已有 `已套回 PRD（YYYY-MM-DD）`。
+
+否則由主模型自己改 `docs/prd.md`：ADDED 加到對應領域節末、MODIFIED 依編號整條取代、REMOVED 刪掉那一條。
+套完在 plan 該小節末加一行 `已套回 PRD（YYYY-MM-DD）`——有這行就不重做。
+
+### 2. 架構文件自動段（ADR-2026-11-05-007）
+
+```bash
+bash .claude/scripts/overview.sh --sync-arch
+```
+
+**在 worktree 跳過**（腳本在 worktree 也只印一行、不寫）。沒有 `overview:generated` 標記時腳本不碰檔、印一行提示 →
+照實轉告，**不要自己加標記**；exit 1（標記不成對）→ 轉告 stderr 的修法，其餘項照做。輸出的讀法同 `/task-status` 步驟 7。
+
+### 3. 資料流提醒（ADR-2026-11-06-001 決策 4）
+
+**跳過**（任一成立）：在 worktree、沒有進行中 plan、plan 沒有「資料流變更」或寫「無」。
+
+否則判斷本任務分岔點以來，`docs/architecture.md` 的改動有沒有落在「資料流」節：
+
+```bash
+A=docs/architecture.md
+BR=$(git rev-parse -q --verify main >/dev/null && echo main || echo master)
+START=$(git merge-base HEAD "$BR" 2>/dev/null)
+S=$(grep -nE '^## [0-9]+\. 資料流' "$A" 2>/dev/null | head -1 | cut -d: -f1)
+if [ -z "$S" ]; then echo "FLOW: no-section"
+elif [ -z "$START" ]; then echo "FLOW: unknown"
+else
+  E=$(awk -v s="$S" 'NR > s && /^## / { print NR - 1; exit }' "$A"); E=${E:-$(wc -l < "$A")}
+  git diff -U0 "$START" -- "$A" | awk -v s="$S" -v e="$E" '
+    /^@@/ { split(substr($3, 2), n, ","); a = n[1]; c = (2 in n) ? n[2] : 1
+            b = c > 0 ? a + c - 1 : a; if (a <= e && b >= s) hit = 1 }
+    END { print hit ? "FLOW: updated" : "FLOW: stale" }'
+fi
+```
+
+- `updated` → 印「資料流節已更新」
+- `stale`、`unknown` → 印下面的提醒（在主分支上直接開發時分岔點就是 HEAD，只看得到未 commit 的改動，寧可多提醒一次）：
+
+  ```
+  ⚠ 這個 plan 改了跨服務資料流，docs/architecture.md「資料流」節要人工更新（/verify 不改圖）：
+    - MODIFIED payments 金流 — 退款 — 改成先寫 outbox…      ← plan「資料流變更」各行原樣列出
+    新流程的圖在：<plan 連結的設計提案或 ADR 路徑；沒有連結就寫「plan 沒有連結」>（可委派 architect 改）
+  ```
+
+- `no-section` → 改印「架構文件沒有資料流節，見 05 範本」
+
+這一項**不問問題、不擋完成、不改任何檔**。
+
+### 4. `.doc-impact`
+
 讀 `.claude/taskmaster-data/.doc-impact`。這份清單由 `post-write.sh` 自動累積——
 本任務改到過的「文件會描述的檔案」（API／路由／schema／對外介面／migration／CLI）。
 
@@ -350,7 +415,7 @@ commit。本輪 ≤4 個合併最多 2 步。**先在 `ROUND_BASE` 跑一次那�
 
 文件要怎麼處理？
   [Recommended] 委派 documentation-specialist 同步
-      從程式碼反推 codemap／API 文檔／技術 README，一次處理完清單上全部檔案
+      從程式碼同步 README、架構文件 architect 撰寫的部分、runbook，一次處理完清單上全部檔案
   我已經自己更新過了
       標記完成，不再詢問
   這次不需要（記錄原因）
@@ -380,7 +445,7 @@ commit。本輪 ≤4 個合併最多 2 步。**先在 `ROUND_BASE` 跑一次那�
 ### 0b. 文件同步關卡
 
 見上方「文件同步關卡（不論有沒有進行中任務）」（唯一來源，勿在此重述）。
-清單非空且未處理 → **不得標 WBS ✅**。
+第 4 項的 `.doc-impact` 清單非空且未處理 → **不得標 WBS ✅**。
 
 ### 標記與歸檔
 
@@ -433,7 +498,8 @@ commit。本輪 ≤4 個合併最多 2 步。**先在 `ROUND_BASE` 跑一次那�
    補登與否由「Ad-hoc plan 完成後：補登 WBS」那節問）
 2. 清除 `.current-task`
 3. **Plan 歸檔**（若存在對應 plan 檔）：
-   - 將 plan frontmatter 標 `status: "✅ 完成"`、`archived: "YYYY-MM-DD"`
+   - 照實際結果修正「改善了什麼」的「之後」欄（只寫行為；舊 plan 沒有這一段就跳過）
+   - 將 plan frontmatter 標 `status: "✅ 完成"`（四值之一，**後面不加附註**——附註寫進「發現與決策」）、`archived: "YYYY-MM-DD"`
    - 移動至 `.claude/taskmaster-data/plans/archive/`（目錄不存在則建立）
    - **同名的執行帳本 `<plan 同名>.progress.md` 一起搬到 `archive/`**（若存在）——
      留在 `plans/` 會讓下次同 ID 的任務誤認為「有續跑中的帳本」
@@ -441,6 +507,7 @@ commit。本輪 ≤4 個合併最多 2 步。**先在 `ROUND_BASE` 跑一次那�
    - **更新 WBS 該任務的 `連結` 欄**：計畫（與帳本）改指 `plans/archive/<filename>`
      （漏掉這步，歸檔後從 WBS 點過去會是死連結）
    - **重算 WBS「現況」區**與總進度（規則見 `.claude/templates/wbs.template.md` 第 3 節，唯一來源）
+   - **歸檔後不再續寫這份 plan**：之後的發現開新 plan，或寫進 `context/learned/`（見 `plan-format` skill）
 4. 用 `AskUserQuestion` 詢問下一步（遵守 `.claude/rules/interactive-qa.md`）：
    - 「繼續下一個任務」(Recommended) — 自動執行 `/task-next` 流程
    - 「開 PR（`/pr`）」 — 這個分支的工作告一段落時
