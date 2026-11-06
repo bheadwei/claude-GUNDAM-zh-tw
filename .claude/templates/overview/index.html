@@ -7,7 +7,7 @@
 <!--
   原檔：.claude/templates/overview/index.html（唯一來源）。overview.sh 會複製到
   taskmaster-data/overview/，那份被覆蓋是正常的——要改畫面改這份。
-  限制（check-counts 會擋）：整份 ≤ 50KB；不載任何外部網址（file:// 要能離線開）；
+  限制（check-counts 會擋）：整份 ≤ 64KB；不載任何外部網址（file:// 要能離線開）；
   不用 module script（file:// 下會被 CORS 擋）；顏色只寫在 :root token 區塊。
   檢查腳本：.claude/hooks/tests/fixtures/overview/qa-check.js（給 Playwright browser_evaluate）。
 -->
@@ -101,7 +101,12 @@ button.chip{cursor:pointer;min-height:28px}
 .note.issue{color:var(--issue-fg);border:1px solid var(--issue);background:none}
 .note.plan{border:1.5px dashed var(--accent);background:none}
 .back{all:unset;cursor:pointer;font-size:var(--fs-s);color:var(--accent);margin-bottom:8px;display:inline-block;padding:4px 0}
-.back:focus-visible{outline:2px solid var(--accent)}
+.back:focus-visible,.panel a:focus-visible{outline:2px solid var(--accent)}
+.panel a{color:var(--accent)}
+#pexp{margin-bottom:4px}
+.crumb{display:flex;align-items:center;gap:8px;margin-top:4px;min-width:0;font-weight:700}
+#cname{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v-inner .legend{display:none}
 .grp{fill:var(--group);stroke:var(--line)}
 .grp-label{fill:var(--muted);font:500 var(--fs-m) var(--f-body)}
 .edge{fill:none;stroke:var(--edge);stroke-width:1.6}
@@ -110,7 +115,14 @@ button.chip{cursor:pointer;min-height:28px}
 .planf{fill:none;stroke:var(--accent);stroke-width:1.5;stroke-dasharray:6 5}
 .undecl .box{stroke-dasharray:6 4;stroke:var(--todo)}
 .mod{cursor:pointer}
-.mod.sel .box{stroke:var(--accent);stroke-width:2.5}
+.mod.sel .box,.nd.sel .box{stroke:var(--accent);stroke-width:2.5}
+.nd{cursor:pointer}
+.dir .box{fill:var(--group)}
+.more .box{fill:var(--canvas);stroke-dasharray:5 4}
+.edge.ext{stroke-dasharray:5 4}
+.fn{fill:var(--fg);font:var(--fs-s) var(--f-mono)}
+.tn{fill:var(--fg);font:500 var(--fs-s) var(--f-body)}
+.m-nd{fill:var(--edge)}.m-nd.chg{fill:var(--chg)}
 .mod.cur .box{stroke:var(--chg);stroke-width:2}
 .name{fill:var(--fg);font:700 var(--fs-xl) var(--f-display)}
 .mid,.path{fill:var(--muted);font:var(--fs-s) var(--f-mono)}
@@ -164,7 +176,8 @@ button.chip{cursor:pointer;min-height:28px}
 </head>
 <body>
 <header class="bar">
-  <div class="ttl"><h1 id="title">專案圖解</h1><div id="status">載入中…</div><div id="lede" hidden></div></div>
+  <div class="ttl"><h1 id="title">專案圖解</h1><div id="status">載入中…</div><div id="lede" hidden></div>
+    <nav id="crumb" class="crumb" aria-label="目前位置" hidden><button class="pill" id="cfull">全圖</button><span aria-hidden="true">›</span><span id="cname" aria-current="page"></span></nav></div>
   <nav class="tabs" aria-label="檢視"><button data-v="map" class="on">專案地圖</button><button data-v="tasks" id="ttab">任務圖</button></nav>
   <div class="legend" role="group" aria-label="篩選模組">
     <button class="pill" data-f="done" aria-pressed="false"><i class="dot s-done"></i>完成</button>
@@ -190,7 +203,7 @@ button.chip{cursor:pointer;min-height:28px}
       <text id="probe" x="0" y="-9999"></text>
     </svg>
     <div id="empty"></div>
-    <div class="hint">拖曳平移 · 滾輪縮放 · 雙擊模組聚焦 · Esc 回全圖</div>
+    <div class="hint" id="hint">拖曳平移 · 滾輪縮放 · 雙擊模組聚焦 · Esc 回全圖</div>
     <svg id="mini" xmlns="http://www.w3.org/2000/svg" aria-label="小地圖"></svg>
     <div class="zoom">
       <button id="zout" aria-label="縮小">−</button><output id="zl">100%</output>
@@ -211,6 +224,10 @@ var STATUS = {done: '完成', wip: '開發中', issue: '有問題', todo: '未�
 // 版面常數。位置由 overview.sh 依群組決定（pos.col／pos.row），這裡只換算像素；節點不可拖
 var W = 290, GAPX = 90, GAPG = 50, GAPY = 36, ROW = 40, HEAD = 70, FOOT = 34, LINE = 22, MAXF = 6, MAXT = 6, MARGIN = 24;
 var LOD1 = 0.55, LOD2 = 1.1, KMIN = 0.1, KMAX = 3;
+// 內部圖：一欄最多 MAXR 個節點，同一層超過就往右多開一欄，免得 60 個檔排成一條長柱
+var NW = 208, NH = 40, NGX = 72, NGY = 12, MAXR = 15, IPAD = 24, IHEAD = 56, OGAP = 120;
+var OUTK = {m: '其他模組', db: '資料庫', pkg: '外部套件'};
+var HINT = ['拖曳平移 · 滾輪縮放 · 雙擊模組聚焦 · Esc 回全圖', '拖曳平移 · 滾輪縮放 · 點節點看 import · Esc 回全圖'];
 var NS = 'http://www.w3.org/2000/svg';
 var DRIFT = {codeNotInDoc: '程式有、架構文件沒寫的模組', docNotInCode: '架構文件有、找不到程式的模組',
   taskModuleMismatch: 'WBS 標的模組與實際改動不符', wbsUnknownModule: 'WBS 寫了不存在的模組', tasksInferred: '由 plan 推斷模組的任務'};
@@ -244,6 +261,7 @@ function delta(c) {
 var world = $('world'), stage = $('stage'), root = document.documentElement, mini = $('mini'), panel = $('panel'), probe = $('probe');
 var D = null, MODS = [], BY = {}, GB = [], ALL = {x: 0, y: 0, w: 1, h: 1}, CHG = {}, TASK = {}, FILTER = {};
 var S = {tx: 0, ty: 0, k: 1}, selected = null, vp = null, fitted = false, pending = false;
+var INNER = null, SAVED = null, IN = {}, nsel = null;
 
 // ---------------------------------------------------------------- 文字量測
 function tw(s, cls) { probe.setAttribute('class', cls); probe.textContent = s; return probe.getComputedTextLength(); }
@@ -360,13 +378,16 @@ function taskRow(m, g) {
   }
   if (shown < m.tasks.length) el('text', {'class': 'tasks d1', x: x, y: y}, g, '＋' + (m.tasks.length - shown));
 }
-function draw(d) {
+function drawGroups() {
   world.replaceChildren();
   GB.forEach(function (g) {
     var gg = el('g', {'class': 'gg'}, world);
     el('rect', {'class': 'grp', x: g.x, y: g.y, width: g.w, height: g.h, rx: 16}, gg);
     el('text', {'class': 'grp-label', x: g.x + 16, y: g.y + 26}, gg, fit(g.label, 'grp-label', g.w - 32, 1)[0]);
   });
+}
+function draw(d) {
+  drawGroups();
   var k = 0;
   d.edges.forEach(function (e) {
     var A = BY[e.from], B = BY[e.to];
@@ -402,7 +423,7 @@ function draw(d) {
   });
   bounds();
   filter();
-  drawMini();
+  drawMini(MODS.map(function (m) { return {x: m.x, y: m.y, w: m.w, h: m.h, r: 12, c: 'l-' + m.status}; }));
 }
 // 全圖範圍量實際內容（含連線與標籤），不是只看群組框；小地圖用同一個範圍
 function bounds() {
@@ -410,11 +431,11 @@ function bounds() {
   if (!b.width) return;
   ALL = {x: b.x - MARGIN, y: b.y - MARGIN, w: b.width + 2 * MARGIN, h: b.height + 2 * MARGIN};
 }
-function drawMini() {
+function drawMini(boxes) {
   mini.replaceChildren();
   mini.setAttribute('viewBox', ALL.x + ' ' + ALL.y + ' ' + ALL.w + ' ' + ALL.h);
   GB.forEach(function (g) { el('rect', {'class': 'm-grp', x: g.x, y: g.y, width: g.w, height: g.h, rx: 16}, mini); });
-  MODS.forEach(function (m) { el('rect', {'class': 'm-box l-' + m.status, x: m.x, y: m.y, width: m.w, height: m.h, rx: 12, opacity: 0.75}, mini); });
+  boxes.forEach(function (b) { el('rect', {'class': 'm-box ' + b.c, x: b.x, y: b.y, width: b.w, height: b.h, rx: b.r, opacity: 0.75}, mini); });
   vp = el('rect', {'class': 'm-vp', rx: 8, 'vector-effect': 'non-scaling-stroke'}, mini);
   drawVp();
 }
@@ -423,6 +444,158 @@ function drawVp() {
   var r = stage.getBoundingClientRect();
   vp.setAttribute('x', -S.tx / S.k); vp.setAttribute('y', -S.ty / S.k);
   vp.setAttribute('width', r.width / S.k); vp.setAttribute('height', r.height / S.k);
+}
+
+// ---------------------------------------------------------------- 模組內部圖
+function noInner(m) {
+  var I = m.inner;
+  if (I && (I.nodes.length || I.folded)) return '';
+  if (!('inner' in m) || I) return '沒有內部資料';
+  return D.scan && D.scan.truncated ? '檔案數超過掃描上限，沒有內部資料' : '資料量超過上限，未保留內部細節（調高 OVERVIEW_MAX_BYTES）';
+}
+function chgSet(m, I) {
+  var hit = {};
+  (CHG[m.id] || []).forEach(function (c) {
+    var r = !I.root ? c.file : c.file.indexOf(I.root + '/') === 0 ? c.file.slice(I.root.length + 1) : null;
+    if (r == null) return;
+    var i = I.nodes.findIndex(function (p) { return p === r || (/\/$/.test(p) && r.indexOf(p) === 0); });
+    hit[i < 0 ? 'more-f' : 'n' + i] = 1;
+  });
+  return hit;
+}
+function innerLayout(m) {
+  var I = m.inner, ch = chgSet(m, I), L = [], col = 0, rows = 1, top = 0, st = {}, post = [];
+  var ns = I.nodes.map(function (p, i) { return {k: 'n' + i, p: p, out: [], inn: [], ext: [], L: 0, chg: ch['n' + i]}; });
+  I.edges.forEach(function (e) { var a = ns[e[0]], b = ns[e[1]]; if (a && b && a !== b) { a.out.push([b, e[2]]); b.inn.push([a, e[2]]); } });
+  // 環狀依賴：DFS 碰到還在堆疊上的節點就是回邊，分層時略過，畫成從上方繞回的線
+  function dfs(a) {
+    st[a.k] = 1;
+    a.out.forEach(function (o) { if (st[o[0].k] === 1) o.back = 1; else if (!st[o[0].k]) dfs(o[0]); });
+    st[a.k] = 2; post.push(a);
+  }
+  ns.forEach(function (a) { if (!st[a.k]) dfs(a); });
+  post.reverse().forEach(function (a) { a.out.forEach(function (o) { if (!o.back) o[0].L = Math.max(o[0].L, a.L + 1); }); });
+  ns.forEach(function (a) { top = Math.max(top, a.L); });
+  if (I.folded) ns.push({k: 'more-f', p: '其他 ' + I.folded + ' 檔', more: 1, out: [], inn: [], ext: [], L: top, chg: ch['more-f']});
+  ns.forEach(function (a) { (L[a.L] = L[a.L] || []).push(a); });
+  L.forEach(function (ls) {
+    ls.forEach(function (a) {
+      var ys = a.inn.filter(function (o) { return o[0].L < a.L; }).map(function (o) { return o[0].y; });
+      a.bc = ys.length ? ys.reduce(function (s, y) { return s + y; }, 0) / ys.length : 1e9;
+    });
+    ls.sort(function (a, b) { return a.bc - b.bc; }).forEach(function (a, i) {
+      a.x = IPAD + (col + Math.floor(i / MAXR)) * (NW + NGX); a.y = IHEAD + (i % MAXR) * (NH + NGY);
+    });
+    col += Math.ceil(ls.length / MAXR); rows = Math.max(rows, Math.min(ls.length, MAXR));
+  });
+  var fw = 2 * IPAD + col * (NW + NGX) - NGX, T = {}, cats = {m: [], db: [], pkg: []}, x0 = fw + OGAP, y = 0;
+  GB = [{label: m.name + ' · ' + (I.root || '專案根目錄'), x: 0, y: 0, w: fw, h: IHEAD + rows * (NH + NGY) - NGY + IPAD}];
+  (I.out || []).forEach(function (o) {
+    var c = String(o[1]).split(':')[0], t = T[o[1]], a = ns[o[0]];
+    if (!cats[c]) return;
+    if (!t) { t = T[o[1]] = {k: o[1], c: c, id: String(o[1]).slice(c.length + 1), out: [], inn: [], ext: []}; cats[c].push(t); }
+    if (o[3] === 'http') t.http = 1;
+    if (a && !a.more) { a.ext.push([t, o[2]]); t.inn.push([a, o[2]]); }
+  });
+  Object.keys(cats).forEach(function (c) {
+    var ts = cats[c], h = IHEAD + ts.length * (NH + NGY) - NGY + IPAD;
+    if (!ts.length) return;
+    GB.push({label: OUTK[c] + '（' + ts.length + '）', x: x0, y: y, w: NW + 2 * IPAD, h: h});
+    ts.forEach(function (t, i) {
+      t.p = (c === 'm' && BY[t.id] ? BY[t.id].name : t.id) + (t.http ? '（HTTP）' : '');
+      t.x = x0 + IPAD; t.y = y + IHEAD + i * (NH + NGY); ns.push(t);
+    });
+    y += h + 24;
+  });
+  if (I.outMore) ns.push({k: 'more-o', p: '其他 ' + I.outMore + ' 個', more: 1, x: x0 + IPAD, y: y, out: [], inn: [], ext: []});
+  IN = {};
+  ns.forEach(function (a) { IN[a.k] = a; });
+  return ns;
+}
+function iedge(a, b, cls) {
+  var d;
+  if (b.x > a.x) {
+    var x1 = a.x + NW, y1 = a.y + NH / 2, x2 = b.x - 2, y2 = b.y + NH / 2, mx = (x1 + x2) / 2;
+    d = 'M' + x1 + ',' + y1 + ' C' + mx + ',' + y1 + ' ' + mx + ',' + y2 + ' ' + x2 + ',' + y2;
+  } else {
+    var ax = a.x + NW / 2, bx = b.x + NW / 2;
+    d = 'M' + ax + ',' + a.y + ' C' + ax + ',' + (a.y - 28) + ' ' + bx + ',' + (b.y - 28) + ' ' + bx + ',' + (b.y - 2);
+  }
+  el('path', {'class': 'edge' + cls, d: d, 'marker-end': 'url(#ah)', 'data-a': a.k, 'data-b': b.k}, world);
+}
+function ntitle(a, m) {
+  if (a.more) return a.p;
+  if (a.c) return OUTK[a.c] + ' ' + a.id;
+  return (m.inner.root ? m.inner.root + '/' : '') + a.p;
+}
+function drawInner(m) {
+  var ns = innerLayout(m);
+  drawGroups();
+  ns.forEach(function (a) {
+    a.out.forEach(function (o) { iedge(a, o[0], ''); });
+    a.ext.forEach(function (o) { iedge(a, o[0], ' ext'); });
+  });
+  ns.forEach(function (a) {
+    var cls = a.more || a.c === 'm' ? 'tn' : a.chg ? 'file' : 'fn';
+    var g = el('g', {'class': 'nd' + (!a.c && /\/$/.test(a.p) ? ' dir' : '') + (a.more ? ' more' : ''), transform: 'translate(' + a.x + ',' + a.y + ')', 'data-k': a.k}, world);
+    el('title', {}, g, ntitle(a, m));
+    el('rect', {'class': 'box', width: NW, height: NH, rx: 8}, g);
+    if (a.chg) el('rect', {'class': 'cmark', x: 8, y: 8, width: 4, height: NH - 16, rx: 2}, g);
+    el('text', {'class': cls, x: 20, y: NH / 2 + 4.5}, g, fit(a.p, cls, NW - 32, 1)[0]);
+  });
+  bounds();
+  drawMini(ns.map(function (a) { return {x: a.x, y: a.y, w: NW, h: NH, r: 8, c: 'm-nd' + (a.chg ? ' chg' : '')}; }));
+}
+function chip(o, pre) {
+  return '<button class="chip" data-k="' + esc(o[0].k) + '">' + pre + ' ' + esc(o[0].p) + (o[1] > 1 ? ' ×' + esc(o[1]) : '') + '</button>';
+}
+function chips(list, pre, none) {
+  return list.length ? '<div class="chips">' + list.map(function (o) { return chip(o, pre); }).join('') + '</div>' : '<div class="fdesc">' + none + '</div>';
+}
+function innerPanel(k) {
+  var m = BY[INNER], a = k && IN[k], I = m.inner, h;
+  if (!a) k = null;
+  nsel = k;
+  world.querySelectorAll('.nd').forEach(function (n) { n.classList.toggle('sel', n.dataset.k === k); });
+  world.querySelectorAll('.edge').forEach(function (p) { p.classList.toggle('dim', !!k && p.dataset.a !== k && p.dataset.b !== k); });
+  h = '<button class="back" id="pback">← ' + (k ? esc(m.name) + ' 內部總覽' : '回全圖') + '</button>';
+  if (!k) {
+    var ks = Object.keys(IN), t = ks.filter(function (x) { return IN[x].c; }).length, c = ks.filter(function (x) { return IN[x].chg; }).length;
+    h += '<h2><i class="dot s-' + esc(m.status) + '"></i>' + esc(m.name) + '</h2><div class="meta"><code>' + esc(m.id) + '</code>' + (noInner(m) ? '' :
+      ' · <code>' + esc(I.root || '/') + '</code> · ' + I.nodes.length + ' 個節點' + (I.folded ? '＋其他 ' + esc(I.folded) + ' 檔' : '') +
+      ' · 模組內 import ' + I.edges.length + ' 條 · 框外 ' + t + ' 個' + (I.outMore ? '＋其他 ' + esc(I.outMore) + ' 個' : '') +
+      (c ? ' · 本次改動碰到 ' + c + ' 個節點' : '')) + '</div>' + flowList(m) + (noInner(m) ? '' :
+      '<h3>怎麼看</h3><div class="fdesc">框內是這個模組的檔案，依 import 方向由左到右排，環狀依賴的回頭線從上方繞；結尾是 / 的節點是整個子目錄。框外虛線連到它用到的其他模組、資料庫、外部套件。紫色標記＝本次改動碰到的檔。點節點看它 import 誰、被誰 import。</div>');
+  } else if (a.more) {
+    h += '<h2>' + esc(a.p) + '</h2><div class="fdesc">' + (k === 'more-f' ? '節點數超過上限，進出 import 較少的檔併在這裡，沒有逐一畫出' : '框外目標超過上限，用到次數較少的沒有列出') + '</div>';
+  } else if (a.c) {
+    h += '<h2>' + esc(a.p) + '</h2><div class="meta">' + esc(OUTK[a.c]) + ' · <code>' + esc(a.id) + '</code>' + (a.http ? ' · 經 HTTP 呼叫' : '') + '</div>' +
+      '<h3>用到它的檔（' + a.inn.length + '）</h3>' + chips(a.inn, '←', '沒有對到框內的檔') +
+      (a.c === 'm' && BY[a.id] ? '<div class="chips"><button class="chip" data-m="' + esc(a.id) + '">在全圖找到' + esc(BY[a.id].name) + '</button></div>' : '');
+  } else {
+    var outs = a.out.concat(a.ext);
+    h += '<h2>' + esc(a.p) + '</h2><div class="meta"><code>' + esc(ntitle(a, m)) + '</code>' + (/\/$/.test(a.p) ? ' · 整個子目錄併成一個節點' : '') + (a.chg ? ' · 本次改動' : '') + '</div>' +
+      '<h3>import（' + outs.length + '）</h3>' + chips(outs, '→', '沒有 import 模組內的檔或框外目標') +
+      '<h3>被 import（' + a.inn.length + '）</h3>' + chips(a.inn, '←', '沒有被模組內其他檔 import');
+  }
+  panel.innerHTML = h;
+  $('pback').onclick = k ? function () { innerPanel(null); } : leave;
+}
+function expand(id) {
+  if (!BY[id]) return;
+  if (!INNER) SAVED = {tx: S.tx, ty: S.ty, k: S.k};
+  INNER = id; nsel = null;
+  map(D);
+  var f = fitTo(ALL, 16, 1); S.tx = f.tx; S.ty = f.ty; S.k = f.k; apply();
+}
+// 回全圖時還原展開前的平移縮放，卡片停在原位（全圖版面本身由資料決定、不會變）
+function leave() {
+  if (!INNER) return;
+  var id = INNER;
+  INNER = null;
+  map(D);
+  if (SAVED) { S.tx = SAVED.tx; S.ty = SAVED.ty; S.k = SAVED.k; }
+  apply(); select(id);
 }
 
 // ---------------------------------------------------------------- 圖例篩選
@@ -482,10 +655,11 @@ function focusMod(id) {
   var m = BY[id]; if (!m) return;
   select(id); animateTo(fitTo({x: m.x, y: m.y, w: m.w, h: m.h}, 60, 1.6));
 }
-function hitMod(e) {
-  var n = document.elementsFromPoint(e.clientX, e.clientY).find(function (x) { return x.closest && x.closest('.mod'); });
-  return n ? n.closest('.mod').dataset.id : null;
+function hit(e, sel) {
+  var n = document.elementsFromPoint(e.clientX, e.clientY).find(function (x) { return x.closest && x.closest(sel); });
+  return n ? n.closest(sel).dataset : {};
 }
+function hitMod(e) { return hit(e, '.mod').id || null; }
 var drag = null;
 stage.addEventListener('pointerdown', function (e) {
   if (e.target.closest('#mini,.zoom')) return;
@@ -501,10 +675,10 @@ stage.addEventListener('pointermove', function (e) {
 stage.addEventListener('pointerup', function (e) {
   if (!drag) return;
   stage.classList.remove('dragging');
-  if (!drag.moved) select(hitMod(e));
+  if (!drag.moved) { if (INNER) innerPanel(hit(e, '.nd').k); else select(hitMod(e)); }
   drag = null;
 });
-stage.addEventListener('dblclick', function (e) { var id = hitMod(e); if (id) focusMod(id); });
+stage.addEventListener('dblclick', function (e) { var id = !INNER && hitMod(e); if (id) focusMod(id); });
 stage.addEventListener('wheel', function (e) {
   e.preventDefault();
   var r = stage.getBoundingClientRect();
@@ -513,11 +687,12 @@ stage.addEventListener('wheel', function (e) {
 function center() { var r = stage.getBoundingClientRect(); return [r.width / 2, r.height / 2]; }
 $('zin').onclick = function () { var c = center(); zoomAt(c[0], c[1], 1.25); };
 $('zout').onclick = function () { var c = center(); zoomAt(c[0], c[1], 0.8); };
-$('zfit').onclick = function () { select(null); fitAll(); };
+$('zfit').onclick = function () { if (INNER) innerPanel(null); else select(null); fitAll(); };
+$('cfull').onclick = leave;
 document.addEventListener('keydown', function (e) {
   if (e.target.matches('input')) return;
   var c = center();
-  if (e.key === 'Escape') { select(null); fitAll(); }
+  if (e.key === 'Escape') { if (INNER) leave(); else { select(null); fitAll(); } }
   else if (e.key === '+' || e.key === '=') zoomAt(c[0], c[1], 1.25);
   else if (e.key === '-') zoomAt(c[0], c[1], 0.8);
 });
@@ -624,6 +799,14 @@ function links(m) {
   });
   return out.length + inn.length ? '<h3>連線（依賴 ' + out.length + '、被依賴 ' + inn.length + '）</h3><div class="chips">' + out.concat(inn).join('') + '</div>' : '';
 }
+// 連到架構文件：index.html 在 <repo>/.claude/taskmaster-data/overview/，往上三層是 repo 根
+function flowList(m) {
+  var a = D.project && D.project.architectureDoc, fs = (m.flows || []).map(function (i) { return (D.flows || [])[i]; }).filter(Boolean);
+  return fs.length ? '<h3>參與的資料流（' + fs.length + '）</h3><ul class="flist">' + fs.map(function (f) {
+    var at = esc((a || '架構文件') + (f.line ? ' 第 ' + f.line + ' 行' : ''));
+    return '<li><span class="row"><span>' + esc(f.title) + '</span>' + (a ? '<a class="fdesc" href="../../../' + esc(a) + '">' + at + '</a>' : '<span class="fdesc">' + at + '</span>') + '</span></li>';
+  }).join('') + '</ul>' : '';
+}
 function select(id) {
   if (id && !BY[id]) id = null;
   selected = id;
@@ -635,6 +818,7 @@ function select(id) {
     '<h2><i class="dot s-' + esc(m.status) + '"></i>' + esc(m.name) + '</h2>' +
     '<div class="meta">' + esc(STATUS[m.status]) + ' · <code>' + esc(m.id) + '</code>' + (m.current ? ' · ★ 本次任務' : '') +
     (m.fileCount ? ' · ' + esc(m.fileCount) + ' 個檔' : '') + (m.routes && m.routes.count ? ' · ' + esc(m.routes.count) + ' 條路由' : '') + '</div>' +
+    '<button class="pill" id="pexp">展開內部</button>' +
     '<div class="note' + (m.status === 'issue' ? ' issue' : '') + '">' + esc(m.statusReason) + '</div>' +
     (m.declared === false ? '<div class="note issue">容器圖有、模組表（5.5）沒有這個模組</div>' : '') +
     (m.planned ? '<div class="note plan">本次 plan 預計會動這個模組' + (pd.idle.indexOf(m) >= 0 ? '，但目前沒有改動（預計但沒動）' : '') + '</div>' : '') +
@@ -644,13 +828,14 @@ function select(id) {
       ((ds.evidence || []).length ? '<div class="chips">' + ds.evidence.map(function (p) { return '<code class="chip">' + esc(p) + '</code>'; }).join('') + '</div>' : '') : '') +
     (m.responsibility ? '<h3>職責</h3><div class="fdesc">' + esc(m.responsibility) + '</div>' : '') +
     (m.paths.length ? '<h3>路徑</h3><div class="chips">' + m.paths.map(function (p) { return '<code class="chip">' + esc(p) + '</code>'; }).join('') + '</div>' : '') +
-    links(m) +
+    links(m) + flowList(m) +
     '<h3>WBS 任務（' + m.tasks.length + '）' + (m.counts && m.counts.archivedDone ? '・另 ' + m.counts.archivedDone + ' 個已歸檔完成' : '') + '</h3><ul class="flist">' + (m.tasks.map(function (t) {
       var x = TASK[t] || {};
       return '<li><span class="row"><span class="fdesc">' + esc((x.status || '') + ' ' + t + ' ' + (x.title || '')) + (x.inferred ? '（由 plan 推斷）' : '') + '</span></span></li>';
     }).join('') || '<li class="fdesc">沒有任務掛在這個模組</li>') + '</ul>' +
     (m.files.length ? '<h3>本次改動（' + m.files.length + '）</h3><ul class="flist">' + fileItems(m.files, false) + '</ul>' : '');
   $('pback').onclick = function () { select(null); fitAll(); };
+  $('pexp').onclick = function () { expand(id); };
 }
 function summary() {
   if (!D) { panel.innerHTML = ''; return; }
@@ -671,8 +856,9 @@ function summary() {
     '<h3>說明</h3><div class="fdesc">模組由程式碼掃描而來；架構文件有模組表時採用它的名稱與分組。點模組看說明、連線與任務，點檔案會飛到所屬模組。縮小只看燈號，放大到 55% 以上顯示路徑、說明、檔名、任務，110% 以上再顯示每個檔改了多少。虛線框＝本次 plan 預計會動。</div>';
 }
 panel.addEventListener('click', function (e) {
-  var b = e.target.closest('button[data-m]');
-  if (b && b.dataset.m) focusMod(b.dataset.m);
+  var b = e.target.closest('button[data-m],button[data-k]'), a = b && IN[b.dataset.k];
+  if (a) { innerPanel(a.k); animateTo(fitTo({x: a.x, y: a.y, w: NW, h: NH}, 60, 1.6)); }
+  else if (b && b.dataset.m) { leave(); focusMod(b.dataset.m); }
 });
 
 // ---------------------------------------------------------------- 任務圖
@@ -749,6 +935,19 @@ function map(d) {
   if (!canMeasure()) { pending = true; return; }
   pending = false;
   layout(d);
+  if (INNER && !BY[INNER]) INNER = null;
+  var m = INNER && BY[INNER], msg = m ? noInner(m) : '';
+  root.classList.toggle('v-inner', !!m);
+  $('crumb').hidden = !m;
+  $('cname').textContent = m ? clean(m.name) : '';
+  $('hint').textContent = HINT[m ? 1 : 0];
+  $('zfit').textContent = m ? '整個模組' : '全圖';
+  if (m) {
+    $('empty').classList.toggle('on', !!msg);
+    $('empty').textContent = msg;
+    if (msg) { GB = []; IN = {}; world.replaceChildren(); drawMini([]); } else drawInner(m);
+    return innerPanel(nsel);
+  }
   var none = !MODS.length;
   $('empty').classList.toggle('on', none);
   $('empty').textContent = none ? ((d.notices[0] && clean(d.notices[0].text)) || '沒有可畫的模組') : '';
@@ -758,6 +957,7 @@ function map(d) {
 function render(d) {
   D = null; MODS = []; BY = {};
   if (d.schema !== SCHEMA) {
+    INNER = null; root.classList.remove('v-inner'); $('crumb').hidden = true;
     world.replaceChildren(); mini.replaceChildren(); panel.innerHTML = '';
     $('empty').classList.add('on');
     $('empty').textContent = '資料格式是舊版（schema ' + (d.schema == null ? '不明' : d.schema) + '），請重產（跑一次 /task-status）';

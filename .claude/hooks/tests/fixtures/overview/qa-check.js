@@ -1,6 +1,9 @@
 // 專案圖解畫面的檢查腳本：整份檔案內容就是一個函式，原樣當 Playwright MCP browser_evaluate 的 function 參數。
-// 回傳六項，全部為 0 或 false 才算過（ADR-2026-11-05-003「確認方式」、plan 階段 3）。
+// 回傳七項，全部為 0 或 false 才算過。前六項照 ADR-2026-11-05-003「確認方式」、plan 階段 3；
+// 第七項 offStage（地圖計畫階段 6 加）量「螢幕上」有幾個卡片、節點、框沒有完整落在畫布可視區內：outOfBounds 比的是世界座標的全圖範圍，
+// 平移到一半被切掉它量不到。只在剛按「全圖」／「整個模組」之後量才有意義，放大後本來就會有東西在畫面外。
 // 量的是專案地圖（畫布、頁首、提示與落差抽屜、右側欄），不含任務圖分頁。
+// 畫布上現在是哪一張就量哪一張：全圖量模組卡片（.mod），展開後的內部圖量檔案與框外節點（.nd），不用帶參數。
 // 量測時暫時打開全部縮放分層（lod1、lod2），讓只在放大時才顯示的文字也被量到，量完還原。
 () => {
   const root = document.documentElement, world = document.getElementById('world');
@@ -10,7 +13,10 @@
     const hit = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
     const pairs = rs => rs.reduce((n, a, i) => n + rs.slice(i + 1).filter(b => hit(a, b)).length, 0);
     const rects = sel => [...world.querySelectorAll(sel)].map(r => r.getBoundingClientRect());
-    const overlaps = pairs(rects('.mod > rect.box')) + pairs(rects('rect.grp'));
+    const overlaps = pairs(rects('.mod > rect.box, .nd > rect.box')) + pairs(rects('rect.grp'));
+    const sv = document.getElementById('stage').getBoundingClientRect();
+    const offStage = rects('.mod > rect.box, .nd > rect.box, rect.grp')
+      .filter(r => r.left < sv.left - 0.5 || r.top < sv.top - 0.5 || r.right > sv.right + 0.5 || r.bottom > sv.bottom + 0.5).length;
 
     const vb = (document.getElementById('mini').getAttribute('viewBox') || '').split(/\s+/).map(Number);
     const toWorld = world.getScreenCTM().inverse();
@@ -44,7 +50,7 @@
     const dupEmpty = Object.keys(seen).filter(t => seen[t] > 1).length;
 
     let overflowText = 0;
-    world.querySelectorAll('.mod').forEach(g => {
+    world.querySelectorAll('.mod, .nd').forEach(g => {
       const w = Number(g.querySelector('rect.box').getAttribute('width'));
       g.querySelectorAll('text:not(.badge-t)').forEach(t => {
         const b = t.getBBox();
@@ -57,7 +63,7 @@
     });
 
     const hScroll = root.scrollWidth > root.clientWidth || document.body.scrollWidth > document.body.clientWidth;
-    return {overlaps, outOfBounds, brCount, dupEmpty, overflowText, hScroll};
+    return {overlaps, outOfBounds, brCount, dupEmpty, overflowText, hScroll, offStage};
   } finally {
     root.className = saved;
   }
