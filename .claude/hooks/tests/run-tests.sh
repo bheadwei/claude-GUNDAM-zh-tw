@@ -1269,6 +1269,28 @@ run session-start.sh '{}' PATH="$FAKE_JQ_DIR:$PATH" FAKE_JQ_VERSION=jq-1.6 >/dev
 expect_contains     "警告也寫進 hooks.log"           "$JQV_MARK" "$(cat "$SANDBOX/.claude/logs/hooks.log" 2>/dev/null)"
 
 # =========================================================================
+section "session-start.sh — bash 最低版本 4"
+# =========================================================================
+#
+# BASH_VERSINFO 是唯讀的、測試機也找不到 bash 3.2，只能靠 hook 認的 TM_TEST_BASH_VERSION 假裝版本。
+reset
+bashv_ctx() {
+    run session-start.sh '{}' ${1:+TM_TEST_BASH_VERSION="$1"} | jq -r '.hookSpecificOutput.additionalContext // ""' 2>/dev/null
+}
+BASHV_MARK="最低要求 bash 4"
+expect_contains     "bash 3.2 → 警告"                "$BASHV_MARK"          "$(bashv_ctx '3.2.57(1)-release')"
+expect_contains     "警告點名實際版本"                "3.2.57"               "$(bashv_ctx '3.2.57(1)-release')"
+expect_contains     "警告附 macOS 安裝方式"           "brew install bash"    "$(bashv_ctx '3.2.57(1)-release')"
+expect_contains     "警告提醒確認 PATH 解析到新版"    "/opt/homebrew/bin/bash" "$(bashv_ctx '3.2.57(1)-release')"
+expect_contains     "只警告不擋：後面的注入照常"      "/task-init"           "$(bashv_ctx '3.2.57(1)-release')"
+expect_not_contains "bash 4.0 → 不警告"              "$BASHV_MARK"          "$(bashv_ctx '4.0.0(1)-release')"
+expect_not_contains "bash 5.2 → 不警告"              "$BASHV_MARK"          "$(bashv_ctx '5.2.37(1)-release')"
+expect_not_contains "不注入、用真的 bash（≥4）→ 不警告" "$BASHV_MARK"        "$(bashv_ctx '')"
+reset
+run session-start.sh '{}' TM_TEST_BASH_VERSION='3.2.57(1)-release' >/dev/null
+expect_contains     "警告也寫進 hooks.log"           "$BASHV_MARK"          "$(cat "$SANDBOX/.claude/logs/hooks.log" 2>/dev/null)"
+
+# =========================================================================
 section "session-start.sh — 風格庫提醒只在模板 repo 出現"
 # =========================================================================
 #
