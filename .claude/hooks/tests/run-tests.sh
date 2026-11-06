@@ -3518,6 +3518,8 @@ for f in .claude/scripts/x.py docs/x.py src/readme.md; do
     rm -rf "$PWO" "$PW/calls"; pw_write "$f" >/dev/null
     expect_eq "寫 $f → 不觸發" 0 "$(pw_calls)"
 done
+rm -rf "$PWO" "$PW/calls"; pw_write src/App.PY >/dev/null
+expect_eq "寫 src/App.PY（副檔名大寫）→ 一樣觸發 1 次" 1 "$(pw_calls)"
 rm -rf "$PWO" "$PW/calls"; pw_write src/app.ts OVERVIEW=off >/dev/null
 expect_eq "OVERVIEW=off → 寫程式碼檔不觸發" 0 "$(pw_calls)"
 expect_eq "post-write 與 overview-scan.sh 的 OVERVIEW_CODE_EXT 相同" \
@@ -4110,6 +4112,14 @@ for h in "$HOOK_DIR"/lib/*.sh; do
     n="lib/$(basename "$h")"
     bash -n "$h" 2>/dev/null && ok "$n 語法正確" || ng "$n 語法正確" "可解析" "語法錯誤"
 done
+
+# macOS 內建 bash 3.2 沒有大小寫轉換展開（兩個逗號、兩個 ^ 與單字元版），執行到那行就 bad substitution
+# 讓整支中止；bash -n 與 Linux／Git Bash 的 bash 4+ 都抓不到。已知的四處早於這條檢查
+# （rm-state-gate.sh 同檔另用了 local -A，本來就要 bash 4；run-tests.sh 是選節的關鍵字比對）——只擋新增的
+CASEMOD_RE='\$\{[#!]?([A-Za-z_][A-Za-z0-9_]*|[0-9]+|[@*])(\[[^]]*\])?[,^]'
+expect_eq ".claude/hooks/**、.claude/scripts/** 的 .sh 沒有新增 bash 4 的大小寫轉換展開" \
+    "hooks/lib/rm-state-gate.sh:2 hooks/tests/run-tests.sh:2" \
+    "$(cd "$HOOK_DIR/.." && grep -rcE --include='*.sh' "$CASEMOD_RE" hooks scripts | grep -v ':0$' | sort | paste -sd' ' -)"
 
 reset
 for h in pre-tool-use.sh post-agent-report.sh user-prompt-submit.sh post-write.sh; do

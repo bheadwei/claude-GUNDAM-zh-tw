@@ -83,7 +83,12 @@ if [ "${OVERVIEW:-on}" != "off" ]; then
     if [ "$OV_HIT" -eq 0 ] && [ "$REL" != "$NORM" ]; then
         case "$REL" in
             .claude/*|docs/*|node_modules/*) ;;
-            *.*) OV_EXT=${REL##*.}; [[ " $OVERVIEW_CODE_EXT " == *" ${OV_EXT,,} "* ]] && OV_HIT=2 ;;
+            # 不分大小寫用 nocasematch（bash 3.1 起有）：macOS 內建 bash 3.2 沒有大小寫轉換展開，
+            # 遇到會 bad substitution 讓整支 hook 中止；tr 又多一個行程
+            *.*) OV_EXT=${REL##*.}
+                 shopt -s nocasematch
+                 [[ " $OVERVIEW_CODE_EXT " == *" $OV_EXT "* ]] && OV_HIT=2
+                 shopt -u nocasematch ;;
         esac
     fi
     OV_SH="$MAIN_CLAUDE/scripts/overview.sh"

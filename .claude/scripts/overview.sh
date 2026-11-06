@@ -130,12 +130,12 @@ find_arch() {
     fi
     [ -f "$MAIN_ROOT/docs/architecture.md" ] && { echo docs/architecture.md; return; }
     for f in "$MAIN_ROOT"/docs/*architecture*.md; do
-        b=${f##*/}; [[ ${b,,} == *frontend* ]] && continue
+        b=${f##*/}; [[ $b == *[Ff][Rr][Oo][Nn][Tt][Ee][Nn][Dd]* ]] && continue
         [ -f "$f" ] && { echo "${f#"$MAIN_ROOT"/}"; return; }
     done
     if [ -d "$MAIN_ROOT/docs" ]; then
         while IFS= read -r -d '' f; do
-            b=${f##*/}; [[ ${b,,} == *frontend* ]] && continue
+            b=${f##*/}; [[ $b == *[Ff][Rr][Oo][Nn][Tt][Ee][Nn][Dd]* ]] && continue
             f=${f#"$MAIN_ROOT"/}
             if [ -z "$best" ] || [[ $f < $best ]]; then best=$f; fi
         done < <(find "$MAIN_ROOT/docs" -mindepth 2 -type f -name '*architecture*.md' -print0 2>/dev/null)
