@@ -86,7 +86,11 @@ GREEN 過不了修實作不改測試，都在那裡（唯一來源，本檔不�
 先檢查帳本 `plans/<plan 同名>.progress.md`：**已存在且身分行指向同一個 plan
 → 這是續跑，直接沿用上次選的方式，不要再問。**
 
-否則用 `AskUserQuestion` 問一題：
+否則先依 `plan-format` skill 的「階段『依賴』與可平行」判準（唯一來源）**重算**：未完成的階段裡，
+哪些「依賴已完成、可同時開工」且部件表「檔案」彼此無交集。「怎麼做」開頭的 `**可平行**：…` 摘要行與重算不一致 →
+**以重算為準**，在問題說明裡指出哪裡不一致。舊 plan 沒有依賴行 → 不提供平行。
+
+再用 `AskUserQuestion` 問一題。可同時開工的階段 ≥ 2 個時才有第三個選項：
 
 ```
 這個計畫有 4 個階段，要怎麼執行？
@@ -97,11 +101,24 @@ GREEN 過不了修實作不改測試，都在那裡（唯一來源，本檔不�
   我直接照 plan 實作
     由主模型照 tdd-workflow 逐階段做。快、省，
     但階段多時容易累積偏離。
+  階段 2、3 用 worktree 同時跑
+    兩個階段的依賴都已完成、檔案不重疊。各開一條 worktree、各派一個 implementer，
+    合併一條驗一條。較快，但要同時看兩條線的回報。
 ```
 
 - 選第一個 → **載入 `subagent-execution` skill**，照它的流程走。派工單（`implementer-prompt.md`）
   已要求 implementer 讀 `tdd-workflow`
 - 選第二個 → 主模型照下方「每階段」自己做
+- 選「用 worktree 同時跑」→ **載入 `worktree-orchestration` 與 `subagent-execution` 兩個 skill**，
+  建立、派工、合併、清理與每階段的派工單、審查、修復迴圈都照它們（唯一來源，本檔不重述）。本指令只多這幾條：
+  - implementer 用 `Agent` 工具帶 `isolation: "worktree"`（`pre-agent-gate.sh` 依既有規則放行）
+  - 會讀整個 repo 的審查 agent（`code-quality-specialist`、critical 加 `security-infrastructure-auditor`）帶
+    `isolation: "worktree"`，prompt 開頭先 `git checkout --detach <該階段分支>` 再審 `<階段起點>..HEAD`；該階段要已 commit。
+    要隔離是因為 `pre-agent-gate.sh` 在有併行寫入者時會持續擋不帶隔離的掃描類 agent（它們在主 checkout 也會讀到另一條線的半成品）
+  - **plan 與帳本只由主模型在主 checkout 改**：開 worktree 前 plan 已 commit（`plans/` 被排除時用 `git add -f`）；
+    合併一條、`/verify` 一條；該階段合併且驗過才標 ✅
+  - 同時進行的階段都標 🔄，frontmatter `current_phase` 寫最小的未完成階段
+  - 可同時開工的階段超過 4 個時，一次只開 2–4 條（見 `rules/agent-orchestration.md`）
 
 把選擇記進帳本第一段，避免下次重複問。
 
