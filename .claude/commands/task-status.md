@@ -47,6 +47,7 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
      轉告使用者「確認模組切分後移除標記，地圖就會改用文件寫的名稱與分組」；
      使用者說確認了，就由你刪掉那一行標記
    - **N 個任務的模組是由 plan 推斷的**：走下方「補『模組』欄」節的「寫回推斷結果」
+   - **N 個模組沒有說明、M 個可能過期**：走下方「模組說明（說明層）」節。**永遠不自動執行**
 
 > 版面與「現況」的重算規則：`.claude/templates/wbs.template.md`（唯一來源）。
 
@@ -245,6 +246,26 @@ WBS 沒有模組欄、或某列填 `—` 時，專案地圖會從該任務 plan 
    - **不要** — 本 session 不再提；地圖照樣用推斷結果畫
 3. 寫回時表頭還沒有「模組」欄 → 先照上面的補法插欄，再填推斷值；推斷以外的列維持 `—`。
    **只動 `wbs.md`**，依據是 `diff` 的列在預覽裡標出來（它只代表「改到了哪裡」，不一定是任務的本意）
+
+## 模組說明（說明層）
+
+專案地圖每個模組的一句白話說明存在 `.claude/taskmaster-data/module-notes.md`（進 git），由
+`documentation-specialist` 讀程式碼後寫（ADR-2026-11-05-002）。步驟 7 的 `--print-path` 多印
+`提示：N 個模組沒有說明、M 個可能過期…` 時：
+
+1. 用 `AskUserQuestion` 問一題（照 `rules/interactive-qa.md`）。問題描述要寫明：會派 `documentation-specialist`
+   每個模組讀最多 3 個檔、每個最多 200 行，**這些程式碼片段會經 Claude Code 送到 Anthropic**（與平常開發同一個通道）；
+   一個模組約 3–6k 輸入 token
+   - **只更新沒有說明與過期的**（Recommended）— 只寫 `overview.sh --notes-todo` 列出的 N＋M 個
+   - **全部重寫** — 每個模組都重讀重寫（說明整體不準、或模組切分大改之後）
+   - **先不要** — 本 session 不再提；地圖照畫，只是沒有說明
+2. 選了前兩項才委派 `documentation-specialist`（`subagent_type: "documentation-specialist"`），
+   prompt 寫「寫模組說明」與範圍（只更新清單上的／全部重寫）。**沒有使用者這一題的回答就不派**——
+   提示每次都會出現，但每次都要問
+3. 完成後重跑 `bash .claude/scripts/overview.sh --print-path`，把剩下的數字轉告使用者
+
+客戶不允許把程式碼送進模型時，請使用者在 `project.json` 設 `"overview": {"notes": "off"}`：
+說明層整個關掉，這行提示也不再出現（地圖照畫）。
 
 ## WBS／plans 進版控（既有專案的一次性遷移）
 
