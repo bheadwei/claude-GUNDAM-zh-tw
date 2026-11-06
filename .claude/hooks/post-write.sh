@@ -7,8 +7,9 @@
 #       記進 .doc-impact 並在本任務第一次命中時注入提醒。
 #       /verify 在標記 WBS ✅ 前必須處理這份清單。
 #   (3) 前端寫入檢查：寫死色碼、動畫等級不符、AI 痕跡（P0）→ lib/ui-lint.sh（只提醒，不擋）
-#   (4) 專案圖解觸發：寫 wbs／plan／架構文件後在背景跑 scripts/overview.sh（不輸出）；
+#   (4) 專案圖解觸發：寫 wbs／plan／架構文件／module-notes.md 後在背景跑 scripts/overview.sh（不輸出）；
 #       寫程式碼檔時節流重掃（30 秒內只觸發一次）
+#   (5) 說明層驗證：寫 module-notes.md 時前景跑 overview.sh --check-notes，有違規才注入
 #
 # 為什麼需要 (2)：新需求／客戶 CR 的程式都會寫出來，但文件常常沒跟上。
 # 原因是 documentation-specialist 在「任務完成路徑」上完全沒有位置——
@@ -76,6 +77,7 @@ if [ "${OVERVIEW:-on}" != "off" ]; then
     OV_HIT=0
     case "$NORM" in
         */.claude/taskmaster-data/wbs.md|*/.claude/taskmaster-data/project.json|*/.claude/taskmaster-data/plans/*.md) OV_HIT=1 ;;
+        */.claude/taskmaster-data/module-notes.md) OV_HIT=1 ;;
     esac
     case "$REL" in
         docs/*architecture*.md|docs/tech-spec.md) OV_HIT=1 ;;
@@ -137,6 +139,29 @@ if [ "${OVERVIEW:-on}" != "off" ]; then
         fi
     fi
 fi
+
+# ---------------------------------------------------------------- 說明層驗證
+#
+# 寫入 module-notes.md 時在前景跑 overview.sh --check-notes：有違規就注入，沒有就完全不出聲。
+# 判斷得出對錯的事交給機器（ADR-2026-11-05-002）：違規的列在地圖上會被當成沒有說明，
+# 而說明可能寫進了客戶的主機、連線字串——不能等人想起來去驗。
+# 放在 .suggest-mode 與擴充維護提醒的 exit 之前：這不是建議密度的問題。
+# 背景重產上一節已經觸發；--check-notes 不搶鎖、只讀現有骨架，兩者並行不互等。逃生門：OVERVIEW=off
+case "$NORM" in
+    */.claude/taskmaster-data/module-notes.md)
+        if [ "${OVERVIEW:-on}" != "off" ] && [ -f "$MAIN_CLAUDE/scripts/overview.sh" ]; then
+            NOTES_V=$(bash "$MAIN_CLAUDE/scripts/overview.sh" --check-notes "$WORK_ROOT" </dev/null 2>/dev/null)
+            NOTES_V=${NOTES_V//$'\r'/}
+            if [ -n "$NOTES_V" ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] module-notes check: violations in $REL" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
+                jq -n --arg v "$NOTES_V" '{hookSpecificOutput: {hookEventName: "PostToolUse",
+                  additionalContext: ("📝 `module-notes.md` 沒通過檢查，下面這幾列在專案地圖上會當成沒有說明：\n\n"
+                    + ($v | split("\n") | map(select(. != "") | "- " + .) | join("\n"))
+                    + "\n\n**修到這則提示不再出現為止。** 格式與寫作標準：`.claude/skills/project-docs/module-notes.md`（說明裡不准寫主機、IP、連線字串、帳密、Email）。")}}' 2>/dev/null || true
+            fi
+        fi
+        exit 0 ;;
+esac
 
 # ---------------------------------------------------------------- hook 語法檢查
 #
