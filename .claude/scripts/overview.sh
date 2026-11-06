@@ -969,7 +969,7 @@ def parse_ledger:
   (reduce ($tasks[] | .milestone) as $m ([]; if any(.[]; . == $m) then . else . + [$m] end)) as $msNames
 | ([$tasks[] | select(.state == "wip") | . as $t | ([$mainPlans[] | select(.task == $t.id)] | first) as $pl
     | {task: .id, title, plan: ($pl.file // null)} + phinfo($pl)]) as $wip
-| {name: ($p.name // "（未命名專案）"),
+| ({name: ($p.name // "（未命名專案）"),
    oneLiner: (if $oneLiner == "" then null else $oneLiner end),
    milestones: [$msNames[] as $m | [$tasks[] | select(.milestone == $m)] as $ts
                 | {name: $m, done: ([$ts[] | select(.state == "done")] | length),
@@ -979,7 +979,11 @@ def parse_ledger:
    next: ([$tasks[] | select(.state == "todo") | {task: .id, title}] | first // null),
    recentDays: 14,
    recentDone: ([$tasks[] | select(.state == "done") | doneday | select(. != null and $todayN - . >= 0 and $todayN - . < 14)] | length),
-   drift: ({total: ([$drift[] | length] | add // 0)} + ($drift | map_values(length)))} as $status
+   drift: ({total: ([$drift[] | length] | add // 0)} + ($drift | map_values(length)))}
+  # line：畫面頁首的一行摘要（X17，畫面讀到物件就顯示 status.line）。第一個還沒完成的里程碑＋三個數
+  | . + {line: ([(.milestones | map(select(.state != "done")) | first // empty | "\(.name) \(.done)/\(.total)"),
+                "進行中 \($wip | length) 項", "阻塞 \(.blocked | length) 項", "落差 \(.drift.total) 項"] | join("・"))})
+  as $status
 
 # ---- 地圖上的「本次改動」：主 checkout ＋ 有 plan 或 .current-task 的 worktree
 | ([$BS | keys[] | select(endswith("|default")) | rtrimstr("|default") | select(. != "main")] | sort) as $wtSrcs

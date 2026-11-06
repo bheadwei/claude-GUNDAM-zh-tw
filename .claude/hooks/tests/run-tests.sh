@@ -4291,6 +4291,8 @@ expect_eq "沒有 docs/00_brief.md → --status 照常輸出、沒有一句話" 
 printf '# 簡介\n\n## 一句話\n\n賣東西給大家\n\n## 要解決的問題\n' > "$DS/shop/docs/00_brief.md"; ds_ov shop
 expect_contains "有 docs/00_brief.md → --status 有「## 一句話」那一句" "賣東西給大家" "$(bash "$OV_SRC" --status "$DS/shop" 2>/dev/null)"
 expect_eq "跑完後 data.js 的 status 不是 null" true "$(ds_q shop '.status != null and (.status | type) == "object"')"
+expect_eq "跑完後 data.js 的 status.line 是非空字串（畫面頁首用，X17）" "true M1 基礎 4/7・進行中 1 項・阻塞 1 項" \
+    "$(ds_q shop '"\((.status.line | type) == "string" and (.status.line | length) > 0) \(.status.line | sub("・落差.*$"; ""))"')"
 expect_eq "task-status.md 含 overview.sh --sync-arch 與 overview.sh --status" "1 1" \
     "$(grep -q 'overview.sh --sync-arch' "$HOOK_DIR/../commands/task-status.md" && echo 1 || echo 0) $(grep -q 'overview.sh --status' "$HOOK_DIR/../commands/task-status.md" && echo 1 || echo 0)"
 
