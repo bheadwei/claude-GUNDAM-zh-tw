@@ -4,7 +4,7 @@ slug: "docs-system"
 created: "2026-11-05"
 updated: "2026-11-06"
 status: "🔄 進行中"
-current_phase: 4
+current_phase: 5
 mode: "standard"
 files:
   # 階段 1：範本與 plan 格式（審閱前；2026-11-06 補資料流節，檔案範圍不變）
@@ -263,7 +263,7 @@ flowchart LR
   - `project-docs` SKILL 的 description 以觸發條件開頭，不含「20 種」
 - **注意**：`update-template` 不會刪掉既有專案裡已淘汰的範本檔，SKILL 寫明「不再被引用」即可；`/ui-site` 產的 `docs/12_*`、`docs/17_*` 路徑一律不動
 
-### 階段 4: 流程文字（D2） 🔄
+### 階段 4: 流程文字（D2） ✅
 
 - **依賴**：階段 1, 2；跨計畫：地圖 2（`--sync-arch`）、地圖 4（`task-status.md`）已合併
 - [ ] `verify.md`「文件同步關卡」（第 335–369 行）改成四項，順序固定：1 PRD 情境套回（主模型改 `docs/prd.md`、小節末加 `已套回 PRD（YYYY-MM-DD）`；worktree、無進行中 plan、情境變更為「無」、已有「已套回」行時跳過）→ 2 `bash .claude/scripts/overview.sh --sync-arch`（worktree 或沒有標記時跳過）→ 3 資料流提醒（照 ADR-2026-11-06-001 決策 4，見下一項）→ 4 `.doc-impact`（選項說明的「codemap／API 文檔」改成「README、架構文件 architect 撰寫的部分、runbook」）；第 1、2 項不另外問，做完印 PRD 的 diff 摘要
@@ -294,6 +294,7 @@ flowchart LR
 - [ ] `check-counts.sh` 拿掉階段 3 加的 `workflow-template-manager.md` 例外
 - [ ] `documentation-specialist.md`：description 拿掉「不處理 PRD/ADR（那是 workflow-template-manager）」與 codemap；同步範圍改成 README、架構文件 architect 撰寫的部分、runbook；刪 `docs/CODEMAPS/` 與「每個 codemap 500 行」
 - [ ] `deployment-expert.md`：維護 `docs/runbook.md`（範本 14）
+- [ ] 文件 4 留下的一致性修正（2026-11-06 加入）：(1)「驗證數據」去處統一（`plan-format` 寫「驗收」、`task-status.md` 轉換表寫「發現與決策」，擇一並兩邊同步）；(2) `plan-format`「誰可以寫入計畫檔」表補 `/verify` 會加「已套回 PRD」行、修正「改善了什麼」；(3) `task-status.md` 轉換表「選型與理由 → `context/decisions/`」改為新專案的 `docs/decisions/`（ADR-004）；(4) `verify.md` 步驟 4 的「主 checkout 的起點」取法移出「模板 repo 例外」小節、放到通用位置（第 3 項資料流提醒依賴它）
 - [ ] 跑：`bash .claude/scripts/check-counts.sh`（agent 數 15 → 14）、`bash .claude/hooks/tests/run-tests.sh --changed <本階段起點>`（背景）、`bash .claude/tests/skill-compliance/run-compliance.sh`（改了 `using-taskmaster` 與關鍵字路由的注入，跑一輪）
 - **預估**：3.5h（不含整套 hook 測試的等待時間）
 - **驗收**：
@@ -359,3 +360,4 @@ flowchart LR
 - 2026-11-06 階段 2 第一輪審閱：使用者已確認六份分工與 mock 寫法，只剩資料流要看；第二輪 artifact 仍整套重產，問題聚焦資料流
 - 2026-11-06 地圖計畫新增階段 5、6（模組展開，ADR-2026-11-06-002），原地圖 5（收尾）改號地圖 7：本計畫「兩份計畫的順序」與階段 5 的跨計畫依賴同步改；地圖 6 只依賴地圖 3，不新增跨計畫限制
 - 2026-11-06 `check-counts.sh` 檢查資料流節與「資料流變更」放階段 1（範本與範例在同一階段寫）；`overview.sh` 的資料流節名常數 `OVERVIEW_FLOW_SECTION` 與 05 範本的比對放地圖 7（常數在 `overview.sh`，比照 A7）
+- 2026-11-06 階段 4 完成（合併，check-counts 717）。偏離：審查 agent 帶 `isolation: "worktree"` 後 `git checkout --detach <階段分支>`（`pre-agent-gate.sh` 有併行寫入者時持續擋不帶隔離的掃描類 agent）；資料流提醒的起點沿用 `verify.md` 步驟 4 的本輪起點（`.merge-round-start`），不用 `merge-base HEAD main`（主 checkout 合併後恆為 HEAD）；最後一個合併時 PRD 套回與資料流提醒對本輪每份已合併 plan 各做一次。技術債：資料流 awk 對純插入的節界判定不對稱。四項一致性修正排進階段 5
