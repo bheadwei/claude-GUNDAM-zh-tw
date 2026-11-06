@@ -398,7 +398,7 @@ flowchart LR
   - `--print-inferred` 的輸出經 jq `-r` 印出、tab 用 `@tsv`（1.6 可用）
   - 前端 fetch 的後綴比對可能誤連：只連唯一候選；必要時 2-A 的這段可整段砍掉不影響其他驗收（X6）
 
-### 階段 3: 畫面（ui-builder，可與階段 2、4 平行）＋畫面審閱 🔄
+### 階段 3: 畫面（ui-builder，可與階段 2、4 平行）＋畫面審閱 ✅
 
 - **依賴**：階段 1；跨計畫：文件 1、文件 3 已合併
 - [ ] 提案 6.2 的頁面端修法：未分組獨立一欄放最右（全部未分組就不畫群組框）、全圖範圍改 `world.getBBox()`＋留白、同欄遠距連線從右側繞出、邊的標籤只在右側欄、`fitText(textEl, maxW, maxLines)`（等 `document.fonts.ready` 再量）、沒有資料的列直接省略、任務列最多 6 個＋「＋N」且推斷任務加虛線底線、縮放 ≥ 55% 時顯示 `description.text` 第一行、`el()` 再防禦一次標籤
@@ -582,6 +582,7 @@ flowchart LR
 | 2026-11-06 | X12 | jq 只用 1.6 語法、CI 用 jq 1.6 把關 | **模板最低要求 jq 1.7.1**，拿掉階段 0 加的 `hooks-jq16` job（合併後另一個 commit 移除） | 遷就 1.6 仍然漏（`overview.sh` 的 `{module, file}` 物件簡寫在 1.6 語法錯誤）；使用者可升級，Ubuntu 24.04 apt 即 1.7.1。版本檢查在 `fix/jq-min-version` 分支 |
 | 2026-11-06 | X13 | （ADR-2026-11-06-002：地圖點模組展開看內部；`architect-2026-11-06-1100.md` 第 4 節） | 新增階段 5「模組展開——資料」（3.5h）、階段 6「模組展開——畫面＋審閱」（4h）；原階段 5（收尾）改號 7、多兩項（`OVERVIEW_FLOW_SECTION` 對 05 範本、地圖說明加展開與資料流），3h → 3.5h；X9 的 50KB 在階段 6 改 64KB；階段 1 的 import 解析寫成「逐檔紀錄 → 彙總」兩步（不改範圍）。合計 40.5h → 48.5h。本表 X7 的「階段 5」是提案的編號，不改 | 資料與畫面拆開，階段 6 在階段 3 合併後就能和 2、4、5 同時跑；合成一個階段要等階段 4 做完（約多 4h 牆鐘時間）。64KB 仍在 ADR-003 原訂的 80KB 內 |
 | 2026-11-06 | X14 | ADR-2026-11-06-002：`inner` 在掃描截斷或被大小上限丟掉時為 null，被丟的顯示「資料量超過上限…」 | 畫面依 `scan.truncated` 分兩種文字：true →「檔案數超過掃描上限，沒有內部資料」；否則 null →「資料量超過上限，未保留內部細節（調高 `OVERVIEW_MAX_BYTES`）」；沒有 `inner` 欄位 →「沒有內部資料」 | ADR 只寫了被丟的那種；兩種原因的解法不同（調 `OVERVIEW_SCAN_MAX_FILES` 還是 `OVERVIEW_MAX_BYTES`），`scan.truncated` 階段 1 就有，不用新欄位 |
+| 2026-11-06 | X17 | `status` 是「一頁現況的結構化版本」，沒有定欄位名 | `status` 是物件、至少含 `line`（頁首一行摘要字串）；畫面讀「字串就顯示、物件就顯示 `.line`」；沒有現況可給時仍可為 null | 階段 3 與 2 平行時畫面先做好、需要一個確定的欄位；合約原文沒寫，主模型補上並通知階段 2 |
 | 2026-11-06 | X16 | Maven 式深層目錄（`src/main/java/...`）靠 `overview.scan.roots`／`depth` 手動覆寫 | 階段 2 新增 2-D：偵測 `src/main/<lang>/` 慣例路徑、剝套件前綴鏈後自動切模組；有手動設定時不偵測。階段 2 12.5h → 15h，合計 48.5h → 51h | 使用者選「自動偵測」（`qa-history/2026-11-06-093000-maven-module-split.md`）；階段 1 實作時發現整棵樹會併成單一模組 |
 | 2026-11-06 | X15 | ADR-2026-11-06-001 原決策：資料流第 4 節、自動段改第 5 節，資料流在 start 標記之前 | ADR 修訂（範本審閱 v3）：自動段維持第 4 節、資料流第 5 節在 `<!-- overview:generated:end -->` 之後。**程式設計不變**；只改階段 7 驗收的節名範例（`## 5. 資料流` → `## 5. 跨服務流程`）與階段 5 `make-fixture.sh` 的版面（資料流節放在 end 標記之後）。預估不變。來源 `coordination/handoffs/architect-to-planner-2026-11-06-1400.md` | 資料流解析樣式 `^## [0-9]+\. 資料流` 不綁節號、A7 標記檢查與 `--sync-arch` 的標記常數不看節號；fixture 要照真實版面，「`--sync-arch` 前後資料流節位元組相同」才驗得到緊鄰 end 標記的情況 |
 
@@ -597,5 +598,6 @@ flowchart LR
 - 2026-11-06 使用者要求：模組展開的畫面開發時一樣先預覽給使用者看 → 階段 6 最後一步是主模型發 artifact＋`AskUserQuestion`（ADR-2026-11-06-002 決策 5），沒有「確認」不合併、不標 ✅
 - 2026-11-06 部件表的檔案用具體檔名（階段 5 寫 `make-fixture.sh`、階段 6 寫 `qa-check.js`），不寫 `fixtures/overview/**`——寫 glob 會讓 `/tdd` 把 5、6 判成檔案有交集而不給平行。來源 `coordination/handoffs/architect-to-planner-2026-11-06-1100.md`
 - 2026-11-06 階段 1 完成（合併 `4e9c719`，含修復迴圈 R1）。實測 5000 檔、5.1＋5.5 有效（機器有他線負載，看相對值）：`overview-scan.sh` 有快取 0.18s、重掃 1.24s，在 3 秒門檻內；`overview.sh` 整條 c49fe61 約 3.4s／29 行程 → 有快取約 4.8–5.0s／28 行程、無快取約 5.8s／35 行程。背景執行且有 30 秒節流，不擋使用者；階段 5「整條多花 ≤ 1 秒」實測時以這組為基準一併看。非 git repo 改標「骨架掃描失敗」＋`.scan-error`（審查判為改善；`copy-template` 後尚未 `git init` 的專案會看到這則提示）
+- 2026-11-06 階段 3 完成（合併前畫面審閱 https://claude.ai/artifact/94By9Ak7PjkQv9h7qLDGWp 使用者「確認」，`qa-history/2026-11-06-140000-overview-page-review.md`；審查 MEDIUM「`light-dark()` 沒有退路」已修：`:root` 先放淺色 hex、`@supports` 內才用 `light-dark()`）。`index.html` 50346 bytes，離 50KB 上限剩約 0.8KB——階段 6 改 64KB 前不要再往裡加。需要 Chrome 123／Firefox 120／Safari 17.5 才有深色，舊瀏覽器只有淺色
 - 2026-11-06 模板最低要求 bash 4（使用者決定，`qa-history/2026-11-06-110000-bash-min-version.md`）：既有 `mapfile`／`declare -A` 不改；R1 加的 `,,`／`^^` 靜態掃描先保留
 - 2026-11-06 階段 4 的 `make-fixture.sh` 加選項，但部件表 p11 沒列它；4 → 5 本來就循序，不影響平行判斷，沿用
