@@ -68,7 +68,7 @@ description: Use when writing or updating a project document — 「寫 PRD」�
 3. **只寫程式碼看不出來的事**。會過期的東西（模組清單、依賴圖、計數、進度）不手寫
 4. **不替使用者填答案**：不確定的寫進該文件的「待確認」或 brief 的「仍未釐清」，不要編
 5. **引用而不複製**：跨文件寫路徑、情境編號（`ORD-02`）、ADR 編號；不把別份的內容抄過來
-6. **架構文件第 4 節不要手改**：標記 `<!-- overview:generated:start -->`／`<!-- overview:generated:end -->` 之間由 `overview.sh --sync-arch` 改寫；改模組名稱或分組改 `.claude/taskmaster-data/module-notes.md`
+6. **架構文件第 4 節不要手改**：標記 `<!-- overview:generated:start -->`／`<!-- overview:generated:end -->` 之間由 `overview.sh --sync-arch` 改寫；改模組名稱或分組改 `.claude/taskmaster-data/module-notes.md`（格式與寫作標準：本 skill 的 `module-notes.md`，由 `documentation-specialist` 照著寫）
 
 ## 範本
 
