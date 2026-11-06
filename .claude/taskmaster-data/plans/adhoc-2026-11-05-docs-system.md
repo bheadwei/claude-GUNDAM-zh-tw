@@ -263,7 +263,7 @@ flowchart LR
   - `project-docs` SKILL 的 description 以觸發條件開頭，不含「20 種」
 - **注意**：`update-template` 不會刪掉既有專案裡已淘汰的範本檔，SKILL 寫明「不再被引用」即可；`/ui-site` 產的 `docs/12_*`、`docs/17_*` 路徑一律不動
 
-### 階段 4: 流程文字（D2） ⏳
+### 階段 4: 流程文字（D2） 🔄
 
 - **依賴**：階段 1, 2；跨計畫：地圖 2（`--sync-arch`）、地圖 4（`task-status.md`）已合併
 - [ ] `verify.md`「文件同步關卡」（第 335–369 行）改成四項，順序固定：1 PRD 情境套回（主模型改 `docs/prd.md`、小節末加 `已套回 PRD（YYYY-MM-DD）`；worktree、無進行中 plan、情境變更為「無」、已有「已套回」行時跳過）→ 2 `bash .claude/scripts/overview.sh --sync-arch`（worktree 或沒有標記時跳過）→ 3 資料流提醒（照 ADR-2026-11-06-001 決策 4，見下一項）→ 4 `.doc-impact`（選項說明的「codemap／API 文檔」改成「README、架構文件 architect 撰寫的部分、runbook」）；第 1、2 項不另外問，做完印 PRD 的 diff 摘要

@@ -4,7 +4,7 @@ slug: "overview-from-code"
 created: "2026-11-05"
 updated: "2026-11-06"
 status: "🔄 進行中"
-current_phase: 4
+current_phase: 5
 mode: "standard"
 files:
   # 階段 0：fixture 產生器、效能實測、jq 1.6 CI
@@ -426,7 +426,7 @@ flowchart LR
   - ui-builder 是 subagent：**本 plan 檔只讀**，階段狀態由主模型改；審閱 artifact 由主模型做，不交給 ui-builder
   - 階段報告附 `anti-ai.md` 產出後清單的逐項對照
 
-### 階段 4: 說明層 🔄
+### 階段 4: 說明層 ✅
 
 - **依賴**：階段 2；跨計畫：文件 3 已合併
 - [ ] `.claude/skills/project-docs/module-notes.md`（附屬檔，唯一來源）：格式（提案 5.1）、寫作標準（5.2，含禁寫項目與每模組最多讀 3 檔 × 200 行）、範例與反例
@@ -463,7 +463,7 @@ flowchart LR
   - 說明可能寫進客戶機密：樣式檢查＋寫入當下注入＋附屬檔禁寫清單＋`based_on` 供抽查；`overview.notes: off` 可整個關掉。建議本階段另請 `security-infrastructure-auditor` 看一次樣式清單（選配）
   - notes 檔的讀取照 learned 的做法走 stdin 或暫存 ASCII 檔名
 
-### 階段 5: 模組展開——資料 ⏳
+### 階段 5: 模組展開——資料 🔄
 
 - **依賴**：階段 2, 4；跨計畫：文件 1（補資料流節後）已合併
 - [ ] `overview-scan.sh`：在既有那一趟 awk 解析 import／http 時多輸出一種行，`skeleton.json` 加 `fileEdges[]`：`{from: 路徑, to: 路徑或 null, ext: "db:<名>"／"pkg:<名>" 或 null, source: "import"／"http"}`（ADR-2026-11-06-002 決策 1）；**不加行程**；`scan.truncated` 時沒有 `fileEdges`（同現行沒有邊） — 驗證：`bash .claude/hooks/tests/run-tests.sh overview`
@@ -598,6 +598,7 @@ flowchart LR
 - 2026-11-06 使用者要求：模組展開的畫面開發時一樣先預覽給使用者看 → 階段 6 最後一步是主模型發 artifact＋`AskUserQuestion`（ADR-2026-11-06-002 決策 5），沒有「確認」不合併、不標 ✅
 - 2026-11-06 部件表的檔案用具體檔名（階段 5 寫 `make-fixture.sh`、階段 6 寫 `qa-check.js`），不寫 `fixtures/overview/**`——寫 glob 會讓 `/tdd` 把 5、6 判成檔案有交集而不給平行。來源 `coordination/handoffs/architect-to-planner-2026-11-06-1100.md`
 - 2026-11-06 階段 1 完成（合併 `4e9c719`，含修復迴圈 R1）。實測 5000 檔、5.1＋5.5 有效（機器有他線負載，看相對值）：`overview-scan.sh` 有快取 0.18s、重掃 1.24s，在 3 秒門檻內；`overview.sh` 整條 c49fe61 約 3.4s／29 行程 → 有快取約 4.8–5.0s／28 行程、無快取約 5.8s／35 行程。背景執行且有 30 秒節流，不擋使用者；階段 5「整條多花 ≤ 1 秒」實測時以這組為基準一併看。非 git repo 改標「骨架掃描失敗」＋`.scan-error`（審查判為改善；`copy-template` 後尚未 `git init` 的專案會看到這則提示）
+- 2026-11-06 階段 4 完成。偏離：`--check-notes`／`--notes-todo` 只讀現有 skeleton、不搶鎖（post-write 前景跑，等鎖最多 60 秒）；代表檔改用「路由最多 → 進入點 → 被引用最多」（腳本不量大小）；「其他」與無程式檔模組不算沒有說明；沒有 notes 檔也印提示（首次產生的入口）；task-status 選項為「只更新沒有說明與過期的」；off 時 `--check-notes` 仍驗。安全稽核（`context/security/security-infrastructure-auditor-2026-11-06-1649.md`）建議全採納：比對前 norm（全形→半形、刪零寬）、IPv4 允許句尾句點、網址／內網主機名／連線字串欄位／token 前綴、Email 最後一段要字母、表格外也檢查；**不加 commit 前閘門**（新機制、超出範圍）。樣式不用 `\b`：Oniguruma 把中文當字元，前接中文會漏擋。依據路徑含 `..`、絕對路徑、磁碟代號、反斜線一律違規、不 stat。人工抽查依 2026-11-05 使用者補充不做。技術債：依據路徑含空白不支援、notes 只寫部分模組又寫分組時同 package 拆兩欄、notes 在 worktree 時模組歸屬用主 checkout 骨架
 - 2026-11-06 階段 2 完成（合併 `28d62cc`）。審查 HIGH：`--sync-arch` 與 `--actual` 寫回使用者檔案時，Git Bash 的 gawk 讀檔吃掉 CRLF 的 CR → 兩處 awk 加 `BINMODE=3`、寫入區塊照文件自己的換行（測試 6 案，比對一律用 bash 讀整份，awk／sed 看不出 CR）。順修階段 1 bug：awk 陣列名 `RT` 撞 gawk 內建，`overview.scan.roots` 在 Git Bash 失效（CI 的 mawk 抓不到）。偏離：diff 推斷只用帳本 `BASE=` 之後的 diff；messy-fullstack 1.1／4.1／4.2 補程式檔、新增 `MAKE_FIXTURE_CHANGES=1`；「## 現況」不帶產生時間；「進行中」只看主 checkout 的 plan。`/verify` 呼叫 `--sync-arch` 留給文件計畫階段 4（D2）。技術債：`jshttp` 沒有詞邊界、`hmatch` 雙向後綴、現況 bullet 原樣放任務標題
 - 2026-11-06 階段 6 完成（畫面審閱 https://claude.ai/artifact/S72V7j3oqMzwxrScZoXR8B 使用者「確認」，`qa-history/2026-11-06-160000-overview-expand-review.md`）。偏離：框外依賴由「三欄並排」改成「右側一欄上下疊三塊」（避免虛線穿過前一欄，使用者同意）；`qa-check.js` 多第七項 `offStage`（平移後跑出可視區，原六項不變）。`index.html` 62603 bytes，64KB 上限剩約 2.9KB。技術債：展開中資料重產且該模組消失時畫面停在錯位、資料流連結未 `encodeURI`
 - 2026-11-06 測試安排（使用者決定）：每階段只跑實作者新增那一節，審查者不跑、合併後只跑 `check-counts.sh`，本輪最後一個合併跑整套＋spec-convergence
