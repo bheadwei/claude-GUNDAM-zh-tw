@@ -439,7 +439,8 @@ if [ -f "$TPL05" ]; then
     fi
 fi
 
-# 專案圖解畫面：≤ 50KB、不載 CDN、不用 module script（file:// 下會被 CORS 擋）
+# 專案圖解畫面：≤ 50KB、不載外部網址、不用 module script（file:// 下會被 CORS 擋）、
+# 顏色只寫在 :root token 區塊（深淺雙主題靠它切換，散在別處的 hex 不會跟著換）
 OVTPL=.claude/templates/overview/index.html
 if [ -f "$OVSH" ]; then
     CHECKED=$((CHECKED + 1))
@@ -453,9 +454,26 @@ if [ -f "$OVSH" ]; then
             printf '  %s %s 有 %s bytes，超過 50KB 上限\n' "$(red '✗')" "$OVTPL" "$OVSIZE"
         fi
         CHECKED=$((CHECKED + 1))
-        if grep -qE 'type=["'"'"']module|(src|href)=["'"'"']https?:' "$OVTPL"; then
+        if grep -qE 'type=["'"'"']module' "$OVTPL"; then
             FAIL=$((FAIL + 1))
-            printf '  %s %s 用了 module script 或外部資源（離線 file:// 會打不開）\n' "$(red '✗')" "$OVTPL"
+            printf '  %s %s 用了 module script（file:// 下會被 CORS 擋）\n' "$(red '✗')" "$OVTPL"
+        fi
+        CHECKED=$((CHECKED + 1))
+        OVEXT=$(grep -nE 'https?:|@import|(src|href)=["'"'"']?//|url\(["'"'"']?//' "$OVTPL" \
+            | sed 's#http://www\.w3\.org/2000/svg##g' \
+            | grep -E 'https?:|@import|(src|href)=["'"'"']?//|url\(["'"'"']?//' | cut -c1-160)
+        if [ -n "$OVEXT" ]; then
+            FAIL=$((FAIL + 1))
+            printf '  %s %s 有外部網址（離線 file:// 會打不開；SVG 命名空間除外）：\n' "$(red '✗')" "$OVTPL"
+            printf '%s\n' "$OVEXT" | sed 's/^\([0-9]*\):/      第 \1 行：/'
+        fi
+        CHECKED=$((CHECKED + 1))
+        OVHEX=$(awk '/^:root/{t=1} !t{print NR ":" $0} t && /}/{t=0}' "$OVTPL" \
+            | grep -E '#[0-9a-fA-F]{3,8}\b' | cut -c1-160)
+        if [ -n "$OVHEX" ]; then
+            FAIL=$((FAIL + 1))
+            printf '  %s %s 在 :root token 區塊以外寫了 hex 色碼（改用 CSS 變數）：\n' "$(red '✗')" "$OVTPL"
+            printf '%s\n' "$OVHEX" | sed 's/^\([0-9]*\):/      第 \1 行：/'
         fi
     fi
 fi
