@@ -36,6 +36,19 @@
 #        背景重產不寫架構文件（hook 不寫模型會 Edit 的檔）
 #   bash .claude/scripts/overview.sh --actual <plan> --result PASS|FAIL [--reason "<一句>"]
 #        把「計畫 vs 實際」寫進 plan 的標記區塊（再跑一次是取代，不會重複）並重產。FAIL 必須帶 reason
+#   bash .claude/scripts/overview.sh --check-notes [<工作目錄>]
+#        驗證說明層 module-notes.md（提案 5.3）：有違規時 stdout 一行一筆「第 N 列 <id>：<原因>」（N 是表格第幾列資料）、
+#        exit 1；沒有違規或沒有這個檔時 stdout 為空、exit 0。post-write 寫入 notes 時在前景呼叫
+#   bash .claude/scripts/overview.sh --notes-todo [<工作目錄>]
+#        沒有說明或可能過期的模組，一行一筆：id<TAB>路徑<TAB>代表檔（最多 3 個）<TAB>missing|stale。
+#        給 documentation-specialist 決定要讀哪些檔（模型不讀 data.js）
+#
+# 說明層：.claude/taskmaster-data/module-notes.md（格式與寫作標準的唯一來源是
+# .claude/skills/project-docs/module-notes.md）。通過驗證的列填進模組的 description、名稱與分組
+# （名稱、分組的優先序：5.5 → notes → 目錄名）；based_on 之後改過的模組標 stale。
+# project.json 的 overview.notes 為 "off" 時不讀、--print-path 也不提示。
+# --check-notes／--notes-todo 只讀現有的 skeleton.json（沒有才先重產一次），不搶鎖、不重掃：
+# 背景重產正持鎖重掃時，它們不必等。代價是剛新增、還沒掃到的檔會被判成不在模組內，重產後再驗一次就對了
 #
 # 沒有 taskmaster-data/project.json（模板 repo 本身、還沒 /task-init 的專案）一律 exit 0、不建任何檔。
 # 沒有 jq：只寫一份帶「需要 jq」提示的 data.js（用 printf），畫面照樣打得開。
@@ -48,6 +61,7 @@ OVERVIEW_COLS_MODULE_OPT="模組 職責"    # 05 範本 5.5 模組表的選用�
 OVERVIEW_COLS_WBS="# 任務 狀態"         # wbs.template.md 任務表的必要欄
 OVERVIEW_COL_WBS="模組"                 # wbs.template.md 任務表的模組欄
 OVERVIEW_COLS_PART="id 部件 階段 檔案"  # plan-format「一眼看懂」部件表的必要欄（驗收欄選用）
+OVERVIEW_COLS_NOTES="id 名稱 分組 說明 依據"  # project-docs/module-notes.md 說明表的必要欄
 
 DRAFT_MARK='<!-- overview: draft -->'
 # 架構文件自動段的標記：與 05 範本（project-docs/templates/05_architecture_and_design_document.md）第 4 節同一字串
@@ -58,9 +72,11 @@ MAX_CHANGES=200                    # 每份 plan、地圖各列幾個改動檔�
 MAX_BYTES=${OVERVIEW_MAX_BYTES:-524288}
 [[ $MAX_BYTES =~ ^[0-9]+$ ]] || MAX_BYTES=524288
 
-ACTUAL_PLAN="" ACTUAL_RESULT="" ACTUAL_REASON="" PRINT_PATH=0 PRINT_INFERRED=0 PRINT_STATUS=0 SYNC_ARCH=0
+ACTUAL_PLAN="" ACTUAL_RESULT="" ACTUAL_REASON="" PRINT_PATH=0 PRINT_INFERRED=0 PRINT_STATUS=0 SYNC_ARCH=0 NOTES_MODE=""
 case "${1:-}" in
     --print-path) PRINT_PATH=1; shift ;;
+    --check-notes) NOTES_MODE=check; shift ;;
+    --notes-todo) NOTES_MODE=todo; shift ;;
     --print-inferred) PRINT_INFERRED=1; shift ;;
     --status) PRINT_STATUS=1; shift ;;
     --sync-arch) SYNC_ARCH=1; shift ;;
@@ -134,6 +150,8 @@ PJ_TEXT=""
 IFS= read -r -d '' PJ_TEXT < "$DATA/project.json"
 IS_DEMO=0
 [[ $PJ_TEXT =~ \"mode\"[[:space:]]*:[[:space:]]*\"demo\" ]] && IS_DEMO=1
+NOTES_OFF=0
+[[ $PJ_TEXT =~ \"notes\"[[:space:]]*:[[:space:]]*\"off\" ]] && NOTES_OFF=1
 
 # 架構文件：project.json 的 overview.architectureDoc（選填覆寫）→ docs/architecture.md → docs/*architecture*.md
 # → docs/**/*architecture*.md → docs/tech-spec.md。檔名含 frontend 的跳過：/ui-site 產的
@@ -183,10 +201,19 @@ if [ "$PRINT_PATH" -eq 1 ]; then
         if [ -n "$a" ] && grep -qF -- "$DRAFT_MARK" "$MAIN_ROOT/$a" 2>/dev/null; then
             echo "提示：$a 是架構草稿（帶 $DRAFT_MARK），地圖照畫，但不拿它覆寫模組名稱；確認模組切分後移除這行標記"
         fi
-        # data.js 是 jq -c 的輸出（沒有空白），tasks[] 每個推斷出的任務恰有一個 "inferred":true
+        # data.js 是 jq -c 的輸出（沒有空白），tasks[] 每個推斷出的任務恰有一個 "inferred":true；
+        # 說明層的數量在頂層 "notes":{"missing":N,"stale":M}（off 時是 null）。一支 awk 兩樣都數
         if [ -f "$OUT/data.js" ]; then
-            n=$(awk '{ n += gsub(/"inferred":true/, "") } END { print n + 0 }' "$OUT/data.js" 2>/dev/null)
+            n=0 nm=0 ns=0
+            read -r n nm ns <<< "$(awk '
+                match($0, /"notes":\{"missing":[0-9]+,"stale":[0-9]+\}/) {
+                    s = substr($0, RSTART + 19, RLENGTH - 20); split(s, a, /,"stale":/); m = a[1]; st = a[2] }
+                { n += gsub(/"inferred":true/, "") }
+                END { print n + 0, m + 0, st + 0 }' "$OUT/data.js" 2>/dev/null)"
             [ "${n:-0}" -gt 0 ] 2>/dev/null && echo "提示：$n 個任務的模組是由 plan 推斷的，/task-status 可提議寫回 WBS（預覽：overview.sh --print-inferred）"
+            if [ "$NOTES_OFF" -eq 0 ] && { [ "${nm:-0}" -gt 0 ] || [ "${ns:-0}" -gt 0 ]; } 2>/dev/null; then
+                echo "提示：$nm 個模組沒有說明、$ns 個可能過期（說明層：/task-status 會問要不要請 documentation-specialist 補寫；清單：overview.sh --notes-todo）"
+            fi
         fi
     fi
     exit 0
@@ -210,6 +237,10 @@ if [ "$PRINT_STATUS" -eq 1 ]; then
 fi
 
 if ! command -v jq >/dev/null 2>&1; then
+    if [ -n "$NOTES_MODE" ]; then
+        echo "overview.sh --$([ "$NOTES_MODE" = check ] && echo check-notes || echo notes-todo)：需要 jq，沒有執行" >&2
+        exit 0
+    fi
     if [ -n "$ACTUAL_PLAN" ]; then
         echo "overview.sh --actual：需要 jq，沒有寫入「計畫 vs 實際」" >&2
         exit 1
@@ -266,23 +297,30 @@ take_lock() {
     fi
     return 1
 }
-if ! take_lock; then
-    if [ -z "$ACTUAL_PLAN" ] && [ "$SYNC_ARCH" -eq 0 ]; then
-        : > "$OUT/.dirty" 2>/dev/null
-        exit 0
+# --check-notes／--notes-todo 只讀不寫共享產物，不搶鎖（理由見檔頭的用法）
+if [ -n "$NOTES_MODE" ]; then
+    TMP="$OUT/.tmp-$$"
+    mkdir -p "$TMP" 2>/dev/null
+    trap 'rm -rf "$TMP" 2>/dev/null' EXIT
+else
+    if ! take_lock; then
+        if [ -z "$ACTUAL_PLAN" ] && [ "$SYNC_ARCH" -eq 0 ]; then
+            : > "$OUT/.dirty" 2>/dev/null
+            exit 0
+        fi
+        got=0
+        for ((i = 0; i < 120; i++)); do
+            sleep 0.5
+            take_lock && { got=1; break; }
+        done
+        who=--sync-arch; [ -n "$ACTUAL_PLAN" ] && who=--actual
+        [ "$got" -eq 1 ] || { echo "overview.sh $who：等不到 overview/.lock（60 秒），沒有寫入" >&2; exit 1; }
     fi
-    got=0
-    for ((i = 0; i < 120; i++)); do
-        sleep 0.5
-        take_lock && { got=1; break; }
-    done
-    who=--sync-arch; [ -n "$ACTUAL_PLAN" ] && who=--actual
-    [ "$got" -eq 1 ] || { echo "overview.sh $who：等不到 overview/.lock（60 秒），沒有寫入" >&2; exit 1; }
+    date +%s > "$LOCK/at" 2>/dev/null
+    TMP="$OUT/.tmp-$$"
+    mkdir -p "$TMP" 2>/dev/null
+    trap 'rm -rf "$LOCK" "$TMP" 2>/dev/null' EXIT
 fi
-date +%s > "$LOCK/at" 2>/dev/null
-TMP="$OUT/.tmp-$$"
-mkdir -p "$TMP" 2>/dev/null
-trap 'rm -rf "$LOCK" "$TMP" 2>/dev/null' EXIT
 
 # ---------------------------------------------------------------- 輸入
 
@@ -461,20 +499,75 @@ read_brief() {
     done < "$MAIN_ROOT/docs/00_brief.md"
 }
 
+# 說明層的輸入：notes 檔複製成 TMP/notes.md（Windows 的 jq 開不了含中文的絕對路徑）；「依據」可能用到的
+# 路徑哪些存在（jq 不能 stat）寫進 notesexist.txt；based_on 之後改過的檔寫進 notesdiff.txt。
+# 存在與否用 bash 內建逐行切詞＋test -f，不開行程：表格列裡含 / 或 . 的詞都試一次，多試的不影響結果
+# （路徑含空白的「依據」不支援）。check 不需要過期判定，省掉兩個 git 行程
+NOTES_FILE="" NOTES_ROOT="" NOTES_BASE="" NOTES_BASE_OK=null
+notes_prep() {
+    local mode="$1" l tok fm=0 n=0 b=""
+    local -a toks
+    : > "$TMP/notes.md"; : > "$TMP/notesexist.txt"; : > "$TMP/notesdiff.txt"
+    NOTES_BASE="" NOTES_BASE_OK=null
+    [ -n "$NOTES_FILE" ] && [ -f "$NOTES_FILE" ] || return 0
+    cp -f "$NOTES_FILE" "$TMP/notes.md" 2>/dev/null || return 0
+    while IFS= read -r l || [ -n "$l" ]; do
+        l=${l%$'\r'}; n=$((n + 1))
+        if [ "$n" -eq 1 ] && [[ $l =~ ^---[[:space:]]*$ ]]; then fm=1; continue; fi
+        if [ "$fm" -eq 1 ]; then
+            if [[ $l =~ ^---[[:space:]]*$ ]]; then fm=2
+            elif [[ $l =~ ^based_on:[[:space:]]*([^[:space:]#]*) ]]; then b=${BASH_REMATCH[1]}; b=${b//\"/}; b=${b//\'/}
+            fi
+            continue
+        fi
+        [[ $l == *'|'* ]] || continue
+        l=${l//\`/ }; l=${l//|/ }; l=${l//,/ }; l=${l//，/ }; l=${l//、/ }
+        read -r -a toks <<< "$l"
+        for tok in "${toks[@]}"; do
+            tok=${tok#./}
+            [[ $tok == */* || $tok == *.* ]] || continue
+            # 走出 repo 的詞不 stat（jq 端的 badpath 會判違規）：含 .. 路徑段、以 / 或磁碟代號開頭、含反斜線
+            [[ $tok == /* || $tok == ..* || $tok == */..* || $tok == *\\* || $tok =~ ^[A-Za-z]: ]] && continue
+            [ -f "$NOTES_ROOT/$tok" ] && printf '%s\n' "$tok"
+        done
+    done < "$NOTES_FILE" > "$TMP/notesexist.txt"
+    NOTES_BASE=$b
+    [ "$mode" = check ] && return 0
+    # 不像 commit 的值不交給 git（以 - 開頭會被當成選項）；git diff 對不到 commit 時 exit 128
+    if [[ $b =~ ^[0-9a-fA-F]{4,40}$ ]] \
+       && git -C "$NOTES_ROOT" -c core.quotePath=false diff --name-only "$b" -- > "$TMP/notesdiff.txt" 2>/dev/null; then
+        NOTES_BASE_OK=true
+        git -C "$NOTES_ROOT" -c core.quotePath=false ls-files --others --exclude-standard >> "$TMP/notesdiff.txt" 2>/dev/null
+    else
+        NOTES_BASE_OK=false
+        : > "$TMP/notesdiff.txt"
+    fi
+}
+
+# $1：full（重產）／check（--check-notes）／todo（--notes-todo）。後兩者只讀現有骨架、不收 plan 與改動
 generate() {
-    local arch_rel now
+    local mode="${1:-full}" arch_rel now f
     arch_rel=$(find_arch)
     : > "$TMP/arch.md"; [ -n "$arch_rel" ] && cp -f "$MAIN_ROOT/$arch_rel" "$TMP/arch.md"
-    : > "$TMP/wbs.md"; [ -f "$DATA/wbs.md" ] && cp -f "$DATA/wbs.md" "$TMP/wbs.md"
-    # wbs-archive.md 只會越長越大，而這裡只要表格（數已歸檔的完成數）：只留標題、表格列、code fence，
-    # 其餘每段換成一個空行（保住「表格到這裡結束」的邊界）
-    : > "$TMP/wbsarch.md"
-    [ -f "$DATA/wbs-archive.md" ] && awk '/^[[:space:]]*(\||#|```)/ { print; b = 0; next } !b { print ""; b = 1 }' \
-        "$DATA/wbs-archive.md" > "$TMP/wbsarch.md" 2>/dev/null
+    : > "$TMP/wbs.md"; : > "$TMP/wbsarch.md"
     cp -f "$DATA/project.json" "$TMP/proj.json" 2> "$TMP/err" || return 1
-    scan
-    gather
-    read_brief
+    if [ "$mode" = full ]; then
+        [ -f "$DATA/wbs.md" ] && cp -f "$DATA/wbs.md" "$TMP/wbs.md"
+        # wbs-archive.md 只會越長越大，而這裡只要表格（數已歸檔的完成數）：只留標題、表格列、code fence，
+        # 其餘每段換成一個空行（保住「表格到這裡結束」的邊界）
+        [ -f "$DATA/wbs-archive.md" ] && awk '/^[[:space:]]*(\||#|```)/ { print; b = 0; next } !b { print ""; b = 1 }' \
+            "$DATA/wbs-archive.md" > "$TMP/wbsarch.md" 2>/dev/null
+        scan
+        gather
+        read_brief
+        NOTES_FILE="" NOTES_ROOT=$MAIN_ROOT
+        [ "$NOTES_OFF" -eq 1 ] || NOTES_FILE="$DATA/module-notes.md"
+    else
+        printf '{}\n' > "$TMP/skel.json"; SKEL=skel.json
+        [ -f "$OUT/skeleton.json" ] && SKEL=../skeleton.json
+        for f in bundle.txt mtimes.tsv changes.tsv bases.tsv currents.tsv planbase.tsv archive.txt; do : > "$TMP/$f"; done
+    fi
+    notes_prep "$mode"
     now=$(date '+%Y-%m-%dT%H:%M:%S.%3N%:z')
 
     # 一支 jq 算完全部，輸出兩行：第 1 行是 data.js 的物件（疊上 worktree），第 2 行是只看主 checkout
@@ -482,7 +575,7 @@ generate() {
     # 輸入先複製進 TMP、在 TMP 裡用相對檔名給 jq：Windows 的 jq 1.8.1 遇到含非 ASCII 字元的
     # 絕對路徑，--rawfile／--slurpfile／-f 一律「Could not open」（位置參數的輸入檔不受影響），
     # 主 checkout 在 D:\模板\ 這類路徑時整張圖會靜默不產生。
-    ( cd "$TMP" && LC_ALL=C.UTF-8 jq -n -c \
+    ( cd "$TMP" && LC_ALL=C.UTF-8 jq -n -c -r \
         --rawfile arch arch.md --arg archPath "$arch_rel" \
         --rawfile wbs wbs.md --rawfile wbsArch wbsarch.md \
         --slurpfile proj proj.json \
@@ -497,7 +590,12 @@ generate() {
         --arg vSrc "$ACTUAL_SRC" --arg vFile "${ACTUAL_PLAN:+$ACTUAL_NAME}" --arg vResult "$ACTUAL_RESULT" \
         --arg vReason "$ACTUAL_REASON" --arg vAt "$(date '+%m-%d %H:%M')" \
         --argjson maxChanges "$MAX_CHANGES" \
+        --rawfile notes notes.md --rawfile notesExist notesexist.txt --rawfile notesDiff notesdiff.txt \
+        --arg notesBase "$NOTES_BASE" --argjson notesBaseOk "$NOTES_BASE_OK" \
+        --argjson notesOff "$([ "$NOTES_OFF" -eq 1 ] && echo true || echo false)" \
+        --arg colsNotes "$OVERVIEW_COLS_NOTES" --arg outMode "$mode" \
         -f overview.jq > out.json 2> err ) || return 1
+    [ "$mode" = full ] || return 0
     local l1="" l2=""
     { IFS= read -r l1; IFS= read -r l2; } < "$TMP/out.json"
     [ -n "$l1" ] && [ -n "$l2" ] || { echo "overview.jq 沒有輸出兩行" >> "$TMP/err"; return 1; }
@@ -570,6 +668,30 @@ def blank: . == null or . == "" or . == "—" or . == "-" or test("^\\[.*\\]$");
 def splitlist: split("[,，、]"; null) | map(unbt) | map(select(blank | not));
 def tsv: lines | map(select(. != "") | split("\t"));
 def cap($n): if type == "string" and length > $n then .[:$n - 1] + "…" else . end;
+
+# ---- 說明層（module-notes.md）。樣式來自安全稽核（security-infrastructure-auditor-2026-11-06-1649）。
+# 一律不分大小寫，比對前先 norm（全形轉半形、U+3000 轉空白、刪零寬字元），否則「Server＝」「pass​word」繞得過。
+# IPv4 要四段、每段 1–3 位數，可接句尾句點（「版本 1.2.3」「1.2.3.4.5」不算）。Email 最後一段要字母（lodash@4.17.21 不算）。
+# 開頭不用 \b：Oniguruma 把中文也當成字元，「呼叫db01.corp.local」「帳號uid=」前面沒有字界
+def norm: explode | map(if . >= 65281 and . <= 65374 then . - 65248 elif . == 12288 then 32
+                        elif (. >= 8203 and . <= 8205) or . == 8288 or . == 65279 or . == 173 then empty else . end) | implode;
+def SECRETS: [
+  {re: "(^|[^0-9.])([0-9]{1,3}\\.){3}[0-9]{1,3}($|[^0-9.]|\\.($|[^0-9]))", why: "IP 位址"},
+  {re: "[a-z][a-z0-9+.-]*://", why: "網址或連線網址"},
+  {re: "[a-z0-9-]+(\\.[a-z0-9-]+)*\\.(local|internal|intra|intranet|corp)($|[^a-z0-9-])", why: "內網主機名"},
+  {re: "server\\s*=", why: "連線字串（Server=）"},
+  {re: "data\\s+source\\s*=", why: "連線字串（Data Source=）"},
+  {re: "(^|[^a-z0-9_])(user\\s*id|uid|initial\\s+catalog|host|username)\\s*=", why: "連線字串欄位"},
+  {re: "passw(or)?d", why: "password 字樣；功能請用中文「密碼」描述"},
+  {re: "pwd\\s*=", why: "pwd= 字樣"},
+  {re: "[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,}", why: "Email"},
+  {re: "AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|xox[abprs]-|-----BEGIN|eyJ[A-Za-z0-9_-]{8,}\\.", why: "存取權杖或金鑰"}];
+def secret_hits: norm as $t | SECRETS[] | select(. as $s | $t | test($s.re; "i")) | .why;
+# 「依據」不准走出 repo：含 .. 路徑段、以 / 或磁碟代號開頭的一律違規（bash 端也不去 stat）
+def badpath: test("(^|[/\\\\])\\.\\.([/\\\\]|$)") or test("^[/\\\\]") or test("^[A-Za-z]:");
+# 「依據」格：有反引號就只取反引號裡的，沒有就照逗號、頓號切
+def evlist: if test("`") then [match("`([^`]+)`"; "g") | .captures[0].string | trim | sub("^\\./"; "")] | map(select(. != ""))
+            else split("[,，、]"; null) | map(trim | sub("^\\./"; "")) | map(select(. != "" and . != "—" and . != "-")) end;
 # 來自 md 的名稱：<br> 換空白、解碼實體、去標籤（mermaid 標籤常寫 `訂單<br/>處理&amp;出貨`）。&amp; 最後解，
 # `&amp;lt;` 才會留成字面的 `&lt;`
 def clean: gsub("\\\\n"; " ") | gsub("<br\\s*/?>"; " "; "i")
@@ -780,8 +902,85 @@ def parse_ledger:
   # plan files: 的 glob 對模組：萬用字元換成一般字元再比對（寬鬆側誤差，只用來找「碰到哪些模組」）
   def globmod: gsub("\\*\\*"; "x") | gsub("[*?]"; "x") | modof;
 
+# ---- 說明層（提案第 5 節）：module-notes.md 的第一張表。表頭缺欄 → 整份當作沒有；某列違規 → 那一列當作沒有。
+# 列號 n 是表格的第幾列資料（--check-notes 印的「第 N 列」）。「依據」存不存在由 bash 先 test -f（$notesExist）
+  ($colsNotes | words) as $needNotes
+| ($notesExist | lines | map(select(. != "") | {key: ., value: true}) | from_entries) as $EX
+# span：第一張表在檔案裡的行範圍 [起, 迄)，同 tables 的判法（表頭列的下一行是分隔列、code fence 裡的不算）
+| (if $notes == "" then null
+   else $notes | lines as $L
+     | (if (($L[0] // "") | trim) == "---" then ([range(1; $L | length) | select(($L[.] | trim) == "---")] | first) else null end) as $e
+     | (if $e != null then $e + 1 else 0 end) as $from
+     | (reduce range($from; $L | length) as $i ({fence: false, s: null, e: null};
+          if .e != null then .
+          elif ($L[$i] | test("^\\s*```")) then (if .s != null then .e = $i else .fence = (.fence | not) end)
+          elif .fence then .
+          elif .s != null then (if ($L[$i] | is_row) then . else .e = $i end)
+          elif ($L[$i] | is_row) and (($L[$i + 1] // "") | is_sep) then .s = $i
+          else . end)) as $sp
+     | {lines: $L, span: (if $sp.s == null then null else [$sp.s, ($sp.e // ($L | length))] end),
+        table: ($L[$from:] | join("\n") | tables | first)}
+   end) as $nt
+| (if $nt == null then {header: null, rows: []}
+   elif $nt.table == null then {header: "找不到說明表（表頭要有 \($needNotes | join("、"))）", rows: []}
+   else ([$needNotes[] | select(. as $c | $nt.table.header | index($c) | not)]) as $miss
+     | if ($miss | length) > 0 then {header: "缺\($miss | map("「\(.)」") | join(""))欄（表頭要有 \($needNotes | join("、"))）", rows: []}
+       else {header: null,
+             rows: [$nt.table.header as $h | $nt.table.rows | to_entries[] | (.key + 1) as $n | .value | rowobj($h)
+                    | {n: $n, id: (.id | unbt),
+                       name: ((.["名稱"] // "") | unbt | if blank then "" else . end),
+                       group: ((.["分組"] // "") | unbt | if blank then "" else . end),
+                       text: ((.["說明"] // "") | trim | if blank then "" else . end),
+                       evidence: ((.["依據"] // "") | evlist)}]} end
+   end) as $NR
+| ([$NR.rows[] | . as $r
+    | ($r.id != "" and ($modIds | index($r.id)) != null) as $known
+    | {n, id, why: [
+        (if $r.id == "" then "id 是空的" elif ($known | not) then "id 不存在於專案地圖（可用的 id 見 overview.sh --notes-todo 或地圖）" else empty end),
+        (($r.name | length) as $l | if $l > 12 then "名稱 \($l) 字，上限 12" else empty end),
+        (($r.text | length) as $l | if $l == 0 then "說明是空的" elif $l > 60 then "說明 \($l) 字，上限 60" else empty end),
+        (if ($r.evidence | length) == 0 then "依據沒有寫檔案（至少一個，包在反引號裡）" else empty end),
+        ($r.evidence[] | . as $f
+         | if ($f | badpath) then "依據 \($f) 路徑不能含 .. 或絕對路徑"
+           elif $EX[$f] != true then "依據 \($f) 不存在"
+           elif $known and (($f | modof) != $r.id) then "依據 \($f) 不在模組 \($r.id) 的路徑內"
+           else empty end),
+        ([$r.name, $r.group, $r.text] | join("\n") | secret_hits
+         | "含機密樣式（\(.)）：名稱、分組、說明不准寫主機、帳密、Email")]}]) as $NV
+# 表格以外的行（frontmatter、註記、第二張表）也不准寫機密；表頭不對時整份都算表外。行號 l 從 1 起
+| (if $nt == null then []
+   else ($nt.span // [0, 0]) as $s | (if $NR.header != null then [0, 0] else $s end) as $s
+     | [range(0; $nt.lines | length) | select(. < $s[0] or . >= $s[1]) as $i
+        | ($nt.lines[$i] | [secret_hits] | unique) as $w | select(($w | length) > 0)
+        | {l: ($i + 1), why: [$w[] | "含機密樣式（\(.)）：表格外也不准寫主機、帳密、Email"]}]
+   end) as $OUTV
+| ([$NV[] | select((.why | length) == 0) | .n]) as $okN
+| ([$NR.rows[] | select(.n as $n | any($okN[]; . == $n))]) as $okRows
+| (reduce $okRows[] as $r ({}; if .[$r.id] != null then . else .[$r.id] = $r end)) as $NOTE
+# based_on 之後改過的檔（含工作區、未追蹤）落在哪些模組；based_on 不是有效 commit 時全部算過期
+| ([$notesDiff | lines[] | select(. != "") | modof | select(. != null)] | unique) as $chgMods
+# 分組：notes 寫的字與既有分組的 label 或 id 相同就併進去，否則開一個新分組（id 依出現順序 notes-1、notes-2…）
+| ([(($dg // {}).groups // [])[], (($sk.groups // [])[])]) as $G0
+| (reduce ($okRows[] | .group | select(. != "")) as $g ({map: {}, new: []};
+     if .map[$g] != null then .
+     else ([$G0[] | select(.label == $g or .id == $g) | .id] | first) as $hit
+       | if $hit != null then .map[$g] = $hit
+         else "notes-\(.new | length + 1)" as $nid | .map[$g] = $nid | .new += [{id: $nid, label: $g}] end
+     end)) as $NG
+| ([$mods0[] | . as $m | $NOTE[.id] as $nr
+    | if $nr == null then . + {description: null}
+      else . + {description: {text: $nr.text, evidence: $nr.evidence,
+                              stale: ($notesBaseOk == false or ($chgMods | index($m.id)) != null)}}
+        # 名稱、分組的優先序：5.5 → notes → 目錄名
+        + (if .nameSource == "doc" then {}
+           else (if $nr.name != "" then {name: $nr.name, nameSource: "notes"} else {} end)
+                + (if $nr.group != "" then {group: $NG.map[$nr.group]} else {} end) end)
+      end]) as $mods0
+# 可以寫說明的模組：有程式檔、不是「其他」。--print-path 的提示與 --notes-todo 都只算這些
+| ([$mods0[] | select(.id != "other" and ($FC[.id] // 0) > 0)]) as $notable
+
 # ---- WBS 任務：表頭有 # 任務 狀態 的表，依表頭找欄（舊節少欄也照讀）
-  ($colsWbs | words) as $needWbs
+| ($colsWbs | words) as $needWbs
 | ([$wbs | tables[] | select(.header as $h | all($needWbs[]; . as $c | $h | index($c)))]) as $wt
 | ([$wt[] | .h as $ms | (.header | index($wcol) != null) as $hasCol | .header as $h | .rows[] | rowobj($h)
     | select(.["#"] | unbt | blank | not)
@@ -1016,7 +1215,7 @@ def parse_ledger:
 
 # ---- 版面由這裡決定（畫面只換算像素、節點不可拖）：群組由左到右排成欄；
 # 群組內依「群組內連線」的深度再分子欄（gateway → svc-a 會排在 gateway 右邊），每欄最多 4 列
-| ((($dg // {}).groups // []) + ($sk.groups // []) | map(select(.id as $g | $mods0 | any(.group == $g)))
+| ((($dg // {}).groups // []) + ($sk.groups // []) + $NG.new | map(select(.id as $g | $mods0 | any(.group == $g)))
    + (if any($mods0[]; .group == "_ungrouped") then [{id: "_ungrouped", label: "未分組"}] else [] end)) as $groups
 | ([($dg // {}).edges // [] | .[] | select(.from != .to)
     | select(.from as $a | .to as $b | ($modIds | index($a)) and ($modIds | index($b)))]
@@ -1076,7 +1275,6 @@ def parse_ledger:
              pos: $pos[$id],
              fileCount: ($FC[$id] // 0),
              routes: {count: (($RT[$id] // []) | length), sample: (($RT[$id] // [])[:20])},
-             description: null,
              planned: ($planned | index($id) != null)});
   def notices_for($plans): [
     (if $demo then {level: "info", text: "demo 情境沒有架構文件，專案地圖不會出現（之後的任務圖仍可用）", action: "/docs-init --mvp"} else empty end),
@@ -1098,11 +1296,38 @@ def parse_ledger:
     ($unknownMods | if length > 0 and ($demo | not) then {level: "warn", text: "任務標了模組表沒有的模組：\(.[:8] | join("、"))", action: "改 WBS 模組欄或補架構文件 5.5"} else empty end),
     (($sk.notices // [])[]),
     ([$plans[] | select(.base == null and (.status | test("✅") | not)) | .file] | if length > 0 then {level: "warn", text: "找不到比較基準（帳本沒有 BASE=，也找不到預設分支），列不出這幾份 plan 改了哪些檔：\(join("、"))", action: "帳本記 BASE=<commit>（subagent-execution）"} else empty end),
-    ([$plans[] | select((.hasParts | not) and (.status | test("✅") | not)) | .file] | if length > 0 then {level: "info", text: "這幾份 plan 沒有「一眼看懂」部件表，任務圖只列得出改了哪些檔：\(join("、"))", action: "格式見 plan-format skill"} else empty end)
+    ([$plans[] | select((.hasParts | not) and (.status | test("✅") | not)) | .file] | if length > 0 then {level: "info", text: "這幾份 plan 沒有「一眼看懂」部件表，任務圖只列得出改了哪些檔：\(join("、"))", action: "格式見 plan-format skill"} else empty end),
+    (([$NV[] | select((.why | length) > 0)] | length) as $bad
+     | if $NR.header != null then {level: "warn", text: "module-notes.md 的表頭不對（\($NR.header)），地圖上沒有任何說明", action: "bash .claude/scripts/overview.sh --check-notes"}
+       elif $bad > 0 then {level: "warn", text: "module-notes.md 有 \($bad) 列沒通過檢查，那幾個模組當成沒有說明", action: "bash .claude/scripts/overview.sh --check-notes"}
+       else empty end),
+    (if ($OUTV | length) > 0 then {level: "warn", text: "module-notes.md 表格以外有 \($OUTV | length) 行含機密樣式（主機、帳密、Email 之類）", action: "bash .claude/scripts/overview.sh --check-notes"} else empty end),
+    (if $notesBaseOk == false and ($NOTE | length) > 0 then
+       {level: "info", text: "module-notes.md 的 based_on（\(if $notesBase == "" then "沒寫" else $notesBase end)）不是有效的 commit，所有說明都標成可能過期", action: "請 documentation-specialist 重寫說明，based_on 填當下的 HEAD"}
+     else empty end)
   ];
   def public: map(del(._touch, ._mtime, ._text, ._fileMods, ._diffMods));
   def taskout: [$tasks[] | {id, title, status, state, milestone, modules, inferred, inferredBy}];
 
+  # --check-notes：一行一筆違規
+  if $outMode == "check" then
+    (if $NR.header != null then "表頭：\($NR.header)"
+     else $NV[] | .n as $n | (if .id == "" then "（沒有 id）" else .id end) as $id | .why[] | "第 \($n) 列 \($id)：\(.)" end),
+    ($OUTV[] | .l as $l | .why[] | "表外第 \($l) 行：\(.)")
+  # --notes-todo：沒有說明或可能過期的模組，代表檔最多 3 個：路由最多的檔 → 進入點 → 被引用最多的檔
+  #（5.2 寫的是「最大的檔」；腳本不量檔案大小，改用被引用次數，同樣挑得出核心檔）
+  elif $outMode == "todo" then
+    ($FM | to_entries | group_by(.value) | map({key: .[0].value, value: map(.key)}) | from_entries) as $MF
+    | (reduce ($sk.routes // [])[] as $r ({}; .[$r[0]] += 1)) as $RC
+    | (reduce ($sk.imports // [])[] as $i ({}; .[$i[1]] += 1)) as $IN
+    | $notable[] | select(.description == null or .description.stale)
+    | ($MF[.id] // []) as $fs
+    | (([$fs[] | select($RC[.] != null)] | sort_by(-($RC[.]), .) | .[:1])
+       + ([$fs[] | select(split("/") | last | test("^(main|index|app|server|program|application)\\.[A-Za-z0-9]+$"; "i"))] | sort | .[:1])
+       + ($fs | sort_by(-($IN[.] // 0), .))
+       | reduce .[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end) | .[:3]) as $rep
+    | "\(.id)\t\(.paths | join(","))\t\($rep | join(","))\t\(if .description == null then "missing" else "stale" end)"
+  else
   {schema: 2,
    generatedAt: $now,
    generator: {script: "overview.sh", version: 3},
@@ -1125,6 +1350,10 @@ def parse_ledger:
    changes: $changesList,
    changesRollup: ($chAll[$maxChanges:] | rollup),
    archived: $archived,
+   # --print-path 用 awk 抓這個物件（key 順序固定）；off 時是 null，不提示
+   notes: (if $notesOff then null
+           else {missing: ([$notable[] | select(.description == null)] | length),
+                 stale: ([$notable[] | select(.description.stale == true)] | length)} end),
    plans: ($plans | public)},
   {project: {name: ($p.name // "（未命名專案）")},
    notices: notices_for($mainPlans),
@@ -1138,6 +1367,7 @@ def parse_ledger:
    unmappedTasks: [$tasks[] | select(.modules | length == 0) | .id],
    archived: $archived,
    plans: ($mainPlans | public)}
+  end
 JQ
 
 # overview.md 與 plan 的「計畫 vs 實際」共用的 markdown 產生器
@@ -1475,6 +1705,31 @@ printf '%s\n%s\n' "$JQ_ROLLUP" "$JQ_SHRINK" > "$TMP/shrink.jq"
 printf '%s\n%s\n' "$JQ_MDDEFS" "$JQ_MD" > "$TMP/md.jq"
 printf '%s\n%s\n' "$JQ_MDDEFS" "$JQ_ACTUAL" > "$TMP/actual.jq"
 printf '%s\n%s\n' "$JQ_MDDEFS" "$JQ_ARCH" > "$TMP/arch.jq"
+
+# --check-notes／--notes-todo：讀寫入的那個 checkout 的 notes（worktree 裡寫的就驗 worktree 那份），沒有才讀主 checkout 的。
+# 骨架與模組歸屬一律是主 checkout 的
+if [ -n "$NOTES_MODE" ]; then
+    NOTES_ROOT=$MAIN_ROOT NOTES_FILE="$DATA/module-notes.md"
+    if [ -f "$WORK_ROOT/.claude/taskmaster-data/module-notes.md" ]; then
+        NOTES_ROOT=$(cd "$WORK_ROOT" && pwd) && NOTES_FILE="$NOTES_ROOT/.claude/taskmaster-data/module-notes.md"
+    fi
+    if [ "$NOTES_MODE" = check ]; then
+        [ -f "$NOTES_FILE" ] || exit 0
+    elif [ "$NOTES_OFF" -eq 1 ]; then
+        echo "overview.sh --notes-todo：project.json 的 overview.notes 是 off，說明層關閉中" >&2
+        exit 0
+    fi
+    [ -f "$OUT/skeleton.json" ] || [ "$IS_DEMO" -eq 1 ] || bash "${BASH_SOURCE[0]}" "$WORK_ROOT" >/dev/null 2>&1
+    if ! generate "$NOTES_MODE"; then
+        printf 'overview.sh --%s：執行失敗：%s\n' "$([ "$NOTES_MODE" = check ] && echo check-notes || echo notes-todo)" "$(cat "$TMP/err" 2>/dev/null)" >&2
+        exit 2
+    fi
+    [ -s "$TMP/out.json" ] || exit 0
+    cat "$TMP/out.json"
+    [ "$NOTES_MODE" = check ] && exit 1
+    exit 0
+fi
+
 RC=0 SYNC_RC=0
 for _ in 1 2 3; do
     rm -f "$OUT/.dirty" 2>/dev/null

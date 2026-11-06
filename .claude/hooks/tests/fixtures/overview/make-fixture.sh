@@ -7,6 +7,9 @@
 #     shop-clean      那三個檔（改動清單才會恰好是那三個）
 #     messy-fullstack 4 份沒有 files: 的 plan 各寫一份帳本（BASE＝目標目錄目前的 HEAD）、改一個頁面檔，
 #                     讓它們的模組只能由 diff 推斷（X4：24 份 plan-files、4 份 diff、4 個任務沒有 plan）
+#   環境變數 MAKE_FIXTURE_NOTES=1（只有 messy-fullstack）：先 commit 基礎檔、再帶這個變數跑一次，只寫說明層
+#     taskmaster-data/module-notes.md（based_on＝目前的 HEAD）。6 列：backend-api、services、pages 合格；
+#     nope（id 不存在）、frontend-api（說明含 IP）、m-5d3b69（依據不在模組內）刻意違規
 #
 #   shop-clean      範例電商：5.1／5.5 都有效，WBS 每個任務都標了模組
 #   messy-fullstack 髒資料：Python 後端＋TS 前端、C4 架構圖、沒有 5.5、WBS 沒有模組欄、32 個任務
@@ -134,7 +137,27 @@ messy_changes() {
     printf "export const dashboardTitle = '儀表板'\n" >> "$DEST/frontend/src/pages/Dashboard.tsx"
 }
 
+# m-5d3b69 是「報表匯出與排程作業」目錄的模組 id（overview-scan.sh 的 X3：非 ASCII 目錄名取雜湊）
+messy_notes() {
+    local head
+    head=$(git -C "$DEST" rev-parse --short HEAD 2>/dev/null) || { echo "make-fixture.sh：$DEST 還沒有 commit，MAKE_FIXTURE_NOTES 需要先 commit 基礎檔" >&2; exit 1; }
+    {
+        printf -- '---\nbased_on: %s\ngenerated: 2026-11-06\n---\n' "$head"
+        cat <<'MD'
+| id | 名稱 | 分組 | 說明 | 依據 |
+|---|---|---|---|---|
+| backend-api | 後端 API | 後端 | 提供使用者、報表與登入的 REST 介面，每支都先確認登入身分 | `backend/app/api/reports.py`、`backend/app/api/deps.py` |
+| services | 查詢服務 | 後端 | 依登入者查使用者與報表資料 | `backend/app/services/report_service.py` |
+| pages | 頁面 | 前端 | 登入、儀表板與報表列表三個畫面 | `frontend/src/pages/Dashboard.tsx` |
+| nope | 不存在 | 後端 | 這一列的 id 不在地圖上 | `backend/app/api/users.py` |
+| frontend-api | 前端 API | 前端 | 呼叫 http://10.0.0.5/api 的報表介面 | `frontend/src/api/client.ts` |
+| m-5d3b69 | 匯出排程 | 後端 | 每天把報表匯成 CSV | `backend/app/services/report_service.py` |
+MD
+    } | put "$TD/module-notes.md"
+}
+
 messy_fullstack() {
+    if [ -n "${MAKE_FIXTURE_NOTES:-}" ]; then messy_notes; return; fi
     if [ -n "${MAKE_FIXTURE_CHANGES:-}" ]; then messy_changes; return; fi
     local zh="報表匯出與排程作業"
     printf '{"name":"查詢系統","mode":"mvp","overview":{"architectureDoc":"docs/architecture/01_system_architecture.md"}}\n' | put "$TD/project.json"

@@ -100,6 +100,21 @@ docs/CODEMAPS/
    每個模組的 `id`、包含哪些路徑、你拿不準的切法（例：`src/shared/` 要不要自成一個模組）
 4. 使用者確認後由**主模型**移除標記——你不要自己移除
 
+## 寫模組說明（專案地圖的說明層）
+
+被派來「寫模組說明」時（`/task-status` 問過使用者才會派你）：
+
+1. **先讀** `.claude/skills/project-docs/module-notes.md`——格式、寫作標準、禁寫清單的唯一來源，勿憑記憶寫
+2. 跑 `bash .claude/scripts/overview.sh --notes-todo` 取得要寫的模組，一行一筆
+   `id<TAB>路徑<TAB>代表檔（最多 3 個）<TAB>missing|stale`。**不要 Read `overview/data.js`**。
+   主模型說「全部重寫」時，先把 `module-notes.md` 的資料列清空（保留 frontmatter 與表頭）再跑，清單就會是全部模組
+3. 每個模組只讀第 3 欄的代表檔，每個最多 200 行（`Read` 帶 `limit: 200`）。讀完還說不出它做什麼的，寫你確定的部分並在回報列出
+4. 寫 `.claude/taskmaster-data/module-notes.md`：清單外的既有列原樣保留，只改清單上的；`based_on` 填當下的
+   `git rev-parse --short HEAD`
+5. 寫入後 `post-write.sh` 會跑 `overview.sh --check-notes`，有違規就注入對話（`第 N 列 <id>：<原因>`）。
+   **修到沒有注入為止**——違規的列在地圖上當成沒有說明
+6. 不寫 context 報告（說明檔本身就是產出），回報照下方格式；「摘要」寫寫了幾個模組，「後續」列出拿不準的模組
+
 ## 關鍵原則
 
 1. **單一真相來源** -- 從程式碼生成，不手動撰寫

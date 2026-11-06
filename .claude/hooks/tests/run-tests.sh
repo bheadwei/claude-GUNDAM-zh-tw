@@ -4412,6 +4412,196 @@ expect_eq "Maven 自動切模組不影響 shop-clean、messy-fullstack 的模組
     "$(ds_q shop-clean '[.modules[].id] | sort | join(" ")')|$(ds_q messy-fullstack '[.modules[].id] | sort | join(" ")')"
 
 # =========================================================================
+section "overview.sh — 說明層（module-notes.md、--check-notes、過期判定、--notes-todo）"
+# =========================================================================
+# 每組資料一個獨立 repo，放在含中文與空格的目錄（notes 檔的讀取要走暫存 ASCII 檔名，見 learned 2026-11-04）。
+# 跑的是 repo 外的 overview.sh（OV_SRC）；post-write 的案例另把 overview.sh 複製進 repo 的 .claude/scripts。
+MN="$SANDBOX/說明 測試"
+FXD="$HOOK_DIR/tests/fixtures/overview"
+rm -rf "$MN"; mkdir -p "$MN"
+mn_ov()  { bash "$OV_SRC" "$MN/$1" >/dev/null 2>&1; }
+mn_q()   { sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$MN/$1/.claude/taskmaster-data/overview/data.js" 2>/dev/null | jq -r "$2" 2>/dev/null | tr -d '\r'; }
+mn_new() { rm -rf "$MN/$1"; mkdir -p "$MN/$1/.claude/taskmaster-data" "$MN/$1/docs"; echo '{"name":"說明","mode":"mvp"}' > "$MN/$1/.claude/taskmaster-data/project.json"; }
+mn_put() { mkdir -p "$(dirname "$MN/$1/$2")"; printf "$3" > "$MN/$1/$2"; }
+mn_git() { ( cd "$MN/$1" && { [ -d .git ] || git init -q -b main . ; } && git add -A && git -c user.email=t@t -c user.name=t commit -qm "${2:-c}" ) >/dev/null 2>&1; }
+mn_head() { git -C "$MN/$1" rev-parse --short "${2:-HEAD}" 2>/dev/null; }
+# mn_notes <repo> <based_on> <列…>：列為「id|名稱|分組|說明|依據」；MN_HEAD 換掉表頭
+mn_notes() {
+    local r="$1" b="$2" row; shift 2
+    { printf -- '---\nbased_on: %s   # 寫說明時的 HEAD\ngenerated: 2026-11-06\n---\n' "$b"
+      echo "${MN_HEAD:-| id | 名稱 | 分組 | 說明 | 依據 |}"; echo '|---|---|---|---|---|'
+      for row in "$@"; do echo "| ${row//|/ | } |"; done
+    } > "$MN/$r/.claude/taskmaster-data/module-notes.md"
+}
+# mn_chk <repo>：--check-notes 的 stdout 與 exit code，印成「<rc>|<stdout>」
+mn_chk() { local o rc; o=$(bash "$OV_SRC" --check-notes "$MN/$1" 2>/dev/null); rc=$?; printf '%s|%s' "$rc" "$(printf '%s' "$o" | tr -d '\r')"; }
+mn_rep() { printf '%s' "$1" | grep -o "$2"; }
+# n：後端 api、services 兩個模組，各兩個檔
+mn_new n
+mn_put n backend/pyproject.toml '[project]\nname = "b"\n'
+for d in api services; do mn_put n "backend/app/$d/a.py" 'a = 1\n'; mn_put n "backend/app/$d/b.py" 'b = 2\n'; done
+mn_git n; mn_ov n
+GOOD_API='api|後端介面|後端|提供報表與使用者的查詢介面|`backend/app/api/a.py`'
+GOOD_SVC='services|查詢服務|後端|依條件查詢報表資料|`backend/app/services/a.py`、`backend/app/services/b.py`'
+
+# ---- --check-notes：規則照提案 5.3
+rm -f "$MN/n/.claude/taskmaster-data/module-notes.md"
+expect_eq "沒有 module-notes.md → --check-notes exit 0、stdout 為空" "0|" "$(mn_chk n)"
+mn_notes n "$(mn_head n)" "$GOOD_API" "$GOOD_SVC"
+expect_eq "格式正確、id 都在骨架裡 → --check-notes exit 0、stdout 為空" "0|" "$(mn_chk n)"
+mn_notes n "$(mn_head n)" "$GOOD_API" 'nope|不存在的|後端|一句說明|`backend/app/api/a.py`'
+out=$(mn_chk n)
+expect_eq       "id 是 nope、骨架沒有 → exit 1" 1 "${out%%|*}"
+expect_contains "id 是 nope → 一行「第 2 列 nope：…」" "第 2 列 nope：" "$out"
+expect_contains "id 是 nope → 原因含「不存在」" "不存在" "$out"
+expect_eq "id 是 nope → 合格的第 1 列沒有被報" "" "$(mn_rep "$out" '第 1 列')"
+N12=$(printf '測%.0s' {1..12}); N13=$(printf '測%.0s' {1..13}); D60=$(printf '說%.0s' {1..60}); D61=$(printf '說%.0s' {1..61})
+mn_notes n "$(mn_head n)" "api|$N13||一句說明|\`backend/app/api/a.py\`" "api|$N12||一句說明|\`backend/app/api/a.py\`" \
+    "api|||$D61|\`backend/app/api/a.py\`" "api|||$D60|\`backend/app/api/a.py\`"
+out=$(mn_chk n)
+expect_eq "名稱 13 字違規、12 字不違規；說明 61 字違規、60 字不違規 → 只報第 1、3 列" "第 1 列|第 3 列" \
+    "$(mn_rep "$out" '第 [0-9]* 列' | sort -u | paste -sd'|' -)"
+expect_contains "名稱超過 → 原因含「名稱」與上限 12" "名稱 13 字" "$out"
+expect_contains "說明超過 → 原因含「說明」與上限 60" "說明 61 字" "$out"
+mn_notes n "$(mn_head n)" 'api|||一句說明|`backend/app/api/zz.py`' 'api|||一句說明|`backend/app/services/a.py`' 'api|||一句說明|'
+out=$(mn_chk n)
+expect_contains "依據的檔案不存在 → 違規" "第 1 列 api：依據 backend/app/api/zz.py 不存在" "$out"
+expect_contains "依據存在但不在該模組路徑內 → 違規" "第 2 列 api：依據 backend/app/services/a.py 不在模組 api 的路徑內" "$out"
+expect_contains "依據是空的 → 違規" "第 3 列 api：依據" "$out"
+mn_notes n "$(mn_head n)" 'api|||連到 10.1.2.3 查資料|`backend/app/api/a.py`' 'api|||用 Server=db01 連線|`backend/app/api/a.py`' \
+    'api|||設定 Data Source=x|`backend/app/api/a.py`' 'api|||檢查 PASSWORD 欄位|`backend/app/api/a.py`' \
+    'api|||帶 PWD=1 登入|`backend/app/api/a.py`' 'api|||呼叫 https://u:p@host/x|`backend/app/api/a.py`' \
+    'api|||通知 a@b.com|`backend/app/api/a.py`' 'api|||相容版本 1.2.3 的格式|`backend/app/api/a.py`'
+out=$(mn_chk n)
+expect_eq "機密樣式（IPv4、Server=、Data Source=、password、pwd=、網址帳密、Email，不分大小寫）→ 7 列各自違規；版本 1.2.3 不違規" \
+    "第 1 列|第 2 列|第 3 列|第 4 列|第 5 列|第 6 列|第 7 列" "$(mn_rep "$out" '第 [0-9]* 列' | sort -u | paste -sd'|' -)"
+expect_contains "password 違規 → 訊息提示改用中文「密碼」描述功能" "密碼" "$(printf '%s\n' "$out" | grep '^第 4 列')"
+# 修復迴圈 R1（安全稽核）：句尾句點、不帶帳密的網址、全形與零寬字元、內網主機名要擋；套件版本、版本號、Node.js、「密碼」不擋
+ZW=$(printf '\342\200\213')
+mn_notes n "$(mn_head n)" 'api|||連到 10.1.2.3.|`backend/app/api/a.py`' 'api|||讀 postgresql://u@h 的資料|`backend/app/api/a.py`' \
+    'api|||用 Server＝db01 連線|`backend/app/api/a.py`' "api|||檢查 pass${ZW}word 欄位|\`backend/app/api/a.py\`" \
+    'api|||連到 １０．１．２．３|`backend/app/api/a.py`' 'api|||呼叫 db01.corp.local 的服務|`backend/app/api/a.py`' \
+    'api|||相容 lodash@4.17.21 的格式|`backend/app/api/a.py`' 'api|||相容版本 1.2.3 的格式|`backend/app/api/a.py`' \
+    'api|||用 Node.js 產生報表|`backend/app/api/a.py`' 'api|||處理密碼重設流程|`backend/app/api/a.py`'
+out=$(mn_chk n)
+expect_eq "句尾句點的 IP、postgresql://、全形 ＝、夾零寬字元的 password、全形 IP、*.corp.local → 6 列各自違規；lodash@4.17.21、版本 1.2.3、Node.js、密碼重設流程不違規" \
+    "第 1 列|第 2 列|第 3 列|第 4 列|第 5 列|第 6 列" "$(mn_rep "$out" '第 [0-9]* 列' | sort -u | paste -sd'|' -)"
+mn_notes n "$(mn_head n)" "$GOOD_API"; printf '\n備註：正式機是 Server=db01\n' >> "$MN/n/.claude/taskmaster-data/module-notes.md"
+out=$(mn_chk n)
+expect_eq       "表格以外的行含 Server=db01 → exit 1" 1 "${out%%|*}"
+expect_contains "表格以外的行含 Server=db01 → 回報「表外第 9 行」" "表外第 9 行：" "$out"
+mn_notes n "$(mn_head n)" 'api|||一句說明|`backend/app/api/../../../etc/passwd`' 'api|||一句說明|`/etc/passwd`'
+out=$(mn_chk n)
+expect_contains "依據含 .. 路徑段 → 違規（不去 stat）" "第 1 列 api：依據 backend/app/api/../../../etc/passwd 路徑不能含 .. 或絕對路徑" "$out"
+expect_contains "依據以 / 開頭 → 違規" "第 2 列 api：依據 /etc/passwd 路徑不能含 .. 或絕對路徑" "$out"
+MN_HEAD='| id | 名稱 | 分組 | 說明 |' mn_notes n "$(mn_head n)" 'api|後端介面|後端|提供查詢介面'
+out=$(mn_chk n)
+expect_eq       "表頭少了「依據」欄 → exit 1" 1 "${out%%|*}"
+expect_contains "表頭少了「依據」欄 → 原因含「表頭」與缺的欄名" "表頭" "$out"
+expect_contains "表頭少了「依據」欄 → 指出缺「依據」" "依據" "$out"
+
+# ---- post-write：寫入 module-notes.md 時前景驗證並注入；其他寫入不跑
+mkdir -p "$MN/n/.claude/scripts" "$MN/n/.claude/templates/overview"
+cp "$OV_SRC" "$MN/n/.claude/scripts/overview.sh"; cp "$OV_SCAN" "$MN/n/.claude/scripts/overview-scan.sh"
+cp "$OV_TPL" "$MN/n/.claude/templates/overview/index.html"
+mn_pw() { local f="$1"; shift; run post-write.sh "$(w "$MN/n/$f")" CLAUDE_PROJECT_DIR="$MN/n" OVERVIEW_SYNC=1 "$@"; }
+mn_notes n "$(mn_head n)" "$GOOD_API" 'services|||用 Server=db01 連線|`backend/app/services/a.py`'
+out=$(mn_pw .claude/taskmaster-data/module-notes.md)
+expect_eq       "post-write 寫入含 Server=db01 的 notes → stdout 是 JSON" PostToolUse "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.hookEventName' 2>/dev/null)"
+expect_contains "post-write 注入的 additionalContext 含該列的列號與 id" "第 2 列 services" \
+    "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null)"
+expect_eq "post-write 寫入 notes 時也重產地圖（OVERVIEW_SYNC=1 前景）→ 合格的 api 有說明、違規的 services 沒有" "提供報表與使用者的查詢介面|null" \
+    "$(mn_q n '"\(.modules[] | select(.id == "api") | .description.text)|\(.modules[] | select(.id == "services") | .description)"')"
+out=$(mn_pw .claude/taskmaster-data/plans/1.1-x.md)
+expect_empty "notes 有違規、但寫入的是 plan → post-write 不跑 --check-notes、沒有輸出" "$out"
+mkdir -p "$MN/n/.claude/worktrees/w/.claude/taskmaster-data"
+out=$(mn_pw .claude/worktrees/w/.claude/taskmaster-data/module-notes.md)
+expect_empty "寫入 .claude/worktrees/ 底下的 notes（相對 WORK_ROOT 不是 .claude/taskmaster-data/module-notes.md）→ 不驗證、沒有輸出" "$out"
+rm -rf "$MN/n/.claude/worktrees"
+echo off > "$MN/n/.claude/taskmaster-data/.suggest-mode"
+out=$(mn_pw .claude/taskmaster-data/module-notes.md)
+expect_contains ".suggest-mode 為 off 時寫入含違規的 notes → 仍注入" "第 2 列 services" "$out"
+rm -f "$MN/n/.claude/taskmaster-data/.suggest-mode"
+mn_notes n "$(mn_head n)" "$GOOD_API" "$GOOD_SVC"
+expect_empty "post-write 寫入合格的 notes → stdout 為空" "$(mn_pw .claude/taskmaster-data/module-notes.md)"
+
+# ---- 讀 notes：違規的列當作沒有說明；名稱、分組的優先序 5.5 → notes → 目錄名
+mn_notes n "$(mn_head n)" "$GOOD_API" 'services|查詢服務|後端|依條件查詢報表資料|`backend/app/api/a.py`'
+mn_ov n
+expect_eq "某列違規 → 該模組 description 為 null，其他合格列照常填入（text、evidence、stale）" \
+    "null|提供報表與使用者的查詢介面|backend/app/api/a.py|false" \
+    "$(mn_q n '"\(.modules[] | select(.id == "services") | .description)|\(.modules[] | select(.id == "api") | .description | "\(.text)|\(.evidence | join(","))|\(.stale)")"')"
+expect_eq "沒有 5.5 → 名稱取 notes、nameSource notes；違規列的名稱不採用（仍是目錄名）" "後端介面 notes|services dir" \
+    "$(mn_q n '[.modules[] | select(.id == "api" or .id == "services") | "\(.name) \(.nameSource)"] | join("|")')"
+expect_eq "沒有 5.5 → 分組取 notes 寫的「後端」" "後端" \
+    "$(mn_q n '(.modules[] | select(.id == "api") | .group) as $g | .groups[] | select(.id == $g) | .label')"
+mn_new doc
+for f in a b; do mn_put doc "src/auth/$f.py" 'x = 1\n'; mn_put doc "src/web/$f.ts" 'export const x = 1\n'; done
+{ echo '# 架構'; echo; echo '### 5.5 模組'; echo; echo '| id | 模組 | 路徑 | 職責 |'; echo '|---|---|---|---|'
+  echo '| auth | 認證中心 | `src/auth/**` | 登入 |'; echo '| web | 前端 | `src/web/**` | 畫面 |'; } > "$MN/doc/docs/architecture.md"
+mn_git doc
+mn_notes doc "$(mn_head doc)" 'auth|登入與權限|後端|驗證帳號並簽發登入憑證|`src/auth/a.py`'
+mn_ov doc
+expect_eq "notes 有 auth、5.5 也有 auth → 名稱取 5.5、nameSource doc，說明照填" "認證中心|doc|驗證帳號並簽發登入憑證" \
+    "$(mn_q doc '.modules[] | select(.id == "auth") | "\(.name)|\(.nameSource)|\(.description.text)"')"
+rm -f "$MN/doc/docs/architecture.md"; mn_git doc; mn_ov doc
+expect_eq "同一份 notes、沒有 5.5 → 名稱取 notes、nameSource notes" "登入與權限|notes" \
+    "$(mn_q doc '.modules[] | select(.id == "auth") | "\(.name)|\(.nameSource)"')"
+
+# ---- 過期判定（提案 5.4）
+mn_put n README.md 'r\n'; mn_git n second
+mn_notes n "$(mn_head n HEAD~1)" "$GOOD_API" "$GOOD_SVC"
+mn_put n backend/app/services/a.py 'a = 2\n'
+mn_ov n
+expect_eq "based_on 是 HEAD~1、之後改了 backend/app/services/a.py → services stale true、api false" "true false" \
+    "$(mn_q n '"\(.modules[] | select(.id == "services") | .description.stale) \(.modules[] | select(.id == "api") | .description.stale)"')"
+mn_notes n 0123abcd "$GOOD_API" "$GOOD_SVC"; mn_ov n
+expect_eq "based_on 是不存在的 sha → 所有有說明的模組 stale 為 true" "true true" \
+    "$(mn_q n '[.modules[] | select(.description != null) | .description.stale] | map(tostring) | join(" ")')"
+expect_eq "based_on 是不存在的 sha → notices 有一則說明（含 based_on）" 1 "$(mn_q n '[.notices[] | select(.text | test("based_on"))] | length')"
+git -C "$MN/n" checkout -q -- backend/app/services/a.py 2>/dev/null
+
+# ---- --print-path 提示與 overview.notes: off
+mn_new ten
+for i in 1 2 3 4 5 6 7 8 9 10; do mn_put ten "src/m$i/a.py" 'a = 1\n'; mn_put ten "src/m$i/b.py" 'b = 2\n'; done
+mn_git ten
+rows=(); for i in 1 2 3 4 5 6 7; do rows+=("m$i|模組 $i||第 $i 個模組的用途|\`src/m$i/a.py\`"); done
+mn_notes ten "$(mn_head ten)" "${rows[@]}"
+mn_put ten src/m1/a.py 'a = 9\n'; mn_put ten src/m2/b.py 'b = 9\n'
+mn_ov ten
+expect_eq "10 個模組中 3 個沒說明、2 個過期 → --print-path 有「提示：3 個模組沒有說明、2 個可能過期」" 1 \
+    "$(bash "$OV_SRC" --print-path "$MN/ten" 2>/dev/null | grep -c '^提示：3 個模組沒有說明、2 個可能過期')"
+out=$(bash "$OV_SRC" --notes-todo "$MN/ten" 2>/dev/null | tr -d '\r')
+expect_eq "--notes-todo → 只列沒有說明或過期的模組（m1 m2 stale、m8 m9 m10 missing）" "m1 stale|m10 missing|m2 stale|m8 missing|m9 missing" \
+    "$(printf '%s\n' "$out" | awk -F'\t' '{ print $1, $4 }' | sort | paste -sd'|' -)"
+expect_eq "--notes-todo → 每行 4 欄、第 3 欄 1–3 個檔且都在該模組路徑內" "" \
+    "$(printf '%s\n' "$out" | awk -F'\t' '{ n = split($3, f, ","); if (NF != 4 || n < 1 || n > 3) print "欄數或檔數不對：" $0; for (i = 1; i <= n; i++) if (index(f[i], "src/" $1 "/") != 1) print "不在模組內：" f[i] }')"
+echo '{"name":"說明","mode":"mvp","overview":{"notes":"off"}}' > "$MN/ten/.claude/taskmaster-data/project.json"; mn_ov ten
+expect_eq "overview.notes: off → 所有 description 為 null" 0 "$(mn_q ten '[.modules[] | select(.description != null)] | length')"
+expect_eq "overview.notes: off → --print-path 沒有說明層的提示行" 0 \
+    "$(bash "$OV_SRC" --print-path "$MN/ten" 2>/dev/null | grep -c '^提示：.*說明')"
+
+# ---- 不可退化：沒有 module-notes.md 時名稱、分組與階段 2 相同（期望值是階段 2 完成時 f219d59 在 messy-fullstack 上的結果）
+rm -rf "$MN/messy"; bash "$FXD/make-fixture.sh" messy-fullstack "$MN/messy" >/dev/null 2>&1; mn_git messy; mn_ov messy
+expect_eq "沒有 module-notes.md → messy-fullstack 的 id／名稱／分組與階段 2 相同、description 全為 null" \
+    "backend-api api pkg-backend|components components pkg-frontend|core core pkg-backend|frontend-api api pkg-frontend|m-5d3b69 報表匯出與排程作業 pkg-backend|models models pkg-backend|other 其他 _ungrouped|pages pages pkg-frontend|services services pkg-backend|stores stores pkg-frontend|0" \
+    "$(mn_q messy '([.modules[] | "\(.id) \(.name) \(.group)"] | sort | join("|")) + "|" + ([.modules[] | select(.description != null)] | length | tostring)')"
+expect_eq "沒有 module-notes.md → 有程式檔的模組都算「沒有說明」（other 不算）" 1 \
+    "$(bash "$OV_SRC" --print-path "$MN/messy" 2>/dev/null | grep -c '^提示：9 個模組沒有說明、0 個可能過期')"
+
+# ---- make-fixture.sh 的 notes 選項：messy-fullstack 的 module-notes.md，含刻意違規的列
+MAKE_FIXTURE_NOTES=1 bash "$FXD/make-fixture.sh" messy-fullstack "$MN/messy" >/dev/null 2>&1; rc=$?
+expect_eq "MAKE_FIXTURE_NOTES=1 → 產生成功、寫出 module-notes.md、based_on 是目前的 HEAD" "0 $(mn_head messy)" \
+    "$rc $(sed -n 's/^based_on:[[:space:]]*\([0-9a-f]*\).*/\1/p' "$MN/messy/.claude/taskmaster-data/module-notes.md" 2>/dev/null)"
+out=$(bash "$OV_SRC" --check-notes "$MN/messy" 2>/dev/null | tr -d '\r'); rc=$?
+expect_eq "fixture 的 notes → --check-notes exit 1，違規的是 nope、機密與依據不在模組內那三列" "1 frontend-api|m-5d3b69|nope" \
+    "$rc $(printf '%s\n' "$out" | sed -n 's/^第 [0-9]* 列 \([^：]*\)：.*/\1/p' | sort -u | paste -sd'|' -)"
+mn_ov messy
+expect_eq "fixture 的 notes → 合格的列有說明（backend-api、services、pages），違規的沒有" "backend-api pages services" \
+    "$(mn_q messy '[.modules[] | select(.description != null) | .id] | sort | join(" ")')"
+rm -rf "$MN"
+
+# =========================================================================
 section "update-template — .gitignore 只補缺少的短命狀態行"
 # =========================================================================
 # 舊專案的 .gitignore 沒有後來新增的狀態檔（.last-verify 等）→ 會被 commit。

@@ -97,7 +97,7 @@ claude_v2026/
     ├── agents/       (15 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
     ├── skills/       (28 個)         # 按需載入（不佔常駐 context）
-    ├── hooks/                        # Hook 腳本 + lib/ + 1154 案例回歸測試
+    ├── hooks/                        # Hook 腳本 + lib/ + 1201 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）、check-counts.sh（文件計數一致性）、overview.sh（專案圖解）
     ├── ui/           (104 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │
