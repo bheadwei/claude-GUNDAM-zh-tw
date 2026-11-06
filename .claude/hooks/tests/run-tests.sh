@@ -3952,9 +3952,10 @@ expect_eq "shop-clean（5.5 有效）→ 模組 id 排序後與 shop-clean.golde
     "$(sc_q shop '[.modules[].id] | sort | join(" ")') $(sc_q shop '.unmappedTasks | length')"
 expect_eq "shop-clean → 每個模組的 source 都是 both" both "$(sc_q shop '[.modules[].source] | unique | join(",")')"
 expect_eq "shop-clean → 沒有 .last-error" none "$(sc_err shop)"
-expect_eq "data.js schema 2 合約：drift 五個 key 都是陣列、模組 description null／planned false、currents 的 phase／phases null 與 activePhases []、status null" \
+# status 在階段 1 是 null，階段 2（一頁現況）起填值——這裡只驗欄位在、是物件
+expect_eq "data.js schema 2 合約：drift 五個 key 都是陣列、模組 description null／planned false（沒有 plan）、currents 的 phase／phases null 與 activePhases []、有 status 物件" \
     "2 codeNotInDoc,docNotInCode,taskModuleMismatch,tasksInferred,wbsUnknownModule true true true true" \
-    "$(sc_q shop '"\(.schema) \(.drift | keys | join(",")) \(.drift | [.[] | type == "array"] | all) \(all(.modules[]; .description == null and .planned == false)) \((.currents | length > 0) and all(.currents[]; .phase == null and .phases == null and .activePhases == [])) \(has("status") and .status == null)"')"
+    "$(sc_q shop '"\(.schema) \(.drift | keys | join(",")) \(.drift | [.[] | type == "array"] | all) \(all(.modules[]; .description == null and .planned == false)) \((.currents | length > 0) and all(.currents[]; .phase == null and .phases == null and .activePhases == [])) \(has("status") and (.status | type) == "object")"')"
 sc_put shop src/search/a.py 'def a():\n    return 1\n'; sc_put shop src/search/b.py 'def b():\n    return 2\n'
 printf '| legacy | 舊系統 | `src/legacy/**` | 已停用 |\n' >> "$SC/shop/docs/05_architecture.md"
 sc_ov shop
@@ -4223,6 +4224,75 @@ expect_eq "四段格式 plan（階段標題下一行是「依賴」）→ 階段
 DS_CP=1 ds_plan shop 1.2 "" ✅ ⏳ ⏳ ⏳; ds_ov shop
 expect_eq "plan 沒有 files: → 沒有任何模組 planned" 0 "$(ds_q shop '[.modules[] | select(.planned)] | length')"
 expect_eq "階段標題都不是 🔄、current_phase: 1 → activePhases 為 [1]" "[1]" "$(ds_q shop '.currents[0].activePhases | tojson')"
+
+# ---- 架構文件自動段（--sync-arch）
+DS_GS='<!-- overview:generated:start -->'; DS_GE='<!-- overview:generated:end -->'
+# 去掉標記區（含標記行）後的內容：驗「標記外的位元組不變」
+ds_outside() { awk '/^<!-- overview:generated:start/ { s = 1 } !s { print } /^<!-- overview:generated:end/ { s = 0 }' "$1"; }
+ds_region()  { sed -n '/^<!-- overview:generated:start/,/^<!-- overview:generated:end/p' "$1" | tr -d '\r'; }
+# 架構文件：第 4 節是標記區，第 5 節「資料流」緊接在 end 之後；檔尾刻意沒有換行
+ds_genarch() {
+    { printf '# 架構\n\n## 4. 模組與依賴\n\n%s\n舊的自動段\n%s\n## 5. 資料流\n\n手寫的流程，不能被動到。\n' "$DS_GS" "$DS_GE"; printf '最後一行沒有換行'; } > "$1"
+}
+ds_new arch; ds_two arch src/web src/api; ds_genarch "$DS/arch/docs/architecture.md"; ds_git arch
+DSA="$DS/arch/docs/architecture.md"
+ds_outside "$DSA" > "$SANDBOX/ds-out0.md"
+out=$(bash "$OV_SRC" --sync-arch "$DS/arch" 2>&1); rc=$?
+ds_outside "$DSA" | cmp -s - "$SANDBOX/ds-out0.md" && [ "$(tail -c 24 "$DSA")" = "最後一行沒有換行" ] \
+    && ok "--sync-arch 有標記 → 標記外的位元組不變（含 end 之後的資料流節、檔尾沒有換行）" \
+    || ng "--sync-arch 有標記 → 標記外的位元組不變" "cmp 相同、檔尾仍無換行" "$(ds_outside "$DSA" | diff - "$SANDBOX/ds-out0.md" | head -5)"
+expect_eq "--sync-arch → exit 0、標記區含模組表表頭、舊內容被取代" "0 1 0" \
+    "$rc $(ds_region "$DSA" | grep -cF '| id | 模組 | 分組 | 路徑 | 檔數 | 路由數 | 說明 |') $(ds_region "$DSA" | grep -c '舊的自動段')"
+ds_ov arch
+expect_eq "標記區裡有模組表、標記區外沒有 5.5 → 沒有模組的 nameSource 是 doc" 0 "$(ds_q arch '[.modules[] | select(.nameSource == "doc")] | length')"
+{ printf '# 架構\n\n### 5.5 模組\n\n| id | 模組 | 路徑 |\n|---|---|---|\n| web | 前端畫面 | `src/web/**` |\n\n'; cat "$DSA"; } > "$SANDBOX/ds-arch.md" && mv "$SANDBOX/ds-arch.md" "$DSA"
+ds_ov arch
+expect_eq "標記區外由 architect 撰寫的 5.5（舊格式）→ 照舊覆寫名稱" "前端畫面 doc" "$(ds_q arch '.modules[] | select(.id == "web") | "\(.name) \(.nameSource)"')"
+
+ds_new nomark; ds_two nomark src/web src/api; printf '# 架構\n\n沒有標記\n' > "$DS/nomark/docs/architecture.md"; ds_git nomark
+touch -d '2001-01-01 00:00:00' "$DS/nomark/docs/architecture.md"; cp "$DS/nomark/docs/architecture.md" "$SANDBOX/ds-nomark.md"
+dsm0=$(stat -c %Y "$DS/nomark/docs/architecture.md")
+out=$(bash "$OV_SRC" --sync-arch "$DS/nomark" 2>/dev/null)
+expect_eq "沒有標記 → 檔案 mtime 與內容不變、stdout 有一行含「自動段標記」" "$dsm0 0 1" \
+    "$(stat -c %Y "$DS/nomark/docs/architecture.md") $(cmp -s "$SANDBOX/ds-nomark.md" "$DS/nomark/docs/architecture.md"; echo $?) $(printf '%s\n' "$out" | grep -c '自動段標記')"
+printf '# 架構\n\n%s\n舊\n\n## 5. 資料流\n' "$DS_GS" > "$DS/nomark/docs/architecture.md"; cp "$DS/nomark/docs/architecture.md" "$SANDBOX/ds-nomark.md"
+bash "$OV_SRC" --sync-arch "$DS/nomark" >/dev/null 2>&1; rc=$?
+expect_eq "只有 start 沒有 end → 檔案不變、exit 非 0" "0 1" \
+    "$(cmp -s "$SANDBOX/ds-nomark.md" "$DS/nomark/docs/architecture.md"; echo $?) $([ "$rc" -ne 0 ] && echo 1 || echo 0)"
+
+ds_new wt; ds_two wt src/web src/api; ds_genarch "$DS/wt/docs/architecture.md"; ds_git wt
+DSWT="$DS/wt/.claude/worktrees/w1"
+git -C "$DS/wt" worktree add -q -b w1 "$DSWT" >/dev/null 2>&1
+cp "$DS/wt/docs/architecture.md" "$SANDBOX/ds-wt-main.md"; cp "$DSWT/docs/architecture.md" "$SANDBOX/ds-wt-wt.md"
+bash "$OV_SRC" --sync-arch "$DSWT" >/dev/null 2>&1
+expect_eq "在 worktree 執行 --sync-arch → 主 checkout 與 worktree 的架構文件都不變" "0 0" \
+    "$(cmp -s "$SANDBOX/ds-wt-main.md" "$DS/wt/docs/architecture.md"; echo $?) $(cmp -s "$SANDBOX/ds-wt-wt.md" "$DSWT/docs/architecture.md"; echo $?)"
+git -C "$DS/wt" worktree remove --force "$DSWT" >/dev/null 2>&1
+
+# 邊超過 60 條：mermaid 只畫跨分組的邊，模組表照列。web/ 是另一個套件，兩條 import 跨到根目錄的模組
+ds_new big; bash "$FXD/gen-large.sh" 300 "$DS/big" >/dev/null 2>&1
+ds_put big web/package.json '{"name":"w"}\n'
+ds_put big web/src/ui/a.ts "import { value } from '../../../src/m01/f61'\n"; ds_put big web/src/ui/b.ts "import { value } from '../../../src/m02/f62'\n"
+ds_genarch "$DS/big/docs/architecture.md"; ds_git big
+bash "$OV_SRC" --sync-arch "$DS/big" >/dev/null 2>&1
+expect_eq "掃到超過 60 條邊 → 自動段的 mermaid 只含跨分組的邊、模組表列數等於模組數" \
+    "$(ds_q big '[.edges[] | select(.source == "import" or .source == "http")] as $e | (.modules | map({key: .id, value: .group}) | from_entries) as $g | "\($e | length > 60) \([$e[] | select($g[.from] != $g[.to])] | length) \(.modules | length)"')" \
+    "true $(ds_region "$DS/big/docs/architecture.md" | grep -c ' --> ') $(( $(ds_region "$DS/big/docs/architecture.md" | grep -c '^| ') - 1 ))"
+
+# ---- 一頁現況（--status）：shop-clean 加一份進行中 plan（階段 2、3 平行）；1.5 本來就是 🚫
+DS_CP=2 ds_plan shop 1.2 "src/services/a/**" ✅ 🔄 🔄 ⏳; ds_ov shop
+st=$(bash "$OV_SRC" --status "$DS/shop" 2>/dev/null | tr -d '\r')
+expect_eq "--status 在 shop-clean 上 → ≤ 30 行，含「進行中」「阻塞」「下一個」「落差」" "1 1 1 1 1" \
+    "$([ "$(printf '%s\n' "$st" | wc -l)" -le 30 ] && [ -n "$st" ] && echo 1 || echo 0) $(for k in 進行中 阻塞 下一個 落差; do printf '%s\n' "$st" | grep -q "$k" && printf '1 ' || printf '0 '; done | sed 's/ $//')"
+expect_eq "overview.md 第一個二級標題是 ## 現況" 1 "$(ds_md shop | grep -m1 '^## ' | grep -c '^## 現況')"
+expect_contains "進行中任務的 plan activePhases 為 [2,3]、共 4 階段 →「進行中」那行含 第 2、3／4 階段" "第 2、3／4 階段" "$(printf '%s\n' "$st" | grep 進行中)"
+expect_contains "--status 的「阻塞」列出 🚫 任務 1.5" "1.5" "$(printf '%s\n' "$st" | grep 阻塞)"
+expect_eq "沒有 docs/00_brief.md → --status 照常輸出、沒有一句話" "1 0" "$([ -n "$st" ] && echo 1 || echo 0) $(printf '%s\n' "$st" | grep -c '賣東西給大家')"
+printf '# 簡介\n\n## 一句話\n\n賣東西給大家\n\n## 要解決的問題\n' > "$DS/shop/docs/00_brief.md"; ds_ov shop
+expect_contains "有 docs/00_brief.md → --status 有「## 一句話」那一句" "賣東西給大家" "$(bash "$OV_SRC" --status "$DS/shop" 2>/dev/null)"
+expect_eq "跑完後 data.js 的 status 不是 null" true "$(ds_q shop '.status != null and (.status | type) == "object"')"
+expect_eq "task-status.md 含 overview.sh --sync-arch 與 overview.sh --status" "1 1" \
+    "$(grep -q 'overview.sh --sync-arch' "$HOOK_DIR/../commands/task-status.md" && echo 1 || echo 0) $(grep -q 'overview.sh --status' "$HOOK_DIR/../commands/task-status.md" && echo 1 || echo 0)"
 
 # =========================================================================
 section "overview-scan.sh — 前後端 HTTP 連線、Maven／Gradle 慣例路徑"

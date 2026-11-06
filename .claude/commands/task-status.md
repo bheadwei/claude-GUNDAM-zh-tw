@@ -18,19 +18,26 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
 
 1. 讀取 `.claude/taskmaster-data/wbs.md`
 2. **沒有 `## 現況` 區 → 舊格式**，先走下方「舊格式轉換」節的提議（可拒絕，拒絕就照舊顯示）
-3. 解析各里程碑節的任務表，統計各狀態數量
+3. 解析各里程碑節的任務表（任務清單要用；現況的統計由步驟 7 的 `--status` 給，不要自己算）
 4. **讀取** `.claude/taskmaster-data/plans/INDEX.md`（若存在），建立 `<task-id> → plan 進度` 映射
-5. 顯示統計和任務清單（含 plan 進度欄位）
+5. 顯示任務清單（含 plan 進度欄位）
 6. 如有任務狀態變更，**立即更新** wbs.md 並重算「現況」區
-7. 重產專案圖解並印出畫面路徑（寫 wbs／plan 時 hook 已在背景重產，這一步是兜底——
-   用 Bash `mv`／`sed` 改的檔不會觸發 hook）：
+7. 同步架構文件自動段、重產專案圖解，印出一頁現況與畫面路徑（寫 wbs／plan 時 hook 已在背景重產，
+   這一步是兜底——用 Bash `mv`／`sed` 改的檔不會觸發 hook；架構文件的自動段只在這裡與 `/verify` 更新）：
 
    ```bash
-   bash .claude/scripts/overview.sh && bash .claude/scripts/overview.sh --print-path
+   bash .claude/scripts/overview.sh --sync-arch
+   bash .claude/scripts/overview.sh --status
+   bash .claude/scripts/overview.sh --print-path
    ```
 
-   把印出的 `file:///…/overview/index.html` 放在輸出的最後一行，讓使用者點開
-   （同一個資料夾裡的 `overview.md` 是 Markdown 版，兩份都不進 git）。
+   - `--sync-arch`：重產地圖，再把架構文件兩個 `overview:generated` 標記之間換成模組表與依賴圖
+     （只在主 checkout 寫，內容沒變就不動檔）。印「…沒有自動段標記…」→ 舊版架構文件，照實轉告、
+     **不要自己加標記**；exit 1（標記不成對）→ 把 stderr 的修法轉告使用者，其餘步驟照做
+   - `--status`：印出的「## 現況」一節**原樣放在輸出最前面**（≤ 30 行：一句話、里程碑、進行中與 plan 階段、
+     阻塞、下一個、最近 14 天完成數、落差數）。**不要自己重拼這些數字**——它和地圖頁首是同一份資料
+   - `--print-path`：把印出的 `file:///…/overview/index.html` 放在輸出的最後一行，讓使用者點開
+     （同一個資料夾裡的 `overview.md` 是 Markdown 版，兩份都不進 git）
    **只印路徑，不要 Read `overview/data.js` 或 `overview/overview.md`**——那是給人看的衍生物，
    大專案可達數百 KB；要狀態就讀 `wbs.md`。沒有 `project.json` 時腳本什麼都不印，直接略過這行
 
@@ -46,13 +53,13 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
 ## 輸出格式
 
 ```
-專案狀態:
-  總任務: [N] 個
-  待處理: [X] 個
-  進行中: [X] 個
-  已完成: [X] 個
-  阻塞:   [X] 個
-  進度:   [=====-----] X%
+## 現況 — <專案名>          ← overview.sh --status 的輸出，原樣貼上
+- 里程碑 M1 基礎 ███░░ 4/7 🔄
+- 進行中 1.2 前端購物車（plan 第 2、3／4 階段）
+- 阻塞 1.5 會員點數
+- 下一個 1.7 CI
+- 最近 14 天 完成 4 項
+- 落差 1 項（任務模組不符 1；見地圖）
 
 任務清單:
   [完成] 1.1 專案初始化                          Plan: —
