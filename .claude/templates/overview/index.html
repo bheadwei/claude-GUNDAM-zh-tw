@@ -14,6 +14,19 @@
 <script>try{var t=localStorage.getItem('overview-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 <style>
 :root{
+  color-scheme:light;
+  --bg:#f2f3f0;--canvas:#f9faf7;--dot:#cfd4cc;--surface:#ffffff;--fg:#1c2420;--muted:#5f6a63;
+  --line:#d3d8d0;--edge:#88938c;--group:#eceee9;--accent:#2f66c9;--on-accent:#ffffff;
+  --done:#2c9a57;--wip:#cf8500;--issue:#d2413c;--todo:#9aa29c;--done-fg:#1f7a43;--wip-fg:#8a5a00;--issue-fg:#b42f2a;
+  --chg:#7448d0;--chg-bg:#eee8fb;--warn-bg:#fff4e0;--info-bg:#e9f0fb;
+  --f-body:system-ui,-apple-system,"Segoe UI","PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
+  --f-display:var(--f-body);
+  --f-mono:ui-monospace,"Cascadia Mono",Consolas,"Microsoft JhengHei",monospace;
+  --fs-xs:11px;--fs-s:12px;--fs-m:13px;--fs-l:15px;--fs-xl:17px;--fs-far:26px;
+}
+/* 不支援 light-dark()（Chrome<123、Firefox<120、Safari<17.5）時只有上面的淺色，主題切換無效但畫面不壞 */
+@supports (color:light-dark(black,black)){
+:root{
   color-scheme:light dark;
   --bg:light-dark(#f2f3f0,#131714);--canvas:light-dark(#f9faf7,#181c19);--dot:light-dark(#cfd4cc,#2b322d);
   --surface:light-dark(#ffffff,#1d2320);--fg:light-dark(#1c2420,#e4eae6);--muted:light-dark(#5f6a63,#9aa59e);
@@ -23,13 +36,10 @@
   --done-fg:light-dark(#1f7a43,#4cc27e);--wip-fg:light-dark(#8a5a00,#f0a82a);--issue-fg:light-dark(#b42f2a,#f2675f);
   --chg:light-dark(#7448d0,#a98cf2);--chg-bg:light-dark(#eee8fb,#2b2442);
   --warn-bg:light-dark(#fff4e0,#3a2e17);--info-bg:light-dark(#e9f0fb,#1c2738);
-  --f-body:system-ui,-apple-system,"Segoe UI","PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
-  --f-display:var(--f-body);
-  --f-mono:ui-monospace,"Cascadia Mono",Consolas,"Microsoft JhengHei",monospace;
-  --fs-xs:11px;--fs-s:12px;--fs-m:13px;--fs-l:15px;--fs-xl:17px;--fs-far:26px;
 }
 :root[data-theme=light]{color-scheme:light}
 :root[data-theme=dark]{color-scheme:dark}
+}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%;margin:0}
@@ -589,7 +599,7 @@ function fileItems(list, withMod) {
 }
 function rollItems(list) {
   return (list || []).map(function (r) {
-    return '<li class="fdesc">' + esc(r.dir) + ' 另 ' + r.files + ' 個檔（+' + r.added + ' / −' + r.removed + '，未逐一列出）</li>';
+    return '<li class="fdesc">' + esc(r.dir) + ' 另 ' + esc(r.files) + ' 個檔（+' + esc(r.added) + ' / −' + esc(r.removed) + '，未逐一列出）</li>';
   }).join('');
 }
 function modChips(ms) {
@@ -598,7 +608,7 @@ function modChips(ms) {
 function phaseText(c) {
   if (c.phases == null) return '';
   var a = c.activePhases && c.activePhases.length ? c.activePhases : (c.phase != null ? [c.phase] : []);
-  return a.length ? 'plan 第 ' + a.join('、') + '／' + c.phases + ' 階段' : '';
+  return a.length ? 'plan 第 ' + esc(a.join('、')) + '／' + esc(c.phases) + ' 階段' : '';
 }
 function planDiff() {
   var any = MODS.some(function (m) { return m.planned; });
@@ -624,7 +634,7 @@ function select(id) {
   panel.innerHTML = '<button class="back" id="pback">← 本次改動總覽</button>' +
     '<h2><i class="dot s-' + esc(m.status) + '"></i>' + esc(m.name) + '</h2>' +
     '<div class="meta">' + esc(STATUS[m.status]) + ' · <code>' + esc(m.id) + '</code>' + (m.current ? ' · ★ 本次任務' : '') +
-    (m.fileCount ? ' · ' + m.fileCount + ' 個檔' : '') + (m.routes && m.routes.count ? ' · ' + m.routes.count + ' 條路由' : '') + '</div>' +
+    (m.fileCount ? ' · ' + esc(m.fileCount) + ' 個檔' : '') + (m.routes && m.routes.count ? ' · ' + esc(m.routes.count) + ' 條路由' : '') + '</div>' +
     '<div class="note' + (m.status === 'issue' ? ' issue' : '') + '">' + esc(m.statusReason) + '</div>' +
     (m.declared === false ? '<div class="note issue">容器圖有、模組表（5.5）沒有這個模組</div>' : '') +
     (m.planned ? '<div class="note plan">本次 plan 預計會動這個模組' + (pd.idle.indexOf(m) >= 0 ? '，但目前沒有改動（預計但沒動）' : '') + '</div>' : '') +
@@ -707,7 +717,7 @@ function planCard(pl) {
         '</td><td>' + esc(delta(c)) + '</td><td>' + esc(p && p.ai && p.ai.summary || '—') + '</td></tr>';
     }).join('') || ((pl.changesRollup || []).length ? '' : '<tr><td colspan="4" class="fdesc">沒有改動</td></tr>')) +
     (pl.changesRollup || []).map(function (r) {
-      return '<tr><td><code>' + esc(r.dir) + '</code> ' + r.files + ' 個檔</td><td>未逐一列出</td><td>' + esc(nums(r)) + '</td><td>—</td></tr>';
+      return '<tr><td><code>' + esc(r.dir) + '</code> ' + esc(r.files) + ' 個檔</td><td>未逐一列出</td><td>' + esc(nums(r)) + '</td><td>—</td></tr>';
     }).join('') + '</tbody></table></section>';
 }
 function renderTasks(d) {
