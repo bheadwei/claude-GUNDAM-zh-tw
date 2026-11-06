@@ -4315,6 +4315,34 @@ ds_put http frontend/src/api/orders.ts "export const x = () => fetch('https://ex
 ds_ov http
 expect_eq "fetch 外部網址、或打到後端沒有的路徑 → 不產生 http 邊" 0 "$(ds_q http '[.edges[] | select(.source == "http")] | length')"
 
+# ---- Maven／Gradle 慣例路徑（X16）：src/main/<lang>/ 剝掉套件前綴鏈，在第一個分岔切模組
+ds_new mvn
+for p in order payment user; do
+    ds_put mvn "src/main/java/com/acme/shop/$p/A.java" "package com.acme.shop.$p;\n\npublic class A {}\n"
+    ds_put mvn "src/main/java/com/acme/shop/$p/B.java" "package com.acme.shop.$p;\n\npublic class B {}\n"
+done
+ds_git mvn; ds_ov mvn
+expect_eq "src/main/java/com/acme/shop/{order,payment,user}/*.java → 模組 id 恰為 order payment user（沒有 java、main、com、acme、shop）" \
+    "order payment user" "$(ds_q mvn '[.modules[].id] | sort | join(" ")')"
+ds_new kt
+for p in billing report; do
+    ds_put kt "src/main/kotlin/com/acme/$p/A.kt" "package com.acme.$p\n\nclass A\n"; ds_put kt "src/main/kotlin/com/acme/$p/B.kt" "package com.acme.$p\n\nclass B\n"
+done
+ds_git kt; ds_ov kt
+expect_eq "src/main/kotlin/com/acme/{billing,report}/*.kt → 模組 billing report" "billing report" "$(ds_q kt '[.modules[].id] | sort | join(" ")')"
+rm -rf "$DS/mm"; bash "$FXD/make-fixture.sh" maven-multi "$DS/mm" >/dev/null 2>&1; rc=$?
+ds_git mm; ds_ov mm
+expect_eq "maven-multi：api／worker 兩個子專案都有 order → 模組 api-order、worker-order，其餘套件照名" \
+    "0 api-order mail payment report user worker-order" "$rc $(ds_q mm '[.modules[].id] | sort | join(" ")')"
+# overview.scan.roots 在 Git Bash（gawk）上原本整個壞掉：awk 用了 gawk 內建變數名 RT 當陣列。這條同時驗修好了
+echo '{"name":"落差","mode":"mvp","overview":{"scan":{"roots":["src/main/java"]}}}' > "$DS/mvn/.claude/taskmaster-data/project.json"; ds_ov mvn
+expect_eq "同一份 Maven 樹、設了 overview.scan.roots → 以設定為準（src/main/java 的下一層 com），不自動偵測" "com" "$(ds_q mvn '[.modules[].id] | sort | join(" ")')"
+# 期望值是 2-D 之前（03fe95f）的 overview.sh 在同樣兩份 fixture 上的結果
+for fx in shop-clean messy-fullstack; do rm -rf "$DS/$fx"; bash "$FXD/make-fixture.sh" "$fx" "$DS/$fx" >/dev/null 2>&1; ds_git "$fx"; ds_ov "$fx"; done
+expect_eq "Maven 自動切模組不影響 shop-clean、messy-fullstack 的模組 id（與 2-D 之前相同）" \
+    "cache db gateway svc-a svc-b web|backend-api components core frontend-api m-5d3b69 models other pages services stores" \
+    "$(ds_q shop-clean '[.modules[].id] | sort | join(" ")')|$(ds_q messy-fullstack '[.modules[].id] | sort | join(" ")')"
+
 # =========================================================================
 section "update-template — .gitignore 只補缺少的短命狀態行"
 # =========================================================================

@@ -1,7 +1,7 @@
 #!/bin/bash
 # make-fixture.sh — 專案圖解的測試資料產生器
 #
-# 用法：make-fixture.sh <shop-clean|messy-fullstack> <目標目錄>
+# 用法：make-fixture.sh <shop-clean|messy-fullstack|maven-multi> <目標目錄>
 #   只把檔案寫進目標目錄，不 git init、不 commit，由呼叫端決定。
 #   環境變數 MAKE_FIXTURE_CHANGES=1：先 commit 基礎檔、再帶這個變數跑一次，只補「本次改動」——
 #     shop-clean      那三個檔（改動清單才會恰好是那三個）
@@ -10,16 +10,17 @@
 #
 #   shop-clean      範例電商：5.1／5.5 都有效，WBS 每個任務都標了模組
 #   messy-fullstack 髒資料：Python 後端＋TS 前端、C4 架構圖、沒有 5.5、WBS 沒有模組欄、32 個任務
+#   maven-multi     Maven／Gradle 多模組：兩個子專案的 src/main/{java,kotlin}/com/acme/<套件>/
 #
 # 只用通用電商／查詢系統詞彙，不含任何實測專案的名稱或程式碼。
 
 usage() {
-    printf '用法：%s <shop-clean|messy-fullstack> <目標目錄>\n' "${0##*/}" >&2
+    printf '用法：%s <shop-clean|messy-fullstack|maven-multi> <目標目錄>\n' "${0##*/}" >&2
     exit 2
 }
 
 [ $# -eq 2 ] || usage
-case "$1" in shop-clean|messy-fullstack) ;; *) usage ;; esac
+case "$1" in shop-clean|messy-fullstack|maven-multi) ;; *) usage ;; esac
 mkdir -p "$2" || exit 1
 DEST=$(cd "$2" && pwd) || exit 1
 TD="$DEST/.claude/taskmaster-data"
@@ -284,7 +285,32 @@ MD
     done
 }
 
+# Maven／Gradle 多模組（X16）：兩個子專案（api 用 Maven、worker 用 Gradle），各 3 個套件、Java＋Kotlin 混合，
+# 兩邊都有 order 套件（撞名）。套件前綴鏈 com/acme 要被剝掉
+maven_multi() {
+    printf '{"name":"多模組後端","mode":"mvp"}\n' | put "$TD/project.json"
+    printf '<project><modelVersion>4.0.0</modelVersion><artifactId>shop</artifactId><packaging>pom</packaging></project>\n' | put "$DEST/pom.xml"
+    printf '<project><modelVersion>4.0.0</modelVersion><artifactId>api</artifactId></project>\n' | put "$DEST/api/pom.xml"
+    printf 'plugins { kotlin("jvm") version "2.0.0" }\n' | put "$DEST/worker/build.gradle.kts"
+    local j=api/src/main/java/com/acme k=api/src/main/kotlin/com/acme
+    printf 'package com.acme.order;\n\nimport com.acme.payment.PaymentClient;\n\npublic class OrderController {\n    private PaymentClient client;\n}\n' | put "$DEST/$j/order/OrderController.java"
+    printf 'package com.acme.order;\n\npublic class OrderService {}\n' | put "$DEST/$j/order/OrderService.java"
+    printf 'package com.acme.payment;\n\npublic class PaymentClient {}\n' | put "$DEST/$j/payment/PaymentClient.java"
+    printf 'package com.acme.payment;\n\npublic class Payment {}\n' | put "$DEST/$j/payment/Payment.java"
+    printf 'package com.acme.user\n\nclass User(val id: Long)\n' | put "$DEST/$k/user/User.kt"
+    printf 'package com.acme.user\n\nclass UserRepo\n' | put "$DEST/$k/user/UserRepo.kt"
+    printf 'package com.acme.order;\n\npublic class OrderControllerTest {}\n' | put "$DEST/api/src/test/java/com/acme/order/OrderControllerTest.java"
+    j=worker/src/main/java/com/acme k=worker/src/main/kotlin/com/acme
+    printf 'package com.acme.order;\n\npublic class OrderJob {}\n' | put "$DEST/$j/order/OrderJob.java"
+    printf 'package com.acme.order;\n\npublic class OrderReader {}\n' | put "$DEST/$j/order/OrderReader.java"
+    printf 'package com.acme.report\n\nimport com.acme.order.OrderReader\n\nclass ReportJob(val reader: OrderReader)\n' | put "$DEST/$k/report/ReportJob.kt"
+    printf 'package com.acme.report\n\nclass ReportWriter\n' | put "$DEST/$k/report/ReportWriter.kt"
+    printf 'package com.acme.mail\n\nclass Mailer\n' | put "$DEST/$k/mail/Mailer.kt"
+    printf 'package com.acme.mail\n\nclass Template\n' | put "$DEST/$k/mail/Template.kt"
+}
+
 case "$1" in
     shop-clean) shop_clean ;;
     messy-fullstack) messy_fullstack ;;
+    maven-multi) maven_multi ;;
 esac

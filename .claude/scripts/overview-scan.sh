@@ -26,7 +26,7 @@
 # 環境變數：OVERVIEW_MAX_MODULES（預設 40）、OVERVIEW_SCAN_MAX_FILES（預設 20000，
 # 超過只切模組、不掃 import 與路由）。project.json 的 overview.scan.{exclude,roots,depth} 可覆寫。
 
-SCAN_VERSION=2
+SCAN_VERSION=3
 # 與 hooks/post-write.sh 的同名常數相同（測試會比對）
 OVERVIEW_CODE_EXT="py ts tsx js jsx mjs cjs vue svelte go java kt cs rs"
 
@@ -128,6 +128,15 @@ function srcroot(P,   pre) {
     else SR[P] = P
     return SR[P]
 }
+# Maven／Gradle 慣例路徑（X16）：從 src/main/<lang> 往下剝掉「只有一個子目錄、沒有程式檔」的套件前綴鏈
+# （com/acme/shop/），停在第一個分岔的層級；下一層就有程式檔時也停（那一層本身就是模組）
+function mvnbase(r,   d, c) {
+    if (r in MB) return MB[r]
+    d = r
+    while (nchild[d] == 1 && !(d in hasfile)) { c = d "/" onlykid[d]; if (c in hasfile) break; d = c }
+    MB[r] = d
+    return d
+}
 # 排序：檔案多的在前，同數依路徑
 function before(a, b) { return cnt[a] > cnt[b] || (cnt[a] == cnt[b] && a < b) }
 BEGIN {
@@ -137,7 +146,8 @@ BEGIN {
     n = split("tests test __tests__ spec specs __mocks__ e2e", A, " "); for (i = 1; i <= n; i++) tdir[A[i]] = 1
     n = split("package.json pyproject.toml go.mod Cargo.toml pom.xml build.gradle build.gradle.kts", A, " "); for (i = 1; i <= n; i++) mani[A[i]] = 1
     for (i = 1; i < 256; i++) ord[sprintf("%c", i)] = i
-    nroot = roots == "" ? 0 : split(roots, RT, "\001")
+    # 不能叫 RT：那是 gawk 的內建變數（記錄分隔符實際值），拿來當陣列會 fatal——mawk 沒有它，所以只在 Git Bash 壞
+    nroot = roots == "" ? 0 : split(roots, ROOTA, "\001")
     autod = depth !~ /^[1-9]$/
     if (autod) depth = 1
     OTHER = "\001"
@@ -156,28 +166,38 @@ BEGIN {
     for (i = 1; i < ns; i++) if (S[i] in tdir) { ntest++; next }
     if (b ~ /\.(test|spec)\.[A-Za-z]+$/ || b ~ /^test_.*\.py$/ || b ~ /_test\.(py|go)$/) { ntest++; next }
     nf++; FP[nf] = p; lang[e]++
-    d = dirname(p); while (d != "" && !(d in hasdir)) { hasdir[d] = 1; d = dirname(d) }
+    d = dirname(p); hasfile[d] = 1
+    while (d != "" && !(d in hasdir)) { hasdir[d] = 1; pd = dirname(d); nchild[pd]++; onlykid[pd] = basename(d); d = pd }
 }
 END {
     for (i = 1; i <= nf; i++) {
         p = FP[i]
+        mvl = ""
         if (nroot) {
             base = OTHER
-            for (r = 1; r <= nroot; r++) if (under(p, RT[r]) && (base == OTHER || length(RT[r]) > length(base))) base = RT[r]
+            for (r = 1; r <= nroot; r++) if (under(p, ROOTA[r]) && (base == OTHER || length(ROOTA[r]) > length(base))) base = ROOTA[r]
             if (base == OTHER) { M[i] = OTHER; continue }
-            gk = base
+            gk = base; mpk = base
         } else {
-            P = dirname(p); while (P != "" && !(P in pkg)) P = dirname(P)
-            base = srcroot(P)
-            if (!under(p, base)) base = P
-            gk = P != "" ? P : base
+            # 設了 overview.scan.depth（autod 為 0）就不自動偵測 Maven 路徑，以設定為準
+            if (autod && substr(p, 1, 9) == "src/main/" && match(p, /^src\/main\/(java|kotlin|scala)\//)) mvl = substr(p, 1, RLENGTH - 1)
+            else if (autod && match(p, /\/src\/main\/(java|kotlin|scala)\//)) mvl = substr(p, 1, RSTART + RLENGTH - 2)
+            if (mvl != "") {
+                # 子專案（mvl 去掉 src/main/<lang>）當群組與撞名前綴（X2）：api-order、worker-order
+                base = mvnbase(mvl); gk = mvl; sub(/\/?src\/main\/[a-z]+$/, "", gk); mpk = gk
+            } else {
+                P = dirname(p); while (P != "" && !(P in pkg)) P = dirname(P)
+                base = srcroot(P)
+                if (!under(p, base)) base = P
+                gk = P != "" ? P : base; mpk = P
+            }
         }
         rel = base == "" ? p : substr(p, length(base) + 2)
         nd = split(rel, R, "/") - 1
         if (nd < 1) { M[i] = OTHER; continue }
         cut = R[1]; for (k = 2; k <= depth && k <= nd; k++) cut = cut "/" R[k]
         md = base == "" ? cut : base "/" cut
-        M[i] = md; GK[md] = gk; MPK[md] = nroot ? base : P
+        M[i] = md; GK[md] = gk; MPK[md] = mpk
         cnt[md]++
     }
     # 某個目錄占全部檔案 40% 以上、又有兩個以上含程式碼的子目錄 → 再往下切一層（只切一次）
