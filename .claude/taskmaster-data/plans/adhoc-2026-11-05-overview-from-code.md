@@ -58,7 +58,7 @@ files:
 
 **可平行**：階段 2 與 3（依賴都只到階段 1，部件表檔案不重疊）；階段 3 與 4（階段 2 合併後若 3 還在跑）；階段 6 與 2、4、5（只依賴階段 3，部件表檔案無交集）。階段 2 與 4 不可（4 依賴 2，且同改 `overview.sh`、`post-write.sh`、`task-status.md`）；4 → 5、2 → 5、3 → 6 循序。階段 3、5 另有跨計畫條件，見「平行開發」。
 
-**預估**：合計 48.5h（0：3h／1：8h／2：12.5h／3：8h／4：6h／5：3.5h／6：4h／7：3.5h）。比 standard 一般的量大，**每個階段各自合併**。
+**預估**：合計 51h（0：3h／1：8h／2：15h／3：8h／4：6h／5：3.5h／6：4h／7：3.5h）。比 standard 一般的量大，**每個階段各自合併**。
 
 ### 一眼看懂
 
@@ -350,7 +350,14 @@ flowchart LR
 - [ ] `overview.md` 開頭「## 現況」（≤ 30 行，格式照 7.3）：一句話取 `docs/00_brief.md` 的「## 一句話」、里程碑、進行中（最多 5 個，帶「plan 第 N／M 階段」，`activePhases` 多個時「第 2、3／4 階段」）、阻塞、下一個、最近 14 天完成、落差數；data.js 的 `status` 填同一份資料
 - [ ] `overview.sh --status`：只印「## 現況」一節
 - [ ] `task-status.md`：步驟中呼叫 `--sync-arch`，輸出改成印 `--status`，不再自己拼現況
-- **預估**：12.5h（2-A 5h／2-B 2.5h／2-C 5h）
+
+**2-D Maven／Gradle 慣例路徑自動切模組（X16）**
+
+- [ ] `overview-scan.sh` 切模組時：路徑含 `src/main/<lang>/`（`java`、`kotlin`、`scala`）→ 剝掉這段前綴，再剝掉其下「只有一個子目錄、沒有程式檔」的套件前綴鏈（如 `com/acme/shop/`），在第一個分岔的層級切模組
+- [ ] 多個 Maven／Gradle 子專案（`<sub>/src/main/java/...`）→ 撞名時照 X2 加子專案目錄名
+- [ ] 設了 `overview.scan.roots` 或 `overview.scan.depth` → 不做自動偵測，以設定為準
+- [ ] `make-fixture.sh` 新增 `maven-multi`（兩個子專案、各 3 個套件、Java＋Kotlin 混合）
+- **預估**：15h（2-A 5h／2-B 2.5h／2-C 5h／2-D 2.5h）
 - **驗收**：
   - 有效 5.5 沒寫、程式有 `src/search/` → `drift.codeNotInDoc` 含 `search`；沒有架構文件、掃到 8 個模組 → `codeNotInDoc` 為空陣列
   - 5.5 寫了 `src/legacy/**`、沒有對應檔 → `drift.docNotInCode` 含 `legacy`；路徑全部對得到 → 空陣列
@@ -379,9 +386,14 @@ flowchart LR
   - 沒有 `docs/00_brief.md` → `--status` 照常輸出，只少一句話那行
   - 跑完後 data.js 的 `status` 不是 null
   - `task-status.md` 含 `overview.sh --sync-arch` 與 `overview.sh --status`
-- **不可退化**：既有 `mismatch` 兩條（`declared-not-touched`／`touched-not-declared`，第 3606–3607 行）原樣通過；shop-clean 的 `drift` 五類全空、`tasks[]` 全部 `inferred` 不為 true
+  - `src/main/java/com/acme/shop/{order,payment,user}/*.java` → 模組 id 恰為 `order`、`payment`、`user`；沒有 id 為 `java`、`main`、`com`、`acme`、`shop` 的模組
+  - `src/main/kotlin/com/acme/{billing,report}/*.kt` → 模組 `billing`、`report`
+  - `maven-multi`：`api/src/main/java/com/acme/order/` 與 `worker/src/main/java/com/acme/order/` → 模組 `api-order`、`worker-order`
+  - 同一份 Maven 樹、設了 `overview.scan.roots` → 模組清單與設定指定的一致，不受自動偵測影響
+- **不可退化**：既有 `mismatch` 兩條（`declared-not-touched`／`touched-not-declared`，第 3606–3607 行）原樣通過；shop-clean 的 `drift` 五類全空、`tasks[]` 全部 `inferred` 不為 true；shop-clean、messy-fullstack 的模組 id 清單與 2-D 之前相同
 - **注意**：
-  - 2-A／2-B／2-C 各自一個 commit、各自跑一次 `run-tests.sh overview`，階段審查一次看完；量大但同改 `overview.sh`，拆成兩個階段也不能平行
+  - 2-A／2-B／2-C／2-D 各自一個 commit、各自跑一次 `run-tests.sh overview`，階段審查一次看完；量大但同改 `overview.sh`，拆成兩個階段也不能平行
+  - 2-D 只改模組切分；Java／Kotlin 的 import 邊對不對得上以階段 1 現行解析為準，對不上記技術債、不擴範圍
   - schema 2 的欄位名在階段 1 定死，本階段只填值不改名（階段 3 可能正在平行做畫面）
   - `--print-inferred` 的輸出經 jq `-r` 印出、tab 用 `@tsv`（1.6 可用）
   - 前端 fetch 的後綴比對可能誤連：只連唯一候選；必要時 2-A 的這段可整段砍掉不影響其他驗收（X6）
@@ -570,6 +582,7 @@ flowchart LR
 | 2026-11-06 | X12 | jq 只用 1.6 語法、CI 用 jq 1.6 把關 | **模板最低要求 jq 1.7.1**，拿掉階段 0 加的 `hooks-jq16` job（合併後另一個 commit 移除） | 遷就 1.6 仍然漏（`overview.sh` 的 `{module, file}` 物件簡寫在 1.6 語法錯誤）；使用者可升級，Ubuntu 24.04 apt 即 1.7.1。版本檢查在 `fix/jq-min-version` 分支 |
 | 2026-11-06 | X13 | （ADR-2026-11-06-002：地圖點模組展開看內部；`architect-2026-11-06-1100.md` 第 4 節） | 新增階段 5「模組展開——資料」（3.5h）、階段 6「模組展開——畫面＋審閱」（4h）；原階段 5（收尾）改號 7、多兩項（`OVERVIEW_FLOW_SECTION` 對 05 範本、地圖說明加展開與資料流），3h → 3.5h；X9 的 50KB 在階段 6 改 64KB；階段 1 的 import 解析寫成「逐檔紀錄 → 彙總」兩步（不改範圍）。合計 40.5h → 48.5h。本表 X7 的「階段 5」是提案的編號，不改 | 資料與畫面拆開，階段 6 在階段 3 合併後就能和 2、4、5 同時跑；合成一個階段要等階段 4 做完（約多 4h 牆鐘時間）。64KB 仍在 ADR-003 原訂的 80KB 內 |
 | 2026-11-06 | X14 | ADR-2026-11-06-002：`inner` 在掃描截斷或被大小上限丟掉時為 null，被丟的顯示「資料量超過上限…」 | 畫面依 `scan.truncated` 分兩種文字：true →「檔案數超過掃描上限，沒有內部資料」；否則 null →「資料量超過上限，未保留內部細節（調高 `OVERVIEW_MAX_BYTES`）」；沒有 `inner` 欄位 →「沒有內部資料」 | ADR 只寫了被丟的那種；兩種原因的解法不同（調 `OVERVIEW_SCAN_MAX_FILES` 還是 `OVERVIEW_MAX_BYTES`），`scan.truncated` 階段 1 就有，不用新欄位 |
+| 2026-11-06 | X16 | Maven 式深層目錄（`src/main/java/...`）靠 `overview.scan.roots`／`depth` 手動覆寫 | 階段 2 新增 2-D：偵測 `src/main/<lang>/` 慣例路徑、剝套件前綴鏈後自動切模組；有手動設定時不偵測。階段 2 12.5h → 15h，合計 48.5h → 51h | 使用者選「自動偵測」（`qa-history/2026-11-06-093000-maven-module-split.md`）；階段 1 實作時發現整棵樹會併成單一模組 |
 | 2026-11-06 | X15 | ADR-2026-11-06-001 原決策：資料流第 4 節、自動段改第 5 節，資料流在 start 標記之前 | ADR 修訂（範本審閱 v3）：自動段維持第 4 節、資料流第 5 節在 `<!-- overview:generated:end -->` 之後。**程式設計不變**；只改階段 7 驗收的節名範例（`## 5. 資料流` → `## 5. 跨服務流程`）與階段 5 `make-fixture.sh` 的版面（資料流節放在 end 標記之後）。預估不變。來源 `coordination/handoffs/architect-to-planner-2026-11-06-1400.md` | 資料流解析樣式 `^## [0-9]+\. 資料流` 不綁節號、A7 標記檢查與 `--sync-arch` 的標記常數不看節號；fixture 要照真實版面，「`--sync-arch` 前後資料流節位元組相同」才驗得到緊鄰 end 標記的情況 |
 
 其他：
