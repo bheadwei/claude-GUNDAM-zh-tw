@@ -3,8 +3,10 @@
 #
 # 用法：make-fixture.sh <shop-clean|messy-fullstack> <目標目錄>
 #   只把檔案寫進目標目錄，不 git init、不 commit，由呼叫端決定。
-#   shop-clean 另有環境變數 MAKE_FIXTURE_CHANGES=1：只補「本次改動」那三個檔
-#   （先 commit 基礎檔、再帶這個變數跑一次，改動清單才會恰好是那三個）。
+#   環境變數 MAKE_FIXTURE_CHANGES=1：先 commit 基礎檔、再帶這個變數跑一次，只補「本次改動」——
+#     shop-clean      那三個檔（改動清單才會恰好是那三個）
+#     messy-fullstack 4 份沒有 files: 的 plan 各寫一份帳本（BASE＝目標目錄目前的 HEAD）、改一個頁面檔，
+#                     讓它們的模組只能由 diff 推斷（X4：24 份 plan-files、4 份 diff、4 個任務沒有 plan）
 #
 #   shop-clean      範例電商：5.1／5.5 都有效，WBS 每個任務都標了模組
 #   messy-fullstack 髒資料：Python 後端＋TS 前端、C4 架構圖、沒有 5.5、WBS 沒有模組欄、32 個任務
@@ -120,7 +122,19 @@ messy_ts() {
     { printf '%b' "$2"; printf '%b' "$3"; } | put "$DEST/frontend/src/$1"
 }
 
+MESSY_DIFF_ONLY=(3.6 3.8 4.3 4.4)
+
+messy_changes() {
+    local head id
+    head=$(git -C "$DEST" rev-parse HEAD 2>/dev/null) || { echo "make-fixture.sh：$DEST 還沒有 commit，MAKE_FIXTURE_CHANGES 需要先 commit 基礎檔" >&2; exit 1; }
+    for id in "${MESSY_DIFF_ONLY[@]}"; do
+        printf -- '# 執行帳本 — plan: %s-task\n\n## 階段 1: 實作\n\n- 09:00 派工｜BASE=%s\n' "$id" "$head" | put "$TD/plans/$id-task.progress.md"
+    done
+    printf "export const dashboardTitle = '儀表板'\n" >> "$DEST/frontend/src/pages/Dashboard.tsx"
+}
+
 messy_fullstack() {
+    if [ -n "${MAKE_FIXTURE_CHANGES:-}" ]; then messy_changes; return; fi
     local zh="報表匯出與排程作業"
     printf '{"name":"查詢系統","mode":"mvp","overview":{"architectureDoc":"docs/architecture/01_system_architecture.md"}}\n' | put "$TD/project.json"
 
@@ -242,17 +256,17 @@ MD
 MD
 
     local -a with_files=(
-        "1.1|backend/pyproject.toml|frontend/package.json" "1.2|backend/app/core/**" "1.3|backend/app/services/ldap_service.py|backend/app/api/auth.py"
+        "1.1|backend/pyproject.toml|frontend/package.json|backend/app/api/__init__.py" "1.2|backend/app/core/**" "1.3|backend/app/services/ldap_service.py|backend/app/api/auth.py"
         "1.4|backend/app/models/user.py" "1.5|backend/app/api/users.py|backend/app/services/user_service.py" "1.6|frontend/src/pages/Login.tsx"
         "1.7|frontend/src/api/client.ts|frontend/src/api/users.ts" "1.8|frontend/src/pages/Login.tsx|frontend/src/stores/auth.ts"
         "2.1|backend/app/models/report.py" "2.2|backend/app/services/report_service.py" "2.3|backend/app/api/reports.py"
         "2.4|frontend/src/pages/Reports.tsx|frontend/src/api/reports.ts" "2.5|frontend/src/components/Table.tsx" "2.6|frontend/src/components/Chart.tsx"
         "2.7|frontend/src/pages/Dashboard.tsx|frontend/src/stores/report.ts" "3.1|backend/app/$zh/export.py"
         "3.2|backend/app/$zh/schedule.py" "3.3|backend/app/api/deps.py|backend/app/core/security.py"
-        "3.7|frontend/src/components/Header.tsx" "4.1|backend/tests/**" "4.2|frontend/src/__tests__/**"
+        "3.7|frontend/src/components/Header.tsx" "4.1|backend/tests/**|backend/app/services/user_service.py"
+        "4.2|frontend/src/__tests__/**|frontend/src/api/users.ts"
         "2.8|frontend/src/stores/report.ts" "3.4|backend/app/core/db.py" "3.5|backend/app/models/report.py"
     )
-    local -a diff_only=(3.6 3.8 4.3 4.4)
     local rec id rest f
     local -a fs
     for rec in "${with_files[@]}"; do
@@ -264,7 +278,7 @@ MD
             printf -- '---\n\n# 實作計畫：任務 %s\n\n### 階段 1: 實作 ⏳\n\n- [ ] 完成任務\n' "$id"
         } | put "$TD/plans/$id-task.md"
     done
-    for id in "${diff_only[@]}"; do
+    for id in "${MESSY_DIFF_ONLY[@]}"; do
         printf -- '---\nwbs_task: "%s"\nstatus: "⏳ 未開始"\nmode: "standard"\n---\n\n# 實作計畫：任務 %s\n\n### 階段 1: 實作 ⏳\n\n- [ ] 完成任務\n' "$id" "$id" \
             | put "$TD/plans/$id-task.md"
     done

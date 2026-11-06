@@ -3393,8 +3393,12 @@ expect_eq       "WBS 舊格式（沒有模組欄）→ 不報錯"        0 "$rc"
 expect_eq       "沒有模組欄 → 任務全進 unmappedTasks"    "1.1 1.2" "$(ovq '.unmappedTasks | join(" ")')"
 expect_contains "沒有模組欄 → notices 說明"              "WBS 沒有模組欄" "$(ovq '[.notices[].text] | join("\n")')"
 
+# overview.md 有「## 落差」（階段 2）：api 從沒有檔變成有檔，md 本來就該變。先 commit 一個 api 的檔，
+# 第二次只差在未 commit 的 new.ts，驗的才是「工作區的改動（本次改動清單）不進 md」。驗完刪掉，不留給後面的案例
+mkdir -p "$SANDBOX/src/api"; echo x > "$SANDBOX/src/api/base.ts"
+( cd "$SANDBOX" && git add src/api/base.ts && git -c user.email=t@t -c user.name=t commit -qm base ) >/dev/null 2>&1
 ov_wbs "1.1|api|✅ 11-01"; ov; cp "$OVO/overview.md" "$SANDBOX/ov-first.md" 2>/dev/null
-mkdir -p "$SANDBOX/src/api"; echo x > "$SANDBOX/src/api/new.ts"
+echo x > "$SANDBOX/src/api/new.ts"
 ov
 cmp -s "$SANDBOX/ov-first.md" "$OVO/overview.md" && ok "同一組輸入連跑兩次 → overview.md 相同（工作區的改動不進 md）" \
     || ng "同一組輸入連跑兩次 → overview.md 相同" "cmp 相同" "$(diff "$SANDBOX/ov-first.md" "$OVO/overview.md" | head -5)"
@@ -3402,6 +3406,7 @@ expect_eq "data.js 去掉賦值外殼後可被 jq 解析，schema 為 2" 2 "$(ov
 expect_eq "data.js 只有一句賦值（畫面靠它判斷寫到一半）" 1 "$(grep -cv '^//' "$OVO/data.js" 2>/dev/null)"
 expect_eq "未追蹤的新檔歸到路徑對得上的模組" "api true" "$(ovq '.changes[] | select(.file == "src/api/new.ts") | "\(.module) \(.new)"')"
 expect_eq "模組的 changed 計數" 1 "$(ovq '.modules[] | select(.id == "api") | .changed')"
+( cd "$SANDBOX" && git rm -q src/api/base.ts && git -c user.email=t@t -c user.name=t commit -qm rm-base ) >/dev/null 2>&1
 
 expect_eq "overview/.gitignore 內容恰為 *" "*" "$(cat "$OVO/.gitignore" 2>/dev/null)"
 expect_eq "git status 不出現 overview/ 底下的檔" "" \
@@ -4094,6 +4099,140 @@ expect_eq "overview.sh 遇到 git grep 出錯 → data.js 有「骨架掃描失�
     "$(sc_q gerr '[.notices[] | select(.text | test("骨架掃描失敗"))] | length') $(grep -c '測試注入的 git grep 錯誤' "$SCOV/.scan-error" 2>/dev/null)"
 rm -rf "$SCBIN" "$SANDBOX/sk-before.json"
 rm -rf "$SC"
+
+# =========================================================================
+section "overview.sh — 落差、任務推斷、plan 疊層、架構自動段、一頁現況"
+# =========================================================================
+# 每組資料一個獨立 repo，放在含中文與空格的目錄。跑的是 repo 外的 overview.sh（OV_SRC），
+# 它從自己的目錄找 overview-scan.sh。
+DS="$SANDBOX/落差 測試"
+rm -rf "$DS"; mkdir -p "$DS"
+ds_ov()  { bash "$OV_SRC" "$DS/$1" >/dev/null 2>&1; }
+ds_q()   { sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$DS/$1/.claude/taskmaster-data/overview/data.js" 2>/dev/null | jq -r "$2" 2>/dev/null | tr -d '\r'; }
+ds_md()  { tr -d '\r' < "$DS/$1/.claude/taskmaster-data/overview/overview.md" 2>/dev/null; }
+ds_new() { rm -rf "$DS/$1"; mkdir -p "$DS/$1/.claude/taskmaster-data/plans" "$DS/$1/docs"; echo '{"name":"落差","mode":"mvp"}' > "$DS/$1/.claude/taskmaster-data/project.json"; }
+ds_put() { mkdir -p "$(dirname "$DS/$1/$2")"; printf "$3" > "$DS/$1/$2"; }
+ds_git() { ( cd "$DS/$1" && { [ -d .git ] || git init -q -b main . ; } && git add -A && git -c user.email=t@t -c user.name=t commit -qm "${2:-c}" ) >/dev/null 2>&1; }
+# ds_two <repo> <目錄…>：每個目錄放兩個 .py
+ds_two() { local r="$1" d; shift; for d in "$@"; do ds_put "$r" "$d/a.py" 'a = 1\n'; ds_put "$r" "$d/b.py" 'b = 2\n'; done; }
+# ds_wbs <repo> <列…>：列為「編號|模組|狀態」；DS_NOCOL=1 時表頭沒有模組欄
+ds_wbs() {
+    local r="$1" row id mod st; shift
+    {
+        echo "# WBS"; echo; echo "## M1 基礎"; echo
+        if [ -n "${DS_NOCOL:-}" ]; then echo "| # | 任務 | 狀態 | 優先 |"; echo "|---|---|---|---|"
+        else echo "| # | 任務 | 模組 | 狀態 | 優先 |"; echo "|---|---|---|---|---|"; fi
+        for row in "$@"; do
+            IFS='|' read -r id mod st <<< "$row"
+            if [ -n "${DS_NOCOL:-}" ]; then echo "| $id | 任務 $id | $st | 高 |"; else echo "| $id | 任務 $id | $mod | $st | 高 |"; fi
+        done
+    } > "$DS/$r/.claude/taskmaster-data/wbs.md"
+}
+# ds_plan <repo> <任務> <files（空白分隔，可空）> [各階段標題狀態…]：每個階段標題下一行是「依賴」行（ADR-006 四段格式）
+ds_plan() {
+    local r="$1" t="$2" i=1 s x; local -a fs=()
+    read -r -a fs <<< "$3"; shift 3
+    mkdir -p "$DS/$r/.claude/taskmaster-data/plans"
+    {
+        echo '---'; echo "wbs_task: \"$t\""; echo 'status: "🔄 進行中"'; echo "current_phase: ${DS_CP:-1}"; echo 'mode: "standard"'
+        if [ ${#fs[@]} -gt 0 ]; then echo 'files:'; for x in "${fs[@]}"; do echo "  - \"$x\""; done; fi
+        echo '---'; echo; echo "# 實作計畫：任務 $t"; echo
+        echo '| id | 部件 | 階段 | 檔案 |'; echo '|---|---|---|---|'; echo "| p1 | 第一件 | 1 | \`${fs[0]:-src/x.py}\` |"; echo
+        for s in "${@:-⏳}"; do echo "### 階段 $i: 第 $i 段 $s"; echo; echo "- **依賴**：階段 $((i - 1))"; echo; i=$((i + 1)); done
+    } > "$DS/$r/.claude/taskmaster-data/plans/$t-x.md"
+}
+# 5.5 有效的架構文件：web、api 兩列；$2 附加在表後
+ds_arch() {
+    { echo '# 架構'; echo; echo '### 5.5 模組'; echo; echo '| id | 模組 | 路徑 | 職責 |'; echo '|---|---|---|---|'
+      echo '| web | 前端 | `src/web/**` | 畫面 |'; echo '| api | 介面 | `src/api/**` | REST |'; [ -n "${2:-}" ] && echo "$2"; } > "$DS/$1/docs/architecture.md"
+}
+
+# ---- 落差：codeNotInDoc／docNotInCode／taskModuleMismatch
+ds_new cd; ds_two cd src/web src/api src/search src/pay; ds_arch cd; ds_wbs cd "1.2|api|🔄 進行中"
+ds_plan cd 1.2 "src/web/**"; ds_git cd; ds_ov cd
+expect_eq "有效 5.5 沒寫、程式有 src/search/ → drift.codeNotInDoc 含 search" true "$(ds_q cd '[.drift.codeNotInDoc[].module] | index("search") != null')"
+expect_eq "5.5 的路徑全部對得到檔 → drift.docNotInCode 為空陣列" "[]" "$(ds_q cd '.drift.docNotInCode | tojson')"
+expect_eq "WBS 標 api、plan files: 只有 src/web/** → taskModuleMismatch 一筆 1.2：declared api、actual web" "1 api web" \
+    "$(ds_q cd '[.drift.taskModuleMismatch[] | select(.task == "1.2")] | "\(length) \(.[0].declared | join(",")) \(.[0].actual | join(","))"')"
+expect_eq "WBS 明標 api → 即使 plan files: 在別處，該任務 inferred 不是 true" false "$(ds_q cd '.tasks[] | select(.id == "1.2") | .inferred')"
+expect_contains "有落差 → overview.md 有「## 落差」" "## 落差" "$(ds_md cd)"
+expect_contains "有落差 → overview.md 的落差節列出各類數量（search、pay 兩個 5.5 沒寫）" "2 項" "$(ds_md cd | sed -n '/^## 落差/,/^## 任務圖/p' | grep search)"
+ds_arch cd '| legacy | 舊系統 | `src/legacy/**` | 停用 |'; ds_ov cd
+expect_eq "5.5 寫了 src/legacy/**、沒有對應檔 → drift.docNotInCode 含 legacy" true "$(ds_q cd '[.drift.docNotInCode[].module] | index("legacy") != null')"
+ds_plan cd 1.2 "src/web/** src/api/**"; ds_ov cd
+expect_eq "plan 同時碰 web 與 api（WBS 標 api）→ taskModuleMismatch 沒有 1.2" 0 "$(ds_q cd '[.drift.taskModuleMismatch[] | select(.task == "1.2")] | length')"
+
+# ---- wbsUnknownModule
+ds_wbs cd "1.2|api|🔄 進行中" "1.3|payment|⏳ 待處理"; ds_plan cd 1.3 "src/pay/**"; ds_ov cd
+expect_eq "WBS 模組欄寫 payment、骨架沒有、plan files: 在 src/pay/** → wbsUnknownModule 有 payment、suggest pay" "1.3 payment pay" \
+    "$(ds_q cd '.drift.wbsUnknownModule[] | select(.module == "payment") | "\(.task) \(.module) \(.suggest)"')"
+ds_wbs cd "1.2|api|🔄 進行中" "1.3|—|⏳ 待處理"; ds_ov cd
+expect_eq "WBS 模組欄寫 — → wbsUnknownModule 沒有 1.3" 0 "$(ds_q cd '[.drift.wbsUnknownModule[] | select(.task == "1.3")] | length')"
+expect_eq "WBS 模組欄寫 —、plan files: 在 src/pay/** → 推斷成 pay（plan-files）" "pay true plan-files" \
+    "$(ds_q cd '.tasks[] | select(.id == "1.3") | "\(.modules | join(",")) \(.inferred) \(.inferredBy)"')"
+
+ds_new eight; ds_two eight src/m1 src/m2 src/m3 src/m4 src/m5 src/m6 src/m7 src/m8; ds_git eight; ds_ov eight
+expect_eq "沒有架構文件、掃到 8 個模組 → codeNotInDoc 為空陣列" "8 []" "$(ds_q eight '"\(.modules | length) \(.drift.codeNotInDoc | tojson)"')"
+
+# ---- 任務推斷：plan files: → 帳本 BASE 之後的 diff → 推斷不出
+ds_new inf
+ds_put inf backend/pyproject.toml '[project]\nname = "b"\n'; ds_two inf backend/app/services backend/app/api
+ds_put inf frontend/package.json '{"name":"f"}\n'
+ds_put inf frontend/src/pages/A.tsx 'export const A = 1\n'; ds_put inf frontend/src/pages/B.tsx 'export const B = 2\n'
+ds_put inf frontend/src/stores/s.ts 'export const s = 1\n'; ds_put inf frontend/src/stores/t.ts 'export const t = 1\n'
+DS_NOCOL=1 ds_wbs inf "2.1||🚫 阻塞" "2.2||⏳ 待處理" "2.3||⏳ 待處理"
+ds_plan inf 2.1 "backend/app/services/**"; ds_plan inf 2.2 ""
+ds_git inf
+printf -- '# 執行帳本\n## 階段 1: 實作\n- 10:00 派工｜BASE=%s\n' "$(git -C "$DS/inf" rev-parse HEAD)" > "$DS/inf/.claude/taskmaster-data/plans/2.2-x.progress.md"
+ds_put inf frontend/src/pages/A.tsx 'export const A = 2\n'
+ds_ov inf
+expect_eq "WBS 沒有模組欄、plan files: 全在 backend/app/services/** → modules [services]、inferred、plan-files" "services true plan-files" \
+    "$(ds_q inf '.tasks[] | select(.id == "2.1") | "\(.modules | join(",")) \(.inferred) \(.inferredBy)"')"
+expect_eq "plan 沒寫 files:、帳本 BASE 之後的 diff 落在 frontend/src/pages/ → modules [pages]、diff" "pages true diff" \
+    "$(ds_q inf '.tasks[] | select(.id == "2.2") | "\(.modules | join(",")) \(.inferred) \(.inferredBy)"')"
+expect_eq "沒有 plan 的任務推斷不出 → 留在 unmappedTasks" "2.3" "$(ds_q inf '.unmappedTasks | join(",")')"
+expect_eq "推斷出 services 的任務是 🚫 阻塞 → services 模組 status 為 issue" issue "$(ds_q inf '.modules[] | select(.id == "services") | .status')"
+expect_eq "推斷的任務列進 drift.tasksInferred" "2.1 2.2" "$(ds_q inf '[.drift.tasksInferred[].task] | join(" ")')"
+expect_eq "--print-inferred → 一行一筆、3 欄 tab 分隔" "2.1	services	plan-files|2.2	pages	diff" \
+    "$(bash "$OV_SRC" --print-inferred "$DS/inf" 2>/dev/null | tr -d '\r' | paste -sd'|' -)"
+expect_contains "有推斷結果 → --print-path 有一行「提示：」含「推斷」" "推斷" "$(bash "$OV_SRC" --print-path "$DS/inf" 2>/dev/null | grep '^提示：')"
+expect_eq "沒有推斷結果 → --print-inferred 輸出為空" "" "$(bash "$OV_SRC" --print-inferred "$DS/eight" 2>/dev/null)"
+expect_eq "WBS 沒有模組欄 → 「還沒對到模組」的 notice 只有 1 則" 1 "$(ds_q inf '[.notices[] | select(.text | test("還沒對到模組"))] | length')"
+
+# messy-fullstack：24 份帶 files:、4 份只有帳本 diff、4 個任務沒有 plan（X4）
+bash "$FXD/make-fixture.sh" messy-fullstack "$DS/messy" >/dev/null 2>&1; ds_git messy
+MAKE_FIXTURE_CHANGES=1 bash "$FXD/make-fixture.sh" messy-fullstack "$DS/messy" >/dev/null 2>&1; ds_ov messy
+expect_eq "messy-fullstack → 有模組的任務 28 個（24 plan-files、4 diff）、unmappedTasks 恰好 4 個" "28 24 4 4" \
+    "$(ds_q messy '"\([.tasks[] | select(.modules | length > 0)] | length) \([.tasks[] | select(.inferredBy == "plan-files")] | length) \([.tasks[] | select(.inferredBy == "diff")] | length) \(.unmappedTasks | length)"')"
+expect_eq "messy-fullstack →「還沒對到模組」的 notice 只出現 1 則" 1 "$(ds_q messy '[.notices[] | select(.text | test("還沒對到模組"))] | length')"
+expect_eq "messy-fullstack → --print-inferred 28 行、每行 3 欄 tab 分隔" "28 28" \
+    "$(bash "$OV_SRC" --print-inferred "$DS/messy" 2>/dev/null | tr -d '\r' | awk -F'\t' 'NF == 3 && $2 != "" { n++ } END { print NR, n + 0 }')"
+
+# shop-clean（5.5 有效、WBS 全標）→ 什麼落差都沒有
+bash "$FXD/make-fixture.sh" shop-clean "$DS/shop" >/dev/null 2>&1; ds_git shop; ds_ov shop
+expect_eq "shop-clean → drift 五類全空、tasks[] 沒有 inferred、overview.md 沒有「## 落差」" "0 0 0" \
+    "$(ds_q shop '[.drift[] | length] | add') $(ds_q shop '[.tasks[] | select(.inferred == true)] | length') $(ds_md shop | grep -c '^## 落差')"
+
+# =========================================================================
+section "overview-scan.sh — 前後端 HTTP 連線、Maven／Gradle 慣例路徑"
+# =========================================================================
+# 沿用上一節的 ds_* 輔助函式（單獨跑這一節時上一節只取定義，所以這裡自己建目錄）
+mkdir -p "$DS"
+
+# ---- 前端 fetch 對後端路由（X6）
+ds_new http
+ds_put http backend/pyproject.toml '[project]\nname = "b"\n'
+ds_put http backend/app/api/orders.py 'from fastapi import APIRouter\n\nrouter = APIRouter(prefix="/orders")\n\n@router.get("/{order_id}")\ndef one(order_id: int):\n    return 1\n'
+ds_put http backend/app/api/deps.py 'x = 1\n'
+ds_put http frontend/package.json '{"name":"f"}\n'
+ds_put http frontend/src/api/orders.ts 'export const one = (id: string) => fetch(`/api/orders/${id}`)\n'
+ds_put http frontend/src/api/client.ts 'export const base = 1\n'
+ds_git http; ds_ov http
+expect_eq "前端 fetch(\`/api/orders/\${id}\`)、後端 APIRouter(prefix=\"/orders\") 的 @router.get(\"/{order_id}\") → 一條 frontend-api→backend-api、source:http 的邊" \
+    "1 backend-api" "$(ds_q http '[.edges[] | select(.from == "frontend-api" and .source == "http")] | "\(length) \(.[0].to)"')"
+ds_put http frontend/src/api/orders.ts "export const x = () => fetch('https://example.com/x')\nexport const y = () => fetch('/api/nothing/here')\n"
+ds_ov http
+expect_eq "fetch 外部網址、或打到後端沒有的路徑 → 不產生 http 邊" 0 "$(ds_q http '[.edges[] | select(.source == "http")] | length')"
 
 # =========================================================================
 section "update-template — .gitignore 只補缺少的短命狀態行"
