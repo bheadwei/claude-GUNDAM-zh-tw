@@ -375,17 +375,18 @@ gather() {
     fi
 }
 
-# 骨架掃描：結果（共享產物）在 OUT/skeleton.json，這裡複製一份進 TMP 給 jq（理由同 generate 的註解）。
+# 骨架掃描：結果（共享產物）在 OUT/skeleton.json。jq 在 TMP（OUT 的子目錄）裡用相對路徑 ../skeleton.json 讀
+# （理由同 generate 的註解），不複製進 TMP：命中快取時省一個 cp 行程。
 # 失敗不擋整張圖：地圖退回只有架構文件寫的模組，錯誤留在 .scan-error、data.js 加一則 notice。
 SCAN_STATE=skipped SCAN_MS=0
 scan() {
     local t0 t1
-    printf '{}\n' > "$TMP/skel.json"
+    printf '{}\n' > "$TMP/skel.json"; SKEL=skel.json
     [ "$IS_DEMO" -eq 0 ] || return 0
     if [ ! -f "$SCRIPT_DIR/overview-scan.sh" ]; then SCAN_STATE=missing; return 0; fi
     t0=${EPOCHREALTIME//[!0-9]/}
     if SCAN_STATE=$(bash "$SCRIPT_DIR/overview-scan.sh" "$MAIN_ROOT" 2> "$TMP/scan.err") && [ -f "$OUT/skeleton.json" ]; then
-        cp -f "$OUT/skeleton.json" "$TMP/skel.json"
+        SKEL=../skeleton.json
         [ -f "$OUT/.scan-error" ] && rm -f "$OUT/.scan-error"
     else
         SCAN_STATE=failed
@@ -424,7 +425,7 @@ generate() {
         --rawfile bundle bundle.txt --rawfile mtimes mtimes.tsv --rawfile changes changes.tsv \
         --rawfile bases bases.tsv --rawfile planbase planbase.tsv --rawfile currents currents.tsv \
         --rawfile archive archive.txt \
-        --slurpfile skel skel.json --arg scanState "$SCAN_STATE" --argjson scanMs "$SCAN_MS" \
+        --slurpfile skel "$SKEL" --arg scanState "$SCAN_STATE" --argjson scanMs "$SCAN_MS" \
         --arg now "$now" --arg draftMark "$DRAFT_MARK" \
         --arg colsMod "$OVERVIEW_COLS_MODULE" --arg colsModOpt "$OVERVIEW_COLS_MODULE_OPT" \
         --arg colsWbs "$OVERVIEW_COLS_WBS" --arg colWbs "$OVERVIEW_COL_WBS" --arg colsPart "$OVERVIEW_COLS_PART" \
