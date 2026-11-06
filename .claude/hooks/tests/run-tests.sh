@@ -4269,10 +4269,18 @@ expect_eq "在 worktree 執行 --sync-arch → 主 checkout 與 worktree 的架�
     "$(cmp -s "$SANDBOX/ds-wt-main.md" "$DS/wt/docs/architecture.md"; echo $?) $(cmp -s "$SANDBOX/ds-wt-wt.md" "$DSWT/docs/architecture.md"; echo $?)"
 git -C "$DS/wt" worktree remove --force "$DSWT" >/dev/null 2>&1
 
-# 邊超過 60 條：mermaid 只畫跨分組的邊，模組表照列。web/ 是另一個套件，兩條 import 跨到根目錄的模組
-ds_new big; bash "$FXD/gen-large.sh" 300 "$DS/big" >/dev/null 2>&1
+# 邊超過 60 條：mermaid 只畫跨分組的邊，模組表照列。src/a1–a8 兩兩互相 import（56 條），
+# web/ 是另一個套件：b1–b4 兩兩互相 import（12 條）、各 import 一次 src/a1（4 條跨分組）
+ds_new big
+for k in 1 2 3 4 5 6 7 8; do
+    imp=""; for j in 1 2 3 4 5 6 7 8; do [ "$j" = "$k" ] || imp+="import { v } from '../a$j/x'\n"; done
+    ds_put big "src/a$k/x.ts" "${imp}export const v = $k\n"; ds_put big "src/a$k/y.ts" 'export const w = 1\n'
+done
 ds_put big web/package.json '{"name":"w"}\n'
-ds_put big web/src/ui/a.ts "import { value } from '../../../src/m01/f61'\n"; ds_put big web/src/ui/b.ts "import { value } from '../../../src/m02/f62'\n"
+for k in 1 2 3 4; do
+    imp="import { v } from '../../../src/a1/x'\n"; for j in 1 2 3 4; do [ "$j" = "$k" ] || imp+="import { v } from '../b$j/x'\n"; done
+    ds_put big "web/src/b$k/x.ts" "${imp}export const v = $k\n"; ds_put big "web/src/b$k/y.ts" 'export const w = 1\n'
+done
 ds_genarch "$DS/big/docs/architecture.md"; ds_git big
 bash "$OV_SRC" --sync-arch "$DS/big" >/dev/null 2>&1
 expect_eq "掃到超過 60 條邊 → 自動段的 mermaid 只含跨分組的邊、模組表列數等於模組數" \
