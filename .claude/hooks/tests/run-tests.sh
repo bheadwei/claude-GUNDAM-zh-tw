@@ -3658,6 +3658,23 @@ tg_outside | cmp -s - "$SANDBOX/tg-out1.md" && ok "--actual 只動標記區塊�
 out=$(bash "$TG/.claude/scripts/overview.sh" --actual "$TGD/plans/1.2-x.md" --result FAIL 2>&1); rc=$?
 expect_eq "--actual FAIL 沒帶 --reason → exit 2、不寫" "2 1" "$rc $(grep -c 'overview:actual:start' "$TGD/plans/1.2-x.md")"
 
+# CRLF 的 plan（Windows 上常見）：標記外的位元組一個都不能變、整份不能混進單獨的 LF。
+# 比對用 bash 讀整份（awk／sed 在 Git Bash 會吃掉 CR，拿它們比對會看不出差別）
+tg_crlf()   { local l; while IFS= read -r l; do printf '%s\r\n' "$l"; done < "$1" > "$1.crlf" && mv "$1.crlf" "$1"; }
+tg_bytes()  { local s; IFS= read -r -d '' s < "$1"; printf '%sx' "$s"; }
+tg_lone_lf() { echo $(( $(tr -cd '\n' < "$1" | wc -c) - $(tr -cd '\r' < "$1" | wc -c) )); }
+TGP="$TGD/plans/1.2-x.md"
+tg_plan 1.2-x.md 🔄 ⏳; tg_crlf "$TGP"; tgc_orig=$(tg_bytes "$TGP"); tgc_orig=${tgc_orig%x}
+tg_actual --result FAIL --reason "CRLF 第一次"; rc=$?; tgc_now=$(tg_bytes "$TGP")
+expect_eq "CRLF plan 第一次 --actual → exit 0、原內容一字不差（含 CR）留在區塊前、整份沒有單獨的 LF" "0 same 0" \
+    "$rc $([[ $tgc_now == "$tgc_orig"* ]] && echo same || echo diff) $(tg_lone_lf "$TGP")"
+tg_plan 1.2-x.md 🔄 ⏳
+printf '%s\n' '<!-- overview:actual:start -->' '舊區塊' '<!-- overview:actual:end -->' '' '## 區塊後面的手寫段落' '' '不能被動到。' >> "$TGP"
+tg_crlf "$TGP"; tgc_orig=$(tg_bytes "$TGP")
+tg_actual --result PASS; rc=$?; tgc_now=$(tg_bytes "$TGP")
+expect_eq "CRLF plan 已有區塊再跑 --actual → exit 0、區塊前後的位元組不變（含 CR）、整份沒有單獨的 LF、舊區塊被取代" "0 same same 0 0" \
+    "$rc $([ "${tgc_now%%<!-- overview:actual:start*}" = "${tgc_orig%%<!-- overview:actual:start*}" ] && echo same || echo diff) $([ "${tgc_now#*<!-- overview:actual:end -->}" = "${tgc_orig#*<!-- overview:actual:end -->}" ] && echo same || echo diff) $(tg_lone_lf "$TGP") $(grep -c '舊區塊' "$TGP")"
+
 # 標記壞掉（只有 start、兩組、end 在 start 前）→ 一個 byte 都不動、非 0 結束、說明怎麼修。
 # 曾經只有 start 時會從 start 一路跳到檔尾，把使用者寫在後面的段落整段刪掉還回報「已寫入」。
 tg_bad_markers() {
