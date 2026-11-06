@@ -1343,9 +1343,17 @@ IFS= read -r -d '' JQ_ARCH <<'JQ'
 JQ
 
 # 換掉架構文件兩個標記之間的內容。整份讀成一筆（RS 用不會出現的 \001），用 index 找行首的標記，
-# 標記外原樣 printf 回去——檔尾有沒有換行、CRLF 都保留。exit 3＝沒有標記；4＝不成對（stderr 說明）
+# 標記外原樣 printf 回去——檔尾有沒有換行、CRLF 都保留；標記區用文件 start 那一行的換行。
+# exit 3＝沒有標記；4＝不成對（stderr 說明）。
+# BINMODE=3（呼叫端也用 -v 給）：Git Bash 的 gawk 預設讀檔就把 CRLF 的 CR 吃掉，寫回去整份變 LF；
+# mawk 沒有這個變數，當一般變數無害。區塊要先用預設的 RS 逐行讀完才換 RS，否則整份 gen.md 會變成一筆
 IFS= read -r -d '' AWK_SPLICE_GEN <<'AWK'
-BEGIN { RS = "\001"; while ((getline l < blk) > 0) { sub(/\r$/, "", l); B[++nb] = l } }
+BEGIN {
+    BINMODE = 3
+    while ((getline l < blk) > 0) { sub(/\r$/, "", l); B[++nb] = l }
+    close(blk)
+    RS = "\001"
+}
 { s = NR > 1 ? s RS $0 : $0 }
 END {
     t = "\n" s; ns = 0; ne = 0
@@ -1369,13 +1377,16 @@ splice_actual() {
     local bad
     bad=$(actual_markers_bad "$ACTUAL_PLAN")
     if [ -n "$bad" ]; then markers_msg "$bad" "$ACTUAL_PLAN" > "$OUT/.last-error"; return 1; fi
-    awk -v blk="$TMP/actual.md" '
-        BEGIN { while ((getline l < blk) > 0) b = b l "\n" }
-        /^<!-- overview:actual:start/ { printf "%s", b; done = 1; skip = 1; next }
+    # BINMODE=3：理由同 AWK_SPLICE_GEN（Git Bash 的 gawk 會把 CRLF 的 plan 整份改成 LF）。區塊用 plan 第一行的換行
+    awk -v BINMODE=3 -v blk="$TMP/actual.md" '
+        function blockout(   k) { for (k = 1; k <= nb; k++) printf "%s%s", B[k], nl }
+        BEGIN { BINMODE = 3; nl = "\n"; while ((getline l < blk) > 0) { sub(/\r$/, "", l); B[++nb] = l } }
+        NR == 1 && /\r$/ { nl = "\r\n" }
+        /^<!-- overview:actual:start/ { blockout(); done = 1; skip = 1; next }
         skip && /^<!-- overview:actual:end/ { skip = 0; next }
         skip { next }
         { print; last = $0 }
-        END { if (!done) { if (NR > 0 && last != "" && last != "\r") print ""; printf "%s", b } }
+        END { if (!done) { if (NR > 0 && last != "" && last != "\r") printf "%s", nl; blockout() } }
     ' "$ACTUAL_PLAN" > "$TMP/plan.md" && mv -f "$TMP/plan.md" "$ACTUAL_PLAN"
 }
 
@@ -1393,7 +1404,7 @@ sync_arch() {
         echo "overview.sh --sync-arch：自動段產生失敗（arch.jq）：$(cat "$TMP/err")" >&2
         return 1
     fi
-    ( cd "$TMP" && LC_ALL=C awk -v blk=gen.md -v S="$OVERVIEW_GEN_START" -v E="$OVERVIEW_GEN_END" \
+    ( cd "$TMP" && LC_ALL=C awk -v BINMODE=3 -v blk=gen.md -v S="$OVERVIEW_GEN_START" -v E="$OVERVIEW_GEN_END" \
           "$AWK_SPLICE_GEN" "$MAIN_ROOT/$a" > arch.new 2> err ); rc=$?
     case $rc in
         0)  if cmp -s "$TMP/arch.new" "$MAIN_ROOT/$a"; then

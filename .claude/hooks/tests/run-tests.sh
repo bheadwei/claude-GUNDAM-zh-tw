@@ -4243,6 +4243,25 @@ ds_outside "$DSA" | cmp -s - "$SANDBOX/ds-out0.md" && [ "$(tail -c 24 "$DSA")" =
     || ng "--sync-arch 有標記 → 標記外的位元組不變" "cmp 相同、檔尾仍無換行" "$(ds_outside "$DSA" | diff - "$SANDBOX/ds-out0.md" | head -5)"
 expect_eq "--sync-arch → exit 0、標記區含模組表表頭、舊內容被取代" "0 1 0" \
     "$rc $(ds_region "$DSA" | grep -cF '| id | 模組 | 分組 | 路徑 | 檔數 | 路由數 | 說明 |') $(ds_region "$DSA" | grep -c '舊的自動段')"
+expect_eq "--sync-arch → end 標記前一行是模組表的列（沒有多出的空行）" "|" "$(ds_region "$DSA" | tail -n 2 | head -n 1 | cut -c1)"
+cp "$DSA" "$SANDBOX/ds-arch-1.md"; bash "$OV_SRC" --sync-arch "$DS/arch" >/dev/null 2>&1
+cmp -s "$SANDBOX/ds-arch-1.md" "$DSA" && ok "連跑兩次 --sync-arch → 架構文件 byte 相同" \
+    || ng "連跑兩次 --sync-arch → 架構文件 byte 相同" "cmp 相同" "$(diff "$SANDBOX/ds-arch-1.md" "$DSA" | head -5)"
+
+# CRLF 的架構文件（Windows 上常見）：標記外的位元組一個都不能變、標記區也要用 CRLF。
+# 比對用 bash 讀整份（awk／sed 在 Git Bash 會吃掉 CR，拿它們比對會看不出差別）
+ds_new crlf; ds_two crlf src/web src/api
+printf '# 架構\r\n\r\n## 4. 模組與依賴\r\n\r\n%s\r\n舊的自動段\r\n%s\r\n## 5. 資料流\r\n\r\n手寫的流程。\r\n' "$DS_GS" "$DS_GE" > "$DS/crlf/docs/architecture.md"
+ds_git crlf; DSC="$DS/crlf/docs/architecture.md"
+ds_bytes() { local s; IFS= read -r -d '' s < "$1"; printf '%s' "$s"; }
+ds_pre()  { local s; s=$(ds_bytes "$1"; printf x); s=${s%x}; printf '%s' "${s%%"$DS_GS"*}"; }
+ds_post() { local s; s=$(ds_bytes "$1"; printf x); s=${s%x}; printf '%s' "${s#*"$DS_GE"}"; }
+dsc_pre=$(ds_pre "$DSC"; printf x); dsc_post=$(ds_post "$DSC"; printf x)
+bash "$OV_SRC" --sync-arch "$DS/crlf" >/dev/null 2>&1
+expect_eq "CRLF 架構文件 --sync-arch → 標記外的位元組不變（含 CR）" "same same" \
+    "$([ "$(ds_pre "$DSC"; printf x)" = "$dsc_pre" ] && echo same || echo diff) $([ "$(ds_post "$DSC"; printf x)" = "$dsc_post" ] && echo same || echo diff)"
+expect_eq "CRLF 架構文件 --sync-arch → 整份沒有單獨的 LF（標記區內也是 CRLF）、區內有模組表" "0 1" \
+    "$(( $(tr -cd '\n' < "$DSC" | wc -c) - $(tr -cd '\r' < "$DSC" | wc -c) )) $(grep -cF '| id | 模組 | 分組 |' "$DSC")"
 ds_ov arch
 expect_eq "標記區裡有模組表、標記區外沒有 5.5 → 沒有模組的 nameSource 是 doc" 0 "$(ds_q arch '[.modules[] | select(.nameSource == "doc")] | length')"
 { printf '# 架構\n\n### 5.5 模組\n\n| id | 模組 | 路徑 |\n|---|---|---|\n| web | 前端畫面 | `src/web/**` |\n\n'; cat "$DSA"; } > "$SANDBOX/ds-arch.md" && mv "$SANDBOX/ds-arch.md" "$DSA"
