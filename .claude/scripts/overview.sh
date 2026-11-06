@@ -526,6 +526,8 @@ notes_prep() {
         for tok in "${toks[@]}"; do
             tok=${tok#./}
             [[ $tok == */* || $tok == *.* ]] || continue
+            # 走出 repo 的詞不 stat（jq 端的 badpath 會判違規）：含 .. 路徑段、以 / 或磁碟代號開頭、含反斜線
+            [[ $tok == /* || $tok == ..* || $tok == */..* || $tok == *\\* || $tok =~ ^[A-Za-z]: ]] && continue
             [ -f "$NOTES_ROOT/$tok" ] && printf '%s\n' "$tok"
         done
     done < "$NOTES_FILE" > "$TMP/notesexist.txt"
@@ -667,15 +669,26 @@ def splitlist: split("[,，、]"; null) | map(unbt) | map(select(blank | not));
 def tsv: lines | map(select(. != "") | split("\t"));
 def cap($n): if type == "string" and length > $n then .[:$n - 1] + "…" else . end;
 
-# ---- 說明層（module-notes.md）。機密樣式一律不分大小寫；IPv4 要四段、每段 1–3 位數（「版本 1.2.3」不算）
+# ---- 說明層（module-notes.md）。樣式來自安全稽核（security-infrastructure-auditor-2026-11-06-1649）。
+# 一律不分大小寫，比對前先 norm（全形轉半形、U+3000 轉空白、刪零寬字元），否則「Server＝」「pass​word」繞得過。
+# IPv4 要四段、每段 1–3 位數，可接句尾句點（「版本 1.2.3」「1.2.3.4.5」不算）。Email 最後一段要字母（lodash@4.17.21 不算）。
+# 開頭不用 \b：Oniguruma 把中文也當成字元，「呼叫db01.corp.local」「帳號uid=」前面沒有字界
+def norm: explode | map(if . >= 65281 and . <= 65374 then . - 65248 elif . == 12288 then 32
+                        elif (. >= 8203 and . <= 8205) or . == 8288 or . == 65279 or . == 173 then empty else . end) | implode;
 def SECRETS: [
-  {re: "(^|[^0-9.])([0-9]{1,3}\\.){3}[0-9]{1,3}($|[^0-9.])", why: "IP 位址"},
+  {re: "(^|[^0-9.])([0-9]{1,3}\\.){3}[0-9]{1,3}($|[^0-9.]|\\.($|[^0-9]))", why: "IP 位址"},
+  {re: "[a-z][a-z0-9+.-]*://", why: "網址或連線網址"},
+  {re: "[a-z0-9-]+(\\.[a-z0-9-]+)*\\.(local|internal|intra|intranet|corp)($|[^a-z0-9-])", why: "內網主機名"},
   {re: "server\\s*=", why: "連線字串（Server=）"},
   {re: "data\\s+source\\s*=", why: "連線字串（Data Source=）"},
-  {re: "password", why: "password 字樣"},
+  {re: "(^|[^a-z0-9_])(user\\s*id|uid|initial\\s+catalog|host|username)\\s*=", why: "連線字串欄位"},
+  {re: "passw(or)?d", why: "password 字樣；功能請用中文「密碼」描述"},
   {re: "pwd\\s*=", why: "pwd= 字樣"},
-  {re: "://[^\\s/@:]+:[^\\s/@]*@", why: "網址帶帳密"},
-  {re: "[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)+", why: "Email"}];
+  {re: "[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,}", why: "Email"},
+  {re: "AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|xox[abprs]-|-----BEGIN|eyJ[A-Za-z0-9_-]{8,}\\.", why: "存取權杖或金鑰"}];
+def secret_hits: norm as $t | SECRETS[] | select(. as $s | $t | test($s.re; "i")) | .why;
+# 「依據」不准走出 repo：含 .. 路徑段、以 / 或磁碟代號開頭的一律違規（bash 端也不去 stat）
+def badpath: test("(^|[/\\\\])\\.\\.([/\\\\]|$)") or test("^[/\\\\]") or test("^[A-Za-z]:");
 # 「依據」格：有反引號就只取反引號裡的，沒有就照逗號、頓號切
 def evlist: if test("`") then [match("`([^`]+)`"; "g") | .captures[0].string | trim | sub("^\\./"; "")] | map(select(. != ""))
             else split("[,，、]"; null) | map(trim | sub("^\\./"; "")) | map(select(. != "" and . != "—" and . != "-")) end;
@@ -893,10 +906,20 @@ def parse_ledger:
 # 列號 n 是表格的第幾列資料（--check-notes 印的「第 N 列」）。「依據」存不存在由 bash 先 test -f（$notesExist）
   ($colsNotes | words) as $needNotes
 | ($notesExist | lines | map(select(. != "") | {key: ., value: true}) | from_entries) as $EX
+# span：第一張表在檔案裡的行範圍 [起, 迄)，同 tables 的判法（表頭列的下一行是分隔列、code fence 裡的不算）
 | (if $notes == "" then null
    else $notes | lines as $L
      | (if (($L[0] // "") | trim) == "---" then ([range(1; $L | length) | select(($L[.] | trim) == "---")] | first) else null end) as $e
-     | {table: ((if $e != null then $L[$e + 1:] else $L end) | join("\n") | tables | first)}
+     | (if $e != null then $e + 1 else 0 end) as $from
+     | (reduce range($from; $L | length) as $i ({fence: false, s: null, e: null};
+          if .e != null then .
+          elif ($L[$i] | test("^\\s*```")) then (if .s != null then .e = $i else .fence = (.fence | not) end)
+          elif .fence then .
+          elif .s != null then (if ($L[$i] | is_row) then . else .e = $i end)
+          elif ($L[$i] | is_row) and (($L[$i + 1] // "") | is_sep) then .s = $i
+          else . end)) as $sp
+     | {lines: $L, span: (if $sp.s == null then null else [$sp.s, ($sp.e // ($L | length))] end),
+        table: ($L[$from:] | join("\n") | tables | first)}
    end) as $nt
 | (if $nt == null then {header: null, rows: []}
    elif $nt.table == null then {header: "找不到說明表（表頭要有 \($needNotes | join("、"))）", rows: []}
@@ -918,11 +941,19 @@ def parse_ledger:
         (($r.text | length) as $l | if $l == 0 then "說明是空的" elif $l > 60 then "說明 \($l) 字，上限 60" else empty end),
         (if ($r.evidence | length) == 0 then "依據沒有寫檔案（至少一個，包在反引號裡）" else empty end),
         ($r.evidence[] | . as $f
-         | if $EX[$f] != true then "依據 \($f) 不存在"
+         | if ($f | badpath) then "依據 \($f) 路徑不能含 .. 或絕對路徑"
+           elif $EX[$f] != true then "依據 \($f) 不存在"
            elif $known and (($f | modof) != $r.id) then "依據 \($f) 不在模組 \($r.id) 的路徑內"
            else empty end),
-        (([$r.name, $r.group, $r.text] | join("\n")) as $txt
-         | SECRETS[] | select(. as $s | $txt | test($s.re; "i")) | "含機密樣式（\(.why)）：名稱、分組、說明不准寫主機、帳密、Email")]}]) as $NV
+        ([$r.name, $r.group, $r.text] | join("\n") | secret_hits
+         | "含機密樣式（\(.)）：名稱、分組、說明不准寫主機、帳密、Email")]}]) as $NV
+# 表格以外的行（frontmatter、註記、第二張表）也不准寫機密；表頭不對時整份都算表外。行號 l 從 1 起
+| (if $nt == null then []
+   else ($nt.span // [0, 0]) as $s | (if $NR.header != null then [0, 0] else $s end) as $s
+     | [range(0; $nt.lines | length) | select(. < $s[0] or . >= $s[1]) as $i
+        | ($nt.lines[$i] | [secret_hits] | unique) as $w | select(($w | length) > 0)
+        | {l: ($i + 1), why: [$w[] | "含機密樣式（\(.)）：表格外也不准寫主機、帳密、Email"]}]
+   end) as $OUTV
 | ([$NV[] | select((.why | length) == 0) | .n]) as $okN
 | ([$NR.rows[] | select(.n as $n | any($okN[]; . == $n))]) as $okRows
 | (reduce $okRows[] as $r ({}; if .[$r.id] != null then . else .[$r.id] = $r end)) as $NOTE
@@ -1270,6 +1301,7 @@ def parse_ledger:
      | if $NR.header != null then {level: "warn", text: "module-notes.md 的表頭不對（\($NR.header)），地圖上沒有任何說明", action: "bash .claude/scripts/overview.sh --check-notes"}
        elif $bad > 0 then {level: "warn", text: "module-notes.md 有 \($bad) 列沒通過檢查，那幾個模組當成沒有說明", action: "bash .claude/scripts/overview.sh --check-notes"}
        else empty end),
+    (if ($OUTV | length) > 0 then {level: "warn", text: "module-notes.md 表格以外有 \($OUTV | length) 行含機密樣式（主機、帳密、Email 之類）", action: "bash .claude/scripts/overview.sh --check-notes"} else empty end),
     (if $notesBaseOk == false and ($NOTE | length) > 0 then
        {level: "info", text: "module-notes.md 的 based_on（\(if $notesBase == "" then "沒寫" else $notesBase end)）不是有效的 commit，所有說明都標成可能過期", action: "請 documentation-specialist 重寫說明，based_on 填當下的 HEAD"}
      else empty end)
@@ -1279,8 +1311,9 @@ def parse_ledger:
 
   # --check-notes：一行一筆違規
   if $outMode == "check" then
-    if $NR.header != null then "表頭：\($NR.header)"
-    else $NV[] | .n as $n | (if .id == "" then "（沒有 id）" else .id end) as $id | .why[] | "第 \($n) 列 \($id)：\(.)" end
+    (if $NR.header != null then "表頭：\($NR.header)"
+     else $NV[] | .n as $n | (if .id == "" then "（沒有 id）" else .id end) as $id | .why[] | "第 \($n) 列 \($id)：\(.)" end),
+    ($OUTV[] | .l as $l | .why[] | "表外第 \($l) 行：\(.)")
   # --notes-todo：沒有說明或可能過期的模組，代表檔最多 3 個：路由最多的檔 → 進入點 → 被引用最多的檔
   #（5.2 寫的是「最大的檔」；腳本不量檔案大小，改用被引用次數，同樣挑得出核心檔）
   elif $outMode == "todo" then

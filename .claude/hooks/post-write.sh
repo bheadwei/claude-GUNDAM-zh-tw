@@ -77,10 +77,10 @@ if [ "${OVERVIEW:-on}" != "off" ]; then
     OV_HIT=0
     case "$NORM" in
         */.claude/taskmaster-data/wbs.md|*/.claude/taskmaster-data/project.json|*/.claude/taskmaster-data/plans/*.md) OV_HIT=1 ;;
-        */.claude/taskmaster-data/module-notes.md) OV_HIT=1 ;;
     esac
+    # module-notes.md 相對 WORK_ROOT 比對、錨定開頭：絕對路徑子字串會被 .claude/worktrees/ 底下別的 checkout 誤命中
     case "$REL" in
-        docs/*architecture*.md|docs/tech-spec.md) OV_HIT=1 ;;
+        docs/*architecture*.md|docs/tech-spec.md|.claude/taskmaster-data/module-notes.md) OV_HIT=1 ;;
     esac
     if [ "$OV_HIT" -eq 0 ] && [ "$REL" != "$NORM" ]; then
         case "$REL" in
@@ -147,8 +147,9 @@ fi
 # 而說明可能寫進了客戶的主機、連線字串——不能等人想起來去驗。
 # 放在 .suggest-mode 與擴充維護提醒的 exit 之前：這不是建議密度的問題。
 # 背景重產上一節已經觸發；--check-notes 不搶鎖、只讀現有骨架，兩者並行不互等。逃生門：OVERVIEW=off
-case "$NORM" in
-    */.claude/taskmaster-data/module-notes.md)
+# 比對相對 WORK_ROOT 的路徑、錨定開頭（理由同上一節的 module-notes.md）
+case "$REL" in
+    .claude/taskmaster-data/module-notes.md)
         if [ "${OVERVIEW:-on}" != "off" ] && [ -f "$MAIN_CLAUDE/scripts/overview.sh" ]; then
             NOTES_V=$(bash "$MAIN_CLAUDE/scripts/overview.sh" --check-notes "$WORK_ROOT" </dev/null 2>/dev/null)
             NOTES_V=${NOTES_V//$'\r'/}

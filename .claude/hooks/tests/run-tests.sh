@@ -4475,6 +4475,25 @@ mn_notes n "$(mn_head n)" 'api|||連到 10.1.2.3 查資料|`backend/app/api/a.py
 out=$(mn_chk n)
 expect_eq "機密樣式（IPv4、Server=、Data Source=、password、pwd=、網址帳密、Email，不分大小寫）→ 7 列各自違規；版本 1.2.3 不違規" \
     "第 1 列|第 2 列|第 3 列|第 4 列|第 5 列|第 6 列|第 7 列" "$(mn_rep "$out" '第 [0-9]* 列' | sort -u | paste -sd'|' -)"
+expect_contains "password 違規 → 訊息提示改用中文「密碼」描述功能" "密碼" "$(printf '%s\n' "$out" | grep '^第 4 列')"
+# 修復迴圈 R1（安全稽核）：句尾句點、不帶帳密的網址、全形與零寬字元、內網主機名要擋；套件版本、版本號、Node.js、「密碼」不擋
+ZW=$(printf '\342\200\213')
+mn_notes n "$(mn_head n)" 'api|||連到 10.1.2.3.|`backend/app/api/a.py`' 'api|||讀 postgresql://u@h 的資料|`backend/app/api/a.py`' \
+    'api|||用 Server＝db01 連線|`backend/app/api/a.py`' "api|||檢查 pass${ZW}word 欄位|\`backend/app/api/a.py\`" \
+    'api|||連到 １０．１．２．３|`backend/app/api/a.py`' 'api|||呼叫 db01.corp.local 的服務|`backend/app/api/a.py`' \
+    'api|||相容 lodash@4.17.21 的格式|`backend/app/api/a.py`' 'api|||相容版本 1.2.3 的格式|`backend/app/api/a.py`' \
+    'api|||用 Node.js 產生報表|`backend/app/api/a.py`' 'api|||處理密碼重設流程|`backend/app/api/a.py`'
+out=$(mn_chk n)
+expect_eq "句尾句點的 IP、postgresql://、全形 ＝、夾零寬字元的 password、全形 IP、*.corp.local → 6 列各自違規；lodash@4.17.21、版本 1.2.3、Node.js、密碼重設流程不違規" \
+    "第 1 列|第 2 列|第 3 列|第 4 列|第 5 列|第 6 列" "$(mn_rep "$out" '第 [0-9]* 列' | sort -u | paste -sd'|' -)"
+mn_notes n "$(mn_head n)" "$GOOD_API"; printf '\n備註：正式機是 Server=db01\n' >> "$MN/n/.claude/taskmaster-data/module-notes.md"
+out=$(mn_chk n)
+expect_eq       "表格以外的行含 Server=db01 → exit 1" 1 "${out%%|*}"
+expect_contains "表格以外的行含 Server=db01 → 回報「表外第 9 行」" "表外第 9 行：" "$out"
+mn_notes n "$(mn_head n)" 'api|||一句說明|`backend/app/api/../../../etc/passwd`' 'api|||一句說明|`/etc/passwd`'
+out=$(mn_chk n)
+expect_contains "依據含 .. 路徑段 → 違規（不去 stat）" "第 1 列 api：依據 backend/app/api/../../../etc/passwd 路徑不能含 .. 或絕對路徑" "$out"
+expect_contains "依據以 / 開頭 → 違規" "第 2 列 api：依據 /etc/passwd 路徑不能含 .. 或絕對路徑" "$out"
 MN_HEAD='| id | 名稱 | 分組 | 說明 |' mn_notes n "$(mn_head n)" 'api|後端介面|後端|提供查詢介面'
 out=$(mn_chk n)
 expect_eq       "表頭少了「依據」欄 → exit 1" 1 "${out%%|*}"
@@ -4495,6 +4514,10 @@ expect_eq "post-write 寫入 notes 時也重產地圖（OVERVIEW_SYNC=1 前景�
     "$(mn_q n '"\(.modules[] | select(.id == "api") | .description.text)|\(.modules[] | select(.id == "services") | .description)"')"
 out=$(mn_pw .claude/taskmaster-data/plans/1.1-x.md)
 expect_empty "notes 有違規、但寫入的是 plan → post-write 不跑 --check-notes、沒有輸出" "$out"
+mkdir -p "$MN/n/.claude/worktrees/w/.claude/taskmaster-data"
+out=$(mn_pw .claude/worktrees/w/.claude/taskmaster-data/module-notes.md)
+expect_empty "寫入 .claude/worktrees/ 底下的 notes（相對 WORK_ROOT 不是 .claude/taskmaster-data/module-notes.md）→ 不驗證、沒有輸出" "$out"
+rm -rf "$MN/n/.claude/worktrees"
 echo off > "$MN/n/.claude/taskmaster-data/.suggest-mode"
 out=$(mn_pw .claude/taskmaster-data/module-notes.md)
 expect_contains ".suggest-mode 為 off 時寫入含違規的 notes → 仍注入" "第 2 列 services" "$out"
