@@ -4,7 +4,7 @@ slug: "overview-from-code"
 created: "2026-11-05"
 updated: "2026-11-06"
 status: "🔄 進行中"
-current_phase: 1
+current_phase: 2
 mode: "standard"
 files:
   # 階段 0：fixture 產生器、效能實測、jq 1.6 CI
@@ -251,7 +251,7 @@ flowchart LR
 - **不可退化**：本階段不動 overview.sh／post-write.sh；`run-tests.sh` 原有案例數只增不減
 - **注意**：產生器寫中文目錄名用 `printf`、不靠 `echo -e`；heredoc 不帶 CRLF；fixture 只用通用電商／查詢系統詞彙，每階段審查時 grep 一次有沒有混入真實名稱
 
-### 階段 1: 骨架掃描與合併 ⏳
+### 階段 1: 骨架掃描與合併 ✅
 
 - **依賴**：階段 0
 
@@ -321,7 +321,7 @@ flowchart LR
   - 自動切出的模組粒度不符直覺 → 上限 40、`overview.scan.roots`／`depth` 覆寫；5.5 有效時以它為準
   - import 解析寫成兩步：**先逐檔產生紀錄（來源檔、目標檔或套件名、`import`／`http`）→ 再彙總成模組邊**，不要在解析時就彙總、也不要在逐檔那一步丟掉第三方 import（模組邊照舊不收）。階段 5 要從這份中間結果多輸出 `fileEdges`（ADR-2026-11-06-002）；本階段範圍與驗收不變
 
-### 階段 2: 落差、任務推斷、前後端連線、plan 疊層、架構自動段、一頁現況 ⏳
+### 階段 2: 落差、任務推斷、前後端連線、plan 疊層、架構自動段、一頁現況 🔄
 
 - **依賴**：階段 1
 
@@ -398,7 +398,7 @@ flowchart LR
   - `--print-inferred` 的輸出經 jq `-r` 印出、tab 用 `@tsv`（1.6 可用）
   - 前端 fetch 的後綴比對可能誤連：只連唯一候選；必要時 2-A 的這段可整段砍掉不影響其他驗收（X6）
 
-### 階段 3: 畫面（ui-builder，可與階段 2、4 平行）＋畫面審閱 ⏳
+### 階段 3: 畫面（ui-builder，可與階段 2、4 平行）＋畫面審閱 🔄
 
 - **依賴**：階段 1；跨計畫：文件 1、文件 3 已合併
 - [ ] 提案 6.2 的頁面端修法：未分組獨立一欄放最右（全部未分組就不畫群組框）、全圖範圍改 `world.getBBox()`＋留白、同欄遠距連線從右側繞出、邊的標籤只在右側欄、`fitText(textEl, maxW, maxLines)`（等 `document.fonts.ready` 再量）、沒有資料的列直接省略、任務列最多 6 個＋「＋N」且推斷任務加虛線底線、縮放 ≥ 55% 時顯示 `description.text` 第一行、`el()` 再防禦一次標籤
@@ -596,4 +596,6 @@ flowchart LR
 - 2026-11-05 選做項目不排入本計畫（外部系統欄、codegraph adapter、增量掃描），等完成後照 ADR-001「何時該重新考慮」決定；增量掃描若階段 0 實測超標則提前到階段 1
 - 2026-11-06 使用者要求：模組展開的畫面開發時一樣先預覽給使用者看 → 階段 6 最後一步是主模型發 artifact＋`AskUserQuestion`（ADR-2026-11-06-002 決策 5），沒有「確認」不合併、不標 ✅
 - 2026-11-06 部件表的檔案用具體檔名（階段 5 寫 `make-fixture.sh`、階段 6 寫 `qa-check.js`），不寫 `fixtures/overview/**`——寫 glob 會讓 `/tdd` 把 5、6 判成檔案有交集而不給平行。來源 `coordination/handoffs/architect-to-planner-2026-11-06-1100.md`
+- 2026-11-06 階段 1 完成（合併 `4e9c719`，含修復迴圈 R1）。實測 5000 檔、5.1＋5.5 有效（機器有他線負載，看相對值）：`overview-scan.sh` 有快取 0.18s、重掃 1.24s，在 3 秒門檻內；`overview.sh` 整條 c49fe61 約 3.4s／29 行程 → 有快取約 4.8–5.0s／28 行程、無快取約 5.8s／35 行程。背景執行且有 30 秒節流，不擋使用者；階段 5「整條多花 ≤ 1 秒」實測時以這組為基準一併看。非 git repo 改標「骨架掃描失敗」＋`.scan-error`（審查判為改善；`copy-template` 後尚未 `git init` 的專案會看到這則提示）
+- 2026-11-06 模板最低要求 bash 4（使用者決定，`qa-history/2026-11-06-110000-bash-min-version.md`）：既有 `mapfile`／`declare -A` 不改；R1 加的 `,,`／`^^` 靜態掃描先保留
 - 2026-11-06 階段 4 的 `make-fixture.sh` 加選項，但部件表 p11 沒列它；4 → 5 本來就循序，不影響平行判斷，沿用
