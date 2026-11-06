@@ -369,18 +369,19 @@ bash .claude/scripts/overview.sh --sync-arch
 
 **跳過**（任一成立）：在 worktree、沒有進行中 plan、plan 沒有「資料流變更」或寫「無」。
 
-否則判斷本任務分岔點以來，`docs/architecture.md` 的改動有沒有落在「資料流」節：
+否則判斷起點以來，`docs/architecture.md` 的改動有沒有落在「資料流」節。起點**和步驟 4「主 checkout 的起點」同一套**
+（唯一來源，勿在此重述）：有 `.merge-round-start` 時是本輪第一個合併前的 HEAD，否則是分支起點——
+所以平行開發合併進來的 worktree 線改動也看得到。在同一個 shell 先跑步驟 4 那段（它設 `S`、印 `START:`），再接：
 
 ```bash
 A=docs/architecture.md
-BR=$(git rev-parse -q --verify main >/dev/null && echo main || echo master)
-START=$(git merge-base HEAD "$BR" 2>/dev/null)
-S=$(grep -nE '^## [0-9]+\. 資料流' "$A" 2>/dev/null | head -1 | cut -d: -f1)
-if [ -z "$S" ]; then echo "FLOW: no-section"
+START=; [ -n "$S" ] && git merge-base --is-ancestor "$S" HEAD 2>/dev/null && START=$S
+L=$(grep -nE '^## [0-9]+\. 資料流' "$A" 2>/dev/null | head -1 | cut -d: -f1)
+if [ -z "$L" ]; then echo "FLOW: no-section"
 elif [ -z "$START" ]; then echo "FLOW: unknown"
 else
-  E=$(awk -v s="$S" 'NR > s && /^## / { print NR - 1; exit }' "$A"); E=${E:-$(wc -l < "$A")}
-  git diff -U0 "$START" -- "$A" | awk -v s="$S" -v e="$E" '
+  E=$(awk -v s="$L" 'NR > s && /^## / { print NR - 1; exit }' "$A"); E=${E:-$(wc -l < "$A")}
+  git diff -U0 "$START" -- "$A" | awk -v s="$L" -v e="$E" '
     /^@@/ { split(substr($3, 2), n, ","); a = n[1]; c = (2 in n) ? n[2] : 1
             b = c > 0 ? a + c - 1 : a; if (a <= e && b >= s) hit = 1 }
     END { print hit ? "FLOW: updated" : "FLOW: stale" }'
@@ -388,7 +389,7 @@ fi
 ```
 
 - `updated` → 印「資料流節已更新」
-- `stale`、`unknown` → 印下面的提醒（在主分支上直接開發時分岔點就是 HEAD，只看得到未 commit 的改動，寧可多提醒一次）：
+- `stale`、`unknown` → 印下面的提醒（取不到起點時寧可多提醒一次）：
 
   ```
   ⚠ 這個 plan 改了跨服務資料流，docs/architecture.md「資料流」節要人工更新（/verify 不改圖）：

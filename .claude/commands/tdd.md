@@ -112,9 +112,9 @@ GREEN 過不了修實作不改測試，都在那裡（唯一來源，本檔不�
 - 選「用 worktree 同時跑」→ **載入 `worktree-orchestration` 與 `subagent-execution` 兩個 skill**，
   建立、派工、合併、清理與每階段的派工單、審查、修復迴圈都照它們（唯一來源，本檔不重述）。本指令只多這幾條：
   - implementer 用 `Agent` 工具帶 `isolation: "worktree"`（`pre-agent-gate.sh` 依既有規則放行）
-  - 會讀整個 repo 的審查 agent（`code-quality-specialist`、critical 加 `security-infrastructure-auditor`）
-    在**該階段的 worktree 裡**審：也帶 `isolation: "worktree"`，prompt 開頭要它先
-    `git checkout --detach <該階段的分支>`，再審 `<階段起點>..HEAD`——不在主 checkout 審，那裡看得到另一條線的半成品
+  - 會讀整個 repo 的審查 agent（`code-quality-specialist`、critical 加 `security-infrastructure-auditor`）帶
+    `isolation: "worktree"`，prompt 開頭先 `git checkout --detach <該階段分支>` 再審 `<階段起點>..HEAD`；該階段要已 commit。
+    要隔離是因為 `pre-agent-gate.sh` 在有併行寫入者時會持續擋不帶隔離的掃描類 agent（它們在主 checkout 也會讀到另一條線的半成品）
   - **plan 與帳本只由主模型在主 checkout 改**：開 worktree 前 plan 已 commit（`plans/` 被排除時用 `git add -f`）；
     合併一條、`/verify` 一條；該階段合併且驗過才標 ✅
   - 同時進行的階段都標 🔄，frontmatter `current_phase` 寫最小的未完成階段
