@@ -516,8 +516,13 @@ JQ
 
 # ---------------------------------------------------------------- 掃描
 
-LC_ALL=C awk -v codeext="$OVERVIEW_CODE_EXT" -v roots="$ROOTS" -v depth="$DEPTH" -v maxmod="$MAX_MODULES" "$AWK_LAYOUT" \
-    < <("${G[@]}" ls-files -z --cached --others --exclude-standard "${PS[@]}" 2>/dev/null | tr '\0' '\n') \
+# 下面任一步失敗都不寫 key，但 .scan-files 可能已換新：舊 key 配上新的 mtime，下一次會把舊骨架
+# 當快取（改動清單裡的檔都不比 .scan-files 新）。先清掉 key（內建，不開行程）
+: > "$OUT/.scan-key"
+# git 出錯（exit 128）不可吞掉：會寫出沒有檔案或沒有邊的骨架，而且被快取。git grep 只放行 exit 1（沒命中）
+set -o pipefail
+"${G[@]}" ls-files -z --cached --others --exclude-standard "${PS[@]}" | tr '\0' '\n' \
+    | LC_ALL=C awk -v codeext="$OVERVIEW_CODE_EXT" -v roots="$ROOTS" -v depth="$DEPTH" -v maxmod="$MAX_MODULES" "$AWK_LAYOUT" \
     > "$OUT/.scan-files" || exit 1
 NFILES=0
 IFS=$'\t' read -r _ NFILES _ < "$OUT/.scan-files"
@@ -529,7 +534,6 @@ for e in $OVERVIEW_CODE_EXT; do GREP_PS+=("*.$e"); done
 GREP_PS+=(go.mod '*/go.mod' ':(exclude).claude' ':(exclude)docs')
 for e in "${EXCL[@]}"; do [ -n "$e" ] && GREP_PS+=(":(exclude,glob)$e"); done
 
-set -o pipefail
 if [ "$TRUNC" = false ]; then
     { "${G[@]}" grep -z -n -I -E --untracked \
         -e '^[[:space:]]*(from|import|package|namespace|using|module)[[:space:]]' \
@@ -542,7 +546,7 @@ if [ "$TRUNC" = false ]; then
         -e '^[[:space:]]*(app|router|server|api)\.(get|post|put|delete|patch)\(' \
         -e '^[[:space:]]*@(Get|Post|Put|Delete|Patch|Request)Mapping' \
         -e '^[[:space:]]*\[(Http(Get|Post|Put|Delete|Patch)|Route)' \
-        "${GREP_PS[@]}" 2>/dev/null || :; } | tr '\0' '\t'
+        "${GREP_PS[@]}" || [ $? -eq 1 ]; } | tr '\0' '\t'
 fi | LC_ALL=C awk "$AWK_EDGES" "$OUT/.scan-files" - \
    | LC_ALL=C.UTF-8 jq -R -n -c --arg head "$HEAD" --argjson trunc "$TRUNC" --argjson maxFiles "$MAX_FILES" "$JQ_SKEL" \
    > "$OUT/.skeleton.tmp" || exit 1

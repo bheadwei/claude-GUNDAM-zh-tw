@@ -4055,6 +4055,44 @@ expect_contains "Java：package／import 對照 → jorder→jstore" "jorder>jst
 expect_contains "C#：namespace／using 對照 → csorders→csstore" "csorders>csstore" "$scedges"
 expect_eq "路由：Express、Spring、ASP.NET 各 1 條" "GET /items|GET /api/orders/{id}|GET /api/Orders/{id}" \
     "$(sc_q poly '[(.modules[] | select(.id == "web") | .routes.sample[0]), (.modules[] | select(.id == "jorder") | .routes.sample[0]), (.modules[] | select(.id == "csorders") | .routes.sample[0])] | join("|")')"
+
+# ---- git 出錯不可吞掉：不寫骨架、不留快取（git grep 的 exit 1 只代表沒命中，要放行）
+# 假 git 放在 PATH 最前面：FAKE_GIT_FAIL 指定的子指令回 128，其餘轉給真的 git
+SCBIN="$SANDBOX/scbin"; mkdir -p "$SCBIN"
+printf '#!/bin/bash\nREAL=%q\n' "$(command -v git)" > "$SCBIN/git"
+cat >> "$SCBIN/git" <<'FAKEGIT'
+a=("$@"); i=0
+while [ "$i" -lt "${#a[@]}" ]; do case "${a[$i]}" in -C|-c) i=$((i + 2)) ;; -*) i=$((i + 1)) ;; *) break ;; esac; done
+[ -n "${FAKE_GIT_FAIL:-}" ] && [ "${a[$i]:-}" = "$FAKE_GIT_FAIL" ] && { echo "fatal: 測試注入的 git $FAKE_GIT_FAIL 錯誤" >&2; exit 128; }
+exec "$REAL" "$@"
+FAKEGIT
+chmod +x "$SCBIN/git"
+# sc_scan <repo> [要失敗的 git 子指令] → 「out=<stdout> exit=<退出碼>」
+sc_scan() { local o; o=$(PATH="$SCBIN:$PATH" FAKE_GIT_FAIL="${2:-}" bash "$OV_SCAN" "$SC/$1" 2>/dev/null); echo "out=$o exit=$?"; }
+sc_new gnone; sc_put gnone src/a/x.py 'x = 1\n'; sc_put gnone src/a/y.py 'y = 2\n'; sc_git gnone
+expect_eq "沒有任何 import 或路由（git grep exit 1）→ 照常 scanned、骨架有 2 個檔" "out=scanned exit=0 2" \
+    "$(sc_scan gnone) $(sc_sk gnone '.scan.files')"
+sc_new gerr
+sc_put gerr src/a/x.py 'import os\n'; sc_put gerr src/a/y.py 'x = 1\n'; sc_put gerr src/b/z.py 'y = 2\n'; sc_put gerr src/b/w.py 'z = 3\n'
+sc_git gerr; SCOV="$SC/gerr/.claude/taskmaster-data/overview"
+expect_eq "git ls-files 出錯、還沒有骨架 → exit 1、stdout 空、不產生 skeleton.json" "out= exit=1 0" \
+    "$(sc_scan gerr ls-files) $([ -f "$SCOV/skeleton.json" ] && echo 1 || echo 0)"
+sc_put gerr src/a/y.py 'from src.b.z import y\n'
+expect_eq "git 恢復正常（y.py 已在改動清單）→ scanned" "out=scanned exit=0" "$(sc_scan gerr)"
+cp "$SCOV/skeleton.json" "$SANDBOX/sk-before.json"
+# y.py 再改一次：改動清單不變（key 不變），只靠「比 .scan-files 新」判斷要重掃
+sc_put gerr src/a/y.py 'from src.b.w import z\n'; touch -d '2001-01-01 00:00:00' "$SCOV/.scan-files"
+expect_eq "git ls-files 出錯、已有骨架 → exit 1、skeleton.json 一個 byte 都沒變" "out= exit=1 0" \
+    "$(sc_scan gerr ls-files) $(cmp -s "$SANDBOX/sk-before.json" "$SCOV/skeleton.json"; echo $?)"
+expect_eq "git grep 出錯（exit 128，ls-files 正常）→ exit 1、skeleton.json 一個 byte 都沒變" "out= exit=1 0" \
+    "$(sc_scan gerr grep) $(cmp -s "$SANDBOX/sk-before.json" "$SCOV/skeleton.json"; echo $?)"
+expect_eq "失敗後 git 恢復 → 重掃（不是 cached）、新的 import 進得來" "out=scanned exit=0 1" \
+    "$(sc_scan gerr) $(sc_sk gerr '[.imports[] | select(. == ["src/a/y.py", "src/b/w.py", "import"])] | length')"
+sc_put gerr src/b/n.py 'q = 1\n'
+PATH="$SCBIN:$PATH" FAKE_GIT_FAIL=grep bash "$OV_SRC" "$SC/gerr" >/dev/null 2>&1
+expect_eq "overview.sh 遇到 git grep 出錯 → data.js 有「骨架掃描失敗」、.scan-error 記下 git 的訊息" "1 1" \
+    "$(sc_q gerr '[.notices[] | select(.text | test("骨架掃描失敗"))] | length') $(grep -c '測試注入的 git grep 錯誤' "$SCOV/.scan-error" 2>/dev/null)"
+rm -rf "$SCBIN" "$SANDBOX/sk-before.json"
 rm -rf "$SC"
 
 # =========================================================================
