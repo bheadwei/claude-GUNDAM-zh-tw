@@ -1,23 +1,26 @@
 #!/bin/bash
 # make-fixture.sh — 專案圖解的測試資料產生器
 #
-# 用法：make-fixture.sh <shop-clean|messy-fullstack> <目標目錄>
+# 用法：make-fixture.sh <shop-clean|messy-fullstack|maven-multi> <目標目錄>
 #   只把檔案寫進目標目錄，不 git init、不 commit，由呼叫端決定。
-#   shop-clean 另有環境變數 MAKE_FIXTURE_CHANGES=1：只補「本次改動」那三個檔
-#   （先 commit 基礎檔、再帶這個變數跑一次，改動清單才會恰好是那三個）。
+#   環境變數 MAKE_FIXTURE_CHANGES=1：先 commit 基礎檔、再帶這個變數跑一次，只補「本次改動」——
+#     shop-clean      那三個檔（改動清單才會恰好是那三個）
+#     messy-fullstack 4 份沒有 files: 的 plan 各寫一份帳本（BASE＝目標目錄目前的 HEAD）、改一個頁面檔，
+#                     讓它們的模組只能由 diff 推斷（X4：24 份 plan-files、4 份 diff、4 個任務沒有 plan）
 #
 #   shop-clean      範例電商：5.1／5.5 都有效，WBS 每個任務都標了模組
 #   messy-fullstack 髒資料：Python 後端＋TS 前端、C4 架構圖、沒有 5.5、WBS 沒有模組欄、32 個任務
+#   maven-multi     Maven／Gradle 多模組：兩個子專案的 src/main/{java,kotlin}/com/acme/<套件>/
 #
 # 只用通用電商／查詢系統詞彙，不含任何實測專案的名稱或程式碼。
 
 usage() {
-    printf '用法：%s <shop-clean|messy-fullstack> <目標目錄>\n' "${0##*/}" >&2
+    printf '用法：%s <shop-clean|messy-fullstack|maven-multi> <目標目錄>\n' "${0##*/}" >&2
     exit 2
 }
 
 [ $# -eq 2 ] || usage
-case "$1" in shop-clean|messy-fullstack) ;; *) usage ;; esac
+case "$1" in shop-clean|messy-fullstack|maven-multi) ;; *) usage ;; esac
 mkdir -p "$2" || exit 1
 DEST=$(cd "$2" && pwd) || exit 1
 TD="$DEST/.claude/taskmaster-data"
@@ -120,7 +123,19 @@ messy_ts() {
     { printf '%b' "$2"; printf '%b' "$3"; } | put "$DEST/frontend/src/$1"
 }
 
+MESSY_DIFF_ONLY=(3.6 3.8 4.3 4.4)
+
+messy_changes() {
+    local head id
+    head=$(git -C "$DEST" rev-parse HEAD 2>/dev/null) || { echo "make-fixture.sh：$DEST 還沒有 commit，MAKE_FIXTURE_CHANGES 需要先 commit 基礎檔" >&2; exit 1; }
+    for id in "${MESSY_DIFF_ONLY[@]}"; do
+        printf -- '# 執行帳本 — plan: %s-task\n\n## 階段 1: 實作\n\n- 09:00 派工｜BASE=%s\n' "$id" "$head" | put "$TD/plans/$id-task.progress.md"
+    done
+    printf "export const dashboardTitle = '儀表板'\n" >> "$DEST/frontend/src/pages/Dashboard.tsx"
+}
+
 messy_fullstack() {
+    if [ -n "${MAKE_FIXTURE_CHANGES:-}" ]; then messy_changes; return; fi
     local zh="報表匯出與排程作業"
     printf '{"name":"查詢系統","mode":"mvp","overview":{"architectureDoc":"docs/architecture/01_system_architecture.md"}}\n' | put "$TD/project.json"
 
@@ -242,17 +257,17 @@ MD
 MD
 
     local -a with_files=(
-        "1.1|backend/pyproject.toml|frontend/package.json" "1.2|backend/app/core/**" "1.3|backend/app/services/ldap_service.py|backend/app/api/auth.py"
+        "1.1|backend/pyproject.toml|frontend/package.json|backend/app/api/__init__.py" "1.2|backend/app/core/**" "1.3|backend/app/services/ldap_service.py|backend/app/api/auth.py"
         "1.4|backend/app/models/user.py" "1.5|backend/app/api/users.py|backend/app/services/user_service.py" "1.6|frontend/src/pages/Login.tsx"
         "1.7|frontend/src/api/client.ts|frontend/src/api/users.ts" "1.8|frontend/src/pages/Login.tsx|frontend/src/stores/auth.ts"
         "2.1|backend/app/models/report.py" "2.2|backend/app/services/report_service.py" "2.3|backend/app/api/reports.py"
         "2.4|frontend/src/pages/Reports.tsx|frontend/src/api/reports.ts" "2.5|frontend/src/components/Table.tsx" "2.6|frontend/src/components/Chart.tsx"
         "2.7|frontend/src/pages/Dashboard.tsx|frontend/src/stores/report.ts" "3.1|backend/app/$zh/export.py"
         "3.2|backend/app/$zh/schedule.py" "3.3|backend/app/api/deps.py|backend/app/core/security.py"
-        "3.7|frontend/src/components/Header.tsx" "4.1|backend/tests/**" "4.2|frontend/src/__tests__/**"
+        "3.7|frontend/src/components/Header.tsx" "4.1|backend/tests/**|backend/app/services/user_service.py"
+        "4.2|frontend/src/__tests__/**|frontend/src/api/users.ts"
         "2.8|frontend/src/stores/report.ts" "3.4|backend/app/core/db.py" "3.5|backend/app/models/report.py"
     )
-    local -a diff_only=(3.6 3.8 4.3 4.4)
     local rec id rest f
     local -a fs
     for rec in "${with_files[@]}"; do
@@ -264,13 +279,38 @@ MD
             printf -- '---\n\n# 實作計畫：任務 %s\n\n### 階段 1: 實作 ⏳\n\n- [ ] 完成任務\n' "$id"
         } | put "$TD/plans/$id-task.md"
     done
-    for id in "${diff_only[@]}"; do
+    for id in "${MESSY_DIFF_ONLY[@]}"; do
         printf -- '---\nwbs_task: "%s"\nstatus: "⏳ 未開始"\nmode: "standard"\n---\n\n# 實作計畫：任務 %s\n\n### 階段 1: 實作 ⏳\n\n- [ ] 完成任務\n' "$id" "$id" \
             | put "$TD/plans/$id-task.md"
     done
 }
 
+# Maven／Gradle 多模組（X16）：兩個子專案（api 用 Maven、worker 用 Gradle），各 3 個套件、Java＋Kotlin 混合，
+# 兩邊都有 order 套件（撞名）。套件前綴鏈 com/acme 要被剝掉
+maven_multi() {
+    printf '{"name":"多模組後端","mode":"mvp"}\n' | put "$TD/project.json"
+    printf '<project><modelVersion>4.0.0</modelVersion><artifactId>shop</artifactId><packaging>pom</packaging></project>\n' | put "$DEST/pom.xml"
+    printf '<project><modelVersion>4.0.0</modelVersion><artifactId>api</artifactId></project>\n' | put "$DEST/api/pom.xml"
+    printf 'plugins { kotlin("jvm") version "2.0.0" }\n' | put "$DEST/worker/build.gradle.kts"
+    local j=api/src/main/java/com/acme k=api/src/main/kotlin/com/acme
+    printf 'package com.acme.order;\n\nimport com.acme.payment.PaymentClient;\n\npublic class OrderController {\n    private PaymentClient client;\n}\n' | put "$DEST/$j/order/OrderController.java"
+    printf 'package com.acme.order;\n\npublic class OrderService {}\n' | put "$DEST/$j/order/OrderService.java"
+    printf 'package com.acme.payment;\n\npublic class PaymentClient {}\n' | put "$DEST/$j/payment/PaymentClient.java"
+    printf 'package com.acme.payment;\n\npublic class Payment {}\n' | put "$DEST/$j/payment/Payment.java"
+    printf 'package com.acme.user\n\nclass User(val id: Long)\n' | put "$DEST/$k/user/User.kt"
+    printf 'package com.acme.user\n\nclass UserRepo\n' | put "$DEST/$k/user/UserRepo.kt"
+    printf 'package com.acme.order;\n\npublic class OrderControllerTest {}\n' | put "$DEST/api/src/test/java/com/acme/order/OrderControllerTest.java"
+    j=worker/src/main/java/com/acme k=worker/src/main/kotlin/com/acme
+    printf 'package com.acme.order;\n\npublic class OrderJob {}\n' | put "$DEST/$j/order/OrderJob.java"
+    printf 'package com.acme.order;\n\npublic class OrderReader {}\n' | put "$DEST/$j/order/OrderReader.java"
+    printf 'package com.acme.report\n\nimport com.acme.order.OrderReader\n\nclass ReportJob(val reader: OrderReader)\n' | put "$DEST/$k/report/ReportJob.kt"
+    printf 'package com.acme.report\n\nclass ReportWriter\n' | put "$DEST/$k/report/ReportWriter.kt"
+    printf 'package com.acme.mail\n\nclass Mailer\n' | put "$DEST/$k/mail/Mailer.kt"
+    printf 'package com.acme.mail\n\nclass Template\n' | put "$DEST/$k/mail/Template.kt"
+}
+
 case "$1" in
     shop-clean) shop_clean ;;
     messy-fullstack) messy_fullstack ;;
+    maven-multi) maven_multi ;;
 esac

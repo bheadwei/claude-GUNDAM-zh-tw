@@ -8,12 +8,13 @@
 #   cached（HEAD、工作區改動清單與設定都沒變，沒有重掃）或 scanned。
 #   失敗時非 0，既有的 skeleton.json 不動。
 #
-# skeleton.json 只放逐檔的事實（檔案屬於哪個掃描模組、逐檔 import、逐檔路由）；彙總成模組邊、
+# skeleton.json 只放逐檔的事實（檔案屬於哪個掃描模組、逐檔 import 與 http、逐檔路由）；彙總成模組邊、
 # 路由數、與架構文件 5.5 合併都在 overview.sh 做——5.5 有效時檔案會改歸 5.5 的模組，
 # 在這裡先彙總就得在那邊拆回來。第三方 import 也留著（`pkg:<名稱>`），模組邊才丟。
 #
 # 演算法：提案 architect-2026-11-05-1500.md 3.1 第 1–8 步，加上計畫的 X2（跨套件撞名加套件
-# 目錄名）、X3（目錄名含非 ASCII 時 id 用 m- 加 6 碼雜湊：mermaid 節點 id 必須是 ASCII）。
+# 目錄名）、X3（目錄名含非 ASCII 時 id 用 m- 加 6 碼雜湊：mermaid 節點 id 必須是 ASCII）、
+# X6（前端 fetch／axios 的路徑常值對到後端路由，只連得上唯一一個後端檔時記一筆 http）。
 #
 # 相容：Git Bash 是 gawk、Ubuntu 是 mawk——awk 一律 LC_ALL=C 逐位元組，不以 \0 切欄（先 tr），
 # 雜湊每步取模保持在 2^31 以下；JSON 跳脫全交給 jq，而 jq 只從 stdin 讀（Windows 的 jq 開不了
@@ -25,7 +26,7 @@
 # 環境變數：OVERVIEW_MAX_MODULES（預設 40）、OVERVIEW_SCAN_MAX_FILES（預設 20000，
 # 超過只切模組、不掃 import 與路由）。project.json 的 overview.scan.{exclude,roots,depth} 可覆寫。
 
-SCAN_VERSION=1
+SCAN_VERSION=3
 # 與 hooks/post-write.sh 的同名常數相同（測試會比對）
 OVERVIEW_CODE_EXT="py ts tsx js jsx mjs cjs vue svelte go java kt cs rs"
 
@@ -127,6 +128,15 @@ function srcroot(P,   pre) {
     else SR[P] = P
     return SR[P]
 }
+# Maven／Gradle 慣例路徑（X16）：從 src/main/<lang> 往下剝掉「只有一個子目錄、沒有程式檔」的套件前綴鏈
+# （com/acme/shop/），停在第一個分岔的層級；下一層就有程式檔時也停（那一層本身就是模組）
+function mvnbase(r,   d, c) {
+    if (r in MB) return MB[r]
+    d = r
+    while (nchild[d] == 1 && !(d in hasfile)) { c = d "/" onlykid[d]; if (c in hasfile) break; d = c }
+    MB[r] = d
+    return d
+}
 # 排序：檔案多的在前，同數依路徑
 function before(a, b) { return cnt[a] > cnt[b] || (cnt[a] == cnt[b] && a < b) }
 BEGIN {
@@ -136,7 +146,8 @@ BEGIN {
     n = split("tests test __tests__ spec specs __mocks__ e2e", A, " "); for (i = 1; i <= n; i++) tdir[A[i]] = 1
     n = split("package.json pyproject.toml go.mod Cargo.toml pom.xml build.gradle build.gradle.kts", A, " "); for (i = 1; i <= n; i++) mani[A[i]] = 1
     for (i = 1; i < 256; i++) ord[sprintf("%c", i)] = i
-    nroot = roots == "" ? 0 : split(roots, RT, "\001")
+    # 不能叫 RT：那是 gawk 的內建變數（記錄分隔符實際值），拿來當陣列會 fatal——mawk 沒有它，所以只在 Git Bash 壞
+    nroot = roots == "" ? 0 : split(roots, ROOTA, "\001")
     autod = depth !~ /^[1-9]$/
     if (autod) depth = 1
     OTHER = "\001"
@@ -155,28 +166,38 @@ BEGIN {
     for (i = 1; i < ns; i++) if (S[i] in tdir) { ntest++; next }
     if (b ~ /\.(test|spec)\.[A-Za-z]+$/ || b ~ /^test_.*\.py$/ || b ~ /_test\.(py|go)$/) { ntest++; next }
     nf++; FP[nf] = p; lang[e]++
-    d = dirname(p); while (d != "" && !(d in hasdir)) { hasdir[d] = 1; d = dirname(d) }
+    d = dirname(p); hasfile[d] = 1
+    while (d != "" && !(d in hasdir)) { hasdir[d] = 1; pd = dirname(d); nchild[pd]++; onlykid[pd] = basename(d); d = pd }
 }
 END {
     for (i = 1; i <= nf; i++) {
         p = FP[i]
+        mvl = ""
         if (nroot) {
             base = OTHER
-            for (r = 1; r <= nroot; r++) if (under(p, RT[r]) && (base == OTHER || length(RT[r]) > length(base))) base = RT[r]
+            for (r = 1; r <= nroot; r++) if (under(p, ROOTA[r]) && (base == OTHER || length(ROOTA[r]) > length(base))) base = ROOTA[r]
             if (base == OTHER) { M[i] = OTHER; continue }
-            gk = base
+            gk = base; mpk = base
         } else {
-            P = dirname(p); while (P != "" && !(P in pkg)) P = dirname(P)
-            base = srcroot(P)
-            if (!under(p, base)) base = P
-            gk = P != "" ? P : base
+            # 設了 overview.scan.depth（autod 為 0）就不自動偵測 Maven 路徑，以設定為準
+            if (autod && substr(p, 1, 9) == "src/main/" && match(p, /^src\/main\/(java|kotlin|scala)\//)) mvl = substr(p, 1, RLENGTH - 1)
+            else if (autod && match(p, /\/src\/main\/(java|kotlin|scala)\//)) mvl = substr(p, 1, RSTART + RLENGTH - 2)
+            if (mvl != "") {
+                # 子專案（mvl 去掉 src/main/<lang>）當群組與撞名前綴（X2）：api-order、worker-order
+                base = mvnbase(mvl); gk = mvl; sub(/\/?src\/main\/[a-z]+$/, "", gk); mpk = gk
+            } else {
+                P = dirname(p); while (P != "" && !(P in pkg)) P = dirname(P)
+                base = srcroot(P)
+                if (!under(p, base)) base = P
+                gk = P != "" ? P : base; mpk = P
+            }
         }
         rel = base == "" ? p : substr(p, length(base) + 2)
         nd = split(rel, R, "/") - 1
         if (nd < 1) { M[i] = OTHER; continue }
         cut = R[1]; for (k = 2; k <= depth && k <= nd; k++) cut = cut "/" R[k]
         md = base == "" ? cut : base "/" cut
-        M[i] = md; GK[md] = gk; MPK[md] = nroot ? base : P
+        M[i] = md; GK[md] = gk; MPK[md] = mpk
         cnt[md]++
     }
     # 某個目錄占全部檔案 40% 以上、又有兩個以上含程式碼的子目錄 → 再往下切一層（只切一次）
@@ -379,7 +400,42 @@ function jsimp(f, s,   p, P, name, X) {
     }
     rec(f, jsfile(p))
 }
+# ---- 前端 HTTP 呼叫（X6）：fetch('…')／fetch(`…`)／axios.<method>('…') 的路徑常值，留到最後對後端路由。
+# fetch 的 method 只看同一行的 `method: '…'`，看不到就不限（多行的 options 很常見）
+function jshttp(f, l,   s, m, ms) {
+    while (match(l, /(fetch|axios\.(get|post|put|delete|patch))\([ \t]*["'`][^"'`]*["'`]/)) {
+        s = substr(l, RSTART, RLENGTH); l = substr(l, RSTART + RLENGTH)
+        m = ""
+        if (s ~ /^axios\./) { m = s; sub(/^axios\./, "", m); sub(/\(.*$/, "", m) }
+        else if (match(l, /method[ \t]*:[ \t]*["'][A-Za-z]+["']/)) { ms = substr(l, RSTART, RLENGTH); sub(/^[^"']*["']/, "", ms); sub(/["']$/, "", ms); m = ms }
+        sub(/^[^"'`]*["'`]/, "", s); sub(/["'`]$/, "", s)
+        hc[++nh] = f "\t" toupper(m) "\t" s
+    }
+}
+# 路徑正規化：外部網址回空字串；開頭的 `${BASE}` 拿掉；查詢字串拿掉；參數（`${x}`、`{x}`、`<x>`、`:x`）一律 *。
+# 前端再去掉 /api 前綴（後端常把它寫在 prefix 裡，也常由反向代理加上；比對是後綴比對，兩種都對得到）
+function hnorm(p, front) {
+    if (p ~ /^[A-Za-z][A-Za-z0-9+.-]*:\/\//) return ""
+    sub(/^\$\{[^}]*\}/, "", p); sub(/[?#].*$/, "", p)
+    gsub(/\$\{[^}]*\}/, "*", p); gsub(/\{[^}]*\}/, "*", p); gsub(/<[^>]*>/, "*", p); gsub(/\/:[A-Za-z_][A-Za-z0-9_]*/, "/*", p)
+    if (front) { if (p ~ /^\/?api$/) p = "/"; else sub(/^\/?api\//, "/", p) }
+    return p
+}
+function hsegs(p, A,   n, i, k, T) { n = split(p, T, "/"); k = 0; for (i = 1; i <= n; i++) if (T[i] != "") A[++k] = T[i]; return k }
+# 兩條路徑從尾端逐段對齊（* 對任何段），短的那條整條對上、而且至少有一段是字面相同才算
+function hmatch(a, b,   A, B, na, nb, n, i, lit) {
+    na = hsegs(a, A); nb = hsegs(b, B); n = na < nb ? na : nb
+    if (n == 0) return 0
+    lit = 0
+    for (i = 0; i < n; i++) {
+        if (A[na - i] == "*" || B[nb - i] == "*") continue
+        if (A[na - i] != B[nb - i]) return 0
+        lit = 1
+    }
+    return lit
+}
 function js(f, l,   s, m) {
+    jshttp(f, l)
     if (match(l, /^[ \t]*(app|router|server|api)\.(get|post|put|delete|patch)\(/)) {
         m = substr(l, RSTART, RLENGTH - 1); sub(/^.*\./, "", m)
         addroute(f, m, strarg(substr(l, RSTART + RLENGTH)))
@@ -489,7 +545,21 @@ END {
     }
     for (i = 1; i <= nrf; i++) {
         f = rorder[i]
-        for (j = 1; j <= rn[f]; j++) printf "R\t%s\t%s %s\n", f, RM[f, j], joinpath(prefix[f], RP[f, j])
+        for (j = 1; j <= rn[f]; j++) { RF[f, j] = hnorm(joinpath(prefix[f], RP[f, j]), 0); printf "R\t%s\t%s %s\n", f, RM[f, j], joinpath(prefix[f], RP[f, j]) }
+    }
+    # 前端呼叫 → 後端路由：只連得上唯一一個後端檔才記（後綴比對可能誤連，多個候選就寧可不畫）
+    for (i = 1; i <= nh; i++) {
+        split(hc[i], H, "\t"); f = H[1]; m = H[2]; p = hnorm(H[3], 1)
+        if (p == "") continue
+        nc = 0; cand = ""
+        for (k = 1; k <= nrf; k++) {
+            g = rorder[k]; if (g == f) continue
+            for (j = 1; j <= rn[g]; j++) {
+                if (m != "" && RM[g, j] != m) continue
+                if (hmatch(p, RF[g, j])) { nc++; cand = g; break }
+            }
+        }
+        if (nc == 1 && !((f SUBSEP cand) in hdone)) { hdone[f, cand] = 1; printf "I\t%s\t%s\thttp\n", f, cand }
     }
 }
 AWK
@@ -543,6 +613,7 @@ if [ "$TRUNC" = false ]; then
         -e '^[[:space:]]*([A-Za-z_.][A-Za-z0-9_]*[[:space:]]+)?"[^"]+"[[:space:]]*$' \
         -e '^[[:space:]]*@[A-Za-z_][A-Za-z0-9_.]*\.(get|post|put|delete|patch|route)\(' \
         -e 'APIRouter\(|Blueprint\(' \
+        -e '(fetch|axios\.(get|post|put|delete|patch))\(' \
         -e '^[[:space:]]*(app|router|server|api)\.(get|post|put|delete|patch)\(' \
         -e '^[[:space:]]*@(Get|Post|Put|Delete|Patch|Request)Mapping' \
         -e '^[[:space:]]*\[(Http(Get|Post|Put|Delete|Patch)|Route)' \

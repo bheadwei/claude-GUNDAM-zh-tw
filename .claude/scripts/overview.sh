@@ -24,7 +24,16 @@
 # 用法：
 #   bash .claude/scripts/overview.sh [<工作目錄>]                重產，不輸出任何東西
 #   bash .claude/scripts/overview.sh --print-path [<工作目錄>]   印 index.html 的 file:// 路徑；
-#        架構文件是草稿時再多印一行「提示：…」，給 /task-status 轉告使用者
+#        架構文件是草稿、或有任務的模組是推斷出來的，再多印一行「提示：…」，給 /task-status 轉告使用者
+#   bash .claude/scripts/overview.sh --print-inferred [<工作目錄>]
+#        模組由 plan 推斷的任務，一行一筆：任務編號<TAB>模組 id（逗號分隔）<TAB>依據（plan-files／diff）。
+#        給 /task-status 預覽「寫回 WBS」用（模型不讀 data.js）。讀現有的 data.js，沒有才先重產
+#   bash .claude/scripts/overview.sh --status [<工作目錄>]
+#        只印 overview.md 的「## 現況」一節（≤ 30 行），/task-status 直接印它。讀現有的，沒有才先重產
+#   bash .claude/scripts/overview.sh --sync-arch [<工作目錄>]
+#        重產，再把架構文件兩個自動段標記之間換成模組表＋依賴圖（ADR-007）。只在主 checkout 寫；
+#        沒有標記就不碰、印一行提示；標記不成對時整份不寫、exit 1。由 /verify、/task-status 在前景呼叫，
+#        背景重產不寫架構文件（hook 不寫模型會 Edit 的檔）
 #   bash .claude/scripts/overview.sh --actual <plan> --result PASS|FAIL [--reason "<一句>"]
 #        把「計畫 vs 實際」寫進 plan 的標記區塊（再跑一次是取代，不會重複）並重產。FAIL 必須帶 reason
 #
@@ -41,14 +50,20 @@ OVERVIEW_COL_WBS="模組"                 # wbs.template.md 任務表的模組�
 OVERVIEW_COLS_PART="id 部件 階段 檔案"  # plan-format「一眼看懂」部件表的必要欄（驗收欄選用）
 
 DRAFT_MARK='<!-- overview: draft -->'
+# 架構文件自動段的標記：與 05 範本（project-docs/templates/05_architecture_and_design_document.md）第 4 節同一字串
+OVERVIEW_GEN_START='<!-- overview:generated:start -->'
+OVERVIEW_GEN_END='<!-- overview:generated:end -->'
 LOCK_STALE_SEC=120                 # 要比 --actual 的等待（60 秒）長，否則等鎖的那支會搶走還活著的鎖
 MAX_CHANGES=200                    # 每份 plan、地圖各列幾個改動檔，其餘依第一層目錄彙總進 changesRollup
 MAX_BYTES=${OVERVIEW_MAX_BYTES:-524288}
 [[ $MAX_BYTES =~ ^[0-9]+$ ]] || MAX_BYTES=524288
 
-ACTUAL_PLAN="" ACTUAL_RESULT="" ACTUAL_REASON="" PRINT_PATH=0
+ACTUAL_PLAN="" ACTUAL_RESULT="" ACTUAL_REASON="" PRINT_PATH=0 PRINT_INFERRED=0 PRINT_STATUS=0 SYNC_ARCH=0
 case "${1:-}" in
     --print-path) PRINT_PATH=1; shift ;;
+    --print-inferred) PRINT_INFERRED=1; shift ;;
+    --status) PRINT_STATUS=1; shift ;;
+    --sync-arch) SYNC_ARCH=1; shift ;;
     --actual)
         ACTUAL_PLAN="${2:-}"
         if [ $# -ge 2 ]; then shift 2; else shift $#; fi
@@ -81,6 +96,7 @@ markers_msg() {
 
 if [ "${OVERVIEW:-on}" = "off" ]; then
     [ -n "$ACTUAL_PLAN" ] && echo "overview.sh：OVERVIEW=off，沒有寫入「計畫 vs 實際」" >&2
+    [ "$SYNC_ARCH" -eq 1 ] && echo "overview.sh：OVERVIEW=off，沒有同步架構文件自動段"
     exit 0
 fi
 
@@ -167,13 +183,39 @@ if [ "$PRINT_PATH" -eq 1 ]; then
         if [ -n "$a" ] && grep -qF -- "$DRAFT_MARK" "$MAIN_ROOT/$a" 2>/dev/null; then
             echo "提示：$a 是架構草稿（帶 $DRAFT_MARK），地圖照畫，但不拿它覆寫模組名稱；確認模組切分後移除這行標記"
         fi
+        # data.js 是 jq -c 的輸出（沒有空白），tasks[] 每個推斷出的任務恰有一個 "inferred":true
+        if [ -f "$OUT/data.js" ]; then
+            n=$(awk '{ n += gsub(/"inferred":true/, "") } END { print n + 0 }' "$OUT/data.js" 2>/dev/null)
+            [ "${n:-0}" -gt 0 ] 2>/dev/null && echo "提示：$n 個任務的模組是由 plan 推斷的，/task-status 可提議寫回 WBS（預覽：overview.sh --print-inferred）"
+        fi
     fi
+    exit 0
+fi
+
+if [ "$PRINT_INFERRED" -eq 1 ]; then
+    command -v jq >/dev/null 2>&1 || exit 0
+    [ -f "$OUT/data.js" ] || bash "${BASH_SOURCE[0]}" "$WORK_ROOT" >/dev/null 2>&1
+    [ -f "$OUT/data.js" ] || exit 0
+    # data.js 用位置參數給 jq（Windows 的 jq 開不了含中文的絕對路徑只限 --rawfile／--slurpfile／-f）
+    jq -R -r 'select(startswith("window.OVERVIEW = ")) | ltrimstr("window.OVERVIEW = ") | rtrimstr(";") | fromjson
+              | (.tasks // [])[] | select(.inferred == true) | [.id, (.modules | join(",")), .inferredBy] | @tsv' \
+        "$OUT/data.js" 2>/dev/null
+    exit 0
+fi
+
+if [ "$PRINT_STATUS" -eq 1 ]; then
+    [ -f "$OUT/overview.md" ] || bash "${BASH_SOURCE[0]}" "$WORK_ROOT" >/dev/null 2>&1
+    [ -f "$OUT/overview.md" ] && awk '/^## 現況/ { p = 1; print; next } p && /^## / { exit } p' "$OUT/overview.md"
     exit 0
 fi
 
 if ! command -v jq >/dev/null 2>&1; then
     if [ -n "$ACTUAL_PLAN" ]; then
         echo "overview.sh --actual：需要 jq，沒有寫入「計畫 vs 實際」" >&2
+        exit 1
+    fi
+    if [ "$SYNC_ARCH" -eq 1 ]; then
+        echo "overview.sh --sync-arch：需要 jq，沒有同步架構文件自動段" >&2
         exit 1
     fi
     # 只靠 printf 寫一份提示，畫面才不會停在「找不到 data.js」而讓人以為壞了
@@ -191,14 +233,16 @@ mkdir -p "$OUT" 2>/dev/null || exit 0
 
 # --actual 寫的是哪一份 plan：主 checkout 的叫 main，worktree 的叫 worktree:<資料夾名>（與 overlay 同名）。
 # 用 git-dir 是否等於 common dir 判斷，不比路徑字串：Windows 的 8.3 短檔名（KUANWE~1）會讓同一個目錄比不相等。
-ACTUAL_SRC=""
-if [ -n "$ACTUAL_PLAN" ]; then
+ACTUAL_SRC="" SYNC_IN_WT=0
+if [ -n "$ACTUAL_PLAN" ] || [ "$SYNC_ARCH" -eq 1 ]; then
     ACTUAL_SRC=main
     gd=$(git -C "$WORK_ROOT" rev-parse --path-format=absolute --git-dir 2>/dev/null)
     if [ -n "$gd" ] && [ "$gd" != "$GCD" ]; then
         wr=$(git -C "$WORK_ROOT" rev-parse --show-toplevel 2>/dev/null)
         ACTUAL_SRC="worktree:${wr##*/}"
+        SYNC_IN_WT=1
     fi
+    [ -n "$ACTUAL_PLAN" ] || ACTUAL_SRC=""
 fi
 
 # ---------------------------------------------------------------- 鎖
@@ -223,7 +267,7 @@ take_lock() {
     return 1
 }
 if ! take_lock; then
-    if [ -z "$ACTUAL_PLAN" ]; then
+    if [ -z "$ACTUAL_PLAN" ] && [ "$SYNC_ARCH" -eq 0 ]; then
         : > "$OUT/.dirty" 2>/dev/null
         exit 0
     fi
@@ -232,7 +276,8 @@ if ! take_lock; then
         sleep 0.5
         take_lock && { got=1; break; }
     done
-    [ "$got" -eq 1 ] || { echo "overview.sh --actual：等不到 overview/.lock（60 秒），沒有寫入" >&2; exit 1; }
+    who=--sync-arch; [ -n "$ACTUAL_PLAN" ] && who=--actual
+    [ "$got" -eq 1 ] || { echo "overview.sh $who：等不到 overview/.lock（60 秒），沒有寫入" >&2; exit 1; }
 fi
 date +%s > "$LOCK/at" 2>/dev/null
 TMP="$OUT/.tmp-$$"
@@ -398,6 +443,24 @@ scan() {
 
 # ---------------------------------------------------------------- 產生
 
+# 一頁現況的「一句話」：docs/00_brief.md 的「## 一句話」節第一行有內容的字（範本佔位的 [...] 與註解不算）。
+# 用 bash 內建逐行讀，不開行程
+ONE_LINER=""
+read_brief() {
+    local l inb=0
+    ONE_LINER=""
+    [ -f "$MAIN_ROOT/docs/00_brief.md" ] || return 0
+    while IFS= read -r l || [ -n "$l" ]; do
+        l=${l%$'\r'}
+        if [ "$inb" = 1 ]; then
+            [[ $l == '#'* ]] && break
+            [[ -z ${l//[[:space:]]/} || $l == '<!--'* || $l =~ ^\[.*\]$ ]] && continue
+            ONE_LINER=$l; break
+        fi
+        [[ $l =~ ^##[[:space:]]+一句話 ]] && inb=1
+    done < "$MAIN_ROOT/docs/00_brief.md"
+}
+
 generate() {
     local arch_rel now
     arch_rel=$(find_arch)
@@ -411,6 +474,7 @@ generate() {
     cp -f "$DATA/project.json" "$TMP/proj.json" 2> "$TMP/err" || return 1
     scan
     gather
+    read_brief
     now=$(date '+%Y-%m-%dT%H:%M:%S.%3N%:z')
 
     # 一支 jq 算完全部，輸出兩行：第 1 行是 data.js 的物件（疊上 worktree），第 2 行是只看主 checkout
@@ -426,7 +490,8 @@ generate() {
         --rawfile bases bases.tsv --rawfile planbase planbase.tsv --rawfile currents currents.tsv \
         --rawfile archive archive.txt \
         --slurpfile skel "$SKEL" --arg scanState "$SCAN_STATE" --argjson scanMs "$SCAN_MS" \
-        --arg now "$now" --arg draftMark "$DRAFT_MARK" \
+        --arg now "$now" --arg draftMark "$DRAFT_MARK" --arg oneLiner "$ONE_LINER" \
+        --arg genStart "$OVERVIEW_GEN_START" --arg genEnd "$OVERVIEW_GEN_END" \
         --arg colsMod "$OVERVIEW_COLS_MODULE" --arg colsModOpt "$OVERVIEW_COLS_MODULE_OPT" \
         --arg colsWbs "$OVERVIEW_COLS_WBS" --arg colWbs "$OVERVIEW_COL_WBS" --arg colsPart "$OVERVIEW_COLS_PART" \
         --arg vSrc "$ACTUAL_SRC" --arg vFile "${ACTUAL_PLAN:+$ACTUAL_NAME}" --arg vResult "$ACTUAL_RESULT" \
@@ -456,8 +521,8 @@ JQ
 
 # data.js 超過 OVERVIEW_MAX_BYTES 時一級一級丟（每級都是在上一級的結果上再丟）：
 #   1 模組的路由清單（只留數量）   2 非本次 plan 的改動明細 → 目錄彙總   3 非本次 plan 的部件驗收
-#   4 非本次 plan 只留狀態（畫面仍列得出有哪些 plan）   5 地圖的本次改動清單 → 目錄彙總
-#   6 不丟東西，只加一則「仍超過上限」（五級都丟完還放不下時才跑）
+#   4 非本次 plan 只留狀態（畫面仍列得出有哪些 plan）   5 落差明細（各類數量寫進那則 notice）
+#   6 地圖的本次改動清單 → 目錄彙總   7 不丟東西，只加一則「仍超過上限」（六級都丟完還放不下時才跑）
 # 只動寫進 data.js 的那份：--actual 寫回 plan 用的是沒丟過的資料，overview.md 不受影響。
 IFS= read -r -d '' JQ_SHRINK <<'JQ'
 def note($what): .notices += [{level: "info", text: "資料超過 \($kb) KB 上限，已省略：\($what)", action: null}];
@@ -478,6 +543,10 @@ def note($what): .notices += [{level: "info", text: "資料超過 \($kb) KB 上�
          phases: [], hasParts: false, parts: [], extraMore: 0, changes: [], changesRollup: [], stub: true} end)
     | note("非本次 plan 的內容（只留狀態）")
   elif $level == 5 then
+    ([.drift // {} | to_entries[] | select((.value | length) > 0) | "\(.key) \(.value | length)"] | join("、")) as $c
+    | .drift |= map_values([])
+    | note("落差明細（只留數量：\($c)）")
+  elif $level == 6 then
     .changesRollup = ((.changes + (.changesRollup // [])) | rollup) | .changes = []
     | note("地圖上的本次改動清單（改成依目錄彙總）")
   else
@@ -654,10 +723,16 @@ def parse_ledger:
 | ($archPath != "") as $hasArch
 | ($hasArch and ($arch | contains($draftMark))) as $draft
 | ($demo or ($hasArch | not) or $draft) as $nodoc
+# 自動段（--sync-arch 寫的模組表與依賴圖）是這支自己的輸出，不能再當 5.5／5.1 讀回來。
+# 標記不成對時不剝（--sync-arch 也拒寫），照整份讀
+| ($arch | lines as $L
+   | ([range(0; $L | length) | select($L[.] | startswith($genStart))]) as $a
+   | ([range(0; $L | length) | select($L[.] | startswith($genEnd))]) as $b
+   | if ($a | length) == 1 and ($b | length) == 1 and $a[0] < $b[0] then $L[:$a[0]] + $L[$b[0] + 1:] | join("\n") else . end) as $archBody
 
 # ---- 5.5 模組表：第一張表頭同時有 id 與 路徑 的表
 | (if $nodoc then null else
-    [$arch | tables[] | select(.header as $h | all($needMod[]; . as $c | $h | index($c)))] | first
+    [$archBody | tables[] | select(.header as $h | all($needMod[]; . as $c | $h | index($c)))] | first
    end) as $mt
 | ([$mt // empty | .header as $h | .rows[] | rowobj($h)
     | {id: (.id | unbt), name: ((.["模組"] // "") | unbt | clean),
@@ -668,7 +743,7 @@ def parse_ledger:
 
 # ---- 5.1 容器圖：節點 id 與模組表重疊最多的 graph／flowchart 區塊；同分取前面的
 | (if ($docValid | not) then null else
-    [$arch | mermaid_blocks | to_entries[] | (.value | parse_block) as $b
+    [$archBody | mermaid_blocks | to_entries[] | (.value | parse_block) as $b
      | select($b.kind == "flow" and ($b.nodes | length) > 0)
      | {i: .key, b: $b, score: ([$b.nodes[].id as $n | $rows[] | select(.id == $n)] | length)}]
     | sort_by(-.score, .i) | first | .b
@@ -711,10 +786,9 @@ def parse_ledger:
 | ([$wt[] | .h as $ms | (.header | index($wcol) != null) as $hasCol | .header as $h | .rows[] | rowobj($h)
     | select(.["#"] | unbt | blank | not)
     | (.["狀態"] | tstate) as $st
-    | {id: (.["#"] | unbt), title: (.["任務"] | trim), status: ($st | temoji), state: $st,
+    | {id: (.["#"] | unbt), title: (.["任務"] | trim), status: ($st | temoji), state: $st, statusText: (.["狀態"] // ""),
        milestone: $ms, hasCol: $hasCol,
        modules: (if $hasCol then (.[$wcol] | splitlist) else [] end)}]) as $tasks0
-| ([$tasks0[] | .modules |= map(select(. as $m | $modIds | index($m)))]) as $tasks
 | ([$tasks0[] | .id as $t | .modules[] | select(. as $m | $modIds | index($m) | not) | "\($t)（\(.)）"]) as $unknownMods
 | ($tasks0 | map(select(.hasCol | not)) | length) as $noColCount
 
@@ -737,10 +811,10 @@ def parse_ledger:
   def changes_for($src; $name):
     ($PB[$src + "|" + $name]) as $lb
     | if $lb != null and $CH[$src + "|" + $lb] != null then
-        {base: $lb[:7], list: ((($CH[$src + "|" + $lb] // []) + ($CH[$src + "|untracked"] // [])) | unique_by(.file))}
+        {base: $lb[:7], ledger: true, list: ((($CH[$src + "|" + $lb] // []) + ($CH[$src + "|untracked"] // [])) | unique_by(.file))}
       else ($BS[$src + "|default"] // {kind: "none"}) as $d
-        | if $d.kind == "none" or $d.kind == "fallback" then {base: null, list: []}
-          else {base: $d.short, list: srcchanges($src)} end
+        | if $d.kind == "none" or $d.kind == "fallback" then {base: null, ledger: false, list: []}
+          else {base: $d.short, ledger: false, list: srcchanges($src)} end
       end;
 
   def build_plan($rec):
@@ -795,6 +869,10 @@ def parse_ledger:
        changes: [$ch[] | {file, added, removed, new, part, planned, module}],
        changesRollup: ($cf.list[$maxChanges:] | rollup),
        modules: ($touch | map(.module) | unique),
+       # 任務推斷的兩個來源（提案 3.3）：files: 對到的模組；帳本 BASE 之後的 diff 對到的模組。
+       # 沒有帳本時的預設基準是整條分支的改動，每份 plan 都一樣，不能拿來推斷某個任務
+       _fileMods: ([$pp.files[] | globmod | select(. != null)] | unique),
+       _diffMods: (if $cf.ledger then [$cf.list[] | .file | modof | select(. != null)] | unique else [] end),
        _touch: $touch, _mtime: $rec.mtime, _text: $rec.text};
   def progress: [(.phases | map(select(.state == "done")) | length), (.verify != null), ._mtime];
 
@@ -802,6 +880,35 @@ def parse_ledger:
     | {src: .head[0], name: .head[1], text, mtime: ($MT[.head[0] + "|" + .head[1]] // 0)}]) as $recs
 | ([$recs[] | . as $r | build_plan($r)]) as $built
 | ([$built[] | select(.source == "main")] | sort_by(.file)) as $mainPlans
+
+# ---- 任務對到模組（提案 3.3）：WBS 明標的一律優先；沒有模組欄、或該列是 — → plan 的 files:，
+# 沒有 files:（或對不到模組）再用帳本 BASE 之後的 diff。只看主 checkout 的 plan：overview.md 與 data.js 才一致。
+# 同一任務有多份 plan 時取檔名排序第一份推斷得出的
+| (reduce $mainPlans[] as $pl ({};
+     if $pl.task == null or .[$pl.task] != null then .
+     elif ($pl._fileMods | length) > 0 then .[$pl.task] = {mods: $pl._fileMods, by: "plan-files"}
+     elif ($pl._diffMods | length) > 0 then .[$pl.task] = {mods: $pl._diffMods, by: "diff"}
+     else . end)) as $PM
+| ([$tasks0[] | ($PM[.id] // null) as $pm
+    | if (.modules | length) > 0 then . + {modules: [.modules[] | select(. as $m | $modIds | index($m))], inferred: false, inferredBy: null}
+      elif $pm != null then . + {modules: $pm.mods, inferred: true, inferredBy: $pm.by}
+      else . + {inferred: false, inferredBy: null} end]) as $tasks
+
+# ---- 落差（提案第 4 節）。給畫面與 overview.md；項目的欄位見 data.js 的 drift
+| {codeNotInDoc: (if $docValid then [$mods0[] | select(.source == "scan" and .id != "other")
+                                     | {module: .id, name, paths, fileCount: ($FC[.id] // 0)}] else [] end),
+   docNotInCode: (if $docValid then [$mods0[] | select(.source == "doc" and (.paths | length) > 0) | {module: .id, name, paths}] else [] end),
+   taskModuleMismatch: [$tasks[] | select((.inferred | not) and (.modules | length) > 0) | . as $t | ($PM[.id] // null) as $pm
+                        | select($pm != null and ([$pm.mods[] | select(. as $m | $t.modules | index($m))] | length) == 0)
+                        | {task: .id, declared: .modules, actual: $pm.mods, by: $pm.by}],
+   wbsUnknownModule: [$tasks0[] | .id as $t | ($PM[$t].mods // []) as $pmm | .modules[] | select(. as $m | $modIds | index($m) | not)
+                      | . as $m
+                      | {task: $t, module: $m,
+                         suggest: (([$pmm[] | select(. != $m)] | first)
+                                   // ([$modIds[] | select(. != "other") | . as $i
+                                        | select(($i | length) >= 3 and ($m | length) >= 3 and (($m | startswith($i)) or ($i | startswith($m))))] | first)
+                                   // null)}],
+   tasksInferred: [$tasks[] | select(.inferred) | {task: .id, modules, inferredBy}]} as $drift
 
 # worktree overlay：同名 plan 取進度較新的那份（內容相同就算主 checkout 的）。進到這裡的 worktree plan
 # 只有它改過或沒進版控的（沒動過的版控副本在 gather_source 就濾掉了），所以主 checkout 已歸檔的不會復活。
@@ -830,6 +937,53 @@ def parse_ledger:
 | ($plans0 | map(. + {current: (.file as $f | any($currents[]; .plan == $f))})
    | sort_by([(if .current then 0 else 1 end), .file])) as $plans
 | ([$plans[] | select(.current and .task == null) | .modules[]] | unique) as $curMods
+
+# ---- plan 疊層（ADR-007 第 3 點）：本次 plan 的進度與「預計會動的模組」（files: 對到的模組）。
+# 「預計但沒動／沒預計卻動了」沿用 mods_with 的 mismatch，不另比
+| def phinfo($pl):
+    if $pl == null then {phase: null, phases: null, activePhases: []}
+    else ([$pl.phases[] | select(.state == "wip") | .n]) as $w
+      | {phase: $pl.currentPhase, phases: ($pl.phases | length),
+         activePhases: (if ($w | length) > 0 then $w elif $pl.currentPhase != null then [$pl.currentPhase] else [] end)} end;
+  ($currents | map(. as $c | . + phinfo([$plans[] | select(.file == $c.plan)] | first))) as $cx
+| ([$cx[] | .plan as $f | $plans[] | select(.file == $f) | ._fileMods[]] | unique) as $plannedMods
+
+# ---- 一頁現況（ADR-007 第 2 點）：overview.md 開頭「## 現況」與 data.js 的 status 是同一份，只看主 checkout。
+# WBS 的完成日多半只寫 MM-DD：當作今年，比今天晚就算去年
+| def daynum($y; $m; $d):
+    (if $m <= 2 then $y - 1 else $y end) as $Y
+    | ($Y / 400 | floor) as $era | ($Y - $era * 400) as $yoe
+    | (((153 * (if $m > 2 then $m - 3 else $m + 9 end) + 2) / 5 | floor) + $d - 1) as $doy
+    | $era * 146097 + $yoe * 365 + ($yoe / 4 | floor) - ($yoe / 100 | floor) + $doy;
+  ($now[:10] | split("-") | map(tonumber)) as $today
+| daynum($today[0]; $today[1]; $today[2]) as $todayN
+| def doneday:
+    ((.statusText | capture("(?<y>[0-9]{4})-(?<m>[0-9]{1,2})-(?<d>[0-9]{1,2})"))
+     // (.statusText | capture("(?<m>[0-9]{1,2})[-/](?<d>[0-9]{1,2})") | . + {y: null})
+     // null)
+    | if . == null then null
+      else (.m | tonumber) as $m | (.d | tonumber) as $d
+        | if .y != null then daynum(.y | tonumber; $m; $d)
+          else daynum($today[0]; $m; $d) as $n | if $n > $todayN then daynum($today[0] - 1; $m; $d) else $n end end
+      end;
+  (reduce ($tasks[] | .milestone) as $m ([]; if any(.[]; . == $m) then . else . + [$m] end)) as $msNames
+| ([$tasks[] | select(.state == "wip") | . as $t | ([$mainPlans[] | select(.task == $t.id)] | first) as $pl
+    | {task: .id, title, plan: ($pl.file // null)} + phinfo($pl)]) as $wip
+| ({name: ($p.name // "（未命名專案）"),
+   oneLiner: (if $oneLiner == "" then null else $oneLiner end),
+   milestones: [$msNames[] as $m | [$tasks[] | select(.milestone == $m)] as $ts
+                | {name: $m, done: ([$ts[] | select(.state == "done")] | length),
+                   total: ([$ts[] | select(.state != "skip")] | length), state: ([$ts[].state] | modstatus)}],
+   inProgress: $wip[:5], inProgressMore: ([($wip | length) - 5, 0] | max),
+   blocked: [$tasks[] | select(.state == "blocked") | {task: .id, title}],
+   next: ([$tasks[] | select(.state == "todo") | {task: .id, title}] | first // null),
+   recentDays: 14,
+   recentDone: ([$tasks[] | select(.state == "done") | doneday | select(. != null and $todayN - . >= 0 and $todayN - . < 14)] | length),
+   drift: ({total: ([$drift[] | length] | add // 0)} + ($drift | map_values(length)))}
+  # line：畫面頁首的一行摘要（X17，畫面讀到物件就顯示 status.line）。第一個還沒完成的里程碑＋三個數
+  | . + {line: ([(.milestones | map(select(.state != "done")) | first // empty | "\(.name) \(.done)/\(.total)"),
+                "進行中 \($wip | length) 項", "阻塞 \(.blocked | length) 項", "落差 \(.drift.total) 項"] | join("・"))})
+  as $status
 
 # ---- 地圖上的「本次改動」：主 checkout ＋ 有 plan 或 .current-task 的 worktree
 | ([$BS | keys[] | select(endswith("|default")) | rtrimstr("|default") | select(. != "main")] | sort) as $wtSrcs
@@ -868,10 +1022,11 @@ def parse_ledger:
     | select(.from as $a | .to as $b | ($modIds | index($a)) and ($modIds | index($b)))]
    | reduce .[] as $e ([]; if any(.[]; .from == $e.from and .to == $e.to) then . else . + [$e] end)
    | map(. + {source: "doc"})) as $dedges
-# import 邊：逐檔紀錄依合併後的歸屬彙總；第三方（pkg:…）與模組內的 import 不成邊。與文件邊重複的不另畫
-| ([($sk.imports // [])[] | select(.[2] == "import") | [$FM[.[0]], $FM[.[1]]]
+# 程式碼邊：逐檔紀錄（import、前端呼叫後端路由的 http）依合併後的歸屬彙總；第三方（pkg:…）與模組內的不成邊。
+# 與文件邊重複的不另畫
+| ([($sk.imports // [])[] | select(.[2] == "import" or .[2] == "http") | [$FM[.[0]], $FM[.[1]], .[2]]
     | select(.[0] != null and .[1] != null and .[0] != .[1])]
-   | group_by(.) | map({from: .[0][0], to: .[0][1], label: "", weight: length, source: "import"})) as $iedges
+   | group_by(.) | map({from: .[0][0], to: .[0][1], label: "", weight: length, source: .[0][2]})) as $iedges
 | ($dedges | map({key: "\(.from)\t\(.to)", value: true}) | from_entries) as $dpair
 | ($dedges + [$iedges[] | select($dpair["\(.from)\t\(.to)"] | not)]) as $edges
 | (reduce $groups[] as $g ({col: 0, pos: {}};
@@ -889,7 +1044,7 @@ def parse_ledger:
    ) | .pos) as $pos
 
 # ---- 模組燈號：WBS 的判法（modstatus）＋「掛在這個模組的 plan 最近一次 /verify 是 FAIL → 有問題」
-| def mods_with($plans; $curTasks; $curMods; $chg):
+| def mods_with($plans; $curTasks; $curMods; $chg; $planned):
     $mods0 | map(
       .id as $id
       | [$tasks[] | select(.modules | index($id))] as $own
@@ -911,7 +1066,7 @@ def parse_ledger:
              current: (any($ownIds[]; . as $t | $curTasks | index($t)) or ($curMods | index($id) != null)),
              changed: ([$chg[] | select(.module == $id)] | length),
              mismatch: [$plans[] | select(.task != null) | .task as $t
-                        | ([$tasks[] | select(.id == $t) | .modules[]]) as $decl
+                        | ([$tasks[] | select(.id == $t and (.inferred | not)) | .modules[]]) as $decl
                         | .modules as $tch
                         | select(($decl | length) > 0 and ($tch | length) > 0)
                         | if ($decl | index($id)) and ($tch | index($id) | not) then {task: $t, kind: "declared-not-touched", files: []}
@@ -922,7 +1077,7 @@ def parse_ledger:
              fileCount: ($FC[$id] // 0),
              routes: {count: (($RT[$id] // []) | length), sample: (($RT[$id] // [])[:20])},
              description: null,
-             planned: false});
+             planned: ($planned | index($id) != null)});
   def notices_for($plans): [
     (if $demo then {level: "info", text: "demo 情境沒有架構文件，專案地圖不會出現（之後的任務圖仍可用）", action: "/docs-init --mvp"} else empty end),
     (if $draft then {level: "warn", text: "架構草稿待確認：\($archPath) 帶 `\($draftMark)` 標記，地圖照畫，但不拿它覆寫模組名稱；確認模組切分後移除標記", action: "確認後由主模型移除標記"} else empty end),
@@ -931,18 +1086,24 @@ def parse_ledger:
     (if $docValid and $dg == null then {level: "info", text: "架構文件沒有可解析的容器圖（5.1 mermaid），模組全部放在「未分組」", action: null} else empty end),
     ([$docMods[] | select(.declared | not) | .id] | if length > 0 then {level: "warn", text: "容器圖有、模組表沒有的節點（灰色虛線）：\(join("、"))", action: "在 5.5 補上這幾列"} else empty end),
     ([$rows[] | select(.id as $i | $dgIds | index($i) | not) | .id] | if length > 0 and $dg != null then {level: "info", text: "模組表有、容器圖沒畫的模組（放在「未分組」）：\(join("、"))", action: "在 5.1 補上節點"} else empty end),
-    (if ($tasks0 | length) > 0 and $noColCount == ($tasks0 | length) and ($demo | not) then {level: "warn", text: "WBS 沒有模組欄，任務無法對到模組", action: "/task-status（會提議補欄）"}
-     elif $noColCount > 0 and ($demo | not) then {level: "warn", text: "WBS 有 \($noColCount) 個任務所在的節沒有模組欄", action: "/task-status（會提議補欄）"} else empty end),
+    # 「還沒對到模組」只出一則：推斷補上的不算，推斷不出的才算
+    (([$tasks[] | select(.inferred)] | length) as $ni | ([$tasks[] | select(.modules | length == 0)] | length) as $nu
+     | ([(if $ni > 0 then "\($ni) 個任務的模組由 plan 推斷" else empty end), (if $nu > 0 then "\($nu) 個任務還沒對到模組" else empty end)]
+        | join("，")) as $why
+     | if ($demo | not) and ($tasks0 | length) > 0 and $noColCount == ($tasks0 | length) then
+         {level: (if $nu > 0 then "warn" else "info" end), text: "WBS 沒有模組欄：\($why)", action: "/task-status（會提議補欄並寫回推斷結果）"}
+       elif ($demo | not) and $noColCount > 0 then
+         {level: "warn", text: "WBS 有 \($noColCount) 個任務所在的節沒有模組欄\(if $why != "" then "：\($why)" else "" end)", action: "/task-status（會提議補欄並寫回推斷結果）"}
+       else empty end),
     ($unknownMods | if length > 0 and ($demo | not) then {level: "warn", text: "任務標了模組表沒有的模組：\(.[:8] | join("、"))", action: "改 WBS 模組欄或補架構文件 5.5"} else empty end),
     (($sk.notices // [])[]),
     ([$plans[] | select(.base == null and (.status | test("✅") | not)) | .file] | if length > 0 then {level: "warn", text: "找不到比較基準（帳本沒有 BASE=，也找不到預設分支），列不出這幾份 plan 改了哪些檔：\(join("、"))", action: "帳本記 BASE=<commit>（subagent-execution）"} else empty end),
     ([$plans[] | select((.hasParts | not) and (.status | test("✅") | not)) | .file] | if length > 0 then {level: "info", text: "這幾份 plan 沒有「一眼看懂」部件表，任務圖只列得出改了哪些檔：\(join("、"))", action: "格式見 plan-format skill"} else empty end)
   ];
-  def public: map(del(._touch, ._mtime, ._text));
-  # plan 疊層（phase／phases／activePhases）與 status 由階段 2 填；這裡先放預設值，畫面才能先照合約排版
-  ($currents | map(. + {phase: null, phases: null, activePhases: []})) as $cx
+  def public: map(del(._touch, ._mtime, ._text, ._fileMods, ._diffMods));
+  def taskout: [$tasks[] | {id, title, status, state, milestone, modules, inferred, inferredBy}];
 
-| {schema: 2,
+  {schema: 2,
    generatedAt: $now,
    generator: {script: "overview.sh", version: 3},
    truncated: (($chAll | length) > $maxChanges or any($plans[]; (.changesRollup | length) > 0)),
@@ -950,16 +1111,16 @@ def parse_ledger:
              architectureDoc: (if $hasArch then $archPath else null end), architectureDraft: $draft},
    scan: (if $sk.scan == null then null
           else $sk.scan + {modules: ($mods0 | length), edges: ($iedges | length), ms: $scanMs, cached: ($scanState == "cached")} end),
-   status: null,
+   status: $status,
    notices: notices_for($plans),
    current: ($cx[0] // null),
    currents: $cx,
    groups: $groups,
-   modules: mods_with($plans; $curTasks; $curMods; $changesList),
+   modules: mods_with($plans; $curTasks; $curMods; $changesList; $plannedMods),
    edges: $edges,
-   tasks: [$tasks[] | del(.hasCol) + {inferred: false, inferredBy: null}],
-   drift: {codeNotInDoc: [], docNotInCode: [], taskModuleMismatch: [], wbsUnknownModule: [], tasksInferred: []},
-   unmappedTasks: [$tasks0[] | select(.modules | length == 0) | .id],
+   tasks: taskout,
+   drift: $drift,
+   unmappedTasks: [$tasks[] | select(.modules | length == 0) | .id],
    changesBase: (($BS["main|default"] // {}) | if (.short // "") != "" then {commit: .short, defaultBranch: .def} else null end),
    changes: $changesList,
    changesRollup: ($chAll[$maxChanges:] | rollup),
@@ -968,10 +1129,13 @@ def parse_ledger:
   {project: {name: ($p.name // "（未命名專案）")},
    notices: notices_for($mainPlans),
    groups: $groups,
-   modules: mods_with($mainPlans; []; []; []),
+   modules: mods_with($mainPlans; []; []; []; []),
    edges: $edges,
-   tasks: [$tasks[] | del(.hasCol)],
-   unmappedTasks: [$tasks0[] | select(.modules | length == 0) | .id],
+   codeEdges: $iedges,
+   tasks: taskout,
+   drift: $drift,
+   status: $status,
+   unmappedTasks: [$tasks[] | select(.modules | length == 0) | .id],
    archived: $archived,
    plans: ($mainPlans | public)}
 JQ
@@ -1029,6 +1193,43 @@ JQ
 
 # overview.md：只反映主 checkout（md.json），不含 generatedAt、「本次」、地圖的本次改動
 IFS= read -r -d '' JQ_MD <<'JQ'
+def dname: {codeNotInDoc: "程式有、架構文件沒寫的模組", docNotInCode: "架構文件寫了、程式沒有的模組",
+            taskModuleMismatch: "WBS 標的模組與 plan 碰到的不同", wbsUnknownModule: "WBS 標了不存在的模組",
+            tasksInferred: "模組由 plan 推斷的任務"}[.] // .;
+def dnext: {codeNotInDoc: "委派 architect 補進架構文件，或不理它", docNotInCode: "程式已搬家或刪掉，架構文件要跟著改",
+            taskModuleMismatch: "改 WBS 的模組欄，或確認是跨模組任務", wbsUnknownModule: "照括號裡的建議改 WBS 的模組 id",
+            tasksInferred: "/task-status 可提議寫回 WBS"}[.] // "";
+def ditem($k):
+  if $k == "codeNotInDoc" then "`\(.module)`"
+  elif $k == "docNotInCode" then "`\(.module)`（\(.paths | map("`\(.)`") | join(", "))）"
+  elif $k == "taskModuleMismatch" then "\(.task) 標 \(.declared | join("、"))、實際在 \(.actual | join("、"))"
+  elif $k == "wbsUnknownModule" then "\(.task) 的 `\(.module)`\(if .suggest then "（可能是 `\(.suggest)`）" else "" end)"
+  else "\(.task) → \(.modules | join("、"))（\(.inferredBy)）" end;
+def dshort: {codeNotInDoc: "文件沒寫的模組", docNotInCode: "程式沒有的模組", taskModuleMismatch: "任務模組不符",
+             wbsUnknownModule: "WBS 寫錯的模組", tasksInferred: "推斷的任務"}[.] // .;
+def bar($n; $t): (if $t > 0 then ($n * 5 / $t | round) else 0 end) as $f | [(range(0; $f) | "█"), (range($f; 5) | "░")] | join("");
+def msicon: {done: "✅", wip: "🔄", issue: "🚫", todo: "⏳"}[.] // "";
+def phtext: if (.activePhases | length) > 0 and .phases != null then "（plan 第 \(.activePhases | map(tostring) | join("、"))／\(.phases) 階段）"
+            elif .plan != null then "（plan 未開始）" else "" end;
+# 一頁現況（≤ 30 行）：--status 只印這一節，/task-status 直接轉貼。每一列都以關鍵字開頭，空的寫「無」
+def statuslines:
+  . as $s
+  | "## 現況 — \($s.name)", "",
+    ($s.oneLiner // empty | ., ""),
+    (if ($s.milestones | length) == 0 then "- 里程碑 （WBS 沒有任務）"
+     else ($s.milestones[:8][] | "- 里程碑 \(.name) \(bar(.done; .total)) \(.done)/\(.total) \(.state | msicon)"),
+          (if ($s.milestones | length) > 8 then "- 里程碑 另有 \(($s.milestones | length) - 8) 個沒列出" else empty end) end),
+    "- 進行中 \(if ($s.inProgress | length) == 0 then "無"
+               else ([$s.inProgress[] | "\(.task) \(.title)\(phtext)"] | join(" ・ "))
+                    + (if $s.inProgressMore > 0 then " 等另 \($s.inProgressMore) 個" else "" end) end)",
+    "- 阻塞 \(if ($s.blocked | length) == 0 then "無"
+             else ([$s.blocked[:5][] | "\(.task) \(.title)"] | join(" ・ "))
+                  + (if ($s.blocked | length) > 5 then " 等共 \($s.blocked | length) 個" else "" end) end)",
+    "- 下一個 \(if $s.next then "\($s.next.task) \($s.next.title)" else "無" end)",
+    "- 最近 \($s.recentDays) 天 完成 \($s.recentDone) 項",
+    "- 落差 \(if $s.drift.total == 0 then "無"
+             else "\($s.drift.total) 項（\([$s.drift | to_entries[] | select(.key != "total" and .value > 0) | "\(.key | dshort) \(.value)"] | join("・"))；見地圖）" end)",
+    "";
 . as $d
 | ($d.modules | to_entries | map({key: .value.id,
     value: (if (.value.id | test("^[A-Za-z0-9_-]+$")) and (.value.id as $i | RESERVED | index($i) | not)
@@ -1037,10 +1238,12 @@ IFS= read -r -d '' JQ_MD <<'JQ'
   "<!-- 由 .claude/scripts/overview.sh 產生，勿手改。互動版：.claude/taskmaster-data/overview/index.html -->",
   "# 專案圖解 — \($d.project.name)",
   "",
-  ($d.notices[] | "> \(if .level == "warn" then "⚠️" else "ℹ️" end) \(.text)\(if .action then "（→ \(.action)）" else "" end)"),
-  (if ($d.notices | length) > 0 then "" else empty end),
+  # 現況在最前面（第一個二級標題）；提示放進專案地圖節，--status 才不會把它們一起印出去
+  ($d.status | statuslines),
   "## 專案地圖",
   "",
+  ($d.notices[] | "> \(if .level == "warn" then "⚠️" else "ℹ️" end) \(.text)\(if .action then "（→ \(.action)）" else "" end)"),
+  (if ($d.notices | length) > 0 then "" else empty end),
   (if ($d.modules | length) == 0 then "（沒有可畫的模組，原因見上方提示）" else
     ("```mermaid",
      "flowchart LR",
@@ -1064,6 +1267,13 @@ IFS= read -r -d '' JQ_MD <<'JQ'
   end),
   (if ($d.unmappedTasks | length) > 0 then ("", "沒有對到模組的任務：\($d.unmappedTasks | join("、"))") else empty end),
   (if ($d.archived.unmapped // 0) > 0 then ("", "已歸檔的完成任務有 \($d.archived.unmapped) 個沒有標模組（歸檔時還沒有模組欄），不算進任何模組") else empty end),
+  # 五類都是 0 時整節不出現；每類列數量與前 10 項
+  (($d.drift // {}) | [to_entries[] | select((.value | length) > 0)] as $ds
+   | if ($ds | length) == 0 then empty
+     else ("", "## 落差", "",
+           ($ds[] | .key as $k
+            | "- **\($k | dname)** \(.value | length) 項（→ \($k | dnext)）：\(.value[:10] | map(ditem($k)) | join("、"))\(if (.value | length) > 10 then " 等" else "" end)"))
+     end),
   "",
   "## 任務圖",
   "",
@@ -1101,30 +1311,122 @@ IFS= read -r -d '' JQ_ACTUAL <<'JQ'
 ] | join("\n")
 JQ
 
+# 架構文件自動段（--sync-arch，ADR-007 第 1 點、提案 7.2）：一行說明、mermaid（每個分組一個 subgraph，
+# 邊取程式碼的 import 與 http；超過 60 條只畫跨分組的）、模組表。只看主 checkout（md.json）
+IFS= read -r -d '' JQ_ARCH <<'JQ'
+. as $d
+| ($d.modules | to_entries | map({key: .value.id,
+    value: (if (.value.id | test("^[A-Za-z0-9_-]+$")) and (.value.id as $i | RESERVED | index($i) | not)
+            then .value.id else "m\(.key + 1)" end)}) | from_entries) as $sid
+| ($d.modules | map({key: .id, value: .group}) | from_entries) as $G
+| ($d.groups | map({key: .id, value: .label}) | from_entries) as $GL
+| ([($d.codeEdges // [])[] | select($sid[.from] != null and $sid[.to] != null)]) as $E
+| (if ($E | length) > 60 then [$E[] | select($G[.from] != $G[.to])] else $E end) as $E2
+| [
+  "（此段由專案地圖產生，手改會被覆蓋。改模組名稱或分組請改 `.claude/taskmaster-data/module-notes.md`）",
+  "",
+  (if ($d.modules | length) == 0 then "（沒有掃到模組）" else
+    ("```mermaid",
+     "flowchart LR",
+     ($d.groups | to_entries[] | .key as $gi | .value as $g | [$d.modules[] | select(.group == $g.id)] as $ms
+       | select(($ms | length) > 0)
+       | "  subgraph sg\($gi + 1)[\"\($g.label | lab)\"]", ($ms[] | "    \($sid[.id])[\"\(.name | lab)\"]"), "  end"),
+     ($E2[] | "  \($sid[.from]) -->\(if .source == "http" then "|HTTP|" else "" end) \($sid[.to])"),
+     "```",
+     (if ($E | length) > 60 then ("", "依賴線共 \($E | length) 條，超過 60 條只畫跨分組的 \($E2 | length) 條。") else empty end))
+  end),
+  "",
+  "| id | 模組 | 分組 | 路徑 | 檔數 | 路由數 | 說明 |",
+  "|---|---|---|---|---|---|---|",
+  ($d.modules[] | "| \(.id) | \(.name | cell) | \(($GL[.group] // .group) | cell) | \(if (.paths | length) > 0 then (.paths | map("`\(.)`") | join(", ")) else "—" end) | \(.fileCount // 0) | \(.routes.count // 0) | \((.description.text // .responsibility // "") | if . == "" then "—" else cell end) |")
+] | join("\n")
+JQ
+
+# 換掉架構文件兩個標記之間的內容。整份讀成一筆（RS 用不會出現的 \001），用 index 找行首的標記，
+# 標記外原樣 printf 回去——檔尾有沒有換行、CRLF 都保留；標記區用文件 start 那一行的換行。
+# exit 3＝沒有標記；4＝不成對（stderr 說明）。
+# BINMODE=3（呼叫端也用 -v 給）：Git Bash 的 gawk 預設讀檔就把 CRLF 的 CR 吃掉，寫回去整份變 LF；
+# mawk 沒有這個變數，當一般變數無害。區塊要先用預設的 RS 逐行讀完才換 RS，否則整份 gen.md 會變成一筆
+IFS= read -r -d '' AWK_SPLICE_GEN <<'AWK'
+BEGIN {
+    BINMODE = 3
+    while ((getline l < blk) > 0) { sub(/\r$/, "", l); B[++nb] = l }
+    close(blk)
+    RS = "\001"
+}
+{ s = NR > 1 ? s RS $0 : $0 }
+END {
+    t = "\n" s; ns = 0; ne = 0
+    for (p = 1; (i = index(substr(t, p), "\n" S)) > 0; p += i) { ns++; if (ns == 1) sp = p + i - 1 }
+    for (p = 1; (i = index(substr(t, p), "\n" E)) > 0; p += i) { ne++; if (ne == 1) ep = p + i - 1 }
+    if (ns == 0 && ne == 0) exit 3
+    if (ns != 1 || ne != 1 || ep < sp) { printf "start %d 個、end %d 個%s", ns, ne, (ns == 1 && ne == 1 ? "（end 在 start 前）" : "") > "/dev/stderr"; exit 4 }
+    j = index(substr(s, sp), "\n")
+    if (j == 0) { printf "start 標記後面沒有換行" > "/dev/stderr"; exit 4 }
+    head = substr(s, 1, sp + j - 1)
+    nl = substr(s, sp + j - 2, 1) == "\r" ? "\r\n" : "\n"
+    printf "%s", head
+    for (k = 1; k <= nb; k++) printf "%s%s", B[k], nl
+    printf "%s", substr(s, ep)
+}
+AWK
+
 # 把區塊換進 plan：有舊區塊就原地取代，沒有就接在檔尾。區塊外一個 byte 都不動。
 # 標記在啟動時檢查過，這裡再查一次：等鎖與產生的期間 plan 可能被人改過。
 splice_actual() {
     local bad
     bad=$(actual_markers_bad "$ACTUAL_PLAN")
     if [ -n "$bad" ]; then markers_msg "$bad" "$ACTUAL_PLAN" > "$OUT/.last-error"; return 1; fi
-    awk -v blk="$TMP/actual.md" '
-        BEGIN { while ((getline l < blk) > 0) b = b l "\n" }
-        /^<!-- overview:actual:start/ { printf "%s", b; done = 1; skip = 1; next }
+    # BINMODE=3：理由同 AWK_SPLICE_GEN（Git Bash 的 gawk 會把 CRLF 的 plan 整份改成 LF）。區塊用 plan 第一行的換行
+    awk -v BINMODE=3 -v blk="$TMP/actual.md" '
+        function blockout(   k) { for (k = 1; k <= nb; k++) printf "%s%s", B[k], nl }
+        BEGIN { BINMODE = 3; nl = "\n"; while ((getline l < blk) > 0) { sub(/\r$/, "", l); B[++nb] = l } }
+        NR == 1 && /\r$/ { nl = "\r\n" }
+        /^<!-- overview:actual:start/ { blockout(); done = 1; skip = 1; next }
         skip && /^<!-- overview:actual:end/ { skip = 0; next }
         skip { next }
         { print; last = $0 }
-        END { if (!done) { if (NR > 0 && last != "" && last != "\r") print ""; printf "%s", b } }
+        END { if (!done) { if (NR > 0 && last != "" && last != "\r") printf "%s", nl; blockout() } }
     ' "$ACTUAL_PLAN" > "$TMP/plan.md" && mv -f "$TMP/plan.md" "$ACTUAL_PLAN"
 }
 
-# data.js 超過上限就照 JQ_SHRINK 的順序一級一級丟，直到放得下（五級都丟完仍超過就照寫，另加一則「仍超過上限」）。
+# --sync-arch：用這一輪產生的 md.json（主 checkout 的資料）寫架構文件的自動段。寫入走「暫存檔＋mv」，
+# 內容沒變就不動檔（mtime 也不變）。只在主 checkout 寫：worktree 裡的架構文件會隨分支合回來，兩邊各寫會衝突
+sync_arch() {
+    local a rc why
+    if [ "$SYNC_IN_WT" = 1 ]; then
+        echo "overview.sh --sync-arch：只在主 checkout 改寫架構文件（目前在 worktree），這次沒有寫"
+        return 0
+    fi
+    a=$(find_arch)
+    if [ -z "$a" ]; then echo "overview.sh --sync-arch：沒有架構文件，略過自動段"; return 0; fi
+    if ! ( cd "$TMP" && LC_ALL=C.UTF-8 jq -r -f arch.jq md.json > gen.md 2> err ); then
+        echo "overview.sh --sync-arch：自動段產生失敗（arch.jq）：$(cat "$TMP/err")" >&2
+        return 1
+    fi
+    ( cd "$TMP" && LC_ALL=C awk -v BINMODE=3 -v blk=gen.md -v S="$OVERVIEW_GEN_START" -v E="$OVERVIEW_GEN_END" \
+          "$AWK_SPLICE_GEN" "$MAIN_ROOT/$a" > arch.new 2> err ); rc=$?
+    case $rc in
+        0)  if cmp -s "$TMP/arch.new" "$MAIN_ROOT/$a"; then
+                echo "架構文件自動段已是最新：$a"
+            else
+                mv -f "$TMP/arch.new" "$MAIN_ROOT/$a" && echo "已更新架構文件自動段：$a"
+            fi ;;
+        3)  echo "$a 沒有自動段標記（$OVERVIEW_GEN_START／$OVERVIEW_GEN_END），沒有寫入；標記放在哪見 05 範本第 4 節" ;;
+        *)  why=$(cat "$TMP/err" 2>/dev/null)
+            echo "overview.sh --sync-arch：$a 的自動段標記不成對（${why:-awk 失敗}），整份沒有寫入。修法：只留一組 $OVERVIEW_GEN_START 與 $OVERVIEW_GEN_END（start 在前、各占一行），或兩行都刪掉" >&2
+            return 1 ;;
+    esac
+}
+
+# data.js 超過上限就照 JQ_SHRINK 的順序一級一級丟，直到放得下（六級都丟完仍超過就照寫，另加一則「仍超過上限」）。
 # 常態只多一次 wc：放得下就什麼都不做。80 是 data.js 外殼（註解行＋賦值）的位元組數。
 shrink_data() {
     local level size
     size=$(wc -c < "$TMP/data.json")
     [ $((size + 80)) -le "$MAX_BYTES" ] && return 0
     cp -f "$TMP/data.json" "$TMP/view.json"
-    for level in 1 2 3 4 5 6; do
+    for level in 1 2 3 4 5 6 7; do
         ( cd "$TMP" && LC_ALL=C.UTF-8 jq -c --argjson level "$level" --argjson kb $((MAX_BYTES / 1024)) \
             -f shrink.jq view.json > shrunk.json 2> err ) || return 1
         mv -f "$TMP/shrunk.json" "$TMP/view.json"
@@ -1172,13 +1474,18 @@ printf '%s\n%s\n' "$JQ_ROLLUP" "$JQ_MAIN" > "$TMP/overview.jq"
 printf '%s\n%s\n' "$JQ_ROLLUP" "$JQ_SHRINK" > "$TMP/shrink.jq"
 printf '%s\n%s\n' "$JQ_MDDEFS" "$JQ_MD" > "$TMP/md.jq"
 printf '%s\n%s\n' "$JQ_MDDEFS" "$JQ_ACTUAL" > "$TMP/actual.jq"
-RC=0
+printf '%s\n%s\n' "$JQ_MDDEFS" "$JQ_ARCH" > "$TMP/arch.jq"
+RC=0 SYNC_RC=0
 for _ in 1 2 3; do
     rm -f "$OUT/.dirty" 2>/dev/null
     if ! run_once; then RC=1; break; fi
     if [ -n "$ACTUAL_PLAN" ]; then
         printf '已寫入「計畫 vs 實際」（%s）：%s\n' "$ACTUAL_RESULT" "$ACTUAL_PLAN"
         ACTUAL_PLAN="" ACTUAL_SRC="" ACTUAL_NAME="" ACTUAL_RESULT="" ACTUAL_REASON=""
+    fi
+    if [ "$SYNC_ARCH" -eq 1 ]; then
+        sync_arch || SYNC_RC=1
+        SYNC_ARCH=0
     fi
     [ -f "$OUT/.dirty" ] || break
 done
@@ -1187,4 +1494,9 @@ if [ "$RC" -ne 0 ] && [ -n "$ACTUAL_PLAN" ]; then
     { echo "overview.sh --actual：沒有寫入，原因："; cat "$OUT/.last-error" 2>/dev/null; } >&2
     exit 1
 fi
+if [ "$RC" -ne 0 ] && [ "$SYNC_ARCH" -eq 1 ]; then
+    { echo "overview.sh --sync-arch：重產失敗，沒有同步架構文件，原因："; cat "$OUT/.last-error" 2>/dev/null; } >&2
+    exit 1
+fi
+[ "$SYNC_RC" -eq 0 ] || exit 1
 exit 0
