@@ -4213,6 +4213,17 @@ bash "$FXD/make-fixture.sh" shop-clean "$DS/shop" >/dev/null 2>&1; ds_git shop; 
 expect_eq "shop-clean → drift 五類全空、tasks[] 沒有 inferred、overview.md 沒有「## 落差」" "0 0 0" \
     "$(ds_q shop '[.drift[] | length] | add') $(ds_q shop '[.tasks[] | select(.inferred == true)] | length') $(ds_md shop | grep -c '^## 落差')"
 
+# ---- plan 疊層（A3）：shop-clean 的 .current-task 是 1.2
+DS_CP=2 ds_plan shop 1.2 "src/services/a/**" ✅ 🔄 🔄 ⏳; ds_ov shop
+expect_eq "本次任務 plan 的 files: 只有 src/services/a/** → 只有 svc-a 是 planned" "svc-a" "$(ds_q shop '[.modules[] | select(.planned) | .id] | join(",")')"
+expect_eq "plan 的階段 2、3 標題都是 🔄 → currents[].activePhases 為 [2,3]、phases 4、phase 取 current_phase" "[2,3] 4 2" \
+    "$(ds_q shop '.currents[0] | "\(.activePhases | tojson) \(.phases) \(.phase)"')"
+expect_eq "四段格式 plan（階段標題下一行是「依賴」）→ 階段名稱不含「依賴」、階段數等於 ### 階段 的數量、部件表照舊抽得到" "false 4 true" \
+    "$(ds_q shop '.plans[] | select(.task == "1.2") | "\([.phases[].name] | any(test("依賴"))) \(.phases | length) \(.hasParts)"')"
+DS_CP=1 ds_plan shop 1.2 "" ✅ ⏳ ⏳ ⏳; ds_ov shop
+expect_eq "plan 沒有 files: → 沒有任何模組 planned" 0 "$(ds_q shop '[.modules[] | select(.planned)] | length')"
+expect_eq "階段標題都不是 🔄、current_phase: 1 → activePhases 為 [1]" "[1]" "$(ds_q shop '.currents[0].activePhases | tojson')"
+
 # =========================================================================
 section "overview-scan.sh — 前後端 HTTP 連線、Maven／Gradle 慣例路徑"
 # =========================================================================

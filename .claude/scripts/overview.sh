@@ -887,6 +887,16 @@ def parse_ledger:
    | sort_by([(if .current then 0 else 1 end), .file])) as $plans
 | ([$plans[] | select(.current and .task == null) | .modules[]] | unique) as $curMods
 
+# ---- plan 疊層（ADR-007 第 3 點）：本次 plan 的進度與「預計會動的模組」（files: 對到的模組）。
+# 「預計但沒動／沒預計卻動了」沿用 mods_with 的 mismatch，不另比
+| def phinfo($pl):
+    if $pl == null then {phase: null, phases: null, activePhases: []}
+    else ([$pl.phases[] | select(.state == "wip") | .n]) as $w
+      | {phase: $pl.currentPhase, phases: ($pl.phases | length),
+         activePhases: (if ($w | length) > 0 then $w elif $pl.currentPhase != null then [$pl.currentPhase] else [] end)} end;
+  ($currents | map(. as $c | . + phinfo([$plans[] | select(.file == $c.plan)] | first))) as $cx
+| ([$cx[] | .plan as $f | $plans[] | select(.file == $f) | ._fileMods[]] | unique) as $plannedMods
+
 # ---- 地圖上的「本次改動」：主 checkout ＋ 有 plan 或 .current-task 的 worktree
 | ([$BS | keys[] | select(endswith("|default")) | rtrimstr("|default") | select(. != "main")] | sort) as $wtSrcs
 | ([(srcchanges("main")[] + {source: "main"})] + [$wtSrcs[] as $s | srcchanges($s)[] + {source: $s}]) as $chAll
@@ -946,7 +956,7 @@ def parse_ledger:
    ) | .pos) as $pos
 
 # ---- 模組燈號：WBS 的判法（modstatus）＋「掛在這個模組的 plan 最近一次 /verify 是 FAIL → 有問題」
-| def mods_with($plans; $curTasks; $curMods; $chg):
+| def mods_with($plans; $curTasks; $curMods; $chg; $planned):
     $mods0 | map(
       .id as $id
       | [$tasks[] | select(.modules | index($id))] as $own
@@ -979,7 +989,7 @@ def parse_ledger:
              fileCount: ($FC[$id] // 0),
              routes: {count: (($RT[$id] // []) | length), sample: (($RT[$id] // [])[:20])},
              description: null,
-             planned: false});
+             planned: ($planned | index($id) != null)});
   def notices_for($plans): [
     (if $demo then {level: "info", text: "demo 情境沒有架構文件，專案地圖不會出現（之後的任務圖仍可用）", action: "/docs-init --mvp"} else empty end),
     (if $draft then {level: "warn", text: "架構草稿待確認：\($archPath) 帶 `\($draftMark)` 標記，地圖照畫，但不拿它覆寫模組名稱；確認模組切分後移除標記", action: "確認後由主模型移除標記"} else empty end),
@@ -1004,10 +1014,8 @@ def parse_ledger:
   ];
   def public: map(del(._touch, ._mtime, ._text, ._fileMods, ._diffMods));
   def taskout: [$tasks[] | {id, title, status, state, milestone, modules, inferred, inferredBy}];
-  # plan 疊層（phase／phases／activePhases）與 status 由階段 2 填；這裡先放預設值，畫面才能先照合約排版
-  ($currents | map(. + {phase: null, phases: null, activePhases: []})) as $cx
 
-| {schema: 2,
+  {schema: 2,
    generatedAt: $now,
    generator: {script: "overview.sh", version: 3},
    truncated: (($chAll | length) > $maxChanges or any($plans[]; (.changesRollup | length) > 0)),
@@ -1020,7 +1028,7 @@ def parse_ledger:
    current: ($cx[0] // null),
    currents: $cx,
    groups: $groups,
-   modules: mods_with($plans; $curTasks; $curMods; $changesList),
+   modules: mods_with($plans; $curTasks; $curMods; $changesList; $plannedMods),
    edges: $edges,
    tasks: taskout,
    drift: $drift,
@@ -1033,7 +1041,7 @@ def parse_ledger:
   {project: {name: ($p.name // "（未命名專案）")},
    notices: notices_for($mainPlans),
    groups: $groups,
-   modules: mods_with($mainPlans; []; []; []),
+   modules: mods_with($mainPlans; []; []; []; []),
    edges: $edges,
    tasks: taskout,
    drift: $drift,
