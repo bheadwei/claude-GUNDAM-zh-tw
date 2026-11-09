@@ -50,11 +50,14 @@ WBS 三種模式都有，由 `/task-init` 寫進 `.claude/taskmaster-data/wbs.md
 不管有沒有帶參數都先算一次「不是 6 份之一」的 md：
 
 ```bash
-git ls-files 'docs/*.md' \
+git -c core.quotepath=false ls-files 'docs/*.md' \
   | grep -Ev '^docs/(00_brief|prd|architecture|threat-model|runbook)\.md$|^docs/(decisions|archive)/|^docs/1[27]_'
 ```
 
-（`docs/archive/` 是盤點後封存的去處，`docs/12_*`、`docs/17_*` 由 `/ui-site` 產生，都不算。）
+（`docs/archive/` 是盤點後封存的去處，`docs/12_*`、`docs/17_*` 由 `/ui-site` 產生，都不算。
+`core.quotepath=false` 不能省：預設會把中文檔名輸出成 `"docs/\344…"`，`^docs/` 就對不上。）
+
+不是 git repo 或清單為空 → 不問，直接進 1c。
 
 這份清單有 **5 份以上**，或沒有 `docs/00_brief.md` 而清單至少 1 份 → 視為既有專案，用 `AskUserQuestion` 問第一題：
 
@@ -74,8 +77,8 @@ git ls-files 'docs/*.md' \
 2. 把報告的 TL;DR 與各類檔數回述給使用者
 3. **逐批搬檔**：報告的「搬移批次」一批一題。先列出這批的檔案，再用 `AskUserQuestion` 問「第 N 批（<類>，k 檔）搬到 `docs/archive/`？」：
    搬（Recommended）／跳過這批／停在這裡。選「搬」：
-   - `git mv` 每個檔到 `docs/archive/<原本在 docs/ 底下的相對路徑>`
-   - `rg` 找 repo 內指向舊路徑的連結，改成新路徑
+   - `git mv` 每個檔到 `docs/archive/<原本在 docs/ 底下的相對路徑>`；目標已存在 → 跳過該檔並告知使用者，不覆蓋
+   - `rg` 找 repo 內指向舊路徑的連結，改成新路徑。**不含「現行，模板外」那類的檔**：交付物裡的舊連結列給使用者，不改
    - 一批一個 commit：`docs: 封存舊文件第 N 批（<類>）`，commit 裡只有 rename 與連結修正
 4. 不搬「現行，模板外」那類（交付物一個字都不改），**任何情況都不刪除檔案**
 5. **內容轉換是另一題**：搬完（或停下）後問「要從報告的『併入』類起草新格式的文件嗎？」：

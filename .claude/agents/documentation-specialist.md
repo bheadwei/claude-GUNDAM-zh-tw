@@ -76,7 +76,7 @@ model: sonnet
 被 `/docs-init` 步驟 1b 派來「盤點既有文件」時（使用者已同意）。產出只有一份報告，**不碰 `docs/`**：
 不搬、不改、不刪，也不起草新文件。
 
-1. **列檔** -- `git ls-files docs/` 列出所有追蹤中的檔；每份用 `git log -1 --format=%cs -- <路徑>` 取最後修改日、`wc -l` 取行數
+1. **列檔** -- `git ls-files docs/` 列出所有追蹤中的檔，要帶 `-c core.quotepath=false`（`git -c core.quotepath=false ls-files docs/`；不帶的話中文檔名會變成 `"docs/\344…"`）；每份用 `git log -1 --format=%cs -- <路徑>` 取最後修改日、`wc -l` 取行數
 2. **只讀開頭** -- 每份 `Read` 帶 `limit: 40`，只讀開頭 40 行，不讀全文。PDF、docx、xlsx、圖檔不讀，依檔名與位置分類，行數寫 `—`。
    40 行判斷不了的，填最可能的那類，理由欄標「待確認」
 3. **分類** -- 已經是 6 份之一的（`00_brief.md`、`prd.md`、`architecture.md`、`decisions/`、`threat-model.md`、`runbook.md`、`12_*`、`17_*`）
