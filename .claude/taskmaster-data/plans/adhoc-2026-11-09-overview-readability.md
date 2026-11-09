@@ -4,7 +4,7 @@ slug: "overview-readability"
 created: "2026-11-09"
 updated: "2026-11-09"
 status: "🔄 進行中"
-current_phase: 2
+current_phase: 3
 mode: "standard"
 files:
   - ".claude/scripts/overview.sh"
@@ -107,7 +107,7 @@ flowchart LR
   - 新案例裡的 `git init` 一律帶 `-b main` 或 `-c init.defaultBranch=main`（`context/learned/2026-11-09-test-sandbox-branch-name-depends-on-host-git-config.md`，`GITINIT_RE` 會擋）；沿用 `tg_reset` 的中文空格路徑（`context/learned/2026-11-04-jq-windows-non-ascii-path.md`）；jq 不寫 1.7 以前才需要的遷就語法（最低 1.7.1）
   - `shrink_data` 第 4 級的 stub 欄位清單要加 `completed`、`changesFrom`、`extraCount`（階段 3 會再加 `plannedModules`），否則被縮成 stub 的 plan 在畫面上又變回「找不到比較基準」
 
-### 階段 2: 任務圖目錄 ⏳
+### 階段 2: 任務圖目錄 ✅
 
 - **依賴**：階段 1（同改 `index.html` 的 `planCard`／`renderTasks`，且目錄的燈號用到 `completed`）
 

@@ -19,3 +19,9 @@
 - 2026-11-09 18:22 階段完成 → plan 標 ✅，current_phase=2｜摘要=完成的 plan 不算改動、改動只歸本次、計畫外收成一行｜測試=413/416
 
 ## 階段 2: 任務圖目錄
+- 2026-11-09 18:25 派工 implementer（sonnet）｜BASE=1ef199b
+- 2026-11-09 18:45 回報 DONE｜commit=7a4d20d｜7 條驗收量測全過（第 10 列捲動 -0.5px、390px scrollWidth=innerWidth、重繪 scrollTop 777→777）｜index.html 63256→64637
+- 2026-11-09 18:46 主模型看截圖 wide-dark／narrow 確認；派審查 code-quality-specialist｜範圍=1ef199b..7a4d20d
+- 2026-11-09 18:55 審查通過（規格 ✅ 品質 ✅，0 CRITICAL／0 HIGH／2 MEDIUM／3 LOW）｜範圍=1ef199b..7a4d20d
+- 2026-11-09 18:55 Ruling: MEDIUM（輪詢重繪丟目錄焦點與內層捲動、修飾鍵點擊被攔）記技術債不加輪 — 只在 data.js 重產時重繪、驗收要求的 #tv.scrollTop 已保留 — 若錯，手機上每次重產後目錄橫向捲動歸零
+- 2026-11-09 18:55 階段完成 → plan 標 ✅，current_phase=3｜摘要=任務圖左側目錄，點了跳到該計畫卡｜測試=7/7
