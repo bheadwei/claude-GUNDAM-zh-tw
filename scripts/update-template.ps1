@@ -97,7 +97,7 @@ if (-not $DryRun -and -not $NoBackup -and (Test-Path (Join-Path $destPath '.clau
 # ============================================================================
 
 function Invoke-Sync {
-    param([string]$Src, [string]$Dst, [switch]$Mirror, [switch]$AdditiveOnly)
+    param([string]$Src, [string]$Dst, [switch]$Mirror, [switch]$AdditiveOnly, [string[]]$ExcludeDirs = @())
 
     if (-not (Test-Path $Src)) { return }   # 模板沒有就跳過
     New-Item -ItemType Directory -Path $Dst -Force | Out-Null
@@ -105,6 +105,8 @@ function Invoke-Sync {
     $rc = @($Src.TrimEnd('\'), $Dst.TrimEnd('\'), '/E', '/R:1', '/W:1', '/NP', '/NDL', '/NFL', '/NJH', '/NJS')
     if ($Mirror -and -not $AdditiveOnly) { $rc += '/PURGE' }   # /E + /PURGE = /MIR 效果
     if ($DryRun) { $rc += '/L' }
+    # /XD 給完整路徑才不會誤傷同名目錄；被排除的目錄 /PURGE 也不會刪，目標端既有的原樣留著
+    foreach ($x in $ExcludeDirs) { $rc += '/XD'; $rc += $x }
 
     & robocopy @rc | Out-Null
     if ($LASTEXITCODE -ge 8) {
@@ -136,7 +138,15 @@ Write-Host ""
 
 Write-Host "▶ SYNC 模板目錄..." -ForegroundColor Green
 foreach ($d in $syncClaudeDirs) {
-    Invoke-Sync (Join-Path $source ".claude\$d") (Join-Path $destPath ".claude\$d") -Mirror:$Prune
+    # hooks\tests 是模板自己的測試，不同步（copy-template.{sh,ps1}、update-template.sh 要一致）
+    $skip = @()
+    if ($d -eq 'hooks') { $skip = @((Join-Path $source '.claude\hooks\tests')) }
+    Invoke-Sync (Join-Path $source ".claude\$d") (Join-Path $destPath ".claude\$d") -Mirror:$Prune -ExcludeDirs $skip
+}
+foreach ($t in @('hooks\tests', 'tests')) {
+    if (Test-Path (Join-Path $destPath ".claude\$t")) {
+        Write-Host "   ℹ  .claude\$t\ 是模板自己的測試，已不再同步；可自行刪除" -ForegroundColor DarkGray
+    }
 }
 
 Write-Host "▶ SYNC 模板檔案..." -ForegroundColor Green
@@ -268,7 +278,7 @@ if (-not $DryRun) {
     Write-Host "👉 下一步：到目標專案開 Claude Code 跑一次 /task-status" -ForegroundColor Cyan
     Write-Host "   若 wbs.md 還是舊版面（沒有「現況」區），它會提議轉換成新版面（一次性遷移，長內容搬出不丟資料）"
     Write-Host "   專案圖解在開 session 時自動產生，/task-status 最後一行印畫面路徑；"
-    Write-Host "   沒有架構文件時它會多印一行提示，說明怎麼請 documentation-specialist 反推草稿"
+    Write-Host "   地圖從程式碼掃出，沒有架構文件也畫得出來；要補 brief、PRD、架構文件時跑 /docs-init"
 }
 Write-Host ""
 

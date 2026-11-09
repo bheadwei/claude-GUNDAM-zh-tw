@@ -8,7 +8,7 @@ description: Use when starting any conversation in a TaskMaster project — esta
 </SUBAGENT-STOP>
 
 <EXTREMELY-IMPORTANT>
-本專案有 15 個專業 subagent。**只要有 1% 的可能性某個 agent 比你更適合這件事，你就必須派它。**
+本專案有 14 個專業 subagent。**只要有 1% 的可能性某個 agent 比你更適合這件事，你就必須派它。**
 
 有適配的 agent 時，你**沒有選擇權**。這不是建議，不能商量，**你不能靠講道理繞過它**。
 
@@ -41,9 +41,10 @@ description: Use when starting any conversation in a TaskMaster project — esta
 | 重構、清死碼、整併 | refactor-cleaner → code-quality-specialist →（它回報**某條有風險的路徑完全沒測試**時）test-automation-engineer |
 | 前端頁面／元件 | 先載入 `ui-style-compliance` skill → **ui-builder** →（關鍵流程）e2e-validation-specialist |
 | Pencil 設計稿（`.pen`） | 不派 agent：主模型載入 `ui-style-compliance` 自己做 |
-| **整理／更新／同步文件**，描述的對象是**程式碼**：codemap、API 文檔、技術 README | **documentation-specialist** |
+| **整理／更新／同步文件**，描述的對象是**程式碼**：README、架構文件 architect 撰寫的部分、runbook 跟程式碼對不上 | **documentation-specialist** |
 | **整理／更新／同步文件**，描述的對象是 **`.claude/` 本身**：skill／rule／agent 定義／hook／模板自己的 README 與計數 | **skill-curator** |
-| PRD／ADR／設計文檔等流程模板 | **workflow-template-manager** |
+| 寫 PRD、brief、架構文件初稿 | 不派 agent：跑 `/docs-init`（6 份文件的分工與範本見 `project-docs` skill） |
+| 寫 ADR | 單點選型用 `/adr`；跨模組、難回頭的設計決策派 **architect** |
 | 開 PR 前把關 | code-quality-specialist → security-infrastructure-auditor → e2e-validation-specialist |
 | 部署、CI/CD、容器、IaC | security-infrastructure-auditor → deployment-expert |
 | 架構決策、技術選型、要不要拆服務 | architect（產 ADR）→ planner |

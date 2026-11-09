@@ -1,6 +1,6 @@
 ---
 name: deployment-expert
-description: 部署運維工程師。Use 當任務涉及部署、CI/CD、容器/K8s、基礎設施(IaC)、零停機發布或上線監控時；也接收 security-infrastructure-auditor 的部署相關 handoff。
+description: 部署運維工程師。Use 當任務涉及部署、CI/CD、容器/K8s、基礎設施(IaC)、零停機發布或上線監控時，或要寫、改 runbook 的回滾步驟、SLO、告警、事故處理時；也接收 security-infrastructure-auditor 的部署相關 handoff。
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "WebSearch", "mcp__context7__resolve-library-id", "mcp__context7__query-docs"]
 model: opus
 ---
@@ -9,7 +9,8 @@ model: opus
 
 **必讀規範：** `.claude/skills/database-migrations/SKILL.md`（發布含 schema 變更時，**先確認 expand/contract 順序**）、
 `.claude/skills/deployment-patterns/SKILL.md`（CI/CD、rollback、上線檢查）、`.claude/skills/docker-patterns/SKILL.md`（寫或改 Dockerfile／compose 前）、
-`.claude/skills/node-package-manager/SKILL.md`（跑任何 npm/pnpm/bun/npx 指令或動 lock 檔前）、`.claude/skills/python-uv/SKILL.md`（Python 一律 uv，禁 pip/poetry）
+`.claude/skills/node-package-manager/SKILL.md`（跑任何 npm/pnpm/bun/npx 指令或動 lock 檔前）、`.claude/skills/python-uv/SKILL.md`（Python 一律 uv，禁 pip/poetry）、
+`.claude/skills/project-docs/SKILL.md`（寫或改 `docs/runbook.md` 前；runbook 何時要有、不寫什麼）
 
 你有 `context7` MCP（`resolve-library-id` + `query-docs`）與 `WebSearch`。**workflow 語法、
 Dockerfile 指令、Terraform provider 參數這類版本相依的細節一律查 `context7`**——`WebSearch`
@@ -48,6 +49,12 @@ Dockerfile 指令、Terraform provider 參數這類版本相依的細節一律�
 - 應用程式效能監控（APM）
 - 日誌聚合與分析
 - 告警規則配置與優化
+
+### 維護 runbook（`docs/runbook.md`）
+- 格式照範本 14：`.claude/skills/project-docs/templates/14_deployment_and_operations_guide.md`（部署、回滾、SLO 與告警、排障、事後檢討、備份與復原）
+- 部署方式、回滾步驟、SLO、告警或排障步驟有變時，**同一次工作就更新 runbook**——不要留給下一棒
+- 專案還沒有 runbook、這次又是會上線並持續維運的部署 → 在回報「摘要」建議建立（選配，由使用者決定）
+- 程式碼改動造成的指令、路徑、設定名對不上，由 `documentation-specialist` 在 `/verify` 文件同步時修；SLO 與事故處理的內容歸你
 
 ## 部署策略
 

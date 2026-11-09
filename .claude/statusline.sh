@@ -296,7 +296,7 @@ if [ "$agent_count" -gt 0 ] 2>/dev/null; then
     line1+="${sep}${magenta}🤖 ${agent_count}${reset}"
 fi
 
-# Level：預設以 git commit 總數為 XP（單調遞增、跨 session 持久、不會因清 log 而倒退）
+# Level：XP 由下面三項加權而成（跨 session 持久）
 # 想換指標 → 改下面 xp 這一行即可（檔尾「等級機制」說明有其他來源範例）
 # 複合戰功值 XP = commits×10 + 累計開發時數×5 + 累計 agent 指揮數×3
 xp_commits=$(git -C "$cwd" rev-list --count HEAD 2>/dev/null); [ -z "$xp_commits" ] && xp_commits=0
@@ -313,34 +313,58 @@ if [ -f "$agent_log_file" ]; then
 fi
 xp=$(( xp_commits * 10 + xp_hours * 5 + xp_agents * 3 ))
 if [ "$xp" -gt 0 ] 2>/dev/null; then
-    lvl_thresholds=(0 120 300 600 1200 2500 5000)
-    lvl_icons=("🔧" "🛡️" "🚀" "⚡" "🌟" "☄️" "👑")
-    lvl_titles=("鋼鐵整備兵" "見習駕駛員" "戰場倖存者" "緋紅王牌" "覺醒新人類" "三倍速·赤色彗星" "白色惡魔")
+    lvl_max=100
+    lvl_icons=("🔩" "⚙️" "🔧" "🛡️" "⚔️" "🚀" "⚡" "🌟" "☄️" "👑")
+    lvl_titles=(
+        "鋼球" "薩克II" "吉姆" "鋼坦克" "德安專用薩克"
+        "藍色巨星·古夫" "鋼加農" "祖達" "黑色三連星·德姆" "真紅閃電·高機動型薩克"
+        "三倍速·夏亞專用薩克" "傑爾古格" "陸戰型鋼彈" "Ez8" "肯普法"
+        "足なんて飾りです·吉翁號" "白色惡魔·鋼彈 RX-78-2" "鋼彈 EX" "精神感應薩克" "全裝甲鋼彈"
+        "鋼彈 NT-1 Alex" "鋼彈 Mk-II" "GP01 玉蘭" "GP01Fb" "百式"
+        "所羅門的惡夢·GP02 酸漿果" "G-SAVIOUR 鋼彈" "Z 鋼彈" "The O" "ZZ 鋼彈"
+        "全裝甲 ZZ" "GP03 石斛蘭" "赤色彗星·沙薩比" "伊達じゃない·ν 鋼彈" "質量殘影·鋼彈 F91"
+        "V 鋼彈" "V2 鋼彈" "光之翼·V2 突擊破壞型" "G-自我" "AGE-1"
+        "AGE-2" "AGE-3" "攻擊鋼彈" "神盾鋼彈" "觀星者鋼彈"
+        "衝擊鋼彈" "鋼彈 X" "沙漠鋼彈" "重武裝鋼彈" "死神鋼彈"
+        "神龍鋼彈" "お前を殺す·飛翼鋼彈" "閃光鋼彈" "俺がガンダムだ·能天使鋼彈" "狙い撃つぜ·力天使鋼彈"
+        "主天使鋼彈" "德天使鋼彈" "創制強襲鋼彈" "創制燃燒鋼彈" "鋼彈00潛網者"
+        "獵魔鋼彈" "古辛鋼彈" "拜爾鋼彈" "不殺·自由鋼彈" "正義鋼彈"
+        "天意鋼彈" "命運鋼彈" "傳說鋼彈" "曉" "次代鋼彈"
+        "飛翼鋼彈零式" "月は出ているか·鋼彈 DX" "AGE-FX" "獵魔鋼彈天狼" "00 鋼彈"
+        "馬夫蒂·Ξ 鋼彈" "敘事鋼彈" "路布莉斯" "進めば二つ·風靈鋼彈" "卡利班鋼彈"
+        "東方不敗·尊者鋼彈" "攻擊自由鋼彈" "無限正義鋼彈" "止まるんじゃねぇぞ·獵魔鋼彈天狼王" "風靈鋼彈改修型"
+        "報喪女妖·諾恩" "TRANS-AM·00 Raiser" "紅鋼彈" "GQuuuuuuX" "可能性之獸·獨角獸鋼彈"
+        "金色不死鳥·菲尼克斯鋼彈" "崛起自由鋼彈" "不朽正義鋼彈" "無限正義鋼彈貳式" "非凡強襲自由鋼彈"
+        "石破天驚·神鋼彈" "00 Qan[T]" "それでも·全裝甲獨角獸鋼彈" "倒X鋼彈" "黑歷史·∀ 鋼彈"
+    )
+    # 第 n 級門檻 = 10×(n-1)²；用迴圈逼近而非 sqrt，避免在常跑的 statusline 多開子行程
     lvl=1
-    for i in "${!lvl_thresholds[@]}"; do
-        [ "$xp" -ge "${lvl_thresholds[$i]}" ] 2>/dev/null && lvl=$((i + 1))
+    while [ "$lvl" -lt "$lvl_max" ] && [ "$xp" -ge $(( 10 * lvl * lvl )) ]; do
+        lvl=$((lvl + 1))
     done
-    lvl_idx=$((lvl - 1))
-    if [ "$lvl" -lt "${#lvl_thresholds[@]}" ]; then
-        lvl_prog="${dim}(${xp}/${lvl_thresholds[$lvl]})${reset}"
+    if [ "$lvl" -lt "$lvl_max" ]; then
+        lvl_prog="${dim}(${xp}/$(( 10 * lvl * lvl )))${reset}"
     else
         lvl_prog="${dim}(MAX)${reset}"
     fi
-    line1+="${sep}${yellow}Lv.${lvl} ${lvl_icons[$lvl_idx]} ${lvl_titles[$lvl_idx]}${reset} ${lvl_prog}"
+    line1+="${sep}${yellow}Lv.${lvl} ${lvl_icons[$(( (lvl - 1) / 10 ))]} ${lvl_titles[$((lvl - 1))]}${reset} ${lvl_prog}"
 fi
 
 # ══════════════════════════════════════════════════════════
 # 等級機制（Level）說明 — 想自訂時改這裡
 # ──────────────────────────────────────────────────────────
-# 原理三步：(1) 取一個會成長的 XP → (2) 用門檻表換算等級 → (3) 配對 icon/稱號。
+# 原理三步：(1) 取一個會成長的 XP → (2) 用門檻公式換算等級 → (3) 配對 icon/稱號。
 # 預設 XP = 複合戰功值：commits×10 + 累計開發時數×5 + 累計 agent 數×3（會頻繁變動，最有感）。
 # 調整權重 → 改上面 xp=$(( ... )) 的係數。改用單一來源範例：
 #   • 純 commit 數：         xp=$xp_commits
 #   • 純累計開發時數：       xp=$xp_hours
 #   • 純累計 agent 指揮數：   xp=$xp_agents
 #   • 本 session 新增行數：   xp=$(echo "$input" | jq -r '.cost.total_lines_added // 0')
-# 門檻/稱號：改 lvl_thresholds / lvl_icons / lvl_titles（三陣列長度需一致）。
-# 註：換 XP 來源後記得同步調整 lvl_thresholds 的量級。
+# 門檻：第 n 級需要 10×(n-1)² XP（Lv.2=10、Lv.10=810、Lv.50=24010、Lv.100=98010），上限 lvl_max=100。
+#   想升得快/慢 → 改 while 條件與 lvl_prog 兩處 `10 * lvl * lvl` 的係數（兩處要一致）。
+# 稱號：lvl_titles 共 100 個鋼彈機體名，第 1 個是 Lv.1；有知名外號或台詞的寫成「梗·機型」（台詞用日文原文）；改 lvl_max 時陣列長度要跟著一致。
+# icon：lvl_icons 共 10 個，每 10 級換一個（索引 = (lvl-1)/10）。
+# 註：換 XP 來源後記得同步調整門檻係數的量級。
 # ══════════════════════════════════════════════════════════
 
 # ── OAuth token resolution ──────────────────────────────

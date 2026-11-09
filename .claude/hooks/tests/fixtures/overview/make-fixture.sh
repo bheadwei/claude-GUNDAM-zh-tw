@@ -1,0 +1,425 @@
+#!/bin/bash
+# make-fixture.sh — 專案圖解的測試資料產生器
+#
+# 用法：make-fixture.sh <shop-clean|messy-fullstack|maven-multi> <目標目錄>
+#   只把檔案寫進目標目錄，不 git init、不 commit，由呼叫端決定。
+#   環境變數 MAKE_FIXTURE_CHANGES=1：先 commit 基礎檔、再帶這個變數跑一次，只補「本次改動」——
+#     shop-clean      那三個檔（改動清單才會恰好是那三個）
+#     messy-fullstack 4 份沒有 files: 的 plan 各寫一份帳本（BASE＝目標目錄目前的 HEAD）、改一個頁面檔，
+#                     讓它們的模組只能由 diff 推斷（X4：24 份 plan-files、4 份 diff、4 個任務沒有 plan）
+#   環境變數 MAKE_FIXTURE_NOTES=1（只有 messy-fullstack）：先 commit 基礎檔、再帶這個變數跑一次，只寫說明層
+#     taskmaster-data/module-notes.md（based_on＝目前的 HEAD）。6 列：backend-api、services、pages 合格；
+#     nope（id 不存在）、frontend-api（說明含 IP）、m-5d3b69（依據不在模組內）刻意違規
+#   環境變數 MAKE_FIXTURE_LARGE=1（只有 messy-fullstack，產生時一起帶）：多一個 61 個檔、分在 3 個子目錄的
+#     catalog 模組，不掛任何 WBS 任務（模組展開的摺疊用，見 messy_large）
+#   兩組的架構文件都在自動段標記之後接「## 5. 資料流」：shop-clean 的參與者都對得到模組；
+#   messy-fullstack 一條用分組 id（pkg-backend、pkg-frontend）、一條的參與者全部對不到模組
+#
+#   shop-clean      範例電商：5.1／5.5 都有效，WBS 每個任務都標了模組
+#   messy-fullstack 髒資料：Python 後端＋TS 前端、C4 架構圖、沒有 5.5、WBS 沒有模組欄、32 個任務
+#   maven-multi     Maven／Gradle 多模組：兩個子專案的 src/main/{java,kotlin}/com/acme/<套件>/
+#
+# 只用通用電商／查詢系統詞彙，不含任何實測專案的名稱或程式碼。
+
+usage() {
+    printf '用法：%s <shop-clean|messy-fullstack|maven-multi> <目標目錄>\n' "${0##*/}" >&2
+    exit 2
+}
+
+[ $# -eq 2 ] || usage
+case "$1" in shop-clean|messy-fullstack|maven-multi) ;; *) usage ;; esac
+mkdir -p "$2" || exit 1
+DEST=$(cd "$2" && pwd) || exit 1
+TD="$DEST/.claude/taskmaster-data"
+
+put() { mkdir -p "$(dirname "$1")" && cat > "$1"; }
+
+shop_changes() {
+    printf 'export const create = (id: string) => id\n' | put "$DEST/src/services/a/create.ts"
+    printf 'export const Cart = () => null\nexport default Cart\n' | put "$DEST/src/web/Cart.tsx"
+    printf 'export const a = 1\nexport const b = 2\n' | put "$DEST/src/web/a.ts"
+}
+
+shop_clean() {
+    if [ -n "${MAKE_FIXTURE_CHANGES:-}" ]; then shop_changes; return; fi
+    printf '{"name":"範例電商","mode":"mvp"}\n' | put "$TD/project.json"
+    printf '1.2\n' | put "$TD/.current-task"
+
+    put "$DEST/docs/05_architecture.md" <<'MD'
+# 範例電商架構
+
+### 5.1 容器圖
+
+```mermaid
+graph TD
+    subgraph g1["用戶端"]
+        web[Web App]
+    end
+    subgraph g2["服務層"]
+        gateway[API Gateway]
+        svc-a[服務 A]
+        svc-b[服務 B]
+    end
+    subgraph g3["資料層"]
+        db[(資料庫)]
+        cache[(快取)]
+    end
+    web --> gateway
+    gateway --> svc-a
+    gateway --> svc-b
+    svc-a --> db
+    svc-b --> cache
+```
+
+### 5.5 MVP 範圍與模組清單
+
+| id | 模組 | 路徑 | 職責 |
+|---|---|---|---|
+| web | Web App | `src/web/**` | 前端 |
+| gateway | API Gateway | `src/gateway/**` | 路由、認證、限流 |
+| svc-a | 服務 A | `src/services/a/**` | 訂單 |
+| svc-b | 服務 B | `src/services/b/**` | 會員 |
+| db | 資料庫 | `migrations/**`, `src/db/**` | 持久化 |
+| cache | 快取 | `src/cache/**` | 快取 |
+
+## 4. 模組與依賴
+
+<!-- overview:generated:start -->
+<!-- overview:generated:end -->
+## 5. 資料流
+
+### svc-a 下單 — 正常下單（ORD-01）
+
+```mermaid
+sequenceDiagram
+    participant web as 前端
+    participant gateway as API Gateway
+    participant svc-a as 訂單服務
+    participant db as 資料庫
+    web->>gateway: POST /orders
+    gateway->>svc-a: 建立訂單
+    svc-a->>db: 寫入訂單
+    svc-a-->>web: 訂單編號
+```
+
+### svc-b 會員 — 查點數（MEM-01）
+
+```mermaid
+sequenceDiagram
+    participant web as 前端
+    participant gateway as API Gateway
+    participant svc-b as 會員服務
+    participant cache as 快取
+    web->>gateway: GET /members/points
+    gateway->>svc-b: 查點數
+    svc-b->>cache: 讀快取
+    svc-b-->>web: 點數
+```
+MD
+
+    put "$TD/wbs.md" <<'MD'
+# WBS — 範例電商
+
+## M1 基礎
+
+| # | 任務 | 模組 | 狀態 | 優先 |
+|---|---|---|---|---|
+| 1.1 | 建 gateway | gateway | ✅ 11-01 | 高 |
+| 1.2 | 前端購物車 | web | 🔄 進行中 | 高 |
+| 1.3 | 訂單服務 | svc-a | ✅ 11-02 | 高 |
+| 1.4 | 訂單退款 | svc-a | ✅ 11-03 | 中 |
+| 1.5 | 會員點數 | svc-b | 🚫 阻塞 | 中 |
+| 1.6 | 資料庫 | db | ✅ 11-01 | 高 |
+| 1.7 | CI | web | ⏳ 待處理 | 低 |
+MD
+
+    printf 'export const boot = () => 1\n' | put "$DEST/src/web/index.ts"
+    printf "import axios from 'axios'\n\nexport const App = () => axios\n" | put "$DEST/src/web/App.tsx"
+    printf 'export const a = 1\n' | put "$DEST/src/web/a.ts"
+    printf 'from src.gateway.auth import check\n\ndef route(path):\n    return check(path)\n' | put "$DEST/src/gateway/router.py"
+    printf 'def check(path):\n    return True\n' | put "$DEST/src/gateway/auth.py"
+    printf "import { readFileSync } from 'node:fs'\n\nexport const limit = 100\n" | put "$DEST/src/gateway/limit.ts"
+    printf 'from src.db.session import connect\nimport httpx\nimport os\n\ndef orders():\n    return connect()\n' | put "$DEST/src/services/a/orders.py"
+    printf 'class Order:\n    id = 0\n' | put "$DEST/src/services/a/models.py"
+    printf 'from src.cache.client import get\n\ndef members():\n    return get("members")\n' | put "$DEST/src/services/b/members.py"
+    printf 'def points(member):\n    return 0\n' | put "$DEST/src/services/b/points.py"
+    printf 'def upgrade():\n    return "create table orders"\n' | put "$DEST/migrations/001_init.py"
+    printf 'from sqlalchemy import create_engine\n\ndef connect():\n    return None\n' | put "$DEST/src/db/session.py"
+    printf "import { Pool } from 'pg'\n\nexport const dbUrl = 'sqlite://'\n" | put "$DEST/src/db/config.ts"
+    printf 'def get(key):\n    return None\n' | put "$DEST/src/cache/client.py"
+    printf 'export const key = (n: string) => `shop:${n}`\n' | put "$DEST/src/cache/keys.ts"
+}
+
+messy_py() {
+    { printf '%b' "$2"; printf '%b' "$3"; } | put "$DEST/backend/app/$1"
+}
+
+messy_router() {
+    local file="$1" prefix="$2" svc="$3" fn="$4"
+    messy_py "$file" "from fastapi import APIRouter\nfrom app.services.$svc import $fn\nfrom .deps import current_user\n\n" \
+"router = APIRouter(prefix=\"$prefix\")\n\n@router.get(\"/\")\ndef list_all(user=current_user):\n    return $fn()\n\n@router.get(\"/{item_id}\")\ndef get_one(item_id: int):\n    return $fn()\n\n@router.post(\"/\")\ndef create(payload: dict):\n    return $fn()\n"
+}
+
+messy_ts() {
+    { printf '%b' "$2"; printf '%b' "$3"; } | put "$DEST/frontend/src/$1"
+}
+
+MESSY_DIFF_ONLY=(3.6 3.8 4.3 4.4)
+
+messy_changes() {
+    local head id
+    head=$(git -C "$DEST" rev-parse HEAD 2>/dev/null) || { echo "make-fixture.sh：$DEST 還沒有 commit，MAKE_FIXTURE_CHANGES 需要先 commit 基礎檔" >&2; exit 1; }
+    for id in "${MESSY_DIFF_ONLY[@]}"; do
+        printf -- '# 執行帳本 — plan: %s-task\n\n## 階段 1: 實作\n\n- 09:00 派工｜BASE=%s\n' "$id" "$head" | put "$TD/plans/$id-task.progress.md"
+    done
+    printf "export const dashboardTitle = '儀表板'\n" >> "$DEST/frontend/src/pages/Dashboard.tsx"
+}
+
+# m-5d3b69 是「報表匯出與排程作業」目錄的模組 id（overview-scan.sh 的 X3：非 ASCII 目錄名取雜湊）
+messy_notes() {
+    local head
+    head=$(git -C "$DEST" rev-parse --short HEAD 2>/dev/null) || { echo "make-fixture.sh：$DEST 還沒有 commit，MAKE_FIXTURE_NOTES 需要先 commit 基礎檔" >&2; exit 1; }
+    {
+        printf -- '---\nbased_on: %s\ngenerated: 2026-11-06\n---\n' "$head"
+        cat <<'MD'
+| id | 名稱 | 分組 | 說明 | 依據 |
+|---|---|---|---|---|
+| backend-api | 後端 API | 後端 | 提供使用者、報表與登入的 REST 介面，每支都先確認登入身分 | `backend/app/api/reports.py`、`backend/app/api/deps.py` |
+| services | 查詢服務 | 後端 | 依登入者查使用者與報表資料 | `backend/app/services/report_service.py` |
+| pages | 頁面 | 前端 | 登入、儀表板與報表列表三個畫面 | `frontend/src/pages/Dashboard.tsx` |
+| nope | 不存在 | 後端 | 這一列的 id 不在地圖上 | `backend/app/api/users.py` |
+| frontend-api | 前端 API | 前端 | 呼叫 http://10.0.0.5/api 的報表介面 | `frontend/src/api/client.ts` |
+| m-5d3b69 | 匯出排程 | 後端 | 每天把報表匯成 CSV | `backend/app/services/report_service.py` |
+MD
+    } | put "$TD/module-notes.md"
+}
+
+# > 60 個檔的模組（模組展開的摺疊）：backend/app/catalog 根目錄 1 個檔＋3 個子目錄各 20 個。
+# 只在 MAKE_FIXTURE_LARGE 時加：多一個模組會改變既有節斷言的模組清單與說明層計數。
+# project.json 同時設 overview.scan.depth 1（切法與自動偵測相同），否則它占全部檔案 40% 以上、
+# 會被 overview-scan.sh 自動再往下切成三個模組。直接 printf 寫檔：put 每個檔開兩個行程，61 個檔在 Windows 要十幾秒
+messy_large() {
+    local c="$DEST/backend/app/catalog" i n
+    mkdir -p "$c/adapters" "$c/parsers" "$c/rules" || exit 1
+    printf 'from app.catalog.adapters.a01 import load\n\ndef run():\n    return load()\n' > "$c/catalog.py"
+    for i in $(seq 1 20); do
+        printf -v n '%02d' "$i"
+        printf 'def load():\n    return %d\n' "$i" > "$c/adapters/a$n.py"
+        printf 'from app.catalog.adapters.a%s import load\n\ndef parse():\n    return load()\n' "$n" > "$c/parsers/p$n.py"
+        printf 'from app.catalog.parsers.p%s import parse\n\ndef check():\n    return parse()\n' "$n" > "$c/rules/r$n.py"
+    done
+    printf '{"name":"查詢系統","mode":"mvp","overview":{"architectureDoc":"docs/architecture/01_system_architecture.md","scan":{"depth":1}}}\n' > "$TD/project.json"
+}
+
+messy_fullstack() {
+    if [ -n "${MAKE_FIXTURE_NOTES:-}" ]; then messy_notes; return; fi
+    if [ -n "${MAKE_FIXTURE_CHANGES:-}" ]; then messy_changes; return; fi
+    local zh="報表匯出與排程作業"
+    printf '{"name":"查詢系統","mode":"mvp","overview":{"architectureDoc":"docs/architecture/01_system_architecture.md"}}\n' | put "$TD/project.json"
+
+    printf '[project]\nname = "query-backend"\nversion = "0.1.0"\nrequires-python = ">=3.11"\ndependencies = ["fastapi", "sqlalchemy"]\n' | put "$DEST/backend/pyproject.toml"
+    printf '{"name":"query-frontend","version":"0.1.0","dependencies":{"react":"^18.0.0"}}\n' | put "$DEST/frontend/package.json"
+
+    printf '' | put "$DEST/backend/app/api/__init__.py"
+    messy_py api/deps.py "from app.core.security import verify_token\n\n" "def current_user():\n    return verify_token(None)\n"
+    messy_router api/users.py /api/users user_service list_users
+    messy_router api/reports.py /api/reports report_service list_reports
+    messy_router api/auth.py /api/auth ldap_service authenticate
+    messy_py services/user_service.py "from app.models.user import User\nfrom app.core.db import session\nfrom sqlalchemy.orm import Session\n\n" "def list_users():\n    return session().query(User).all()\n"
+    messy_py services/report_service.py "from app.models.report import Report\nfrom app.core.db import session\nfrom . import user_service\n\n" "def list_reports():\n    user_service.list_users()\n    return session().query(Report).all()\n"
+    messy_py services/ldap_service.py "from app.core.config import settings\nimport httpx\nimport os\n\n" "def authenticate():\n    return settings.ldap_url\n"
+    messy_py models/user.py "from app.core.db import Base\n\n" "class User(Base):\n    id = 0\n"
+    messy_py models/report.py "from app.core.db import Base\n\n" "class Report(Base):\n    id = 0\n"
+    messy_py core/config.py "" "class settings:\n    ldap_url = \"ldap://example.invalid\"\n    db_url = \"mssql://example.invalid\"\n    redis_url = \"redis://example.invalid\"\n"
+    messy_py core/db.py "from .config import settings\n\n" "Base = object\n\ndef session():\n    return settings.db_url\n"
+    messy_py core/security.py "from .config import settings\n\n" "def verify_token(token):\n    return settings.ldap_url\n"
+    messy_py "$zh/export.py" "from app.services.report_service import list_reports\n\n" "def export_csv():\n    return list_reports()\n"
+    messy_py "$zh/schedule.py" "from .export import export_csv\n\n" "def run_daily():\n    return export_csv()\n"
+    messy_py utils/helpers.py "" "def slug(text):\n    return text.lower()\n"
+
+    printf 'def test_users():\n    assert True\n' | put "$DEST/backend/tests/test_users.py"
+    printf 'def test_reports():\n    assert True\n' | put "$DEST/backend/tests/test_reports.py"
+
+    messy_ts api/client.ts "import axios from 'axios'\nimport { readFileSync } from 'node:fs'\n\n" "export async function http(url: string) {\n  const res = await fetch(url)\n  return res.json()\n}\n"
+    messy_ts api/users.ts "import { http } from './client'\n\n" "export const listUsers = () => http('/api/users')\nexport const loadMe = () => fetch('/api/auth/me')\n"
+    messy_ts api/reports.ts "import { http } from './client'\n\n" "export const listReports = () => http('/api/reports')\nexport const createReport = (body: unknown) => fetch('/api/reports', { method: 'POST', body: JSON.stringify(body) })\n"
+    messy_ts stores/auth.ts "import { loadMe } from '@/api/users'\n\n" "export const useAuth = () => loadMe()\n"
+    messy_ts stores/report.ts "import { listReports } from '@/api/reports'\n\n" "export const useReports = () => listReports()\n"
+    messy_ts components/Table.tsx "" "export const Table = () => null\n"
+    messy_ts components/Header.tsx "import { useAuth } from '@/stores/auth'\n\n" "export const Header = () => useAuth()\n"
+    messy_ts components/Chart.tsx "import { Table } from './Table'\n\n" "export const Chart = () => Table()\n"
+    messy_ts pages/Login.tsx "import { useAuth } from '@/stores/auth'\nimport { Header } from '../components/Header'\n\n" "export const Login = () => [useAuth(), Header()]\n"
+    messy_ts pages/Dashboard.tsx "import { Chart } from '../components/Chart'\nimport { useReports } from '@/stores/report'\n\n" "export const Dashboard = () => [Chart(), useReports()]\n"
+    messy_ts pages/Reports.tsx "import { Table } from '@/components/Table'\nimport { createReport } from '@/api/reports'\n\n" "export const Reports = () => [Table(), createReport({})]\n"
+    messy_ts __tests__/users.test.ts "import { listUsers } from '../api/users'\n\n" "test('users', () => { listUsers() })\n"
+    messy_ts __tests__/reports.test.ts "import { listReports } from '../api/reports'\n\n" "test('reports', () => { listReports() })\n"
+
+    put "$DEST/docs/architecture/01_system_architecture.md" <<'MD'
+# 查詢系統：系統架構
+
+## 系統情境
+
+```mermaid
+C4Context
+    title 系統情境圖
+    Person(user, "使用者", "查詢並匯出報表<br/>內部員工")
+    System(app, "查詢系統", "報表查詢 &amp; 匯出<br/>排程作業")
+    System_Ext(ldap, "LDAP", "身分驗證")
+    SystemDb_Ext(mssql, "MSSQL", "主要資料庫")
+    SystemDb_Ext(redis, "Redis", "快取 &amp; 工作佇列")
+    Rel(user, app, "使用", "HTTPS")
+    Rel(app, ldap, "驗證", "LDAP")
+    Rel(app, mssql, "讀寫", "SQL")
+    Rel(app, redis, "快取", "TCP")
+```
+
+## 技術選型
+
+後端 FastAPI、前端 React，資料庫 MSSQL。
+
+## 4. 模組與依賴
+
+<!-- overview:generated:start -->
+<!-- overview:generated:end -->
+## 5. 資料流
+
+### pkg-backend 報表 — 查報表（RPT-01）
+
+```mermaid
+sequenceDiagram
+    actor user as 使用者
+    participant pkg-frontend as 前端
+    participant pkg-backend as 後端
+    participant mssql as MSSQL
+    user->>pkg-frontend: 開報表頁
+    pkg-frontend->>pkg-backend: GET /api/reports
+    pkg-backend->>mssql: 查詢
+```
+
+### exporter 匯出 — 每日匯出（排程：每日 02:00）
+
+```mermaid
+sequenceDiagram
+    participant scheduler as 排程器
+    participant exporter as 匯出作業
+    participant mail as 郵件（外部）
+    scheduler->>exporter: 觸發
+    exporter-)mail: 寄出 CSV
+```
+MD
+
+    put "$TD/wbs.md" <<'MD'
+# WBS — 查詢系統
+
+## M1 基礎
+
+| # | 任務 | 狀態 | 優先 |
+|---|---|---|---|
+| 1.1 | 專案骨架 | ✅ 10-20 | 高 |
+| 1.2 | 設定與資料庫連線 | ✅ 10-21 | 高 |
+| 1.3 | LDAP 登入 | ✅ 10-22 | 高 |
+| 1.4 | 使用者模型 | ✅ 10-22 | 高 |
+| 1.5 | 使用者 API | ✅ 10-23 | 高 |
+| 1.6 | 前端框架與路由 | ✅ 10-24 | 高 |
+| 1.7 | 前端 API client | ✅ 10-24 | 中 |
+| 1.8 | 登入頁 | ✅ 10-25 | 高 |
+
+## M2 查詢
+
+| # | 任務 | 狀態 | 優先 |
+|---|---|---|---|
+| 2.1 | 報表模型 | ✅ 10-28 | 高 |
+| 2.2 | 報表服務 | ✅ 10-29 | 高 |
+| 2.3 | 報表 API | ✅ 10-30 | 高 |
+| 2.4 | 報表列表頁 | ✅ 10-31 | 高 |
+| 2.5 | 共用表格元件 | ✅ 11-01 | 中 |
+| 2.6 | 圖表元件 | ✅ 11-01 | 中 |
+| 2.7 | 儀表板頁 | 🔄 進行中 | 高 |
+| 2.8 | 查詢條件儲存 | ⏳ 待處理 | 中 |
+
+## M3 匯出與排程
+
+| # | 任務 | 狀態 | 優先 |
+|---|---|---|---|
+| 3.1 | CSV 匯出 | ✅ 11-02 | 高 |
+| 3.2 | 排程作業 | ✅ 11-03 | 中 |
+| 3.3 | 匯出權限檢查 | 🔄 進行中 | 高 |
+| 3.4 | 快取查詢結果 | ⏳ 待處理 | 中 |
+| 3.5 | 匯出紀錄 | ⏳ 待處理 | 低 |
+| 3.6 | 排程失敗通知 | 🚫 阻塞 | 中 |
+| 3.7 | Header 與登入狀態 | ✅ 11-03 | 中 |
+| 3.8 | 錯誤頁 | ⏳ 待處理 | 低 |
+
+## M4 收尾
+
+| # | 任務 | 狀態 | 優先 |
+|---|---|---|---|
+| 4.1 | 後端單元測試 | ✅ 11-04 | 中 |
+| 4.2 | 前端單元測試 | 🔄 進行中 | 中 |
+| 4.3 | 部署腳本 | ⏳ 待處理 | 中 |
+| 4.4 | 操作手冊 | ⏳ 待處理 | 低 |
+| 4.5 | 效能調校 | ⏳ 待處理 | 低 |
+| 4.6 | 驗收測試 | ⏳ 待處理 | 高 |
+| 4.7 | 上線檢查 | ⏳ 待處理 | 高 |
+| 4.8 | 交接文件 | ⏳ 待處理 | 低 |
+MD
+
+    local -a with_files=(
+        "1.1|backend/pyproject.toml|frontend/package.json|backend/app/api/__init__.py" "1.2|backend/app/core/**" "1.3|backend/app/services/ldap_service.py|backend/app/api/auth.py"
+        "1.4|backend/app/models/user.py" "1.5|backend/app/api/users.py|backend/app/services/user_service.py" "1.6|frontend/src/pages/Login.tsx"
+        "1.7|frontend/src/api/client.ts|frontend/src/api/users.ts" "1.8|frontend/src/pages/Login.tsx|frontend/src/stores/auth.ts"
+        "2.1|backend/app/models/report.py" "2.2|backend/app/services/report_service.py" "2.3|backend/app/api/reports.py"
+        "2.4|frontend/src/pages/Reports.tsx|frontend/src/api/reports.ts" "2.5|frontend/src/components/Table.tsx" "2.6|frontend/src/components/Chart.tsx"
+        "2.7|frontend/src/pages/Dashboard.tsx|frontend/src/stores/report.ts" "3.1|backend/app/$zh/export.py"
+        "3.2|backend/app/$zh/schedule.py" "3.3|backend/app/api/deps.py|backend/app/core/security.py"
+        "3.7|frontend/src/components/Header.tsx" "4.1|backend/tests/**|backend/app/services/user_service.py"
+        "4.2|frontend/src/__tests__/**|frontend/src/api/users.ts"
+        "2.8|frontend/src/stores/report.ts" "3.4|backend/app/core/db.py" "3.5|backend/app/models/report.py"
+    )
+    local rec id rest f
+    local -a fs
+    for rec in "${with_files[@]}"; do
+        id=${rec%%|*}; rest=${rec#*|}
+        IFS='|' read -r -a fs <<< "$rest"
+        {
+            printf -- '---\nwbs_task: "%s"\nstatus: "⏳ 未開始"\nmode: "standard"\nfiles:\n' "$id"
+            for f in "${fs[@]}"; do printf '  - "%s"\n' "$f"; done
+            printf -- '---\n\n# 實作計畫：任務 %s\n\n### 階段 1: 實作 ⏳\n\n- [ ] 完成任務\n' "$id"
+        } | put "$TD/plans/$id-task.md"
+    done
+    for id in "${MESSY_DIFF_ONLY[@]}"; do
+        printf -- '---\nwbs_task: "%s"\nstatus: "⏳ 未開始"\nmode: "standard"\n---\n\n# 實作計畫：任務 %s\n\n### 階段 1: 實作 ⏳\n\n- [ ] 完成任務\n' "$id" "$id" \
+            | put "$TD/plans/$id-task.md"
+    done
+    [ -z "${MAKE_FIXTURE_LARGE:-}" ] || messy_large
+}
+
+# Maven／Gradle 多模組（X16）：兩個子專案（api 用 Maven、worker 用 Gradle），各 3 個套件、Java＋Kotlin 混合，
+# 兩邊都有 order 套件（撞名）。套件前綴鏈 com/acme 要被剝掉
+maven_multi() {
+    printf '{"name":"多模組後端","mode":"mvp"}\n' | put "$TD/project.json"
+    printf '<project><modelVersion>4.0.0</modelVersion><artifactId>shop</artifactId><packaging>pom</packaging></project>\n' | put "$DEST/pom.xml"
+    printf '<project><modelVersion>4.0.0</modelVersion><artifactId>api</artifactId></project>\n' | put "$DEST/api/pom.xml"
+    printf 'plugins { kotlin("jvm") version "2.0.0" }\n' | put "$DEST/worker/build.gradle.kts"
+    local j=api/src/main/java/com/acme k=api/src/main/kotlin/com/acme
+    printf 'package com.acme.order;\n\nimport com.acme.payment.PaymentClient;\n\npublic class OrderController {\n    private PaymentClient client;\n}\n' | put "$DEST/$j/order/OrderController.java"
+    printf 'package com.acme.order;\n\npublic class OrderService {}\n' | put "$DEST/$j/order/OrderService.java"
+    printf 'package com.acme.payment;\n\npublic class PaymentClient {}\n' | put "$DEST/$j/payment/PaymentClient.java"
+    printf 'package com.acme.payment;\n\npublic class Payment {}\n' | put "$DEST/$j/payment/Payment.java"
+    printf 'package com.acme.user\n\nclass User(val id: Long)\n' | put "$DEST/$k/user/User.kt"
+    printf 'package com.acme.user\n\nclass UserRepo\n' | put "$DEST/$k/user/UserRepo.kt"
+    printf 'package com.acme.order;\n\npublic class OrderControllerTest {}\n' | put "$DEST/api/src/test/java/com/acme/order/OrderControllerTest.java"
+    j=worker/src/main/java/com/acme k=worker/src/main/kotlin/com/acme
+    printf 'package com.acme.order;\n\npublic class OrderJob {}\n' | put "$DEST/$j/order/OrderJob.java"
+    printf 'package com.acme.order;\n\npublic class OrderReader {}\n' | put "$DEST/$j/order/OrderReader.java"
+    printf 'package com.acme.report\n\nimport com.acme.order.OrderReader\n\nclass ReportJob(val reader: OrderReader)\n' | put "$DEST/$k/report/ReportJob.kt"
+    printf 'package com.acme.report\n\nclass ReportWriter\n' | put "$DEST/$k/report/ReportWriter.kt"
+    printf 'package com.acme.mail\n\nclass Mailer\n' | put "$DEST/$k/mail/Mailer.kt"
+    printf 'package com.acme.mail\n\nclass Template\n' | put "$DEST/$k/mail/Template.kt"
+}
+
+case "$1" in
+    shop-clean) shop_clean ;;
+    messy-fullstack) messy_fullstack ;;
+    maven-multi) maven_multi ;;
+esac

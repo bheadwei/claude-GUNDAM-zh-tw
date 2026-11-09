@@ -18,43 +18,49 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
 
 1. 讀取 `.claude/taskmaster-data/wbs.md`
 2. **沒有 `## 現況` 區 → 舊格式**，先走下方「舊格式轉換」節的提議（可拒絕，拒絕就照舊顯示）
-3. 解析各里程碑節的任務表，統計各狀態數量
+3. 解析各里程碑節的任務表（任務清單要用；現況的統計由步驟 7 的 `--status` 給，不要自己算）
 4. **讀取** `.claude/taskmaster-data/plans/INDEX.md`（若存在），建立 `<task-id> → plan 進度` 映射
-5. 顯示統計和任務清單（含 plan 進度欄位）
+5. 顯示任務清單（含 plan 進度欄位）
 6. 如有任務狀態變更，**立即更新** wbs.md 並重算「現況」區
-7. 重產專案圖解並印出畫面路徑（寫 wbs／plan 時 hook 已在背景重產，這一步是兜底——
-   用 Bash `mv`／`sed` 改的檔不會觸發 hook）：
+7. 同步架構文件自動段、重產專案圖解，印出一頁現況與畫面路徑（寫 wbs／plan 時 hook 已在背景重產，
+   這一步是兜底——用 Bash `mv`／`sed` 改的檔不會觸發 hook；架構文件的自動段只在這裡與 `/verify` 更新）：
 
    ```bash
-   bash .claude/scripts/overview.sh && bash .claude/scripts/overview.sh --print-path
+   bash .claude/scripts/overview.sh --sync-arch
+   bash .claude/scripts/overview.sh --status
+   bash .claude/scripts/overview.sh --print-path
    ```
 
-   把印出的 `file:///…/overview/index.html` 放在輸出的最後一行，讓使用者點開
-   （同一個資料夾裡的 `overview.md` 是 Markdown 版，兩份都不進 git）。
+   - `--sync-arch`：重產地圖，再把架構文件兩個 `overview:generated` 標記之間換成模組表與依賴圖
+     （只在主 checkout 寫，內容沒變就不動檔）。印「…沒有自動段標記…」→ 舊版架構文件，照實轉告、
+     **不要自己加標記**；exit 1（標記不成對）→ 把 stderr 的修法轉告使用者，其餘步驟照做
+   - `--status`：印出的「## 現況」一節**原樣放在輸出最前面**（≤ 30 行：一句話、里程碑、進行中與 plan 階段、
+     阻塞、下一個、最近 14 天完成數、落差數）。**不要自己重拼這些數字**——它和地圖頁首是同一份資料
+   - `--print-path`：把印出的 `file:///…/overview/index.html` 放在輸出的最後一行，讓使用者點開
+     （同一個資料夾裡的 `overview.md` 是 Markdown 版，兩份都不進 git）
    **只印路徑，不要 Read `overview/data.js` 或 `overview/overview.md`**——那是給人看的衍生物，
    大專案可達數百 KB；要狀態就讀 `wbs.md`。沒有 `project.json` 時腳本什麼都不印，直接略過這行
 
-   **路徑下面多印了一行 `提示：…` → 地圖畫不出來**，照提示的情況處理（任務圖不受影響）：
-
-   - **找不到架構文件**（多半是升級上來的舊專案）→ 把提示轉告使用者，再用 `AskUserQuestion` 問
-     要不要委派 `documentation-specialist` 從程式碼反推架構草稿（Recommended）／先不要（本 session 不再提）。
-     反推的程序與草稿標記見該 agent 定義的「沒有架構文件時：從程式碼反推草稿」節（唯一來源）。
-     它回 `NEEDS_CONTEXT` 列出的模組切分逐題問使用者，確認後由你移除草稿第一行的標記
-   - **架構文件是草稿** → 轉告使用者「確認模組切分後移除標記，地圖才會出現」；
+   專案地圖由程式碼掃出（`overview-scan.sh`），沒有架構文件也畫得出來，所以沒有架構文件時**不會**印提示。
+   路徑下面多印的 `提示：…` 有兩種：
+   - **架構文件是草稿**：地圖照畫，但模組名稱、分組不取自那份文件。
+     轉告使用者「確認模組切分後移除標記，地圖就會改用文件寫的名稱與分組」；
      使用者說確認了，就由你刪掉那一行標記
+   - **N 個任務的模組是由 plan 推斷的**：走下方「補『模組』欄」節的「寫回推斷結果」
+   - **N 個模組沒有說明、M 個可能過期**：走下方「模組說明（說明層）」節。**永遠不自動執行**
 
 > 版面與「現況」的重算規則：`.claude/templates/wbs.template.md`（唯一來源）。
 
 ## 輸出格式
 
 ```
-專案狀態:
-  總任務: [N] 個
-  待處理: [X] 個
-  進行中: [X] 個
-  已完成: [X] 個
-  阻塞:   [X] 個
-  進度:   [=====-----] X%
+## 現況 — <專案名>          ← overview.sh --status 的輸出，原樣貼上
+- 里程碑 M1 基礎 ███░░ 4/7 🔄
+- 進行中 1.2 前端購物車（plan 第 2、3／4 階段）
+- 阻塞 1.5 會員點數
+- 下一個 1.7 CI
+- 最近 14 天 完成 4 項
+- 落差 1 項（任務模組不符 1；見地圖）
 
 任務清單:
   [完成] 1.1 專案初始化                          Plan: —
@@ -182,10 +188,10 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
    |---|---|---|
    | 狀態符號＋完成日 | 留在狀態欄 | `✅ 09-23` |
    | `[計畫](…)` 連結（舊 `Plan` 欄或備註裡的） | 連結欄 | 原連結 |
-   | 驗證數據、執行結果 | 有 plan → 追加到該 plan 的「驗收標準（整體）」；無 plan → 遷移紀錄 | `[報告](…)` 或不留 |
+   | 驗證數據、執行結果 | 有 plan → 追加到該 plan 對應階段的「驗收」（一筆一行帶日期）；無 plan → 遷移紀錄 | `[報告](…)` 或不留 |
    | 進度、派工、commit SHA | 有帳本 → 追加到帳本；無 → 遷移紀錄 | `[帳本](…)` 或不留 |
-   | 帶給下一任務的疑慮 | **下一任務**的 plan「風險與緩解」；下一任務還沒有 plan → 遷移紀錄，並在報告中列出待建 plan 時要搬的項目 | 不留 |
-   | 選型與理由 | `context/decisions/`（新 ADR 或追加既有） | 必要時 `[ADR](…)` |
+   | 帶給下一任務的疑慮 | **下一任務**的 plan「發現與決策」或該階段的「注意」；下一任務還沒有 plan → 遷移紀錄，並在報告中列出待建 plan 時要搬的項目 | 不留 |
+   | 選型與理由 | `docs/decisions/`（新 ADR 或追加既有，用 `/adr`） | 必要時 `[ADR](…)` |
    | 阻塞原因 | 「風險與阻塞」表新增一列 `R<n>` | 狀態 `🚫 阻塞` ＋ 連結欄 `R<n>` |
    | 任務等級（critical 等） | 有 plan → frontmatter `mode:`；無 → 遷移紀錄 | 不留 |
    | 歸不了類的 | **列出來問使用者**（見步驟 5） | — |
@@ -225,6 +231,41 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
 
 補法：每個 active 節的表頭與分隔列在 `任務` 之後插入 `模組`，該節每一列同位置插入 `—`。
 **只動 `wbs.md`**——`wbs-archive.md` 的舊節照歸檔規則原樣保留。沒確認不寫。
+
+#### 寫回推斷結果
+
+WBS 沒有模組欄、或某列填 `—` 時，專案地圖會從該任務 plan 的 `files:`（沒有就用帳本 `BASE=` 之後的 diff）
+推斷它碰了哪些模組。步驟 7 的 `--print-path` 多印
+`提示：N 個任務的模組是由 plan 推斷的…` 時：
+
+1. 跑 `bash .claude/scripts/overview.sh --print-inferred` 取得預覽——一行一筆
+   `任務編號<TAB>模組 id（逗號分隔）<TAB>依據`（`plan-files`／`diff`）。**不要 Read `data.js`**
+2. 用 `AskUserQuestion` 問（可拒絕）：
+   - **寫回**（Recommended）— 把推斷出的模組 id 填進那幾列的「模組」欄（多個用 `、` 分隔）
+   - **先看預覽** — 列出「任務 → 模組（依據）」與要改的列，不寫檔；看完再問一次寫回或不要
+   - **不要** — 本 session 不再提；地圖照樣用推斷結果畫
+3. 寫回時表頭還沒有「模組」欄 → 先照上面的補法插欄，再填推斷值；推斷以外的列維持 `—`。
+   **只動 `wbs.md`**，依據是 `diff` 的列在預覽裡標出來（它只代表「改到了哪裡」，不一定是任務的本意）
+
+## 模組說明（說明層）
+
+專案地圖每個模組的一句白話說明存在 `.claude/taskmaster-data/module-notes.md`（進 git），由
+`documentation-specialist` 讀程式碼後寫（ADR-2026-11-05-002）。步驟 7 的 `--print-path` 多印
+`提示：N 個模組沒有說明、M 個可能過期…` 時：
+
+1. 用 `AskUserQuestion` 問一題（照 `rules/interactive-qa.md`）。問題描述要寫明：會派 `documentation-specialist`
+   每個模組讀最多 3 個檔、每個最多 200 行，**這些程式碼片段會經 Claude Code 送到 Anthropic**（與平常開發同一個通道）；
+   一個模組約 3–6k 輸入 token
+   - **只更新沒有說明與過期的**（Recommended）— 只寫 `overview.sh --notes-todo` 列出的 N＋M 個
+   - **全部重寫** — 每個模組都重讀重寫（說明整體不準、或模組切分大改之後）
+   - **先不要** — 本 session 不再提；地圖照畫，只是沒有說明
+2. 選了前兩項才委派 `documentation-specialist`（`subagent_type: "documentation-specialist"`），
+   prompt 寫「寫模組說明」與範圍（只更新清單上的／全部重寫）。**沒有使用者這一題的回答就不派**——
+   提示每次都會出現，但每次都要問
+3. 完成後重跑 `bash .claude/scripts/overview.sh --print-path`，把剩下的數字轉告使用者
+
+客戶不允許把程式碼送進模型時，請使用者在 `project.json` 設 `"overview": {"notes": "off"}`：
+說明層整個關掉，這行提示也不再出現（地圖照畫）。
 
 ## WBS／plans 進版控（既有專案的一次性遷移）
 

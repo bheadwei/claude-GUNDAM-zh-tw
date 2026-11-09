@@ -119,6 +119,14 @@ foreach ($dir in $excludeDirs) {
 $robocopyArgs += '/XD'
 $robocopyArgs += (Join-Path $sourcePath 'scripts')
 
+# 模板自己的測試（hook 測試、skill 壓力測試題）：只服務模板開發，專案用不到。
+# 同樣用完整路徑錨定，'tests' 這個名字在專案其他位置也常見。
+# copy-template.sh 的 EXCLUDES、update-template.{sh,ps1} 要一致
+foreach ($t in @('.claude\hooks\tests', '.claude\tests')) {
+    $robocopyArgs += '/XD'
+    $robocopyArgs += (Join-Path $sourcePath $t)
+}
+
 foreach ($file in $excludeFiles) {
     $robocopyArgs += '/XF'
     $robocopyArgs += $file

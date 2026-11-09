@@ -94,11 +94,6 @@ decisions/
 - **測試場景**: {關鍵使用者流程}
 - **期望輸出**: {預期結果}
 
-### 🎯 workflow-template-manager
-- **任務**: {具體任務描述}
-- **範本需求**: {VibeCoding 範本應用}
-- **期望輸出**: {預期結果}
-
 ## 執行順序與依賴
 ```mermaid
 graph TD
@@ -312,7 +307,7 @@ graph TD
 ## 當前專案狀態 Dashboard
 
 ### 主要階段進度
-- [ ] Phase 1: 需求分析 - 負責: workflow-template-manager
+- [ ] Phase 1: 需求分析 - 負責: planner
 - [x] Phase 2: 架構設計 - 負責: Claude Code + code-quality-specialist
 - [ ] Phase 3: 開發實作 - 負責: test-automation-engineer
 - [ ] Phase 4: 品質保證 - 負責: security + e2e-validation
@@ -324,7 +319,6 @@ graph TD
 - ⚡ deployment-expert: IDLE - 待命中
 - 📝 documentation-specialist: ACTIVE - 更新 API 文檔
 - 🧪 e2e-validation-specialist: WAITING - 等待功能完成
-- 🎯 workflow-template-manager: COMPLETED - 已完成初始規劃
 ```
 
 ## 🔄 最佳實踐

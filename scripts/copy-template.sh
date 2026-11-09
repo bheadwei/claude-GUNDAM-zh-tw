@@ -101,6 +101,12 @@ EXCLUDES=(
     # session-start.sh 靠「scripts/sync-ui-sources.sh 在不在」判斷是不是模板 repo，
     # 這條排除讓新專案一定判成「不是」。copy-template.ps1 的 $excludeDirs 要一致
     "/scripts/"
+
+    # 模板自己的測試（hook 測試、skill 壓力測試題）：只服務模板開發，專案的 workflow 用不到。
+    # 錨定完整路徑：專案自己的 tests/ 與 .claude/ 其他位置的同名目錄不能被誤排。
+    # copy-template.ps1 的 $excludeTestDirs、update-template.{sh,ps1} 要一致
+    "/.claude/hooks/tests/"
+    "/.claude/tests/"
 )
 
 # ============================================================================

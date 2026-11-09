@@ -75,9 +75,9 @@
 #
 #   ② **唯讀名單**（READONLY_AGENTS，名單本身在 lib/agent-inflight.sh 的
 #      AGENT_INFLIGHT_READONLY，兩道閘門共用）：
-#        Explore Plan claude-code-guide planner architect workflow-template-manager
+#        Explore Plan claude-code-guide planner architect
 #      依據：它們的產出是「讀程式碼、寫一份自己的文件」——planner 寫 plan、architect 寫
-#      ADR／決策報告、workflow-template-manager 寫流程文件，不碰產品碼也不跑測試。
+#      ADR／決策報告，不碰產品碼也不跑測試。
 #      要派的是名單內的 → 放行；在跑的名單內 agent 不算進 in-flight、也不進讀寫衝突掃描。
 #
 #      **邊界（不要假裝這是機器保證）**：planner 有 Write／Edit、Explore 有 Bash——

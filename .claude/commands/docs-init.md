@@ -1,24 +1,27 @@
 ---
-description: 依開發情境產出規格文件（demo / mvp / full）。demo 產精簡 PRD；mvp 產單檔 Tech Spec；full 走 VibeCoding 完整流程
+description: Use when 要產專案文件初稿（「寫 PRD」「補架構文件」「先把需求寫下來」），或舊專案要補文件、`docs/` 已有一堆舊文件不知道怎麼收（先問要不要盤點）。依 demo / mvp / full 決定先產哪幾份：demo 只有 brief；mvp 加 PRD 與架構文件；full 再依專案特性加威脅模型、runbook
 ---
 
 # 文件初始化
 
 ## 功能
 
-依據開發情境產出對應深度的規格文件，作為 WBS 拆解與後續開發的基準。
+依開發情境產出專案文件的初稿，作為 WBS 拆解與後續開發的基準。
+
+一個專案只有 6 份文件（brief、PRD、架構文件、WBS、plan、ADR），各份回答什麼、不寫什麼，
+唯一來源是 `.claude/skills/project-docs/SKILL.md`。本指令只決定**先產哪幾份、照什麼順序產**。
 
 **核心原則**：文件先行，WBS 從文件反推——避免「越做越發散」。
 
 ## 三種模式對照
 
-| 模式 | 產出文件 | 存放位置 | 適用情境 |
-|---|---|---|---|
-| **demo** | 精簡 PRD（1 份） | `docs/prd.md` | 快速驗證想法、個人實驗、< 1 天 |
-| **mvp** | Tech Spec（1 份合併 02+05+06+08） | `docs/tech-spec.md` | 內部工具、小型產品、< 1 週 |
-| **full** | VibeCoding 完整文件集（多份編號檔，含條件式範本 18-21） | `docs/01_prd.md`、`docs/02_bdd.md`… | 正式產品、跨團隊、> 1 週 |
+| 模式 | 先產 | 適用情境 |
+|---|---|---|
+| **demo** | `docs/00_brief.md`（PRD 等第一條情境出現才建；不產架構文件） | 快速驗證想法、個人實驗、< 1 天 |
+| **mvp** | `docs/00_brief.md`、`docs/prd.md`、`docs/architecture.md` | 內部工具、小型產品、< 1 週 |
+| **full** | 同 mvp；碰到認證、金流、個資時加 `docs/threat-model.md`；詢問要不要 `docs/runbook.md` | 正式產品、跨團隊、> 1 週 |
 
-**共通**：三種模式都會產出 PRD 與 WBS，差別在深度與文件數量。
+WBS 三種模式都有，由 `/task-init` 寫進 `.claude/taskmaster-data/wbs.md`；plan 與 ADR 在開發中產生，不在這裡產。
 
 ---
 
@@ -27,7 +30,7 @@ description: 依開發情境產出規格文件（demo / mvp / full）。demo 產
 - `/task-init` 依使用者選擇的情境自動呼叫（傳入 `--demo` / `--mvp` / `--full`）
 - 使用者主動執行 `/docs-init` 互動選模式
 - demo 做大了要升級：`/docs-init --mvp` 或 `/docs-init --full`
-- 既有專案補文件：任何時候都能跑
+- 既有專案補文件：任何時候都能跑；舊文件多時第一題問要不要先盤點（步驟 1a）
 
 ---
 
@@ -40,197 +43,148 @@ description: 依開發情境產出規格文件（demo / mvp / full）。demo 產
 - 使用 `AskUserQuestion` 逐題詢問
 - 記憶中收集問答，結束後一次性 Write 到 `.claude/qa-history/YYYY-MM-DD-HHMMSS-docs-init.md`
 
-### 步驟 1：確認模式
+### 步驟 1：偵測既有文件，再確認模式
+
+#### 1a. 既有文件多 → 先問要不要盤點
+
+不管有沒有帶參數都先算一次「不是 6 份之一」的 md：
+
+```bash
+git -c core.quotepath=false ls-files 'docs/*.md' \
+  | grep -Ev '^docs/(00_brief|prd|architecture|threat-model|runbook)\.md$|^docs/(decisions|archive)/|^docs/1[27]_'
+```
+
+（`docs/archive/` 是盤點後封存的去處，`docs/12_*`、`docs/17_*` 由 `/ui-site` 產生，都不算。
+`core.quotepath=false` 不能省：預設會把中文檔名輸出成 `"docs/\344…"`，`^docs/` 就對不上。）
+
+不是 git repo 或清單為空 → 不問，直接進 1c。
+
+這份清單有 **5 份以上**，或沒有 `docs/00_brief.md` 而清單至少 1 份 → 視為既有專案，用 `AskUserQuestion` 問第一題：
+
+**題目：** `docs/` 已經有 N 份不在 6 份文件體系裡的文件，要先盤點嗎？
+
+| 選項 | 說明 |
+|------|------|
+| **先盤點 (Recommended)** | 派 `documentation-specialist` 讀每份開頭、分類，產報告到 `.claude/context/docs/`。**盤點只產報告、不改 `docs/`**；搬不搬檔看完報告再逐批決定 |
+| **直接產文件** | 跳過盤點，照下方「確認模式」產新文件；舊文件原樣留著 |
+
+清單不到門檻 → 不問，直接進「確認模式」。
+
+#### 1b. 盤點分支（選了「先盤點」才走）
+
+1. 派 `documentation-specialist`（`subagent_type: "documentation-specialist"`），prompt 寫「盤點既有文件」。
+   它回 `DONE` 與報告路徑 `.claude/context/docs/docs-inventory-<日期>.md`；此時 `git status` 不該有任何 `docs/` 的變更
+2. 把報告的 TL;DR 與各類檔數回述給使用者
+3. **逐批搬檔**：報告的「搬移批次」一批一題。先列出這批的檔案，再用 `AskUserQuestion` 問「第 N 批（<類>，k 檔）搬到 `docs/archive/`？」：
+   搬（Recommended）／跳過這批／停在這裡。選「搬」：
+   - `git mv` 每個檔到 `docs/archive/<原本在 docs/ 底下的相對路徑>`；目標已存在 → 跳過該檔並告知使用者，不覆蓋
+   - `rg` 找 repo 內指向舊路徑的連結，改成新路徑。**不含「現行，模板外」那類的檔**：交付物裡的舊連結列給使用者，不改
+   - 一批一個 commit：`docs: 封存舊文件第 N 批（<類>）`，commit 裡只有 rename 與連結修正
+4. 不搬「現行，模板外」那類（交付物一個字都不改），**任何情況都不刪除檔案**
+5. **內容轉換是另一題**：搬完（或停下）後問「要從報告的『併入』類起草新格式的文件嗎？」：
+   起草（Recommended）／先不用。選「起草」→ 往下走「確認模式」，步驟 2 起把併入類的檔當草稿來源，每份照原步驟逐段讓使用者確認才寫；
+   單檔多條 ADR 拆成一條一檔用 `/adr`。選「先不用」→ 跳到步驟 8，提示之後再跑 `/docs-init`
+
+#### 1c. 確認模式
 
 若指令帶參數（`--demo` / `--mvp` / `--full`）→ 直接採用，跳到步驟 2。
 
 若無參數 → 用 `AskUserQuestion` 問：
 
-**題目：** 要產出哪種深度的文件？
+**題目：** 要先產哪幾份文件？
 
 | 選項 | 說明 |
 |------|------|
-| **demo** | 只產精簡 PRD（名稱/問題/使用者/核心功能/成功標準）。適合快速驗證 |
-| **mvp (Recommended)** | 單檔 Tech Spec：PRD + 架構 + API + 結構。適合內部工具與小產品 |
-| **full** | VibeCoding 完整文件集（16 必備 + 條件式 18-21）。適合正式產品 |
+| **demo** | 只產 brief。適合快速驗證；PRD 等第一條情境出現才建 |
+| **mvp (Recommended)** | brief＋PRD＋架構文件。適合內部工具與小產品 |
+| **full** | 同 mvp，再依專案特性加威脅模型、runbook。適合正式產品 |
 
 ### 步驟 2：讀取既有上下文
 
 從以下來源讀取已收集的專案資訊，避免重問：
 
 0. **`docs/00_brief.md`（優先，若存在）** —— `/task-init` 步驟 2.7 產出且**已由使用者逐段確認**的需求 brief。
-   比解析問答歷史可靠得多：它已經收斂過、含 non-goals 與風險、且「仍未釐清」那段誠實標出了缺口。
    **有 brief 就不要再問它已經涵蓋的問題。**
    - 特別注意 brief 的「**仍未釐清**」段：那些是使用者當時說「還不確定」的事。
-     產文件時**不要自己填答案**——在文件對應處標 `TBD` 並列出待確認清單
+     產文件時**不要自己填答案**——寫進該文件的「待確認」
 1. `.claude/qa-history/YYYY-MM-DD-HHMMSS-task-init.md`（若由 `/task-init` 觸發，或 brief 不存在時的退路）
 2. `.claude/taskmaster-data/project.json`
-3. 既有 `docs/` 下的檔案（若為升級模式）
+3. 既有 `docs/` 下的檔案（若為升級模式）；走過 1b 的「起草」時，讀最新一份 `docs-inventory-*.md` 的「併入」類（已封存的到 `docs/archive/` 找）
 
-若資訊不足，在步驟 3 依模式補問。
+### 步驟 3：brief（三種模式都有）
 
-### 步驟 3：依模式產出文件
+`docs/00_brief.md` 已存在 → 直接用，進步驟 4。
 
-#### 路徑 A：demo 模式
+不存在 → 照 `.claude/skills/project-docs/templates/02_project_brief_and_prd.md` 的**上半**產（唯一來源，勿在此重述骨架）。
+骨架裡缺的段用 `AskUserQuestion` 一題一題補問（由 `/task-init` 觸發時直接用它的問答），寫完逐段回述給使用者確認。
 
-**不額外問問題**——直接用 `/task-init` 步驟 2 收集到的答案產出精簡 PRD。
+**demo 到這裡結束**，跳到步驟 7。demo 沒有架構文件，WBS 的模組欄一律 `—`。
+使用者要求在 demo 就先建一份架構文件時，照步驟 5 建，但第 5 節只放 `## 5. 資料流` 標題與「尚無」一行，不畫圖。
 
-若獨立執行（非由 task-init 觸發），用 `AskUserQuestion` 補問：
-1. 一句話描述這個 demo 要做什麼
-2. 目標使用者是誰
-3. 最重要的 3 個功能
-4. 成功標準（用什麼判斷做出來了）
+### 步驟 4：PRD 初稿（mvp／full）
 
-**產出**：`docs/prd.md`
+照 02 範本的**下半**產 `docs/prd.md`（格式的唯一來源）：
 
-demo 沒有架構文件，所以 WBS 的模組欄一律 `—`，之後的專案圖解只顯示任務圖、沒有專案地圖。
-要有地圖就升級到 mvp。
+1. 從 brief 的「核心功能」切出**領域**（一組相關的功能）。節標題括號寫模組分組名；還沒有程式碼時分組名先由這裡定，之後架構文件與專案地圖照用同一個名字
+2. 先寫**用語表**：brief 與問答裡出現的業務名詞，各寫一句意思與「不要說成」
+3. 每個領域先寫 **1–3 條情境**（`#### <代碼>-<序號> 標題`＋假設／當／那麼），只寫使用者看得到的行為，不寫實作、路徑、API 端點
+4. 不確定的寫進「待確認」一節，不要替使用者填答案
+5. **逐領域回述**，用 `AskUserQuestion` 問「這個領域的情境對嗎？」：對（Recommended）／要改（直接輸入要改的地方）
 
-```markdown
-# PRD — {專案名稱}
+PRD 寫好之後只由 `/verify` 依 plan 的「PRD 情境變更」套回，不手寫進度。
 
-**版本：** 0.1
-**日期：** {YYYY-MM-DD}
-**狀態：** draft
-**模式：** demo
+### 步驟 5：架構文件（mvp／full）
 
-## 一句話描述
+照 `.claude/skills/project-docs/templates/05_architecture_and_design_document.md` 產 `docs/architecture.md`
+（節的寫法、標記字串、「不寫什麼」都以範本為唯一來源，不在這裡重述或內嵌表格）。
+第 1–3、5 節由 architect 撰寫；第 4 節由專案地圖從程式碼自動產生。
 
-{摘要}
+- **第 1–3 節（系統情境、技術選型、部署）由 architect 撰寫**：委派 `architect`（`subagent_type: "architect"`），或主模型照範本寫。
+  資訊來自 brief 的技術約束與問答；技術選型每列要連到 ADR，還沒有 ADR 的標 `[待確認]`，並提示之後用 `/adr` 補
+- **第 4 節（模組與依賴）自動產生**：照範本放兩行標記與標記內那一行說明，其餘留空，第一次 `/task-status` 時由專案地圖從程式碼填上。**不要手寫模組表**
+- **第 5 節（資料流）由 architect 撰寫**：依 PRD 的領域，為跨服務的主要功能各畫一張 `sequenceDiagram`，小標題括號寫對應的 PRD 情境編號。
+  系統只有一個服務、也不連外部系統 → 寫「無跨服務或跨系統的流程」，節保留
 
-## 目標使用者
+寫好後把 architect 撰寫的各節重點回述給使用者，用 `AskUserQuestion` 確認：對（Recommended）／要改（直接輸入要改的地方）。
 
-{誰會用、為什麼用}
+### 步驟 6：條件式文件（full）
 
-## 核心功能
+- **威脅模型**：brief 或 PRD 碰到認證、金流、個資 → **必產** `docs/threat-model.md`（`20_threat_model_template.md`），不另外問
+- **runbook**：用 `AskUserQuestion` 問「這個專案會上線並持續維運嗎？」
+  - 上線前再補（Recommended）— 現在還沒有部署可寫
+  - 現在就產 — 照 `14_deployment_and_operations_guide.md` 產 `docs/runbook.md`，沒有的節直接刪
 
-1. {功能 1}
-2. {功能 2}
-3. {功能 3}
-
-## 成功標準
-
-{如何判斷做出來了，量化優先}
-
-## 技術約束
-
-{若無，填「無特殊限制」}
-
-## 備註
-
-此為 demo 模式精簡 PRD。要擴展為完整文件請執行：
-- `/docs-init --mvp`（升級為 Tech Spec）
-- `/docs-init --full`（升級為完整 VibeCoding 文件集）
-```
-
-#### 路徑 B：mvp 模式
-
-讀取 `.claude/skills/project-docs/templates/02_project_brief_and_prd.md`、`05_architecture_and_design_document.md`、`06_api_design_specification.md`、`08_project_structure_guide.md` 的骨架，**取最小集合**合併為一份。
-
-用 `AskUserQuestion` 補問（已從 task-init 取得的不重問）：
-1. 關鍵 OKR 或成功指標（1-2 個量化數字）
-2. 主要架構決策（單體/微服務、前後端分離等）
-3. 核心 API 端點（3-5 個）
-4. 資料模型雛形（實體與關係）
-
-**產出**：`docs/tech-spec.md`
-
-骨架：
-```markdown
-# Tech Spec — {專案名稱}
-
-**版本：** 0.1 | **日期：** {YYYY-MM-DD} | **狀態：** draft | **模式：** mvp
-
-## 1. 產品需求（來自 PRD 02）
-- 問題陳述
-- 目標使用者 & Personas（簡化）
-- 核心功能
-- 成功指標（OKR）
-
-## 2. 架構總覽（來自 05）
-- 系統 Context（C4 Level 1）
-- 容器圖（mermaid，照 05 的 5.1）
-- 模組表（照 05 的 5.5）
-- 關鍵技術選型
-
-## 3. API 設計（來自 06）
-- 端點清單
-- 資料格式約定
-
-## 4. 專案結構（來自 08）
-- 目錄配置
-- 命名規範
-
-## 5. 後續擴展
-
-要升級為完整文件集請執行 `/docs-init --full`
-```
-
-「2. 架構總覽」的容器圖與模組表**格式照 `.claude/skills/project-docs/templates/05_architecture_and_design_document.md`
-的 5.1 與 5.5（唯一來源，勿在此重述欄位）**。這兩塊不能省：WBS 的模組欄填的就是這張模組表的 id，
-專案圖解也從這裡畫地圖。
-
-#### 路徑 C：full 模式
-
-依 VibeCoding 順序**依序產出**完整文件集。每份文件由 `project-docs` skill 處理：
-
-```
-02 PRD → 03 BDD → 04 ADR → 05 架構 → 06 API → 07 模組 → (18 資料模型)
-  → 08 結構 → 09 設計與依賴 → 11 審查 → (12/17 前端) → 13 安全 → (20 威脅模型) → 14 部署 → (19 SLO) → 15 文檔 → (21 AI/LLM)
-```
-
-WBS 任務表不在 docs-init 階段產：由 `/task-init` 寫進 `.claude/taskmaster-data/wbs.md`
-（版面唯一來源 `.claude/templates/wbs.template.md`）。16 號範本是**選用**的規劃脈絡文件
-（Pitch／Appetite、高階模組、里程碑交付物），**不含任務表**，需要時才另外產。
-
-**條件式範本（括號者）**：進入 full 流程前，用一次 `AskUserQuestion`（multiSelect）確認專案特性，決定要納入哪些：
-
-| 範本 | 納入條件 |
-|---|---|
-| 18 資料模型與 Migration | 有資料庫 / schema 會演進 |
-| 20 威脅模型 | 建議納入；觸及認證/金流/個資則**強制** |
-| 19 可觀測性與 SLO | 會上線並持續維運（非一次性工具） |
-| 21 AI/LLM 整合規範 | 專案含 LLM/AI 功能 |
-
-**產出檔名**：`docs/01_prd.md`、`docs/02_bdd.md`、`docs/03_adr.md`…（依階段編號，與 VibeCoding 範本編號對齊）
-
-**執行方式**：
-1. 讀 `.claude/skills/project-docs/templates/INDEX.md` 確認階段順序
-2. 條件式範本以 `AskUserQuestion` 勾選後排入序列
-3. 依序呼叫 `project-docs` skill 處理每份
-4. 每份完成後 `AskUserQuestion` 詢問「繼續產下一份？還是暫停？」
-5. 使用者可隨時中斷，下次執行 `/docs-init --full --resume` 從上次進度接續
-
-### 步驟 4：更新 project.json
+### 步驟 7：更新 project.json
 
 Write `.claude/taskmaster-data/project.json`：
 
 ```json
 {
   "name": "...",
-  "mode": "demo" | "mvp" | "full",
+  "mode": "mvp",
   "docs": {
     "location": "docs/",
-    "mode_produced": "demo" | "mvp" | "full",
-    "files": ["prd.md"]  // 或 ["tech-spec.md"] 或 ["01_prd.md", "02_bdd.md", ...]
-  },
-  ...
+    "set": ["00_brief.md", "prd.md", "architecture.md"]
+  }
 }
 ```
 
-### 步驟 5：完成提示
+- `mode` 只准 `demo`、`mvp`、`full` 三個值
+- `docs.set` 列實際產出的檔（相對 `docs/`），沒產的不列；升級模式時把新產的加進去
+- 既有專案的 `docs.files`、`docs.mode_produced` 不用刪，也不再更新
+
+### 步驟 8：完成提示
 
 ```
 ✅ 文件已產出（模式：{mode}）
-   位置：docs/
-   檔案：{列出產出的檔案}
+   檔案：{列出 docs.set}
 
 下一步：
   /task-init 會接著產生 WBS（若由 task-init 呼叫）
-  
+
   獨立執行時：
     閱讀 docs/ 下的文件 → 確認內容 → 執行 /task-next 開始開發
-    或執行 /docs-init --{上一層模式} 升級文件深度
+    或執行 /docs-init --{上一層模式} 補齊文件
 ```
 
 ---
@@ -239,15 +193,14 @@ Write `.claude/taskmaster-data/project.json`：
 
 ```
 /docs-init                 # 互動選模式
-/docs-init --demo          # 精簡 PRD
-/docs-init --mvp           # Tech Spec
-/docs-init --full          # 完整文件集
-/docs-init --full --resume # 接續中斷的完整模式
+/docs-init --demo          # 只產 brief
+/docs-init --mvp           # brief＋PRD＋架構文件
+/docs-init --full          # 同 mvp，再加條件式文件
 ```
 
 ## 注意事項
 
-- **不覆蓋既有文件**：若 `docs/prd.md` 已存在，先提示使用者是覆蓋、合併、還是取消
-- **模式升級** 會**保留**既有文件，在其上補充（例：demo → mvp 會保留 `prd.md`，另產 `tech-spec.md`）
-- **模式降級** 不支援（降級無意義；要從頭重來請手動刪除 docs/ 後重跑）
-- 所有文件都遵循 VibeCoding 範本結構，不自創格式
+- **不覆蓋既有文件**：要產的檔已存在時，先問使用者是覆蓋、合併、還是取消
+- **模式升級**保留既有文件，只補缺的（例：demo → mvp 保留 brief，補 PRD 與架構文件）
+- **模式降級**不支援（降級無意義；要從頭重來請手動刪除 docs/ 後重跑）
+- 文件格式一律照 `project-docs` skill 的範本，不自創格式、不在本檔內嵌骨架

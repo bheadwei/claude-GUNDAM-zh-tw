@@ -1,0 +1,14 @@
+module web g1
+module gateway g2
+module svc-a g2
+module svc-b g2
+module db g3
+module cache g3
+group g1 用戶端
+group g2 服務層
+group g3 資料層
+edge web gateway
+edge gateway svc-a
+edge gateway svc-b
+edge svc-a db
+edge svc-b cache

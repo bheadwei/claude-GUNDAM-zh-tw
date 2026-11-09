@@ -7,7 +7,9 @@
 #       記進 .doc-impact 並在本任務第一次命中時注入提醒。
 #       /verify 在標記 WBS ✅ 前必須處理這份清單。
 #   (3) 前端寫入檢查：寫死色碼、動畫等級不符、AI 痕跡（P0）→ lib/ui-lint.sh（只提醒，不擋）
-#   (4) 專案圖解觸發：寫 wbs／plan／架構文件後在背景跑 scripts/overview.sh（不輸出）
+#   (4) 專案圖解觸發：寫 wbs／plan／架構文件／module-notes.md 後在背景跑 scripts/overview.sh（不輸出）；
+#       寫程式碼檔時節流重掃（30 秒內只觸發一次）
+#   (5) 說明層驗證：寫 module-notes.md 時前景跑 overview.sh --check-notes，有違規才注入
 #
 # 為什麼需要 (2)：新需求／客戶 CR 的程式都會寫出來，但文件常常沒跟上。
 # 原因是 documentation-specialist 在「任務完成路徑」上完全沒有位置——
@@ -62,17 +64,73 @@ REL="${NORM#"$ROOT_NORM"/}"
 # stdout，用 $(…) 擷取輸出的呼叫端（測試）會等完整支腳本（階段 1 實測多等 5 秒）。
 # 工作目錄用參數傳。放在 .suggest-mode 之前：那是建議密度開關，圖不是建議。
 #
-# 逃生門：OVERVIEW=off（腳本自己也認）；OVERVIEW_SYNC=1 改前景執行（測試用）
+# 寫程式碼檔也重產（地圖骨架來自程式碼），但要節流：連續改檔時每次都重掃太貴。
+# 戳記 .scan-at 是共享產物，放主 checkout——從 WORK_ROOT 的 .git 檔讀出來，不開 git 行程。
+# 視窗內只用 bash 內建（printf %()T、read、重導向）：這段在每次寫程式碼檔時都會跑。
+# 視窗內的改動留 .dirty：正在跑的 overview.sh 會再跑一輪；沒在跑的話等下一次視窗外的寫入。
+#
+# 逃生門：OVERVIEW=off（腳本自己也認）；OVERVIEW_SYNC=1 改前景執行（測試用）；
+# 節流秒數 OVERVIEW_THROTTLE_SEC（預設 30）
+# 與 scripts/overview-scan.sh 的同名常數相同（測試會比對）
+OVERVIEW_CODE_EXT="py ts tsx js jsx mjs cjs vue svelte go java kt cs rs"
 if [ "${OVERVIEW:-on}" != "off" ]; then
     OV_HIT=0
     case "$NORM" in
         */.claude/taskmaster-data/wbs.md|*/.claude/taskmaster-data/project.json|*/.claude/taskmaster-data/plans/*.md) OV_HIT=1 ;;
     esac
+    # module-notes.md 相對 WORK_ROOT 比對、錨定開頭：絕對路徑子字串會被 .claude/worktrees/ 底下別的 checkout 誤命中
     case "$REL" in
-        docs/*architecture*.md|docs/tech-spec.md) OV_HIT=1 ;;
+        docs/*architecture*.md|docs/tech-spec.md|.claude/taskmaster-data/module-notes.md) OV_HIT=1 ;;
     esac
+    if [ "$OV_HIT" -eq 0 ] && [ "$REL" != "$NORM" ]; then
+        case "$REL" in
+            .claude/*|docs/*|node_modules/*) ;;
+            # 不分大小寫用 nocasematch（bash 3.1 起有）：macOS 內建 bash 3.2 沒有大小寫轉換展開，
+            # 遇到會 bad substitution 讓整支 hook 中止；tr 又多一個行程
+            *.*) OV_EXT=${REL##*.}
+                 shopt -s nocasematch
+                 [[ " $OVERVIEW_CODE_EXT " == *" $OV_EXT "* ]] && OV_HIT=2
+                 shopt -u nocasematch ;;
+        esac
+    fi
     OV_SH="$MAIN_CLAUDE/scripts/overview.sh"
-    if [ "$OV_HIT" -eq 1 ] && [ -f "$OV_SH" ] \
+    if [ "$OV_HIT" -ne 0 ] && [ -f "$OV_SH" ] \
+       && { [ -f "$MAIN_CLAUDE/taskmaster-data/project.json" ] || [ -f "$WORK_CLAUDE/taskmaster-data/project.json" ]; }; then
+        if [ "$OV_HIT" -eq 2 ]; then
+            OV_MAIN="$WORK_ROOT"
+            if [ -f "$WORK_ROOT/.git" ]; then
+                OV_GD=""
+                IFS= read -r OV_GD < "$WORK_ROOT/.git"
+                OV_GD=${OV_GD#gitdir: }; OV_GD=${OV_GD%$'\r'}
+                case "$OV_GD" in
+                    /*|[A-Za-z]:*) ;;
+                    *) OV_GD="$WORK_ROOT/$OV_GD" ;;
+                esac
+                case "$OV_GD" in */.git/worktrees/*) OV_MAIN=${OV_GD%/.git/worktrees/*} ;; esac
+            fi
+            OV_DIR="$OV_MAIN/.claude/taskmaster-data/overview"
+            OV_AT=0
+            [ -f "$OV_DIR/.scan-at" ] && IFS= read -r OV_AT < "$OV_DIR/.scan-at"
+            [[ $OV_AT =~ ^[0-9]+$ ]] || OV_AT=0
+            OV_WIN=${OVERVIEW_THROTTLE_SEC:-30}
+            [[ $OV_WIN =~ ^[0-9]+$ ]] || OV_WIN=30
+            if (( BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 2) )); then
+                printf -v OV_NOW '%(%s)T' -1
+            else
+                OV_NOW=$(date +%s)
+            fi
+            if (( OV_NOW - OV_AT < OV_WIN )); then
+                [ -d "$OV_DIR" ] && : > "$OV_DIR/.dirty" 2>/dev/null
+                OV_HIT=0
+            else
+                if [ ! -d "$OV_DIR" ]; then
+                    mkdir -p "$OV_DIR" 2>/dev/null && printf '*\n' > "$OV_DIR/.gitignore" 2>/dev/null
+                fi
+                printf '%s\n' "$OV_NOW" > "$OV_DIR/.scan-at" 2>/dev/null
+            fi
+        fi
+    fi
+    if [ "$OV_HIT" -ne 0 ] && [ -f "$OV_SH" ] \
        && { [ -f "$MAIN_CLAUDE/taskmaster-data/project.json" ] || [ -f "$WORK_CLAUDE/taskmaster-data/project.json" ]; }; then
         if [ "${OVERVIEW_SYNC:-}" = "1" ]; then
             bash "$OV_SH" "$WORK_ROOT" </dev/null >/dev/null 2>&1
@@ -81,6 +139,30 @@ if [ "${OVERVIEW:-on}" != "off" ]; then
         fi
     fi
 fi
+
+# ---------------------------------------------------------------- 說明層驗證
+#
+# 寫入 module-notes.md 時在前景跑 overview.sh --check-notes：有違規就注入，沒有就完全不出聲。
+# 判斷得出對錯的事交給機器（ADR-2026-11-05-002）：違規的列在地圖上會被當成沒有說明，
+# 而說明可能寫進了客戶的主機、連線字串——不能等人想起來去驗。
+# 放在 .suggest-mode 與擴充維護提醒的 exit 之前：這不是建議密度的問題。
+# 背景重產上一節已經觸發；--check-notes 不搶鎖、只讀現有骨架，兩者並行不互等。逃生門：OVERVIEW=off
+# 比對相對 WORK_ROOT 的路徑、錨定開頭（理由同上一節的 module-notes.md）
+case "$REL" in
+    .claude/taskmaster-data/module-notes.md)
+        if [ "${OVERVIEW:-on}" != "off" ] && [ -f "$MAIN_CLAUDE/scripts/overview.sh" ]; then
+            NOTES_V=$(bash "$MAIN_CLAUDE/scripts/overview.sh" --check-notes "$WORK_ROOT" </dev/null 2>/dev/null)
+            NOTES_V=${NOTES_V//$'\r'/}
+            if [ -n "$NOTES_V" ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] module-notes check: violations in $REL" >> "$CLAUDE_DIR/logs/hooks.log" 2>/dev/null || true
+                jq -n --arg v "$NOTES_V" '{hookSpecificOutput: {hookEventName: "PostToolUse",
+                  additionalContext: ("📝 `module-notes.md` 沒通過檢查，下面這幾列在專案地圖上會當成沒有說明：\n\n"
+                    + ($v | split("\n") | map(select(. != "") | "- " + .) | join("\n"))
+                    + "\n\n**修到這則提示不再出現為止。** 格式與寫作標準：`.claude/skills/project-docs/module-notes.md`（說明裡不准寫主機、IP、連線字串、帳密、Email）。")}}' 2>/dev/null || true
+            fi
+        fi
+        exit 0 ;;
+esac
 
 # ---------------------------------------------------------------- hook 語法檢查
 #
@@ -210,7 +292,7 @@ case "$NORM" in
                     "📏 WBS 格子太長：`wbs.md` 有 \($hits | length) 格超過 \($max) 字。WBS 是打開就要能掌握專案狀態的文件，**每格只寫一行**——長內容搬出去，格子裡只留連結或風險 ID。\n\n"
                     + ([$hits[:8][] | "- \(.id) 的「\(.col)」（\(.len) 字）"] | join("\n"))
                     + (if ($hits | length) > 8 then "\n- …另有 \(($hits | length) - 8) 格" else "" end)
-                    + "\n\n該搬去哪：驗證數據／執行結果 → 評估報告或 plan 該階段的「驗收」・進度／派工／commit SHA → 執行帳本 `plans/*.progress.md`・帶給下一任務的疑慮 → 下一任務 plan 的「風險與緩解」・選型理由 → `context/decisions/` 或 ADR・阻塞原因 → 「風險與阻塞」表（任務列只寫風險 ID）・任務等級 → plan frontmatter。"
+                    + "\n\n該搬去哪：驗證數據／執行結果 → 評估報告或 plan 該階段的「驗收」・進度／派工／commit SHA → 執行帳本 `plans/*.progress.md`・帶給下一任務的疑慮 → 下一任務 plan 的「發現與決策」或該階段的「注意」・選型理由 → ADR（`docs/decisions/`，用 `/adr`）・阻塞原因 → 「風險與阻塞」表（任務列只寫風險 ID）・任務等級 → plan frontmatter。"
                     + (if ($doc | test("(^|\n)## 現況")) then "" else "\n\n這份 WBS 沒有「現況」區，是舊版面——`/task-status` 會提議整份轉換（長內容搬出、不丟資料）。" end)
                     + "\n\n版面唯一來源：`.claude/templates/wbs.template.md`。（只提醒，不擋。關閉：WBS_CELL_CHECK=off）"
                   end

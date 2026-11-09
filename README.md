@@ -13,7 +13,10 @@
 | 平台 | 必要軟體 |
 |---|---|
 | Windows | **Git Bash**（Git for Windows 附帶）+ `jq` **1.7.1 以上**（`winget install jqlang.jq`） |
-| Linux / macOS | `bash`（系統內建）+ `jq` **1.7.1 以上**（`apt/brew install jq`） |
+| Linux | `bash` **4 以上**（各發行版內建即符合）+ `jq` **1.7.1 以上**（`apt install jq`） |
+| macOS | `bash` **4 以上**（內建是 3.2，需 `brew install bash`）+ `jq` **1.7.1 以上**（`brew install jq`） |
+
+> bash 最低 4：多支 hook 用了關聯陣列與 `mapfile`。macOS 內建 `/bin/bash` 是 3.2，`brew install bash` 後確認 `command -v bash` 解析到新版（Apple Silicon 是 `/opt/homebrew/bin/bash`、Intel 是 `/usr/local/bin/bash`）；`session-start.sh` 偵測到 3.x 會警告。
 
 > jq 最低 1.7.1，`session-start.sh` 版本過舊時會警告。Debian 12、Ubuntu 22.04 以前 apt 只有 1.6，要從 [jq releases](https://github.com/jqlang/jq/releases) 手動下載執行檔放進 PATH；Ubuntu 24.04 起 apt 版本即為 1.7.1。
 
@@ -91,10 +94,10 @@ claude_v2026/
     ├── statusline.sh                 # StatusLine 腳本
     │
     ├── rules/        ( 6 個)         # 自動載入規則（每次對話注入）
-    ├── agents/       (15 個)         # 專業 Agent 定義
+    ├── agents/       (14 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
     ├── skills/       (28 個)         # 按需載入（不佔常駐 context）
-    ├── hooks/                        # Hook 腳本 + lib/ + 1002 案例回歸測試
+    ├── hooks/                        # Hook 腳本 + lib/ + 1268 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）、check-counts.sh（文件計數一致性）、overview.sh（專案圖解）
     ├── ui/           (104 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │
@@ -125,9 +128,9 @@ claude_v2026/
 ```
 /task-init                                          ← 第一題：demo / mvp / full
     │
-    ├─ demo  → /docs-init --demo  → docs/prd.md
-    ├─ mvp   → /docs-init --mvp   → docs/tech-spec.md
-    └─ full  → /docs-init --full  → docs/01_prd.md, 02_bdd.md ...
+    ├─ demo  → /docs-init --demo  → docs/00_brief.md
+    ├─ mvp   → /docs-init --mvp   → ＋ docs/prd.md、docs/architecture.md
+    └─ full  → /docs-init --full  → 同 mvp（碰認證／金流／個資時加威脅模型；可選 runbook）
          ↓
    WBS（從文件反推，避免發散）
          ↓
@@ -153,11 +156,14 @@ claude_v2026/
 建立 handoff，`post-agent-report.sh` 掃到 pending 交接即注入提示。編排劇本見
 `.claude/rules/agent-orchestration.md`。
 
-**專案圖解**：用瀏覽器看整個專案的兩張圖——**專案地圖**（架構文件的模組＋燈號＋本次改動）
-與**任務圖**（每份 plan 的部件做了沒）。網址由 `/task-status` 最後一行印出
-（或 `bash .claude/scripts/overview.sh --print-path`）。不用手動重產：寫 wbs／plan／架構文件時
+**專案圖解**：用瀏覽器看整個專案的兩張圖——**專案地圖**（模組＋燈號＋本次改動＋本次 plan 預計動的模組）
+與**任務圖**（每份 plan 的部件做了沒）。骨架掃程式碼（沒有架構文件、文件不照模板寫也畫得出來，對不上的列成落差）、
+進度看 WBS／plan、模組說明按需請 `documentation-specialist` 寫；架構文件第 4 節的自動段與 `/task-status` 的一頁現況
+由同一份資料產生。網址由 `/task-status` 最後一行印出
+（或 `bash .claude/scripts/overview.sh --print-path`）。不用手動重產：寫 wbs／plan／架構文件或程式碼檔時
 hook 在背景更新，畫面每 3 秒自己重讀。地圖可拖曳平移、縮放（放大會顯示更多細節）、
-雙擊模組聚焦，左下角有小地圖可跳轉；產物在 `taskmaster-data/overview/`，不進 git。
+雙擊模組聚焦，左下角有小地圖可跳轉；點模組可展開看內部檔案與 import，右側欄列出它參與的資料流；
+產物在 `taskmaster-data/overview/`，不進 git。SSH 遠端開發用 VS Code Remote 開，或把 `overview/` 整個下載回本機。
 關閉用環境變數 `OVERVIEW=off`。使用方式見 `.claude/guides/WORKFLOW.md`「想看整體長什麼樣」，
 產生器與設定見 `.claude/scripts/overview.sh` 檔頭。
 
@@ -192,14 +198,14 @@ hook 在背景更新，畫面每 3 秒自己重讀。地圖可拖曳平移、縮
 | 輔助 | `/hub-delegate` | 手動委派單一 Agent |
 | | `/agent-log` | 查看 subagent 活動軌跡與交接決策 |
 | | `/suggest-mode` | 調整建議/注入密度（off / low / medium / high） |
-| | `/template-check` | VibeCoding 模板合規檢查 |
+| | `/template-check` | 檢查專案文件是否符合 project-docs 範本 |
 
 > 程式碼審查用 **Claude Code 內建的 `/code-review`**（支援 `ultra` 多 agent 雲端審查、
 > `--fix`、`--comment`、指定 PR/分支）。本模板不自建，舊有的 `/review-code` 已刪除。
 
 ---
 
-## Agent（15 個）
+## Agent（14 個）
 
 | Agent | Model | 用途 |
 | :--- | :--- | :--- |
@@ -215,8 +221,7 @@ hook 在背景更新，畫面每 3 秒自己重讀。地圖可拖曳平移、縮
 | deployment-expert | opus | 部署、CI/CD、IaC、上線監控 |
 | ui-builder | opus | 前端 UI 產出（嚴格遵循 DESIGN.md） |
 | build-error-resolver | opus | 建置/型別錯誤最小差異修復 |
-| documentation-specialist | sonnet | codemap、API 文檔 |
-| workflow-template-manager | sonnet | PRD/ADR 等流程模板管理 |
+| documentation-specialist | sonnet | 程式碼改動後同步 README、架構文件、runbook |
 | skill-curator | opus | Skill 擴充維護、UI 素材庫盤點與新增 |
 
 通用任務退回 Claude Code **內建的 `general-purpose`**——本模板不自訂它，同名會 shadow
@@ -287,7 +292,7 @@ hook 在背景更新，畫面每 3 秒自己重讀。地圖可拖曳平移、縮
 
 | Skill | 用途 |
 | :--- | :--- |
-| **project-docs** | 依 VibeCoding 範本產專案文件（**20 份範本自帶於 skill 內**），支援 demo/mvp/full 三檔深度 |
+| **project-docs** | 6 份專案文件（brief、PRD、架構文件、WBS、plan、ADR）的分工、各份不寫什麼與範本（**5 份範本自帶於 skill 內**）；demo/mvp/full 只決定先產哪幾份 |
 | **deep-research** | 多源深度研究（MCP 串接） |
 | **e2e-testing** | Playwright E2E 測試模式 |
 | **cost-aware-llm-pipeline** | LLM API 成本優化（模型路由 + 預算追蹤） |
@@ -317,19 +322,23 @@ hook 在背景更新，畫面每 3 秒自己重讀。地圖可拖曳平移、縮
 
 ---
 
-## VibeCoding 工作流模板（20 份）
+## 專案文件範本（5 份）
 
-自帶於 `project-docs` skill 的 `templates/`，由 `/docs-init` 依情境選用（編號無 `10`）。
+一個專案只有 6 份文件，各回答一個問題。範本自帶於 `project-docs` skill 的 `templates/`，
+由 `/docs-init` 依 demo／mvp／full 決定先產哪幾份（ADR-2026-11-05-004）。
 
-| 階段 | 模板 |
-| :--- | :--- |
-| 流程總覽 | `01` workflow_manual |
-| 規劃 | `02` PRD、`03` BDD |
-| 架構設計 | `04` ADR、`05` 架構、`06` API |
-| 詳細設計 | `07` 模組與測試、`08` 專案結構、`09` 設計與依賴、`18` 資料模型與 migration |
-| 開發品質 | `11` Code Review、`12` 前端架構、`17` 前端 IA |
-| 安全部署 | `13` 安全與就緒清單、`20` 威脅模型、`14` 部署維運、`19` 可觀測性與 SLO |
-| 維護管理 | `15` 文檔維護、`16` WBS、`21` AI/LLM 整合 |
+| 文件 | 路徑 | 範本 |
+| :--- | :--- | :--- |
+| brief | `docs/00_brief.md` | `02` 上半 |
+| PRD | `docs/prd.md` | `02` 下半（編號情境＋用語表） |
+| 架構文件 | `docs/architecture.md` | `05`（第 1–3、5 節由 architect 撰寫；第 4 節由專案地圖從程式碼自動產生） |
+| WBS | `.claude/taskmaster-data/wbs.md` | `.claude/templates/wbs.template.md` |
+| plan | `.claude/taskmaster-data/plans/` | `plan-format` skill |
+| ADR | `docs/decisions/` | `04` |
+| 威脅模型（條件式） | `docs/threat-model.md` | `20` |
+| runbook（選配） | `docs/runbook.md` | `14` |
+
+`12`、`17` 屬 `/ui-site` 的 UI 鏈，不算文件體系。
 
 ---
 

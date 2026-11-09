@@ -169,6 +169,16 @@ else
     fi
 fi
 
+# 最低要 bash 4：多支 hook 用了關聯陣列與 mapfile。本檔自己必須維持 bash 3.2 可跑，否則這段警告永遠印不出來
+# BASH_VERSINFO 唯讀，測試只能靠 TM_TEST_BASH_VERSION 假裝版本
+_bash_ver="${TM_TEST_BASH_VERSION:-$BASH_VERSION}"
+_bash_major="${BASH_VERSINFO[0]}"
+[ -n "${TM_TEST_BASH_VERSION:-}" ] && _bash_major="${TM_TEST_BASH_VERSION%%.*}"
+if [ "$_bash_major" -lt 4 ] 2>/dev/null; then
+    log "⚠️ bash 版本過舊：$_bash_ver（最低要求 bash 4）"
+    note "⚠️ bash 版本 $_bash_ver 太舊（最低要求 bash 4）— 部分 hook 會語法錯誤或靜默失效。macOS 內建的是 3.2：\`brew install bash\` 安裝後，確認 \`command -v bash\` 解析到新版（Apple Silicon 是 \`/opt/homebrew/bin/bash\`、Intel 是 \`/usr/local/bin/bash\`），不是 \`/bin/bash\`。"
+fi
+
 # ============================================================================
 # 這是不是模板 repo 本身
 #

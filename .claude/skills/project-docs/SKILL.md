@@ -1,134 +1,102 @@
 ---
 name: project-docs
-description: 依據 VibeCoding 工作流範本撰寫專案文件。涵蓋 PRD、架構設計、ADR、API 規範、威脅模型、SLO、AI/LLM 整合、WBS 等 20 種文件範本，支援 demo / mvp / full 三種深度模式。適用於需要產出專案文件、規劃文檔或技術規格時。
+description: Use when writing or updating a project document — 「寫 PRD」「補架構文件」「寫 ADR」「要不要寫威脅模型／runbook」「API 規格放哪」「文件要寫哪幾份」，running /docs-init or /task-init 2.7b, or before creating any new file under docs/. 決定這份內容屬於 6 份文件的哪一份、該照哪份範本、哪些東西不該寫進去；demo／mvp／full 只決定先產哪幾份。
 ---
 
-# 專案文件撰寫
+# 專案文件
 
-依據本 skill 自帶的 `templates/`（`.claude/skills/project-docs/templates/`）中的 20 種範本，產出結構化的專案文件。範本是 skill 的一部分，隨 `.claude/` 一起攜帶與更新。
+**一個專案只有 6 份文件**，每份回答一個問題、有固定路徑。5 種範本放在本 skill 的 `templates/`，隨 `.claude/` 一起更新。
+決策依據：ADR-2026-11-05-004（6 份文件）、005（PRD 情境）、006（plan）、007（架構文件自動段）、ADR-2026-11-06-001（資料流）。
 
-## 啟動時機
+## 6 份文件
 
-- 使用者要求撰寫專案文件（PRD、架構文件、API 規格等）
-- 使用者說「寫文件」、「產出文檔」、「建立 PRD」、「架構設計」、「API 規範」
-- `/task-init` 完成後進入文件撰寫階段
-- 使用者提到 VibeCoding 範本或文件編號（如「幫我寫 05」）
+| 文件 | 路徑 | 回答什麼 | 誰寫、何時更新 | 格式來源 |
+|---|---|---|---|---|
+| brief | `docs/00_brief.md` | 為什麼做、範圍上限、不做什麼、怎樣算成功 | `/task-init` 2.7b 產、使用者逐段確認；方向改變時改 | 02 範本上半 |
+| PRD | `docs/prd.md` | 系統該有什麼行為（編號情境）、用語 | `/docs-init` 產初稿；之後只由 `/verify` 依 plan 的「PRD 情境變更」套回 | 02 範本下半 |
+| 架構文件 | `docs/architecture.md` | 跟誰連、用什麼、怎麼部署；模組與依賴；跨服務的資料流 | 第 1–3、5 節由 `architect` 撰寫；第 4 節由專案地圖從程式碼自動產生 | 05 範本 |
+| WBS | `.claude/taskmaster-data/wbs.md` | 做到哪、誰負責、下一個 | `/task-init`、`/task-add`、`/verify` | `.claude/templates/wbs.template.md` |
+| plan | `.claude/taskmaster-data/plans/*.md` | 這次為什麼做、怎麼做、改善了什麼 | `planner`、`/tdd`、`/verify`；完成即歸檔 | `plan-format` skill |
+| ADR | `docs/decisions/ADR-*.md` | 為什麼這樣設計 | `architect`、`/adr`；接受後只改 status | 04 範本 |
 
-## 範本清單與選擇
+**按條件才有**（不算常駐）：
 
-### 階段對照表
+| 文件 | 路徑 | 何時要 | 格式來源 |
+|---|---|---|---|
+| 威脅模型 | `docs/threat-model.md` | critical 任務碰到認證、金流、個資時**必產** | 20 範本 |
+| runbook | `docs/runbook.md` | 會上線並持續維運時（選配），由 `deployment-expert` 維護 | 14 範本 |
 
-| 階段 | 編號 | 範本 | 用途 | 適用模式 |
-|:---|:---|:---|:---|:---|
-| **規劃** | 02 | `project_brief_and_prd.md` | PRD（含 OKRs、Personas、競爭分析） | 完整+MVP |
-| | 03 | `behavior_driven_development_guide.md` | BDD 指南與 Gherkin | 完整 |
-| **架構** | 04 | `architecture_decision_record_template.md` | ADR 決策紀錄 | 完整+MVP |
-| | 05 | `architecture_and_design_document.md` | 架構設計（C4/DDD） | 完整 |
-| | 06 | `api_design_specification.md` | API 設計規範 | 完整+MVP |
-| **詳設** | 07 | `module_specification_and_tests.md` | 模組規格與測試（含效能邊界、實際範例） | 完整 |
-| | 08 | `project_structure_guide.md` | 專案結構指南 | 完整+MVP |
-| | 09 | `design_and_dependencies.md` | 設計與依賴（類別圖、分層、SOLID） | 完整 |
-| **開發** | 11 | `code_review_and_refactoring_guide.md` | 程式碼審查（嚴重等級、PR 範本） | 完整 |
-| | 12 | `frontend_architecture_specification.md` | 前端架構規範 | 完整 |
-| | 17 | `frontend_information_architecture_template.md` | 前端資訊架構 | 完整 |
-| | 18 | `data_model_and_migration_spec.md` | 資料模型與 Migration 規範（expand-contract、data contract） | 完整+MVP(簡化) |
-| **安全部署** | 13 | `security_and_readiness_checklists.md` | 安全與上線檢查（ASVS、供應鏈） | 完整+MVP(簡化) |
-| | 20 | `threat_model_template.md` | 威脅模型（STRIDE、設計期安全） | 完整（觸及認證/金流必產） |
-| | 14 | `deployment_and_operations_guide.md` | 部署與運維指南（PRR、runbook、incident） | 完整 |
-| | 19 | `observability_and_slo_spec.md` | 可觀測性與 SLO（SLI/SLO、error budget、告警） | 完整 |
-| **管理** | 15 | `documentation_and_maintenance_guide.md` | 文檔維護指南（docs-as-code、Diátaxis） | 完整 |
-| | 16 | `wbs_development_plan_template.md` | WBS 開發計畫（Pitch/Appetite、高階模組、里程碑交付物；任務表在 `wbs.md`，版面見 `.claude/templates/wbs.template.md`） | 完整+MVP |
-| **AI 功能** | 21 | `ai_llm_integration_spec.md` | AI/LLM 整合規範（prompt 版控、eval、成本護欄） | 完整（有 AI 功能才產） |
+**不算文件體系**：
 
-### 模式選擇邏輯（三檔）
+- 專案地圖與一頁現況（`/task-status`）是產生物，不進 git
+- `README.md`、`CLAUDE.md` 是入口。6 份文件的位置寫在 CLAUDE.md 的「文件在哪」，**不另寫手寫索引**（`docs/README.md` 這種索引最先腐爛）
+- 交付物、對外手冊、評測紀錄、匯出檔是使用者自己的，模板不管、不檢查
+- `docs/12_*`、`docs/17_*` 由 `/ui-site` 產生（12、17 範本），路徑不動
 
-**demo 模式**（精簡 PRD）：快速驗證想法、個人實驗、< 1 天
-- 只產 1 份精簡 PRD（`docs/prd.md`）
-- 欄位：問題陳述 / 使用者 / 3 個核心功能 / 成功標準 / 技術約束
-- 不涉及 BDD、架構、API、安全檢查
-- **仍會產出 WBS**（由 `/task-init` 後續產生）
+## 每份不寫什麼
 
-**mvp 模式**（快速迭代，合併為 Tech Spec）：內部工具、小型產品、< 1 週
-- 一份 `docs/tech-spec.md` 合併 02+05+06+08 的最小集合（有資料庫演進需求時併入 18 的簡化節）
-- 必要時單獨補 04 ADR 和 13 安全檢查
+同一件事寫在兩處就會漂開。寫之前先查這張表：
 
-**full 模式**（完整流程，依序產出）：涉及金流/法遵/隱私、高可用規模化、跨 3+ 團隊
-```
-02 PRD → 03 BDD → 04 ADR + 05 架構 → 06 API + 07 模組 + 18 資料模型 → 08 結構 + 09 設計與依賴
-  → 11 審查 + 12/17 前端 → 13 安全 + 20 威脅模型 → 14 部署 + 19 SLO → 15 文檔 + 16 WBS →（有 AI 功能）21 AI/LLM
-```
+| 內容 | 唯一來源 | 其他文件怎麼寫 |
+|---|---|---|
+| 產品方向、不做什麼 | brief | PRD、plan 不重述 |
+| 系統行為 | PRD 情境（已完成的）／plan 的「PRD 情境變更」（進行中的） | 驗收句寫情境編號 |
+| 設計理由 | ADR | plan 的「發現與決策」只記本變更內的小決策 |
+| 做法、階段 | plan | WBS 不寫 |
+| 任務狀態、負責 | WBS | plan 只有 `wbs_task` |
+| 模組、依賴、路由數 | 程式碼（架構文件第 4 節自動段、專案地圖） | 不手寫 |
+| 跨服務的資料流 | 架構文件第 5 節 | plan 只寫「資料流變更」一句，不貼整張圖 |
+| 用語 | PRD 用語表 | 其他文件與程式命名照用 |
+| API 欄位與端點 | 程式碼與框架產生的 OpenAPI | 不另寫 API 規格文件（設計準則見 `api-design` skill） |
 
-**條件式範本**（依專案特性決定是否產出，用 `AskUserQuestion` 確認）：
-- 18 資料模型：有資料庫/schema 演進需求才產
-- 20 威脅模型：full 模式建議產；觸及認證/金流/個資則**必產**
-- 19 SLO：有上線維運需求（非一次性工具）才產
-- 21 AI/LLM：專案含 LLM/AI 功能才產
+各範本自己也有一張「不寫什麼」表，寫那份文件時照它。
 
-**觸發方式**：三種模式都應透過 `/docs-init --{demo|mvp|full}` 觸發，由該指令載入本 skill 處理實際產出。
+## demo／mvp／full 只決定先產哪幾份
 
-## 工作流程
+| 模式 | `/docs-init` 先產 |
+|---|---|
+| demo | brief、WBS（PRD 等第一條情境出現才建；不產架構文件） |
+| mvp | brief、PRD、架構文件、WBS |
+| full | 同 mvp；碰到認證、金流、個資時加威脅模型；詢問要不要 runbook |
 
-### 步驟 1：確認需求
+不再產 `tech-spec.md` 與編號文件序列。舊專案的 `docs/tech-spec.md`、`docs/01_prd.md` 仍會被讀（專案地圖找架構文件、`spec-convergence` 找 PRD 都有退路），但不再新增。
 
-用 `AskUserQuestion` 確認：
-1. **要寫哪份文件？** — 提供編號或描述，推薦依階段順序
-2. **完整模式還是 MVP？** — 若尚未決定，依專案特性建議
+## 怎麼寫
 
-### 步驟 2：讀取範本
+1. **先讀範本**：`.claude/skills/project-docs/templates/<編號>_*.md`。範本的節、寫法、「不寫什麼」是唯一來源，不要憑記憶重打
+2. **能從程式碼或既有文件推斷的先讀再確認**；問使用者時照 `rules/interactive-qa.md`（一次一題）
+3. **只寫程式碼看不出來的事**。會過期的東西（模組清單、依賴圖、計數、進度）不手寫
+4. **不替使用者填答案**：不確定的寫進該文件的「待確認」或 brief 的「仍未釐清」，不要編
+5. **引用而不複製**：跨文件寫路徑、情境編號（`ORD-02`）、ADR 編號；不把別份的內容抄過來
+6. **架構文件第 4 節不要手改**：標記 `<!-- overview:generated:start -->`／`<!-- overview:generated:end -->` 之間由 `overview.sh --sync-arch` 改寫；改模組名稱或分組改 `.claude/taskmaster-data/module-notes.md`（格式與寫作標準：本 skill 的 `module-notes.md`，由 `documentation-specialist` 照著寫）
 
-```
-Read .claude/skills/project-docs/templates/[編號]_[名稱].md
-```
+## 範本
 
-取得該範本的完整結構，作為產出骨架。
+| # | 範本 | 用在 |
+|---|---|---|
+| 02 | `project_brief_and_prd.md` | brief（上半）、PRD（下半） |
+| 04 | `architecture_decision_record_template.md` | ADR（簡易版給 `/adr`、完整版給 `architect`） |
+| 05 | `architecture_and_design_document.md` | 架構文件 |
+| 14 | `deployment_and_operations_guide.md` | runbook |
+| 20 | `threat_model_template.md` | 威脅模型 |
 
-### 步驟 3：收集專案資訊
+另有 UI 鏈的 12、17，由 `/ui-site` 使用。清單與產出路徑見 `templates/INDEX.md`。
 
-依範本欄位，逐項向使用者收集：
-- 用 `AskUserQuestion` 一次問 1-2 個關鍵欄位
-- 能從程式碼或既有文件推斷的，先讀取再確認
-- 標記 `[待填]` 的欄位讓使用者後續補充
+## 淘汰的範本
 
-### 步驟 4：撰寫文件
+01、03、06、07、08、09、11、13、15、16、18、19、21 已移除。`update-template` 不會刪掉既有專案裡的舊檔，它們只是不再被引用。
+想找它們原本的內容時的去處：
 
-- 嚴格遵循範本結構（標題、表格、欄位順序）
-- 填入收集到的專案資訊
-- 保留範本中的 Mermaid 圖框架，填入實際內容
-- 輸出到 `docs/` 目錄，檔名沿用範本編號
-
-### 步驟 5：交叉參照
-
-撰寫時自動檢查：
-- PRD (02) 的 User Story ID 與 OKR → 是否在架構 (05) 中被引用
-- ADR (04) 編號 → 是否在技術選型表中對應
-- API (06) 端點 → 是否在模組規格 (07) 中有對應
-- 設計與依賴 (09) 的介面契約 → 是否在模組 (07) 中有測試覆蓋
-- 資料模型 (18) 的實體 → 是否與架構 (05) 資料架構章節一致
-- 威脅模型 (20) 的緩解措施 → 是否在安全檢查 (13) 中有對應勾選項
-- SLO (19) 的 SLI → 是否在部署運維 (14) 的監控章節有落地
-- 發現不一致時提醒使用者
-
-## 品質規則
-
-1. **範本結構不可任意刪減** — 可以標 `N/A` 但不能跳過章節
-2. **每個決策都要理由** — ADR 的「選擇理由」不能空白
-3. **量化優於描述** — OKR 用數字、NFR 用目標值、工時用小時
-4. **連結相關文件** — 用相對路徑連結其他文件（如 `→ 詳見 06_api_design_specification.md`）
-5. **版本與狀態必填** — 每份文件頂部的版本、日期、狀態三欄位
-6. **遵循互動問答規則** — 收集資訊時使用 `AskUserQuestion`，記錄到 `.claude/qa-history/`
-
-## 角色對應
-
-根據使用者角色推薦重點範本：
-
-| 角色 | 優先範本 |
-|:---|:---|
-| PM / PO | 02 PRD、03 BDD、16 WBS |
-| Tech Lead | 04 ADR、05 架構、06 API、11 審查 |
-| 架構師 | 05 架構、09 設計與依賴 |
-| 後端工程師 | 06 API、07 模組、08 結構 |
-| 前端工程師 | 12 前端架構、17 資訊架構 |
-| 後端 / 資料工程師 | 18 資料模型與 Migration |
-| 安全工程師 | 13 安全檢查、20 威脅模型 |
-| SRE / DevOps | 14 部署運維、19 可觀測性與 SLO |
-| AI 工程師 | 21 AI/LLM 整合規範 |
+| 原本 | 現在 |
+|---|---|
+| 01 流程手冊 | `.claude/guides/WORKFLOW.md` |
+| 03 BDD、07 模組規格與測試 | PRD 的情境（假設／當／那麼）＋`testing-standards` skill |
+| 06 API 規格 | `api-design` skill（準則）＋框架產生的 OpenAPI |
+| 08 專案結構、09 設計與依賴 | 架構文件第 4 節自動段＋專案地圖 |
+| 11 Code Review | `code-quality-specialist` agent |
+| 13 安全檢查 | `rules/security.md`＋`security-infrastructure-auditor` agent |
+| 15 文件維護 | 本 skill |
+| 16 WBS 開發計畫 | brief（範圍上限）＋`.claude/templates/wbs.template.md` |
+| 18 資料模型與 migration | `database-migrations` skill |
+| 19 可觀測性與 SLO | runbook 的「SLO 與告警」節 |
+| 21 AI／LLM 整合 | PRD 的領域情境＋`cost-aware-llm-pipeline` skill |
