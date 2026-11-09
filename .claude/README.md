@@ -22,7 +22,7 @@
 ├── rules/        ( 6 個)      # 自動載入規則
 ├── skills/       (28 個)      # 專案特定領域知識
 ├── hooks/                     # Hook 腳本＋lib/（閘門）＋tests/（回歸測試）
-├── scripts/                   # context-gc.sh、check-counts.sh、overview.sh（產生專案圖解）
+├── scripts/                   # context-gc.sh、check-counts.sh、overview.sh＋overview-scan.sh（專案圖解：骨架掃程式碼、進度看 WBS／plan）
 ├── templates/                 # CLAUDE.md／WBS 版面範本、overview/index.html（專案圖解畫面原檔）
 ├── ui/                        # 設計系統 DESIGN.md + CATALOG.md（/ui-style 選用）
 ├── tests/skill-compliance/    # 壓力測試：模型會不會照 skill 做
@@ -31,7 +31,8 @@
 ├── coordination/              # Agent 協調配置
 └── taskmaster-data/           # WBS、時間日誌、plans/（計畫持久化）
     ├── wbs.md                 # WBS 任務清單（What；版面見 templates/wbs.template.md）
-    ├── overview/              # 專案圖解：overview.md＋index.html＋data.js（scripts/overview.sh 產生、不進版控；畫面原檔在 templates/overview/）
+    ├── overview/              # 專案圖解：overview.md＋index.html＋data.js＋skeleton.json（scripts/overview.sh 產生、不進版控；畫面原檔在 templates/overview/）。架構文件自動段與 /task-status 的一頁現況由同一份資料產生；點模組可展開看內部檔案與參與的資料流
+    ├── module-notes.md        # 專案地圖的模組說明（按需由 documentation-specialist 寫，進版控；格式見 skills/project-docs/module-notes.md）
     ├── plans/                 # 計畫檔（How，/plan 寫入）
     │   ├── INDEX.md
     │   └── archive/           # /verify 完成後歸檔
@@ -103,7 +104,7 @@
 實際接線以 `settings.json` 為準。最常碰到的幾件：
 
 - `pre-tool-use.sh`：任務模式閘門（未判級不得寫程式碼）、裸 `cd` 攔截，以及 `lib/` 底下的 git／合併／平行測試閘門
-- `post-write.sh`：寫 wbs／plan／架構文件後在背景重產專案圖解（`scripts/overview.sh`）、記錄文件債
+- `post-write.sh`：寫 wbs／plan／架構文件或程式碼檔後在背景重產專案圖解（`scripts/overview.sh`，程式碼檔節流 30 秒）、寫 `module-notes.md` 時驗證說明、記錄文件債
 - `session-start.sh`：全文注入 `using-taskmaster`、補產專案圖解
 
 改了 hook 之後（模板 repo 限定，專案不帶 `hooks/tests/`）：`bash hooks/tests/run-tests.sh --changed <起點>` 只跑改到的節；

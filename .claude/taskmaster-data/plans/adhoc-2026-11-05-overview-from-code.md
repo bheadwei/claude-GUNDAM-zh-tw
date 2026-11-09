@@ -524,7 +524,7 @@ flowchart LR
   - ui-builder 是 subagent：**本 plan 檔只讀**，階段狀態由主模型改；審閱 artifact 由主模型做，不交給 ui-builder
   - 階段報告附 `anti-ai.md` 產出後清單的逐項對照
 
-### 階段 7: 文件同步與 CI 常數檢查 ⏳
+### 階段 7: 文件同步與 CI 常數檢查 🔄
 
 - **依賴**：階段 2, 3, 4, 5, 6；跨計畫：文件 1 已合併（05 範本的自動段標記與資料流節名）
 - [ ] `check-counts.sh`：`OVERVIEW_COLS_NOTES` 對 `project-docs/module-notes.md` 範例表頭；`documentation-specialist.md` 寫到的附屬檔路徑存在；**A7** `overview.sh` 的自動段標記常數對 05 範本裡的兩行標記；`overview.sh` 的 `OVERVIEW_FLOW_SECTION` 對 05 範本的資料流節名（比照 A7）
@@ -614,3 +614,12 @@ flowchart LR
   - 沒有程式檔的模組（只在架構文件）與骨架掃描失敗時，`inner` 是空的 `{root: "", nodes: [], …}` 而不是 null：ADR 只規定截斷與被大小上限丟掉時為 null，畫面顯示空圖
   - `shrink_data` 的新兩級在 `JQ_SHRINK` 編號 0 與 8，執行順序 0、1–6、8、7（7 是「仍超過上限」那則提示，維持最後）
   - 新節另加三案（計畫沒列、ADR 有寫）：測試檔不進 `inner`、框外排序「其他模組 → 資料庫 → 外部套件」、`OVERVIEW_INNER_MAX_OUT` 覆寫與 `outMore`。新節 36 案，案例數 1201 → 1237
+- 2026-11-09 階段 7 實作完成（待審查、合併）：
+  - **check-counts 的四項檢查用假模板測**（新節「check-counts.sh — 專案圖解常數對範本」）：真模板跑一次 check-counts 在 Windows 要 2 分鐘以上，每個驗收句改壞＋改回要 13 次。假模板只放這幾項讀的檔，再補讓其餘檢查也全綠的最少檔（documentation-specialist 引用的三個 SKILL.md、plan-format、wbs.template.md、只列這幾個 skill 的 INDEX），所以基準是 exit 0、改壞是 exit 1，不是只看訊息。驗收句之外多三案：end 標記也驗一次、改 `check-counts.sh` 時 `--changed` 挑到本節且不挑只提到檔名的 copy-template 節。RED 7 過 6 敗 → GREEN 15/15；案例數 1237 → 1252；check-counts 714 → 723 項
+  - `_changed_rule`：`check-counts.sh` 原本落在 `.claude/scripts/*` → 不跑，改成只挑本節（寫 `=check-counts.sh` 會連帶挑到只是提到檔名的 copy-template 節）
+  - 比對方式照 `overview.sh` 本身：自動段標記比「行首是常數」（`--sync-arch` 的 awk 用 `index`、jq 用 `startswith`），節名比 `^##\s+[0-9]+\.\s*<節名>` 開頭；`ov_const` 改成單、雙引號都認（標記常數是單引號）
+  - 附屬檔只驗 documentation-specialist.md 裡 `.claude/skills/<名>/` 底下、SKILL.md 以外的 `.md`（目前 module-notes.md、05 範本兩個）；`.claude/scripts/*.sh` 與執行時產物 `taskmaster-data/module-notes.md` 不在內
+  - documentation-specialist 的 description 同步：「舊專案沒有架構文件時從程式碼反推草稿」→「被要求替舊專案補架構文件時…（選配）；寫專案地圖的模組說明」（說明層的派工入口原本沒寫在 description）
+  - 壓力測試第 11 題 prompt 加「現在卡在哪一步」探一頁現況；不加「文件」字眼：`user-prompt-submit.sh` 會路由到 documentation-specialist，題目就混了。`run-compliance.sh 11` 已跑（`results/20261109-104911/`，gitignore、在 worktree 裡）：正向情境未測（模板 repo 沒有 `project.json`），舊行為（要求補架構文件）沒有殘留；受測 session 讀到本計畫與 results 目錄，知道自己在被測，本輪打折
+  - [實測] `qa-check.js` 用真資料重跑：shop-clean（＋CHANGES）、messy-fullstack（＋LARGE＋NOTES＋CHANGES）× 390／1440 × 淺／深，全圖＋兩個模組的內部圖（shop：web、svc-a；messy：catalog（三個子目錄節點）、backend-api），24 次七項全 0／false。Playwright MCP 擋 `file:`，改用 node 在 scratchpad 起本機靜態伺服（不進 repo）。按「全圖」後只等 0.4 秒時 `offStage` 量到 3（縮放動畫中途），等 1.2 秒為 0——寫進 `hooks/tests/README.md` 的步驟
+  - 技術債：check-counts 既有的欄名檢查在範本檔不存在時（`wbs.template.md`、plan-format）照樣報「缺欄」而不是略過，真模板無害、假模板第一次就踩到；`overview.sh` 第 57 行註解仍寫 check-counts 比對「05 範本 5.5」，實際沒有 `OVERVIEW_COLS_MODULE` 的檢查（5.5 改選配後），註解過期——`overview.sh` 不在本階段 `files:`，沒改

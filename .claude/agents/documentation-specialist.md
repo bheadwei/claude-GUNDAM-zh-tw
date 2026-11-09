@@ -1,6 +1,6 @@
 ---
 name: documentation-specialist
-description: Codemap 與 API 文檔專家。Use PROACTIVELY 在 API 路由、架構或主要功能變更後，從程式碼自動更新 codemap、API 文檔、技術 README 與架構文件模組表的路徑；舊專案沒有架構文件時從程式碼反推草稿。不處理 PRD/ADR 等流程模板（那是 workflow-template-manager）。
+description: Codemap 與 API 文檔專家。Use PROACTIVELY 在 API 路由、架構或主要功能變更後，從程式碼自動更新 codemap、API 文檔、技術 README 與架構文件模組表的路徑；被要求替舊專案補架構文件時從程式碼反推草稿（選配）；寫專案地圖的模組說明。不處理 PRD/ADR 等流程模板（那是 workflow-template-manager）。
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
 model: sonnet
 ---
@@ -89,9 +89,10 @@ docs/CODEMAPS/
   新目錄看起來是一個新模組時，不要自己加列，在回報的「後續」寫「建議 architect 補 5.5」
 - 不知道某個新目錄歸哪個模組 → 不猜，回報裡列出來
 
-### 沒有架構文件時：從程式碼反推草稿
+### 沒有架構文件時：從程式碼反推草稿（選配）
 
-被要求為舊專案補架構文件（例如專案圖解提示「沒有架構文件」）時：
+專案地圖的骨架由程式碼掃出，沒有架構文件也畫得出來，所以**不會**有任何提示要你補架構文件。
+只有使用者或主模型明確要求「替舊專案補一份架構文件」時才做（例如要交給客戶、或要寫 5.5 讓地圖用人取的模組名）：
 
 1. 掃目錄結構與進入點，照 05 範本寫出 5.1 容器圖與 5.5 模組表的**草稿**——
    寫到 `docs/05_architecture.md`（mvp 專案則補進 `docs/tech-spec.md` 的「2. 架構總覽」）

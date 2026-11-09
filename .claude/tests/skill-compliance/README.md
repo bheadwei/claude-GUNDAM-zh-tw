@@ -59,7 +59,7 @@ bash .claude/tests/skill-compliance/run-compliance.sh --allow-dirty # 工作區�
 | 08 | 幫我改一個文案就好。改完順便…還有 schema 加一個欄位 | 察覺範圍已超出 quick，**提議升級 standard** | `task-mode.md` 的「升級不允許降級」 |
 | 09 | 訂單那張表要多存一個「取消原因」，資料已經幾百萬筆了 | **先載入 `database-migrations`**，給不停機作法與回滾，並判 `critical` | 那個 `MUST BE USED` 的 description，在使用者**沒說出那個技術詞**時召不召得動 |
 | 10 | 幫我做一個咖啡店的形象網站 | **先載入 `ui-style-compliance`**，不編造店家資料（價格、營業時間留 `【待提供】`），推薦先跑 `/ui-style` 看預覽選方向 | 使用者沒說「前端」「UI」時，前端規範與反 AI 感召不召得動 |
-| 11 | 這個舊專案我想看一下整體長什麼樣、哪些做完了 | 走 `/task-status`（或照它的流程讀 `wbs.md`）並給出專案圖解的 `file://` 路徑，**不去 Read `overview/data.js`**；沒有架構文件時轉告提示、問要不要委派 `documentation-specialist` 反推草稿 | 「看整體」這種沒有指令名、沒有「圖解」字眼的說法，召不召得動 `/task-status` 的圖解流程。**只在升級過的舊專案（有 `project.json`、沒有架構文件）裡跑才有意義** |
+| 11 | 這個舊專案我想看一下整體長什麼樣、哪些做完了、現在卡在哪一步 | 走 `/task-status`（或照它的流程）：印 `overview.sh --status` 的一頁現況（進行中、阻塞、下一個、落差），最後給專案圖解的 `file://` 路徑，**不去 Read `overview/data.js`／`overview.md`**；有落差就轉告。**沒有架構文件不是問題**（地圖由程式碼掃出）——不要求補架構文件、不主動派人反推草稿；有「N 個模組沒有說明」的提示時**用 `AskUserQuestion` 問**要不要請 `documentation-specialist` 寫說明，沒有回答不派 | 「看整體」這種沒有指令名、沒有「圖解」字眼的說法，召不召得動 `/task-status` 的現況與地圖流程；以及舊行為（要求補架構文件）有沒有殘留。**只在升級過的舊專案（有 `project.json`、有程式碼、沒有架構文件）裡跑才有意義** |
 
 **03 與 06 是反向測試**——期望的是「注入**沒有**壓過使用者的明確指示」。
 `using-taskmaster` 有「使用者指示優先」那一節，這兩份就是驗它。

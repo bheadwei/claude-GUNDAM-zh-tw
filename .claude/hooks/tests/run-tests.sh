@@ -65,6 +65,8 @@ _changed_rule() {
         .claude/hooks/tests/fixtures/overview/*)             echo "=overview" ;;
         # hook 與被測的腳本：跑提到它的節
         .claude/hooks/*.sh|.claude/scripts/overview.sh|.claude/scripts/overview-scan.sh)      echo "=${1##*/}" ;;
+        # 只挑常數檢查那節：寫 =check-counts.sh 會連帶挑到只是提到檔名的 copy-template 節
+        .claude/scripts/check-counts.sh)                     echo "=專案圖解常數對範本" ;;
         # 不被 hook 測試執行的東西
         *.md|docs/*|workshop/*|.claude/templates/*|.claude/ui/*|.claude/skills/*|.claude/output-styles/*) echo NONE ;;
         .claude/context/*|.claude/coordination/*|.claude/qa-history/*|.claude/taskmaster-data/*|.claude/logs/*) echo NONE ;;
@@ -4798,6 +4800,68 @@ if [ -f "$UT_SRC" ] && [ -f "$UT_GI" ]; then
     rm -rf "$UT"
 else
     ok "（不是模板 repo，沒有 scripts/update-template.sh，略過）"
+fi
+
+# =========================================================================
+section "check-counts.sh — 專案圖解常數對範本（notes 表頭、附屬檔路徑、自動段標記、資料流節名）"
+# =========================================================================
+# 地圖計畫階段 7。overview.sh 靠常數抽 module-notes.md 表頭、架構文件的自動段標記與資料流節，
+# 範本改了字而常數沒跟上，地圖會靜默抽不到東西。用假模板跑（真模板整份 check-counts 在 Windows 要 2 分鐘以上）：
+# 只放這幾項檢查讀的檔，加上讓其餘檢查在假模板裡也全綠的最少檔案；目錄含中文與空格。
+CC_SRC="$HOOK_DIR/../scripts/check-counts.sh"
+CC_DS="$HOOK_DIR/../agents/documentation-specialist.md"
+if [ -f "$CC_SRC" ] && [ -f "$CC_DS" ] && [ -d "$HOOK_DIR/../skills/project-docs" ]; then
+    CC="$SANDBOX/常數 檢查"; CC_BAK="$SANDBOX/cc-bak"
+    rm -rf "$CC" "$CC_BAK"
+    mkdir -p "$CC/.claude/scripts" "$CC/.claude/agents" "$CC/.claude/templates/overview" "$CC_BAK" \
+        "$CC/.claude/skills/node-package-manager" "$CC/.claude/skills/api-design" "$CC/.claude/skills/plan-format"
+    cp "$CC_SRC" "$OV_SRC" "$CC/.claude/scripts/"
+    cp "$CC_DS" "$CC/.claude/agents/"
+    cp -R "$HOOK_DIR/../skills/project-docs" "$CC/.claude/skills/"
+    for s in node-package-manager api-design plan-format; do cp "$HOOK_DIR/../skills/$s/SKILL.md" "$CC/.claude/skills/$s/"; done
+    printf -- '- project-docs\n- node-package-manager\n- api-design\n- plan-format\n' > "$CC/.claude/skills/INDEX.md"
+    cp "$HOOK_DIR/../templates/overview/index.html" "$CC/.claude/templates/overview/"
+    cp "$HOOK_DIR/../templates/wbs.template.md" "$CC/.claude/templates/"
+    CC_NOTES=.claude/skills/project-docs/module-notes.md
+    CC_T05=.claude/skills/project-docs/templates/05_architecture_and_design_document.md
+    cc_run() {
+        CC_OUT=$(bash "$CC/.claude/scripts/check-counts.sh" 2>&1 </dev/null); CC_RC=$?
+        CC_OUT=$(printf '%s' "$CC_OUT" | sed $'s/\033\\[[0-9;]*m//g')
+    }
+    # cc_case <說明> <檔（相對假模板）> <sed 運算式> <失敗訊息要含的字>：改壞 → exit 1 且訊息含該字；改回 → exit 0 且不含
+    cc_case() {
+        cp "$CC/$2" "$CC_BAK/f"
+        sed -i "$3" "$CC/$2"
+        if cmp -s "$CC/$2" "$CC_BAK/f"; then ng "$1（改壞）" "sed 改到檔案" "檔案沒變（sed 沒命中）"; return; fi
+        cc_run
+        [ "$CC_RC" = 1 ] && printf '%s\n' "$CC_OUT" | grep '✗' | grep -qF -- "$4" \
+            && ok "$1 → check-counts 失敗並指出 $4" \
+            || ng "$1 → check-counts 失敗並指出 $4" "exit 1、✗ 行含 $4" "exit $CC_RC：$(printf '%s\n' "$CC_OUT" | grep '✗' | head -3 | tr '\n' ' ')"
+        cp "$CC_BAK/f" "$CC/$2"
+        cc_run
+        [ "$CC_RC" = 0 ] && ! printf '%s\n' "$CC_OUT" | grep -qF -- "$4" \
+            && ok "$1 → 改回後通過" \
+            || ng "$1 → 改回後通過" "exit 0、不提 $4" "exit $CC_RC：$(printf '%s\n' "$CC_OUT" | grep '✗' | head -3 | tr '\n' ' ')"
+    }
+    cc_run
+    expect_eq "假模板的基準：check-counts 全綠" "exit 0" \
+        "exit $CC_RC$([ "$CC_RC" = 0 ] || printf '：%s' "$(printf '%s\n' "$CC_OUT" | grep '✗' | head -3 | tr '\n' ' ')")"
+    cc_case "module-notes.md 說明表表頭「依據」改成「來源」" "$CC_NOTES" '/^| id | 名稱 /s/| 依據 |/| 來源 |/' OVERVIEW_COLS_NOTES
+    cc_case "documentation-specialist.md 的附屬檔路徑 module-notes.md 少一個字" .claude/agents/documentation-specialist.md \
+        's#skills/project-docs/module-notes\.md#skills/project-docs/module-note.md#' "module-note.md"
+    cc_case "05 範本的 <!-- overview:generated:start --> 改成 <!-- overview:gen:start -->" "$CC_T05" \
+        's/<!-- overview:generated:start -->/<!-- overview:gen:start -->/' OVERVIEW_GEN_START
+    cc_case "05 範本的 <!-- overview:generated:end --> 改成 <!-- overview:gen:end -->" "$CC_T05" \
+        's/<!-- overview:generated:end -->/<!-- overview:gen:end -->/' OVERVIEW_GEN_END
+    cc_case "05 範本的「## 5. 資料流」改成「## 5. 跨服務流程」" "$CC_T05" 's/^## 5\. 資料流/## 5. 跨服務流程/' OVERVIEW_FLOW_SECTION
+    cc_case "overview.sh 的 OVERVIEW_FLOW_SECTION 改成 \"流程\"" .claude/scripts/overview.sh \
+        's/^OVERVIEW_FLOW_SECTION="資料流"/OVERVIEW_FLOW_SECTION="流程"/' OVERVIEW_FLOW_SECTION
+    rm -rf "$CC" "$CC_BAK"
+    out=$(printf '%s\n' .claude/scripts/check-counts.sh | bash "$HOOK_DIR/tests/run-tests.sh" --changed - --dry-run 2>&1)
+    expect_contains "改 check-counts.sh → --changed 挑到本節" "專案圖解常數對範本" "$out"
+    expect_not_contains "改 check-counts.sh → 不挑只提到檔名的 copy-template 那節" "初始化狀態只看 project.json" "$out"
+else
+    ok "（不是模板 repo，沒有 check-counts.sh 或 documentation-specialist.md，略過）"
 fi
 
 # =========================================================================
