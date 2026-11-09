@@ -2,9 +2,9 @@
 wbs_task: "none"
 slug: "docs-system"
 created: "2026-11-05"
-updated: "2026-11-06"
+updated: "2026-11-09"
 status: "🔄 進行中"
-current_phase: 5
+current_phase: 6
 mode: "standard"
 files:
   # 階段 1：範本與 plan 格式（審閱前；2026-11-06 補資料流節，檔案範圍不變）
@@ -286,17 +286,17 @@ flowchart LR
   - `task-status.md` 不含「驗收標準（整體）」「風險與緩解」
 - **注意**：ADR-005／006 的 [M] 確認（實跑 `/plan`→`/tdd`→`/verify`、worktree 裡 `/verify` 不改 PRD、平行選項出現與消失）由使用者在自己的專案驗，不排進本計畫
 
-### 階段 5: agent 調整（D3） ⏳
+### 階段 5: agent 調整（D3） ✅
 
 - **依賴**：階段 3；跨計畫：地圖 7 已合併
-- [ ] 刪 `agents/workflow-template-manager.md`；同步：`rules/agent-orchestration.md`（終端節點名單與 8＋1＋1＋4 → 8＋1＋1＋3＝13，`conflict-resolver` 成為第 14 個）、`skills/using-taskmaster/SKILL.md` 第 46 行路由（PRD → `/docs-init`／`project-docs`，ADR → `/adr` 或 `architect`）、`commands/hub-delegate.md` 第 71 行、`guides/MECHANISMS.md` 第 84–85 行、`guides/MODELS.md` 第 20、36、39 行、`.claude/README.md` 第 59 行、`README.md` 第 92、217 行、`context/decisions/README.md`
-- [ ] hook 只刪改字串：`user-prompt-submit.sh` 第 165–169 行改成「PRD → `/docs-init`／`project-docs`，ADR → `/adr` 或 `architect`」、第 171 行拿掉「codemap」說法；`lib/agent-inflight.sh` 第 43 行唯讀名單刪名字；`pre-agent-gate.sh` 第 78–80 行註解；`post-write.sh` 第 213 行「下一任務 plan 的『風險與緩解』」改成「『發現與決策』或該階段的『注意』」；`hooks/README.md` 第 60 行
-- [ ] `hooks/tests/run-tests.sh` 第 607 行（PRD/ADR 路由預期）、第 2877 行（唯讀名單迴圈）
-- [ ] `check-counts.sh` 拿掉階段 3 加的 `workflow-template-manager.md` 例外
-- [ ] `documentation-specialist.md`：description 拿掉「不處理 PRD/ADR（那是 workflow-template-manager）」與 codemap；同步範圍改成 README、架構文件 architect 撰寫的部分、runbook；刪 `docs/CODEMAPS/` 與「每個 codemap 500 行」
-- [ ] `deployment-expert.md`：維護 `docs/runbook.md`（範本 14）
-- [ ] 文件 4 留下的一致性修正（2026-11-06 加入）：(1)「驗證數據」去處統一（`plan-format` 寫「驗收」、`task-status.md` 轉換表寫「發現與決策」，擇一並兩邊同步）；(2) `plan-format`「誰可以寫入計畫檔」表補 `/verify` 會加「已套回 PRD」行、修正「改善了什麼」；(3) `task-status.md` 轉換表「選型與理由 → `context/decisions/`」改為新專案的 `docs/decisions/`（ADR-004）；(4) `verify.md` 步驟 4 的「主 checkout 的起點」取法移出「模板 repo 例外」小節、放到通用位置（第 3 項資料流提醒依賴它）
-- [ ] 跑：`bash .claude/scripts/check-counts.sh`（agent 數 15 → 14）、`bash .claude/hooks/tests/run-tests.sh --changed <本階段起點>`（背景）、`bash .claude/tests/skill-compliance/run-compliance.sh`（改了 `using-taskmaster` 與關鍵字路由的注入，跑一輪）
+- [x] 刪 `agents/workflow-template-manager.md`；同步：`rules/agent-orchestration.md`（終端節點名單與 8＋1＋1＋4 → 8＋1＋1＋3＝13，`conflict-resolver` 成為第 14 個）、`skills/using-taskmaster/SKILL.md` 第 46 行路由（PRD → `/docs-init`／`project-docs`，ADR → `/adr` 或 `architect`）、`commands/hub-delegate.md` 第 71 行、`guides/MECHANISMS.md` 第 84–85 行、`guides/MODELS.md` 第 20、36、39 行、`.claude/README.md` 第 59 行、`README.md` 第 92、217 行、`context/decisions/README.md`
+- [x] hook 只刪改字串：`user-prompt-submit.sh` 第 165–169 行改成「PRD → `/docs-init`／`project-docs`，ADR → `/adr` 或 `architect`」、第 171 行拿掉「codemap」說法；`lib/agent-inflight.sh` 第 43 行唯讀名單刪名字；`pre-agent-gate.sh` 第 78–80 行註解；`post-write.sh` 第 213 行「下一任務 plan 的『風險與緩解』」改成「『發現與決策』或該階段的『注意』」；`hooks/README.md` 第 60 行
+- [x] `hooks/tests/run-tests.sh` 第 607 行（PRD/ADR 路由預期）、第 2877 行（唯讀名單迴圈）
+- [x] `check-counts.sh` 拿掉階段 3 加的 `workflow-template-manager.md` 例外
+- [x] `documentation-specialist.md`：description 拿掉「不處理 PRD/ADR（那是 workflow-template-manager）」與 codemap；同步範圍改成 README、架構文件 architect 撰寫的部分、runbook；刪 `docs/CODEMAPS/` 與「每個 codemap 500 行」
+- [x] `deployment-expert.md`：維護 `docs/runbook.md`（範本 14）
+- [x] 文件 4 留下的一致性修正（2026-11-06 加入）：(1)「驗證數據」去處統一（`plan-format` 寫「驗收」、`task-status.md` 轉換表寫「發現與決策」，擇一並兩邊同步）；(2) `plan-format`「誰可以寫入計畫檔」表補 `/verify` 會加「已套回 PRD」行、修正「改善了什麼」；(3) `task-status.md` 轉換表「選型與理由 → `context/decisions/`」改為新專案的 `docs/decisions/`（ADR-004）；(4) `verify.md` 步驟 4 的「主 checkout 的起點」取法移出「模板 repo 例外」小節、放到通用位置（第 3 項資料流提醒依賴它）
+- [x] 跑：`bash .claude/scripts/check-counts.sh`（agent 數 15 → 14）、`bash .claude/hooks/tests/run-tests.sh --changed <本階段起點>`（背景）、`bash .claude/tests/skill-compliance/run-compliance.sh`（改了 `using-taskmaster` 與關鍵字路由的注入，跑一輪）
 - **預估**：3.5h（不含整套 hook 測試的等待時間）
 - **驗收**：
   - `documentation-specialist.md` 不含「模組表（5.5）」「tech-spec.md」「docs/05_architecture.md」，也不叫它同步 5.5 的「路徑」欄（2026-11-06 階段 3 審查 MEDIUM：第 78–97 行那節要在本階段整節改寫）
