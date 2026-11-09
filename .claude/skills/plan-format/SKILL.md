@@ -298,7 +298,8 @@ WBS 版面與連結欄的完整規則見 `.claude/templates/wbs.template.md`（�
 下一任務 plan 的「發現與決策」或該階段的「注意」，不要回頭塞進 WBS 的格子。
 
 反向連結由 plan frontmatter 的 `wbs_task` 提供，兩個方向都要維護才點得到。
-- **WBS 任務被跳過/刪除時** → Plan 檔保留但標記 `status: "⚠️ WBS 已移除"`
+- **WBS 任務被跳過/刪除時** → Plan 檔保留，標 `status: "🚫 阻塞"`，「發現與決策」加一行 `YYYY-MM-DD WBS 任務已移除：<原因>`。
+  不另造狀態值；用阻塞是因為 `/tdd` 只撿 `⏳ 未開始` 的 plan，不會再被提議開工
 
 ### Ad-hoc 計畫
 

@@ -1,5 +1,5 @@
 ---
-description: 產出專案文件初稿，依 demo / mvp / full 決定先產哪幾份。demo 只有 brief；mvp 加 PRD 與架構文件；full 再依專案特性加威脅模型、runbook
+description: Use when 要產專案文件初稿（「寫 PRD」「補架構文件」「先把需求寫下來」），或舊專案要補文件、`docs/` 已有一堆舊文件不知道怎麼收（先問要不要盤點）。依 demo / mvp / full 決定先產哪幾份：demo 只有 brief；mvp 加 PRD 與架構文件；full 再依專案特性加威脅模型、runbook
 ---
 
 # 文件初始化

@@ -253,6 +253,6 @@ if [ "$DRY_RUN" -eq 0 ]; then
   echo "👉 下一步：到目標專案開 Claude Code 跑一次 /task-status"
   echo "   若 wbs.md 還是舊版面（沒有「現況」區），它會提議轉換成新版面（一次性遷移，長內容搬出不丟資料）"
   echo "   專案圖解在開 session 時自動產生，/task-status 最後一行印畫面路徑；"
-  echo "   沒有架構文件時它會多印一行提示，說明怎麼請 documentation-specialist 反推草稿"
+  echo "   地圖從程式碼掃出，沒有架構文件也畫得出來；要補 brief、PRD、架構文件時跑 /docs-init"
 fi
 echo ""

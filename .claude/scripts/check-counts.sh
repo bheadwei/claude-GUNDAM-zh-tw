@@ -439,6 +439,19 @@ if [ -f "$PFSKILL" ]; then
     fi
 fi
 
+# 範例區塊外的 plan status：指令、agent、範本、plan-format 內文教人寫的 `status: "<emoji>…"` 也只准四值
+#
+# 為什麼：上一項只看 plan-format 的範例區塊，內文曾寫出 `status: "⚠️ WBS 已移除"` 而沒被抓到。
+# 只看 emoji 開頭的值：`status: "ok"` 這類是程式碼範例的 API 回應，不是 plan status。
+CHECKED=$((CHECKED + 1))
+BAD_PS=$(grep -Ho 'status: "[^"]*"' "$PFSKILL" .claude/commands/*.md .claude/agents/*.md .claude/templates/*.md 2>/dev/null \
+    | LC_ALL=C grep -v ':status: "[ -~]' \
+    | grep -vE ':status: "(⏳ 未開始|🔄 進行中|🚫 阻塞|✅ 完成)"$' || true)
+if [ -n "$BAD_PS" ]; then
+    FAIL=$((FAIL + 1))
+    printf '  %s 教人寫的 plan status 只准 ⏳ 未開始／🔄 進行中／🚫 阻塞／✅ 完成（不加附註）：%s\n' "$(red '✗')" "$(printf '%s' "$BAD_PS" | tr '\n' ';')"
+fi
+
 # 05 範本的資料流節：位在自動段之後、至少一張 sequenceDiagram、每個小標題以全形括號結尾
 #
 # 為什麼：圖要連到 PRD 情境（括號裡的編號）；順序由大到小（模組與依賴在前、資料流在後）。

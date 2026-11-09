@@ -292,7 +292,7 @@ case "$NORM" in
                     "📏 WBS 格子太長：`wbs.md` 有 \($hits | length) 格超過 \($max) 字。WBS 是打開就要能掌握專案狀態的文件，**每格只寫一行**——長內容搬出去，格子裡只留連結或風險 ID。\n\n"
                     + ([$hits[:8][] | "- \(.id) 的「\(.col)」（\(.len) 字）"] | join("\n"))
                     + (if ($hits | length) > 8 then "\n- …另有 \(($hits | length) - 8) 格" else "" end)
-                    + "\n\n該搬去哪：驗證數據／執行結果 → 評估報告或 plan 該階段的「驗收」・進度／派工／commit SHA → 執行帳本 `plans/*.progress.md`・帶給下一任務的疑慮 → 下一任務 plan 的「發現與決策」或該階段的「注意」・選型理由 → `context/decisions/` 或 ADR・阻塞原因 → 「風險與阻塞」表（任務列只寫風險 ID）・任務等級 → plan frontmatter。"
+                    + "\n\n該搬去哪：驗證數據／執行結果 → 評估報告或 plan 該階段的「驗收」・進度／派工／commit SHA → 執行帳本 `plans/*.progress.md`・帶給下一任務的疑慮 → 下一任務 plan 的「發現與決策」或該階段的「注意」・選型理由 → ADR（`docs/decisions/`，用 `/adr`）・阻塞原因 → 「風險與阻塞」表（任務列只寫風險 ID）・任務等級 → plan frontmatter。"
                     + (if ($doc | test("(^|\n)## 現況")) then "" else "\n\n這份 WBS 沒有「現況」區，是舊版面——`/task-status` 會提議整份轉換（長內容搬出、不丟資料）。" end)
                     + "\n\n版面唯一來源：`.claude/templates/wbs.template.md`。（只提醒，不擋。關閉：WBS_CELL_CHECK=off）"
                   end

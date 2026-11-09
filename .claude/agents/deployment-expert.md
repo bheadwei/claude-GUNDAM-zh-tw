@@ -1,6 +1,6 @@
 ---
 name: deployment-expert
-description: 部署運維工程師。Use 當任務涉及部署、CI/CD、容器/K8s、基礎設施(IaC)、零停機發布或上線監控時；也接收 security-infrastructure-auditor 的部署相關 handoff。
+description: 部署運維工程師。Use 當任務涉及部署、CI/CD、容器/K8s、基礎設施(IaC)、零停機發布或上線監控時，或要寫、改 runbook 的回滾步驟、SLO、告警、事故處理時；也接收 security-infrastructure-auditor 的部署相關 handoff。
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob", "WebSearch", "mcp__context7__resolve-library-id", "mcp__context7__query-docs"]
 model: opus
 ---

@@ -82,8 +82,10 @@ PRD 只透過 plan 的「PRD 情境變更」改（`/verify` 套回）；brief �
 
 最貴的一項，**只在里程碑收斂或使用者明確要求時做**。
 
-委派 `documentation-specialist`（`subagent_type: "documentation-specialist"`）——
-「文件與程式碼是否相符」正是它的職責，不要自己一個一個檔案讀。
+派 `general-purpose`（`subagent_type: "general-purpose"`）做抽樣比對，prompt 寫明**只讀不改**、
+回傳下方「C. 描述失真」那張表；報告與後續提問仍由主模型做。不要自己一個一個檔案讀（會吃掉主 context）。
+不派 `documentation-specialist`：它的原則是「以程式碼為準改文件」，而且不寫 PRD——
+這裡要的是報告落差，PRD 該改還是程式該改由使用者決定。
 
 抽樣比對 PRD 情境（假設／當／那麼）裡**具體可驗證**的行為與程式碼：
 
@@ -152,7 +154,7 @@ PRD 只透過 plan 的「PRD 情境變更」改（`/verify` 套回）；brief �
 - ❌ 比對散文式描述（「效能良好」）→ 假警報
 - ❌ 沒讀 `wbs-archive.md` → 把已完成歸檔的任務誤報成「漏做」
 - ❌ 沒有 brief 時假裝比對過 non-goals
-- ❌ 檢查 C 自己一個一個檔案讀（委派 `documentation-specialist`）
+- ❌ 檢查 C 自己一個一個檔案讀（派 `general-purpose` 只讀比對）
 - ❌ 把「範圍蔓延」當成錯誤來報 —— CR 本來就會發生，錯的是 PRD 沒跟上
 
 ## 相關
