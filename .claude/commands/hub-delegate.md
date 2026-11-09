@@ -66,7 +66,7 @@ Agent 建議:
 | build-error-resolver | 建置/型別錯誤修復 |
 | debug-investigator | 執行期 bug 根因調查 |
 | refactor-cleaner | 死碼清理 |
-| documentation-specialist | 文檔生成 |
+| documentation-specialist | 文件同步（README、架構文件、runbook）、模組說明 |
 | deployment-expert | 部署運維 |
 | ui-builder | 前端 UI 產出 |
 | conflict-resolver | 合併衝突處理 |

@@ -56,7 +56,7 @@
 | code-quality-specialist | sonnet | 程式碼審查 |
 | e2e-validation-specialist | sonnet | E2E 測試 |
 | refactor-cleaner | sonnet | 死碼清理 |
-| documentation-specialist | sonnet | 文檔生成 |
+| documentation-specialist | sonnet | 文件同步、模組說明 |
 
 實作（含 TDD）沒有專屬 agent：`/tdd` 由主模型照 `tdd-workflow` skill 做，
 多階段計畫逐階段派 `general-purpose` implementer（`subagent-execution` skill）。
