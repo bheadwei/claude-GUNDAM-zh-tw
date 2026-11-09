@@ -4,7 +4,7 @@ slug: "overview-from-code"
 created: "2026-11-05"
 updated: "2026-11-06"
 status: "🔄 進行中"
-current_phase: 5
+current_phase: 7
 mode: "standard"
 files:
   # 階段 0：fixture 產生器、效能實測、jq 1.6 CI
@@ -463,7 +463,7 @@ flowchart LR
   - 說明可能寫進客戶機密：樣式檢查＋寫入當下注入＋附屬檔禁寫清單＋`based_on` 供抽查；`overview.notes: off` 可整個關掉。建議本階段另請 `security-infrastructure-auditor` 看一次樣式清單（選配）
   - notes 檔的讀取照 learned 的做法走 stdin 或暫存 ASCII 檔名
 
-### 階段 5: 模組展開——資料 🔄
+### 階段 5: 模組展開——資料 ✅
 
 - **依賴**：階段 2, 4；跨計畫：文件 1（補資料流節後）已合併
 - [ ] `overview-scan.sh`：在既有那一趟 awk 解析 import／http 時多輸出一種行，`skeleton.json` 加 `fileEdges[]`：`{from: 路徑, to: 路徑或 null, ext: "db:<名>"／"pkg:<名>" 或 null, source: "import"／"http"}`（ADR-2026-11-06-002 決策 1）；**不加行程**；`scan.truncated` 時沒有 `fileEdges`（同現行沒有邊） — 驗證：`bash .claude/hooks/tests/run-tests.sh overview`
