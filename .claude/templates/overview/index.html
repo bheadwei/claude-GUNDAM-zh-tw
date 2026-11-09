@@ -145,6 +145,10 @@ button.chip{cursor:pointer;min-height:28px}
 .tabs button:focus-visible{outline-offset:-2px}
 #tv{display:none;flex:1;min-height:0;overflow:auto;padding:16px 20px}
 .v-tasks #tv{display:block}.v-tasks .main,.v-tasks .legend{display:none}
+.tw{display:flex;gap:16px;align-items:flex-start;max-width:1500px;margin:0 auto}.tcards{flex:1;min-width:0}
+.toc{position:sticky;top:0;flex:none;width:230px;max-height:calc(100vh - 140px);overflow:auto;display:grid;gap:2px;font-size:var(--fs-s)}
+.toc a{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;color:var(--fg);text-decoration:none;overflow-wrap:anywhere}
+.toc a:hover{background:var(--info-bg)}
 .plan{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:0 auto 16px;max-width:1240px}
 .plan.cur{border-color:var(--chg);box-shadow:0 0 0 1px var(--chg)}
 .plan h2{font:700 var(--fs-l) var(--f-display);margin:0 0 4px}
@@ -168,7 +172,7 @@ button.chip{cursor:pointer;min-height:28px}
 .xtra{margin-top:8px;font-size:var(--fs-s)}.xtra summary{cursor:pointer;color:var(--chg)}.xtra code{display:inline-block;margin:4px 6px 0 0}
 .tnone{color:var(--muted);text-align:center;padding:64px 20px;line-height:1.7}
 @media (pointer:coarse){.pill,.tabs button,button.chip{min-height:44px}}
-@media (max-width:760px){.main{flex-direction:column}.panel{width:auto;max-height:38%;border-left:0;border-top:1px solid var(--line)}#mini,.hint{display:none}
+@media (max-width:760px){.main{flex-direction:column}.tw{flex-direction:column;gap:8px}.toc{position:static;display:flex;width:100%;max-height:none;overflow-x:auto;gap:4px}.toc a{flex:none;white-space:nowrap;border:1px solid var(--line)}.panel{width:auto;max-height:38%;border-left:0;border-top:1px solid var(--line)}#mini,.hint{display:none}
   .bar{position:relative;gap:8px}.ttl{flex-basis:100%}.bar h1{padding-right:72px}
   #theme{position:absolute;top:8px;right:max(16px,env(safe-area-inset-right))}
   .legend{flex-wrap:nowrap;overflow-x:auto;max-width:100%;scrollbar-width:thin}
@@ -878,7 +882,7 @@ function partCard(p, pl) {
     (ai.summary ? '<span>' + esc(ai.summary) + (ai.source === 'phase' ? '（階段摘要）' : '') + '</span>' : '') +
     '<span class="fdesc">' + esc(nums(ai)) + (ai.tests ? ' · 測試 ' + esc(ai.tests) : '') + '</span></div>';
 }
-function planCard(pl) {
+function planCard(pl, i) {
   var cols = (pl.phases || []).map(function (ph) {
     return {t: '階段 ' + ph.n + ' ' + ph.name + ' · ' + (PST[ph.state] || ph.state),
       ps: pl.parts.filter(function (p) { return p.planned && p.phase === ph.n; })};
@@ -889,7 +893,7 @@ function planCard(pl) {
   if (lone.length) cols.push({t: '沒標階段', ps: lone});
   var xn = pl.extraCount || ex.length, v = pl.verify;
   var from = {completed: '已完成：只顯示階段狀態', none: '沒有執行帳本、也不是本次任務：工作區改動見地圖的「本次改動」'}[pl.changesFrom];
-  return '<section class="plan' + (pl.current ? ' cur' : '') + '"><h2>' + (pl.current ? '★ ' : '') + esc((pl.task ? pl.task + ' ' : '') + pl.title) +
+  return '<section id="p' + i + '" class="plan' + (pl.current ? ' cur' : '') + '"><h2>' + (pl.current ? '★ ' : '') + esc((pl.task ? pl.task + ' ' : '') + pl.title) +
     '<span class="tag">' + esc(pl.status || '—') + '</span>' + (pl.source !== 'main' ? '<span class="tag">' + esc(pl.source) + '</span>' : '') + '</h2>' +
     '<div class="meta"><code>' + esc(pl.file) + '</code>' + (pl.mode ? ' · ' + esc(pl.mode) : '') +
     ' · ' + (from ? esc(from) : pl.base ? '比較基準 <code>' + esc(pl.base) + '</code>' : '找不到比較基準') + '</div>' +
@@ -909,10 +913,20 @@ function planCard(pl) {
       return '<tr><td><code>' + esc(r.dir) + '</code> ' + esc(r.files) + ' 個檔</td><td>未逐一列出</td><td>' + esc(nums(r)) + '</td><td>—</td></tr>';
     }).join('') + '</tbody></table></section>';
 }
+function tocItem(pl, i) {
+  var s = pl.status || '', c = pl.verify && pl.verify.result === 'FAIL' || s.indexOf('🚫') >= 0 ? 'issue' : pl.completed ? 'done' : s.indexOf('🔄') >= 0 ? 'wip' : 'todo';
+  return '<a href="#p' + i + '" data-p="p' + i + '"><i class="dot s-' + c + '"></i>' + (pl.current ? '★ ' : '') + esc((pl.task ? pl.task + ' ' : '') + pl.title) + '</a>';
+}
+$('tv').addEventListener('click', function (e) {
+  var a = e.target.closest('a[data-p]'), t = a && $(a.dataset.p);
+  if (!t) return;
+  e.preventDefault();
+  t.scrollIntoView({block: 'start', behavior: reduce ? 'auto' : 'smooth'});
+});
 function renderTasks(d) {
   var tv = $('tv'), st = tv.scrollTop, ps = d.plans || [];
   $('ttab').textContent = '任務圖' + (ps.length ? '（' + ps.length + '）' : '');
-  tv.innerHTML = ps.length ? ps.map(planCard).join('')
+  tv.innerHTML = ps.length ? '<div class="tw"><nav class="toc" aria-label="任務目錄">' + ps.map(tocItem).join('') + '</nav><div class="tcards">' + ps.map(planCard).join('') + '</div></div>'
     : '<div class="tnone">plans/ 底下沒有計畫。<br>跑 /plan 之後，這裡會依階段列出每個部件做了沒、改了哪些檔。</div>';
   tv.scrollTop = st;
 }
