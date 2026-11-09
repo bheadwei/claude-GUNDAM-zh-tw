@@ -2403,8 +2403,7 @@ gbg_untag
 # 本閘門的判斷正是「當前分支 == 預設分支嗎」，所以分支名必須是確定的。本檔每個 git init 都帶
 # `-c init.defaultBranch=main`（「全體 hooks」那節有檢查擋新增的），不看跑測試那台機器的設定；
 # 前面的區塊會真的 `checkout main`（例如 backup 閘門那組）。下面兩行是保險：萬一 HEAD 停在別的分支，
-# 改名成 main 再切過去。2026-11-09 之前 setup_worktree 沒帶它，CI Windows（master）留下
-# master 與 main 兩個分支，閘門把 master 當預設分支 → 本節 4 個案例只在 CI 紅。
+# 改名成 main 再切過去。
 gitq branch -M main
 gitq checkout main
 reset
