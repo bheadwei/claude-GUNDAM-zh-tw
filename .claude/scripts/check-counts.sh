@@ -194,6 +194,23 @@ for f in .claude/agents/*.md .claude/skills/*/SKILL.md; do
     done <<< "$refs"
 done
 
+# documentation-specialist 引用的 skill 附屬檔（SKILL.md 以外的檔）必須存在
+#
+# 為什麼：上面只驗 SKILL.md。這支 agent 寫模組說明前要 Read `project-docs/module-notes.md`、
+# 補架構文件要讀 05 範本——路徑寫錯一個字，它就憑記憶寫，地圖的說明層照樣驗不過也不會有人知道原因。
+DSAGENT=.claude/agents/documentation-specialist.md
+if [ -f "$DSAGENT" ]; then
+    refs=$(grep -ohE '\.claude/skills/[a-z0-9-]+/[A-Za-z0-9_./-]+\.md' "$DSAGENT" 2>/dev/null | grep -v '/SKILL\.md$' | sort -u)
+    while IFS= read -r ref; do
+        [ -n "$ref" ] || continue
+        CHECKED=$((CHECKED + 1))
+        if [ ! -f "$ref" ]; then
+            FAIL=$((FAIL + 1))
+            printf '  %s documentation-specialist.md 引用了不存在的 skill 附屬檔：%s\n' "$(red '✗')" "$ref"
+        fi
+    done <<< "$refs"
+fi
+
 # 壓力測試的 code grader 不得殘留硬編碼的 agent 名單
 #
 # 為什麼：run-compliance.sh 的 grader 用 grep 比對「這一輪點名了哪些 agent」。
@@ -337,19 +354,21 @@ fi
 
 # 專案圖解產生器的欄名常數 vs 範本表頭
 #
-# 為什麼：overview.sh 依欄名抽 WBS 任務表與 plan 部件表。範本改了欄名、常數沒跟上，
+# 為什麼：overview.sh 依欄名抽 WBS 任務表、plan 部件表與說明層 module-notes.md。範本改了欄名、常數沒跟上，
 # 地圖會靜默變空白（不報錯）——跟孤兒 skill 同類的安靜失效，只有這裡擋得住。
 OVSH=.claude/scripts/overview.sh
 if [ -f "$OVSH" ]; then
     cols_of() { printf '%s\n' "$1" | tr '|' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$'; }
-    ov_const() { sed -n "s/^$1=\"\([^\"]*\)\".*/\1/p" "$OVSH" | head -1; }
+    ov_const() { sed -n "s/^$1=[\"']\([^\"']*\)[\"'].*/\1/p" "$OVSH" | head -1; }
     WBS_COLS=$(cols_of "$(grep -m1 -E '^\| # \| 任務 \|' "$WBST" 2>/dev/null)")
     PART_COLS=$(cols_of "$(grep -m1 -E '^\| id \| 部件 \|' .claude/skills/plan-format/SKILL.md 2>/dev/null)")
-    for pair in OVERVIEW_COLS_WBS:WBS OVERVIEW_COL_WBS:WBS OVERVIEW_COLS_PART:PART; do
+    NOTES_COLS=$(cols_of "$(grep -m1 -E '^\| id \|' .claude/skills/project-docs/module-notes.md 2>/dev/null)")
+    for pair in OVERVIEW_COLS_WBS:WBS OVERVIEW_COL_WBS:WBS OVERVIEW_COLS_PART:PART OVERVIEW_COLS_NOTES:NOTES; do
         name=${pair%:*}
         case "${pair#*:}" in
-            WBS) have=$WBS_COLS; where="wbs.template.md 任務表頭" ;;
-            *)   have=$PART_COLS; where="plan-format「一眼看懂」部件表表頭" ;;
+            WBS)   have=$WBS_COLS; where="wbs.template.md 任務表頭" ;;
+            NOTES) have=$NOTES_COLS; where="project-docs/module-notes.md 說明表表頭" ;;
+            *)     have=$PART_COLS; where="plan-format「一眼看懂」部件表表頭" ;;
         esac
         val=$(ov_const "$name")
         miss=""
@@ -436,6 +455,30 @@ if [ -f "$TPL05" ]; then
     if [ -n "$DF_TPL" ]; then
         FAIL=$((FAIL + 1))
         printf '  %s 05 範本要在自動段之後有「## N. 資料流」節（含 sequenceDiagram、小標題以全形括號結尾）：%s\n' "$(red '✗')" "$(printf '%s' "$DF_TPL" | tr '\n' ';')"
+    fi
+fi
+
+# overview.sh 的自動段標記與資料流節名 vs 05 範本（ADR-2026-11-05-007 的 A7、ADR-2026-11-06-002 決策 3）
+#
+# 為什麼：--sync-arch 找「行首是標記常數」的兩行，資料流解析找「## <數字>. <節名常數>」。
+# 範本改了字而常數沒跟上，照範本寫的架構文件自動段永遠不更新、資料流永遠是空的，都不報錯。
+# 比對方式照 overview.sh 本身：標記比行首、節名比「## 數字. 」之後的開頭。
+if [ -f "$OVSH" ] && [ -f "$TPL05" ]; then
+    for name in OVERVIEW_GEN_START OVERVIEW_GEN_END; do
+        CHECKED=$((CHECKED + 1))
+        val=$(ov_const "$name")
+        if [ -z "$val" ] || ! awk -v S="$val" '{ sub(/\r$/, "") } index($0, S) == 1 { f = 1 } END { exit !f }' "$TPL05"; then
+            FAIL=$((FAIL + 1))
+            printf '  %s overview.sh 的 %s（%s）在 05 範本找不到以它開頭的一行：%s\n' "$(red '✗')" "$name" "${val:-找不到這個常數}" "$TPL05"
+            printf '      改了範本的自動段標記就同步 %s 的常數，否則 --sync-arch 會說沒有標記、自動段永遠不更新\n' "$OVSH"
+        fi
+    done
+    CHECKED=$((CHECKED + 1))
+    val=$(ov_const OVERVIEW_FLOW_SECTION)
+    if [ -z "$val" ] || ! grep -qE "^##[[:space:]]+[0-9]+\.[[:space:]]*$val" "$TPL05"; then
+        FAIL=$((FAIL + 1))
+        printf '  %s overview.sh 的 OVERVIEW_FLOW_SECTION（%s）在 05 範本找不到「## N. %s」節：%s\n' "$(red '✗')" "${val:-找不到這個常數}" "${val:-…}" "$TPL05"
+        printf '      改了範本的資料流節名就同步 %s 的常數，否則地圖的資料流清單永遠是空的\n' "$OVSH"
     fi
 fi
 
