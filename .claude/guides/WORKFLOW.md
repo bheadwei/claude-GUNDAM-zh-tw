@@ -8,7 +8,7 @@
 | **Rules** | 6 | 每個 session 全量載入 | 否（但靠模型遵守） |
 | **Skills** | 28 | 情境觸發，按需載入 | 是（需被想起來） |
 | **Commands** | 29 | 使用者主動叫 | — |
-| **Agents** | 15 | 委派時啟動 | — |
+| **Agents** | 14 | 委派時啟動 | — |
 
 **設計原則**：能交給機器的交給 hook；任何任務都適用的才常駐 rule；
 領域專屬知識放 skill 按需載入。
@@ -475,5 +475,5 @@ bash .claude/scripts/check-counts.sh --tests 1041         # 文件計數一致�
 CI（`.github/workflows/template-ci.yml`）會在 push 與 PR 時自動跑整套與計數檢查，
 加上 Windows/Git Bash 的回歸測試、shell 與 PowerShell 語法、copy/update-template 沙箱實跑。
 
-整套 1255 個案例，全綠才算沒破壞閘門；什麼時候跑整套、什麼時候依改動挑，唯一來源是
+整套 1268 個案例，全綠才算沒破壞閘門；什麼時候跑整套、什麼時候依改動挑，唯一來源是
 `commands/verify.md` 步驟 4。詳見 `.claude/hooks/tests/README.md`。

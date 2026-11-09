@@ -54,6 +54,7 @@ files:
   - ".claude/hooks/lib/agent-inflight.sh"
   - ".claude/hooks/README.md"
   - ".claude/hooks/tests/run-tests.sh"
+  - ".claude/hooks/tests/README.md"
   # 階段 6：舊文件盤點（D4，只動上面已列的 docs-init.md、documentation-specialist.md）
 ---
 
@@ -361,3 +362,6 @@ flowchart LR
 - 2026-11-06 地圖計畫新增階段 5、6（模組展開，ADR-2026-11-06-002），原地圖 5（收尾）改號地圖 7：本計畫「兩份計畫的順序」與階段 5 的跨計畫依賴同步改；地圖 6 只依賴地圖 3，不新增跨計畫限制
 - 2026-11-06 `check-counts.sh` 檢查資料流節與「資料流變更」放階段 1（範本與範例在同一階段寫）；`overview.sh` 的資料流節名常數 `OVERVIEW_FLOW_SECTION` 與 05 範本的比對放地圖 7（常數在 `overview.sh`，比照 A7）
 - 2026-11-06 階段 4 完成（合併，check-counts 717）。偏離：審查 agent 帶 `isolation: "worktree"` 後 `git checkout --detach <階段分支>`（`pre-agent-gate.sh` 有併行寫入者時持續擋不帶隔離的掃描類 agent）；資料流提醒的起點沿用 `verify.md` 步驟 4 的本輪起點（`.merge-round-start`），不用 `merge-base HEAD main`（主 checkout 合併後恆為 HEAD）；最後一個合併時 PRD 套回與資料流提醒對本輪每份已合併 plan 各做一次。技術債：資料流 awk 對純插入的節界判定不對稱。四項一致性修正排進階段 5
+- 2026-11-09 階段 5 實作（worktree，BASE `087a9ee`）。偏離：①「幫我寫一份 PRD」不含「文件」，舊規則要先命中文件類關鍵字才看 PRD → `user-prompt-submit.sh` 把 PRD／ADR／架構文件分支提到文件維護之前、不必先命中「文件」，`prd`／`adr` 左右不能是英文字母（address），拿掉「流程模板」關鍵字；注入同時指向 `/docs-init`、`/adr`／`architect` 與架構文件事實不符時的 `documentation-specialist` ②驗收「搜 `workflow-template-manager` → 0 筆」涵蓋 `.claude/hooks`，所以新增的反向測試不寫全名：PRD 路由斷言不含 `template-manager`（範圍更寬）、唯讀名單改成整串相等比對五個名字 ③`using-taskmaster` 路由表：PRD／brief／架構文件初稿 → `/docs-init`（不派 agent），ADR → `/adr` 或 `architect`；文件維護那列改成「README、架構文件 architect 撰寫的部分、runbook」④`MODELS.md` 的 haiku 歷史句改寫成「2026-11 退場的流程模板 agent」以免殘留名字。一致性修正：(1) 驗證數據統一寫「驗收」（`plan-format`、`wbs.template.md`、`post-write.sh`、`verify.md` 本來就這樣寫，只改 `task-status.md` 轉換表；`plan-format` 補「一筆一行帶日期」）(2) `plan-format` 寫入權表的 `/verify` 列加「修正改善了什麼」、新增「文件同步關卡只加 `已套回 PRD` 行」一列 (3) `task-status.md` 選型與理由 → `docs/decisions/`（用 `/adr`）(4) `verify.md` 新增通用小節「主 checkout 的起點」放在模板 repo 例外之前，例外表與資料流提醒都指向它。案例數 1252 → 1258（路由 +5、WBS 提醒 +2、唯讀名單相等 +1、唯讀迴圈少一個名字 −2）。範圍外發現（未改）：`post-write.sh` 同一句提示的「選型理由 → `context/decisions/` 或 ADR」與 ADR-004 不一致；`plan-format`「WBS 任務被跳過／刪除時」寫 `status: "⚠️ WBS 已移除"`，違反四值規則
+- 2026-11-09 階段 5 驗證：選節測試 RED 322 過／8 敗 → GREEN 330 過／0 敗；`check-counts.sh` 718 項全綠；`run-compliance.sh -n 3 01 02` 兩題都 3/3 宣告了委派或拒派（在模板 repo 內派 `skill-curator`）。受測 session 改了 `README.md`、`scripts/update-template.{sh,ps1}`，已全部還原。它指出的範圍外落差（未改）：`update-template.{sh,ps1}` 結尾仍說「沒有架構文件時會提示請 documentation-specialist 反推草稿」；`spec-convergence` SKILL 第 84 行會派 `documentation-specialist` 比對 PRD，但它的定義沒有這項工作
+- 2026-11-09 階段 5 修復迴圈 R1（審查 1 MEDIUM＋2 LOW）：`user-prompt-submit.sh` 的專案文件分支拆成兩則——ADR（`/adr`／architect，只在 ADR 命中時出現）與 PRD／架構文件（`/docs-init`）；架構文件句含更新、同步、整理、修正、更正、對齊、跟上、維護、過時、過期時不走 `/docs-init`，落回文件維護（documentation-specialist）。PRD、ADR 的同步句不落回：PRD 只由 `/verify` 依 plan 的「PRD 情境變更」套回、ADR 接受後只改 status，都不歸 documentation-specialist。`prd`／`adr` 收複數 `s`。案例數 1258 → 1265

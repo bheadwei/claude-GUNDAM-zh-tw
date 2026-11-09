@@ -94,10 +94,10 @@ claude_v2026/
     ├── statusline.sh                 # StatusLine 腳本
     │
     ├── rules/        ( 6 個)         # 自動載入規則（每次對話注入）
-    ├── agents/       (15 個)         # 專業 Agent 定義
+    ├── agents/       (14 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
     ├── skills/       (28 個)         # 按需載入（不佔常駐 context）
-    ├── hooks/                        # Hook 腳本 + lib/ + 1255 案例回歸測試
+    ├── hooks/                        # Hook 腳本 + lib/ + 1268 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）、check-counts.sh（文件計數一致性）、overview.sh（專案圖解）
     ├── ui/           (104 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │
@@ -205,7 +205,7 @@ hook 在背景更新，畫面每 3 秒自己重讀。地圖可拖曳平移、縮
 
 ---
 
-## Agent（15 個）
+## Agent（14 個）
 
 | Agent | Model | 用途 |
 | :--- | :--- | :--- |
@@ -221,8 +221,7 @@ hook 在背景更新，畫面每 3 秒自己重讀。地圖可拖曳平移、縮
 | deployment-expert | opus | 部署、CI/CD、IaC、上線監控 |
 | ui-builder | opus | 前端 UI 產出（嚴格遵循 DESIGN.md） |
 | build-error-resolver | opus | 建置/型別錯誤最小差異修復 |
-| documentation-specialist | sonnet | codemap、API 文檔 |
-| workflow-template-manager | sonnet | PRD/ADR 等流程模板管理 |
+| documentation-specialist | sonnet | 程式碼改動後同步 README、架構文件、runbook |
 | skill-curator | opus | Skill 擴充維護、UI 素材庫盤點與新增 |
 
 通用任務退回 Claude Code **內建的 `general-purpose`**——本模板不自訂它，同名會 shadow

@@ -44,10 +44,10 @@ e2e-validation-specialist、deployment-expert、ui-builder、debug-investigator�
 實作者不是專屬 agent（主模型自己照 `tdd-workflow` skill 做，或派 `general-purpose`
 implementer，見 `subagent-execution`），所以沒有 handoff 對象
 
-**終端節點，不建 handoff（4）**：build-error-resolver（單點修完即止）、
-documentation-specialist、workflow-template-manager、test-automation-engineer（只補被點名的缺口，補完鏈結束）
+**終端節點，不建 handoff（3）**：build-error-resolver（單點修完即止）、
+documentation-specialist、test-automation-engineer（只補被點名的缺口，補完鏈結束）
 
-8＋1＋1＋4＝14，第 15 個 `conflict-resolver` **刻意不在名單裡**：它的 tools 沒有 Write，
+8＋1＋1＋3＝13，第 14 個 `conflict-resolver` **刻意不在名單裡**：它的 tools 沒有 Write，
 機制上寫不了報告檔（只在回應裡回 STATUS 碼），列進去會讓稽核每次解衝突都發假警報
 （見 `post-agent-report.sh` 的註解）。**不要把它「補」回來。**
 

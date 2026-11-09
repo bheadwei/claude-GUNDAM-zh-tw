@@ -81,8 +81,9 @@
 
 | 元件 | 區別 |
 |---|---|
-| `documentation-specialist` agent | 程式碼層：codemap、API doc |
-| `workflow-template-manager` agent | 流程層：PRD、ADR 模板 |
+| `documentation-specialist` agent | 程式碼改了之後同步：README、架構文件 architect 撰寫的部分、runbook |
+| `/docs-init` ＋ `project-docs` skill | 產 brief、PRD、架構文件初稿；6 份文件的分工與範本 |
+| `/adr`、`architect` agent | ADR（單點選型用 `/adr`，跨模組決策派 `architect`） |
 
 ## 6. 命名約定
 

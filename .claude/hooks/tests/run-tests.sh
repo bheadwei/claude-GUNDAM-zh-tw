@@ -607,7 +607,7 @@ expect_contains "文件維護 → documentation-specialist" "documentation-speci
     "$(run user-prompt-submit.sh "$(p '幫我整理更新文件')")"
 expect_contains "更新 README → documentation-specialist" "documentation-specialist" \
     "$(run user-prompt-submit.sh "$(p '更新一下 README 和 API 文檔')")"
-expect_contains "PRD/ADR → workflow-template-manager" "workflow-template-manager" \
+expect_contains "PRD／架構文檔 → /docs-init" "/docs-init" \
     "$(run user-prompt-submit.sh "$(p '把 PRD 的架構文檔同步一下')")"
 expect_contains "路由用命令式而非建議式"      'subagent_type' \
     "$(run user-prompt-submit.sh "$(p '幫我整理更新文件')")"
@@ -635,6 +635,32 @@ expect_contains "session＋token 過期處理 → critical" "critical" \
     "$(run user-prompt-submit.sh "$(p 'session 過期時要自動 refresh token')")"
 expect_contains "認證訊息不再重述覆蓋率百分比" "testing-standards" \
     "$(run user-prompt-submit.sh "$(p '實作登入認證')")"
+
+# 流程模板 agent 退場（ADR-2026-11-05-004）：PRD／架構文件走 /docs-init，ADR 走 /adr 或 architect。
+# 「幫我寫一份 PRD」不含「文件」：舊規則要先命中文件類關鍵字才看 PRD，整句沒有任何注入
+reset
+expect_contains     "寫 PRD（沒說「文件」）→ /docs-init" "/docs-init" \
+    "$(run user-prompt-submit.sh "$(p '幫我寫一份 PRD')")"
+expect_not_contains "PRD 路由不再指向已退場的流程模板 agent" "template-manager" \
+    "$(run user-prompt-submit.sh "$(p '把 PRD 的架構文檔同步一下')")"
+DOC_ADR=$(run user-prompt-submit.sh "$(p '幫我補一份 ADR')")
+expect_contains     "補 ADR → ADR 路由（/adr 或 architect）" "偵測到 ADR" "$DOC_ADR"
+expect_not_contains "補 ADR 不會被導去 /docs-init" "/docs-init" "$DOC_ADR"
+expect_contains     "複數 ADRs 也命中 ADR 路由" "偵測到 ADR" \
+    "$(run user-prompt-submit.sh "$(p '這次要寫幾份 ADRs')")"
+expect_contains     "複數 PRDs 也命中 /docs-init" "/docs-init" \
+    "$(run user-prompt-submit.sh "$(p '兩個子系統各有 PRDs 要寫')")"
+# 「同步／更新既有架構文件」是文件維護，不是產初稿：主訊息要是 documentation-specialist
+DOC_ARCH_SYNC=$(run user-prompt-submit.sh "$(p '同步架構文件')")
+expect_contains     "同步架構文件 → 文件維護（documentation-specialist）" "偵測到文件維護" "$DOC_ARCH_SYNC"
+expect_not_contains "同步架構文件不會被導去 /docs-init" "/docs-init" "$DOC_ARCH_SYNC"
+expect_contains     "更新架構文件 → 文件維護（documentation-specialist）" "偵測到文件維護" \
+    "$(run user-prompt-submit.sh "$(p '程式改完了，幫我更新一下架構文件')")"
+expect_contains     "補架構文件 → /docs-init" "/docs-init" \
+    "$(run user-prompt-submit.sh "$(p '幫我補一份架構文件')")"
+DOC_README=$(run user-prompt-submit.sh "$(p '順便更新 README')")
+expect_contains     "順便更新 README → documentation-specialist" "documentation-specialist" "$DOC_README"
+expect_not_contains "文件維護的注入不再提 codemap" "codemap" "$DOC_README"
 
 # subagent 交回的報告不是使用者提問。實測（2026-09-17 transcript）harness 把報告
 # 當成一則 user 訊息送進來、UserPromptSubmit 照樣觸發，報告內文的關鍵字於是
@@ -1012,6 +1038,8 @@ WBS_OUT=$(run post-write.sh "$(w "$WBS_F")")
 expect_contains "WBS 中文超長格子會提醒"       "WBS 格子太長"   "$WBS_OUT"
 expect_contains "WBS 提醒指出任務編號與欄位"   "13.1 的「狀態」" "$WBS_OUT"
 expect_contains "WBS 提醒附長內容去處"         "執行帳本"       "$WBS_OUT"
+expect_contains "WBS 提醒：疑慮的去處是「發現與決策」" "「發現與決策」或該階段的「注意」" "$WBS_OUT"
+expect_not_contains "WBS 提醒不再指向舊 plan 的「風險與緩解」" "風險與緩解" "$WBS_OUT"
 
 reset; wbs_doc "$SHORT_ZH" "—"
 expect_empty "WBS 短中文格子不提醒（以字計、非位元組）" "$(run post-write.sh "$(w "$WBS_F")")"
@@ -2929,7 +2957,7 @@ reset; mkdir -p "$SANDBOX/.claude/agents"
 printf -- '---\nname: x\n---\n\nisolation: worktree\n' > "$SANDBOX/.claude/agents/ui-builder.md"
 st2 a1 debug-investigator
 expect_decision "isolation 寫在 frontmatter 之外不算（只看第一個區塊）" deny "$(ag2 ui-builder)"
-for ro in Explore Plan claude-code-guide planner architect workflow-template-manager; do
+for ro in Explore Plan claude-code-guide planner architect; do
     reset; st2 a1 ui-builder
     expect_decision "唯讀名單：要派 $ro → 放行" allow "$(ag2 "$ro")"
     reset; st2 a1 "$ro"
@@ -2937,6 +2965,8 @@ for ro in Explore Plan claude-code-guide planner architect workflow-template-man
 done
 reset; st2 a1 ui-builder
 expect_decision "general-purpose 不在唯讀名單（仍擋）" deny "$(ag2 general-purpose)"
+expect_eq "唯讀名單恰好是這五個（退場的流程模板 agent 已移除）" "Explore Plan claude-code-guide planner architect" \
+    "$(source "$HOOK_DIR/lib/agent-inflight.sh"; printf '%s' "$AGENT_INFLIGHT_READONLY")"
 reset; st2 a1 planner; st2 a2 code-quality-specialist
 expect_decision "唯讀 agent 不會讓掃描類的讀寫衝突消失" deny "$(ag2 ui-builder)"
 # branch-switch-gate 用同一個 lib，自動受惠
