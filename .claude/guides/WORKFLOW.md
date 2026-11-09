@@ -135,16 +135,32 @@ wbs-archive.md  已完成里程碑的完整任務列（含實際耗時，可回�
 
 ### 想看整體長什麼樣（專案圖解）
 
-`/task-status` 最後一行印出 `file:///…/taskmaster-data/overview/index.html`，瀏覽器打開有兩頁：
-**專案地圖**（架構文件的模組＋燈號＋本次改動）與**任務圖**（每份 plan 的部件做了沒、改了哪些檔）。
-不用手動重產——寫 wbs／plan／架構文件時 hook 在背景更新，畫面每 3 秒自己讀一次。
+`/task-status` 先印一頁現況（進行中、阻塞、下一個、落差），最後一行印出
+`file:///…/taskmaster-data/overview/index.html`，瀏覽器打開有兩頁：
+**專案地圖**（模組＋燈號＋本次改動＋本次 plan 預計動的模組）與**任務圖**（每份 plan 的部件做了沒、改了哪些檔）。
+資料從哪來：
+
+- **骨架掃程式碼**：模組、依賴線、路由數由 `overview-scan.sh` 從程式碼掃出，沒有架構文件、文件不照模板寫也畫得出來；
+  架構文件的模組表與程式碼對不上的地方，頁首列成「落差 N 項」
+- **進度看 WBS／plan**：燈號來自 WBS 狀態；WBS 沒有模組欄時依 plan 的 `files:` 推斷，`/task-status` 會提議寫回
+- **說明按需**：模組的一句白話說明不會自動產生，`/task-status` 問過你才請 `documentation-specialist` 寫，程式改過才標過期
+- **同一份資料產生其他出口**：架構文件第 4 節的自動段（`/verify`、`/task-status` 時改寫兩個標記之間）與一頁現況，
+  都和畫面讀同一份資料，不會三份各說各話
+
+不用手動重產——寫 wbs／plan／架構文件或程式碼檔時 hook 在背景更新（程式碼檔 30 秒內只重掃一次），畫面每 3 秒自己讀一次。
 地圖可拖曳平移、滾輪或右下角按鈕縮放（放大會顯示更多細節，「全圖」或 Esc 回到全貌）、
 雙擊模組聚焦；左下角的小地圖可點選或拖曳跳轉，上方可勾「只看本次改動」。
+點模組後右側欄有「展開內部」與「參與的資料流」：展開看模組裡的檔案、誰 import 誰、框外碰了哪些模組／資料庫／套件，
+資料流清單連到架構文件資料流節的那一條流程；`Esc` 或麵包屑的「全圖」回到全圖。
 兩份產物（`data.js`、`overview.md`）都不進 git。
 
+**在 SSH 遠端機器上開發時**：`file://` 網址指的是遠端的檔，本機瀏覽器打不開。兩種開法——
+用 VS Code Remote 連到遠端，以 Live Preview 這類預覽擴充打開遠端的 `.claude/taskmaster-data/overview/index.html`
+（VS Code 會把預覽的 port 轉送到本機，畫面照樣每 3 秒重讀）；
+或把整個 `overview/` 資料夾下載回本機再打開（`index.html` 與 `data.js` 要在同一個資料夾，畫面不連外網）。
+沒有匯出功能，下載回來的是當下那一份，不會自己更新。
+
 舊專案跑完 `update-template` 後，下一次開 session 就會自動產生第一份。
-沒有架構文件時只有任務圖，`/task-status` 會多印一行提示，問你要不要請
-`documentation-specialist` 從程式碼反推草稿；草稿確認前地圖不會出現。
 產生器與資料格式見 `.claude/scripts/overview.sh` 檔頭（唯一來源）。
 
 ### Ad-hoc 路徑（沒跑 /task-next，直接叫我改東西）
@@ -206,7 +222,7 @@ PreToolUse 閘門攔截（.current-task-mode 不存在）
 | 你送出訊息 | `user-prompt-submit.sh` | 依關鍵字路由：任務模式、**該委派哪個 agent（含 `subagent_type`）**、該載入哪個 skill |
 | 我要寫檔/跑 Bash | `pre-tool-use.sh` | **任務模式閘門**、**坑閘門**、模式檔 TTL 過期清除、裸 `cd` 攔截 |
 | Agent 完成 | `post-agent-report.sh` | 把 pending handoff 注入對話，提示接下一棒；**非同步啟動的 agent 記下報告期望，交由延後稽核** |
-| 寫檔後 | `post-write.sh` | 記錄 WBS 變更歷史；**文件影響偵測**（改到 API／schema／對外介面時記進 `.doc-impact` 並提醒一次）；寫 wbs／plan／架構文件時在背景重產專案圖解 |
+| 寫檔後 | `post-write.sh` | 記錄 WBS 變更歷史；**文件影響偵測**（改到 API／schema／對外介面時記進 `.doc-impact` 並提醒一次）；寫 wbs／plan／架構文件或程式碼檔時在背景重產專案圖解（程式碼檔節流 30 秒） |
 | Context 將壓縮 | `pre-compact.sh` | 自動快照 |
 
 ### 閘門的逃生門
@@ -459,5 +475,5 @@ bash .claude/scripts/check-counts.sh --tests 1041         # 文件計數一致�
 CI（`.github/workflows/template-ci.yml`）會在 push 與 PR 時自動跑整套與計數檢查，
 加上 Windows/Git Bash 的回歸測試、shell 與 PowerShell 語法、copy/update-template 沙箱實跑。
 
-整套 1237 個案例，全綠才算沒破壞閘門；什麼時候跑整套、什麼時候依改動挑，唯一來源是
+整套 1252 個案例，全綠才算沒破壞閘門；什麼時候跑整套、什麼時候依改動挑，唯一來源是
 `commands/verify.md` 步驟 4。詳見 `.claude/hooks/tests/README.md`。

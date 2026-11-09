@@ -7,7 +7,7 @@ bash .claude/hooks/tests/run-tests.sh overview post-write   # 只跑標題含關
 bash .claude/hooks/tests/run-tests.sh --list             # 列出所有節；任何形式加 --dry-run 只印會跑哪些節
 ```
 
-1237 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。只跑部分節時結尾寫
+1252 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。只跑部分節時結尾寫
 「部分執行（N 節／共 M 節，不是整套）… 通過數 X」——刻意不用「通過 X」，CI 與 `check-counts.sh --tests`
 的 regex 抓不到。改動檔對應到哪些節的規則只寫在 `run-tests.sh` 的 `_changed_rule`（唯一來源）；
 什麼時候跑整套見 `commands/verify.md` 步驟 4。在 worktree 裡不帶參數跑整套會被 `full-suite-gate` 擋一次。
@@ -91,6 +91,34 @@ git checkout -- .claude/hooks/pre-tool-use.sh   # 還原（比 cp 可靠）
 
 > 還原務必用 `git checkout --`，不要只依賴 `cp` 備份——
 > 若中途逾時或中斷，備份還原那一步可能根本沒執行到。
+
+## 專案圖解的測試資料與畫面檢查
+
+`fixtures/overview/` 只放產生器與檢查腳本，不放實體的 `.py`／`.ts`（會被新專案的 pytest、tsc、依賴掃描撿到）。
+用法與各組資料的內容寫在各檔開頭（唯一來源），這裡只列入口：
+
+```bash
+F=.claude/hooks/tests/fixtures/overview
+bash $F/make-fixture.sh shop-clean      <目錄>   # 範例電商：5.1／5.5 有效、WBS 每個任務都標模組
+bash $F/make-fixture.sh messy-fullstack <目錄>   # 髒資料：Python 後端＋TS 前端、沒有 5.5、WBS 沒有模組欄
+bash $F/make-fixture.sh maven-multi     <目錄>   # Maven／Gradle 多模組
+bash $F/gen-large.sh 5000 <目錄>                 # 效能實測用：N 個帶 import 的檔
+```
+
+產生器只寫檔，不 `git init`、不 commit。「本次改動」「說明層」「> 60 檔的模組」要先 commit 基礎檔，
+再帶 `MAKE_FIXTURE_CHANGES=1`／`MAKE_FIXTURE_NOTES=1`／`MAKE_FIXTURE_LARGE=1` 補（見 `make-fixture.sh` 開頭）。
+產好後跑 `bash .claude/scripts/overview.sh <目錄>`，畫面在 `<目錄>/.claude/taskmaster-data/overview/index.html`。
+
+**`qa-check.js`** 量畫面有沒有疊卡、溢出、殘留 `<br>`、橫向捲動等七項，回傳的物件全部為 0／false 才算過。
+它整份就是一個函式，原樣當 Playwright MCP `browser_evaluate` 的 `function` 參數：
+
+1. `browser_navigate` 到 `file:///<目錄>/.claude/taskmaster-data/overview/index.html`
+2. `browser_resize` 成 390 或 1440 寬；`browser_emulate_media` 切 `colorScheme` 淺／深
+3. 按「全圖」（或展開模組後按「整個模組」），**等縮放動畫跑完（約 1 秒）**再 `browser_evaluate` 貼上 `qa-check.js` 全文——
+   放大後本來就會有東西在畫面外，`offStage` 只在全貌時有意義；動畫中途量會多出幾個 `offStage`（實測過 3）
+4. 全圖量模組卡片；點模組 →「展開內部」後量的是內部圖，同一支腳本不用帶參數
+
+兩組 fixture（shop-clean、messy-fullstack）× 390／1440 × 淺／深，全圖與一個模組的內部圖都要量。
 
 ## 加新案例
 

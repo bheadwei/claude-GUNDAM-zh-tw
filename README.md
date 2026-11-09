@@ -97,7 +97,7 @@ claude_v2026/
     ├── agents/       (15 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
     ├── skills/       (28 個)         # 按需載入（不佔常駐 context）
-    ├── hooks/                        # Hook 腳本 + lib/ + 1237 案例回歸測試
+    ├── hooks/                        # Hook 腳本 + lib/ + 1252 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）、check-counts.sh（文件計數一致性）、overview.sh（專案圖解）
     ├── ui/           (104 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │
@@ -156,11 +156,14 @@ claude_v2026/
 建立 handoff，`post-agent-report.sh` 掃到 pending 交接即注入提示。編排劇本見
 `.claude/rules/agent-orchestration.md`。
 
-**專案圖解**：用瀏覽器看整個專案的兩張圖——**專案地圖**（架構文件的模組＋燈號＋本次改動）
-與**任務圖**（每份 plan 的部件做了沒）。網址由 `/task-status` 最後一行印出
-（或 `bash .claude/scripts/overview.sh --print-path`）。不用手動重產：寫 wbs／plan／架構文件時
+**專案圖解**：用瀏覽器看整個專案的兩張圖——**專案地圖**（模組＋燈號＋本次改動＋本次 plan 預計動的模組）
+與**任務圖**（每份 plan 的部件做了沒）。骨架掃程式碼（沒有架構文件、文件不照模板寫也畫得出來，對不上的列成落差）、
+進度看 WBS／plan、模組說明按需請 `documentation-specialist` 寫；架構文件第 4 節的自動段與 `/task-status` 的一頁現況
+由同一份資料產生。網址由 `/task-status` 最後一行印出
+（或 `bash .claude/scripts/overview.sh --print-path`）。不用手動重產：寫 wbs／plan／架構文件或程式碼檔時
 hook 在背景更新，畫面每 3 秒自己重讀。地圖可拖曳平移、縮放（放大會顯示更多細節）、
-雙擊模組聚焦，左下角有小地圖可跳轉；產物在 `taskmaster-data/overview/`，不進 git。
+雙擊模組聚焦，左下角有小地圖可跳轉；點模組可展開看內部檔案與 import，右側欄列出它參與的資料流；
+產物在 `taskmaster-data/overview/`，不進 git。SSH 遠端開發用 VS Code Remote 開，或把 `overview/` 整個下載回本機。
 關閉用環境變數 `OVERVIEW=off`。使用方式見 `.claude/guides/WORKFLOW.md`「想看整體長什麼樣」，
 產生器與設定見 `.claude/scripts/overview.sh` 檔頭。
 
