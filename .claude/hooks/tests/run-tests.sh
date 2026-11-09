@@ -643,8 +643,21 @@ expect_contains     "寫 PRD（沒說「文件」）→ /docs-init" "/docs-init"
     "$(run user-prompt-submit.sh "$(p '幫我寫一份 PRD')")"
 expect_not_contains "PRD 路由不再指向已退場的流程模板 agent" "template-manager" \
     "$(run user-prompt-submit.sh "$(p '把 PRD 的架構文檔同步一下')")"
-expect_contains     "補 ADR → /adr" "/adr" \
-    "$(run user-prompt-submit.sh "$(p '幫我補一份 ADR')")"
+DOC_ADR=$(run user-prompt-submit.sh "$(p '幫我補一份 ADR')")
+expect_contains     "補 ADR → ADR 路由（/adr 或 architect）" "偵測到 ADR" "$DOC_ADR"
+expect_not_contains "補 ADR 不會被導去 /docs-init" "/docs-init" "$DOC_ADR"
+expect_contains     "複數 ADRs 也命中 ADR 路由" "偵測到 ADR" \
+    "$(run user-prompt-submit.sh "$(p '這次要寫幾份 ADRs')")"
+expect_contains     "複數 PRDs 也命中 /docs-init" "/docs-init" \
+    "$(run user-prompt-submit.sh "$(p '兩個子系統各有 PRDs 要寫')")"
+# 「同步／更新既有架構文件」是文件維護，不是產初稿：主訊息要是 documentation-specialist
+DOC_ARCH_SYNC=$(run user-prompt-submit.sh "$(p '同步架構文件')")
+expect_contains     "同步架構文件 → 文件維護（documentation-specialist）" "偵測到文件維護" "$DOC_ARCH_SYNC"
+expect_not_contains "同步架構文件不會被導去 /docs-init" "/docs-init" "$DOC_ARCH_SYNC"
+expect_contains     "更新架構文件 → 文件維護（documentation-specialist）" "偵測到文件維護" \
+    "$(run user-prompt-submit.sh "$(p '程式改完了，幫我更新一下架構文件')")"
+expect_contains     "補架構文件 → /docs-init" "/docs-init" \
+    "$(run user-prompt-submit.sh "$(p '幫我補一份架構文件')")"
 DOC_README=$(run user-prompt-submit.sh "$(p '順便更新 README')")
 expect_contains     "順便更新 README → documentation-specialist" "documentation-specialist" "$DOC_README"
 expect_not_contains "文件維護的注入不再提 codemap" "codemap" "$DOC_README"

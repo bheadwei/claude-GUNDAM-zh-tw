@@ -7,7 +7,7 @@ bash .claude/hooks/tests/run-tests.sh overview post-write   # 只跑標題含關
 bash .claude/hooks/tests/run-tests.sh --list             # 列出所有節；任何形式加 --dry-run 只印會跑哪些節
 ```
 
-1258 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。只跑部分節時結尾寫
+1265 個案例，全數通過才算綠燈（失敗時 exit 1，可直接掛 CI）。只跑部分節時結尾寫
 「部分執行（N 節／共 M 節，不是整套）… 通過數 X」——刻意不用「通過 X」，CI 與 `check-counts.sh --tests`
 的 regex 抓不到。改動檔對應到哪些節的規則只寫在 `run-tests.sh` 的 `_changed_rule`（唯一來源）；
 什麼時候跑整套見 `commands/verify.md` 步驟 4。在 worktree 裡不帶參數跑整套會被 `full-suite-gate` 擋一次。

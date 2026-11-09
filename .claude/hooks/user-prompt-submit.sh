@@ -163,12 +163,24 @@ if [ "$SUGGEST_MODE" != "low" ]; then
     fi
     # 專案文件與文件維護 —— 文件維護這條以前不存在，是 documentation-specialist 從未被啟動過的
     # 直接原因（agent-activity.jsonl 可查）。
-    # PRD／ADR／架構文件排在前面、不必先命中「文件」：使用者說「幫我寫一份 PRD」時從不加這兩個字，
-    # 舊規則要先命中文件類關鍵字才看 PRD，整句沒有任何注入。prd／adr 左右不能是英文字母（address、quadratic）。
-    if has '(^|[^a-z])(prd|adr)([^a-z]|$)|架構文件|架構文檔|設計文檔|規格書'; then
-        add "偵測到專案文件（PRD／ADR／架構文件）→ 還沒有這份文件就用 **/docs-init** 產初稿（6 份文件的分工與範本：先載入 \`project-docs\` skill）；PRD 之後由 /verify 依 plan 的「PRD 情境變更」套回；ADR 單點選型用 **/adr**，跨模組、難回頭的設計決策**委派 architect**（\`subagent_type: \"architect\"\`）；架構文件跟程式碼對不上的事實**委派 documentation-specialist**（\`subagent_type: \"documentation-specialist\"\`）。"
-    elif has '文件|文檔|docs|documentation|readme|codemap|api 文件|api 文檔|註解文件|技術文件' \
-       || has '整理.{0,10}(文件|文檔|docs)|更新.{0,10}(文件|文檔|docs|readme)|同步.{0,10}(文件|文檔|docs)'; then
+    # PRD／ADR／架構文件先判、不必先命中「文件」：使用者說「幫我寫一份 PRD」時從不加這兩個字。
+    # prd／adr（含複數 s）左右不能是英文字母（address、quadratic）。
+    # 「同步／更新既有架構文件」是文件維護，落到下面的 documentation-specialist；「寫／補架構文件」才是產初稿。
+    # PRD、ADR 的同步句不落回去：PRD 只由 /verify 依 plan 的「PRD 情境變更」套回，ADR 接受後只改 status，
+    # 兩者都不是 documentation-specialist 能改的文件。
+    DOC_ROUTED=0
+    if has '(^|[^a-z])adrs?([^a-z]|$)'; then
+        DOC_ROUTED=1
+        add "偵測到 ADR → 單點選型用 **/adr** 記錄「為什麼選 A 不選 B」；跨模組、難回頭的設計決策**委派 architect**（\`subagent_type: \"architect\"\`）產 ADR。ADR 放 \`docs/decisions/\`，接受後只改 status。"
+    fi
+    if has '(^|[^a-z])prds?([^a-z]|$)' \
+       || { has '架構文件|架構文檔|設計文檔|規格書' && ! has '更新|同步|整理|修正|更正|對齊|跟上|維護|過時|過期'; }; then
+        DOC_ROUTED=1
+        add "偵測到專案文件（PRD／brief／架構文件）→ 還沒有這份文件就用 **/docs-init** 產初稿（6 份文件的分工與範本：先載入 \`project-docs\` skill）；PRD 之後只由 /verify 依 plan 的「PRD 情境變更」套回，不要直接改。"
+    fi
+    if [ "$DOC_ROUTED" -eq 0 ] \
+       && { has '文件|文檔|docs|documentation|readme|codemap|api 文件|api 文檔|註解文件|技術文件' \
+            || has '整理.{0,10}(文件|文檔|docs)|更新.{0,10}(文件|文檔|docs|readme)|同步.{0,10}(文件|文檔|docs)'; }; then
         add "偵測到文件維護 → **委派 documentation-specialist**（\`subagent_type: \"documentation-specialist\"\`），它會從程式碼同步 README、架構文件 architect 撰寫的部分、runbook 裡對不上的事實。不要自己一個一個檔案改。"
     fi
     # `ui`／`css` 前後不能是英文字母：裸子字串會命中 quick、build、guide、suite、access，
