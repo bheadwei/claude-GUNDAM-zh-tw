@@ -313,7 +313,7 @@ flowchart LR
   - `hooks/lib/agent-inflight.sh` 符合 `_changed_rule` 的 `.claude/hooks/lib/*` → `ALL`，`--changed` 會跑整套（Windows 約 50 分鐘），放背景
   - `workshop/docs/03_command_cheatsheet.md` 也提到這個 agent；workshop 依使用者偏好不動，不在本階段範圍
 
-### 階段 6: 舊文件盤點（D4） ⏳
+### 階段 6: 舊文件盤點（D4） ✅
 
 - **依賴**：階段 5
 - [x] `docs-init.md` 步驟 1：偵測既有文件（`docs/` 有 5 份以上不是 6 份之一的 md，或沒有 `docs/00_brief.md` 卻有其他文件）→ 第一題問要不要先盤點（Recommended），選了就派 `documentation-specialist`
