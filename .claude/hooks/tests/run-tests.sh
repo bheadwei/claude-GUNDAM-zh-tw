@@ -3666,7 +3666,7 @@ tg_actual() { bash "$TG/.claude/scripts/overview.sh" --actual "$TGD/plans/1.2-x.
 # plan 拿掉 actual 區塊後的內容（驗「區塊外不動」用）
 tg_outside() { awk '/^<!-- overview:actual:start/ { s = 1 } !s { print } /^<!-- overview:actual:end/ { s = 0 }' "$TGD/plans/1.2-x.md"; }
 
-tg_reset; tg_plan 1.2-x.md ⏳ ⏳; tg_ov
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳; echo 1.2 > "$TGD/.current-task"; tg_ov
 expect_eq "兩階段都 ⏳ → 兩個部件都是 planned" "planned planned" "$(tgp '[.parts[].state] | join(" ")')"
 expect_contains "overview.md 任務圖：p1 是 planned" "class p1 planned" "$(cat "$TGO/overview.md" 2>/dev/null)"
 expect_contains "overview.md 任務圖：p2 是 planned" "class p2 planned" "$(cat "$TGO/overview.md" 2>/dev/null)"
@@ -3694,11 +3694,62 @@ echo "- 10:30 部件 p1 完成｜摘要=部件層摘要｜測試=3/3" >> "$TGD/p
 expect_eq "帳本有「部件 p1 完成」行 → 以部件行為準" "部件層摘要 3/3 part" \
     "$(tgp '.parts[] | select(.id == "p1") | "\(.ai.summary) \(.ai.tests) \(.ai.source)"')"
 
-tg_reset; tg_plan 1.2-x.md ✅ ⏳; tg_ov
+tg_reset; tg_plan 1.2-x.md ✅ ⏳; echo 1.2 > "$TGD/.current-task"; tg_ov
 expect_eq "階段 1 ✅、但 p1 的檔案不在 diff 裡 → skipped" skipped "$(tgp '.parts[] | select(.id == "p1") | .state')"
 tg_git branch -m main trunk; tg_ov
 expect_eq "沒有帳本、也找不到預設分支 → changes 為空、base 為 null" "0 null" "$(tgp '"\(.changes | length) \(.base)"')"
 expect_contains "找不到基準 → notices 說明" "找不到比較基準" "$(tgq '[.notices[].text] | join("\n")')"
+
+# 已完成的 plan 不算改動（status 含 ✅，或階段全部 ✅）：帳本 BASE 再舊也不拿來對現在的工作區 diff
+tg_completed_case() {
+    tg_reset; TP_STATUS="$1" tg_plan 1.2-x.md ✅ ✅; echo 1.2 > "$TGD/.current-task"
+    { echo "# 執行帳本 — plan: x"; echo "## 階段 1: 介面"; echo "- 10:00 派工｜BASE=$(git -C "$TG" rev-parse HEAD)"; } > "$TGD/plans/1.2-x.progress.md"
+    printf 'a\n' > "$TG/src/api/a.ts"; tg_git add -A; tg_git commit -qm a
+    printf 'c\n' > "$TG/src/api/c.ts"; tg_git add -A; tg_git commit -qm c
+    tg_ov
+}
+tg_completed_case "✅ 完成"
+expect_eq "status ✅ 完成、帳本 BASE 在 2 個 commit 前 → changes 0、extraCount 0、base null、changesFrom completed、部件 done done" \
+    "0 0 null completed true done done" \
+    "$(tgp '"\(.changes | length) \(.extraCount) \(.base) \(.changesFrom) \(.completed) \([.parts[].state] | join(" "))"')"
+tg_completed_case "🔄 進行中"
+expect_eq "status 🔄 但兩個階段都 ✅ → 同樣算已完成" "0 0 null completed true done done" \
+    "$(tgp '"\(.changes | length) \(.extraCount) \(.base) \(.changesFrom) \(.completed) \([.parts[].state] | join(" "))"')"
+rm -f "$TGD/plans/1.2-x.progress.md"; tg_git branch -m main trunk; tg_ov
+expect_eq "已完成的 plan（沒帳本、也找不到預設分支）→ notices 沒有「找不到比較基準」" 0 \
+    "$(tgq '[.notices[].text | select(test("找不到比較基準"))] | length')"
+
+# 沒有帳本的 plan：只有 .current-task 明確指到的那份拿工作區改動
+tg_two_plans() {
+    tg_reset; tg_plan 1.2-x.md ⏳ ⏳; TP_TASK=1.3 tg_plan 1.3-y.md ⏳ ⏳
+    OVD="$TGD" ov_wbs "1.2|api|⏳ 待處理" "1.3|api|⏳ 待處理"
+    printf 'c\n' > "$TG/src/api/c.ts"
+}
+tg_two_plans; echo 1.3 > "$TGD/.current-task"; tg_ov
+expect_eq ".current-task 是 1.3、工作區新增 src/api/c.ts → 1.3 的 changes 含它、changesFrom current" "true current" \
+    "$(tgp '"\([.changes[].file] | index("src/api/c.ts") != null) \(.changesFrom)"' 1.3-y.md)"
+expect_eq "非本次、沒帳本的 1.2 → changes 0、changesFrom none、base null" "0 none null" \
+    "$(tgp '"\(.changes | length) \(.changesFrom) \(.base)"')"
+tg_git branch -m main trunk; tg_ov
+expect_eq "changesFrom none 的 plan 不進「找不到比較基準」（本次那份照列）" "1 0" \
+    "$(tgq '[.notices[].text | select(test("找不到比較基準"))] | "\(map(select(test("1.3-y.md"))) | length) \(map(select(test("1.2-x.md"))) | length)"')"
+tg_two_plans; tg_ov
+expect_eq "沒有 .current-task（本次是猜的）→ 沒有 plan 拿到 c.ts、地圖 changes 仍有、currents[0].guessed" "0 true true" \
+    "$(tgq '"\([.plans[].changes[] | select(.file == "src/api/c.ts")] | length) \([.changes[].file] | index("src/api/c.ts") != null) \(.currents[0].guessed)"')"
+
+# --actual 指定的 plan 不套「已完成」與「只歸本次」：/verify 寫計畫 vs 實際時 plan 多半已全部 ✅
+tg_reset; TP_STATUS="✅ 完成" tg_plan 1.2-x.md ✅ ✅; printf 'a\n' > "$TG/src/api/a.ts"; tg_git add -A; tg_git commit -qm a
+tg_actual --result PASS
+expect_contains "已完成、沒帳本、不是本次的 plan 跑 --actual → 計畫 vs 實際列得出分支上改的 src/api/a.ts" \
+    '`src/api/a.ts` | +1 / −0' "$(sed -n '/overview:actual:start/,/overview:actual:end/p' "$TGD/plans/1.2-x.md")"
+
+# 計畫外很多：mermaid 收成一個節點；data.js 帶總數
+tg_reset; tg_plan 1.2-x.md 🔄 ⏳; echo 1.2 > "$TGD/.current-task"; mkdir -p "$TG/src/x"
+for i in $(seq 1 35); do echo x > "$TG/src/x/f$i.ts"; done
+tg_git add -A; tg_git commit -qm many; tg_ov
+expect_eq "本次 plan 有 35 個計畫外檔 → extraCount 35" 35 "$(tgp '.extraCount')"
+expect_eq "overview.md 的任務圖：「＋ 計畫外 35 個檔」節點恰好 1 個、沒有逐檔的「＋ 計畫外 src/」" "1 0" \
+    "$(grep -c '＋ 計畫外 35 個檔' "$TGO/overview.md") $(grep -c '＋ 計畫外 src/' "$TGO/overview.md")"
 
 tg_reset; tg_plan 1.2-x.md 🔄 ⏳; printf 'a\n' > "$TG/src/api/a.ts"; tg_git add -A; tg_git commit -qm a
 cp "$TGD/plans/1.2-x.md" "$SANDBOX/tg-plan-orig.md"
@@ -3846,7 +3897,7 @@ expect_eq "wbs-archive 舊節無模組欄不報錯；api 已歸檔完成 3（0.9
 expect_contains "overview.md 說明已歸檔任務有幾個沒標模組" "1 個沒有標模組" "$(cat "$TGO/overview.md" 2>/dev/null)"
 
 # 改動超過 200 個：plan 與地圖都只列前 200（依檔名排序），其餘依第一層目錄彙總
-tg_reset; tg_plan 1.2-x.md 🔄 ⏳; mkdir -p "$TG/lib" "$TG/src/gen"
+tg_reset; tg_plan 1.2-x.md 🔄 ⏳; echo 1.2 > "$TGD/.current-task"; mkdir -p "$TG/lib" "$TG/src/gen"
 for i in $(seq 1 100); do echo x > "$TG/lib/l$i.ts"; done
 for i in $(seq 1 150); do echo x > "$TG/src/gen/g$i.ts"; done
 tg_git add -A; tg_git commit -qm many; tg_ov
@@ -3868,7 +3919,9 @@ rm -f "$TGD/plans/1.3-y.md" "$TGD/.current-task"
 tg_reset
 OV_ROWS=(); for i in $(seq 1 300); do OV_ROWS+=("9.$i|api|⏳ 待處理"); done
 OVD="$TGD" ov_wbs "${OV_ROWS[@]}"
-for i in $(seq 1 20); do TP_TASK="9.$i" tg_plan "9.$i-p.md" 🔄 ⏳; done
+# 每份都有帳本：沒帳本、不是本次的 plan 不列改動
+for i in $(seq 1 20); do TP_TASK="9.$i" tg_plan "9.$i-p.md" 🔄 ⏳
+    echo "- 10:00 派工｜BASE=$(git -C "$TG" rev-parse HEAD)" > "$TGD/plans/9.$i-p.progress.md"; done
 mkdir -p "$TG/src/big"; for i in $(seq 1 500); do echo x > "$TG/src/big/f$i.ts"; done
 tg_git add -A; tg_git commit -qm big; tg_ov
 expect_eq "300 任務・20 份 plan・每份 500 個改動 → data.js ≤ 512KB、truncated、20 份都是 changes ≤ 200 且明細＋彙總＝500" \
