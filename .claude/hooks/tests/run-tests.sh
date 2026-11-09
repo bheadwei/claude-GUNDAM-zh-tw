@@ -1414,7 +1414,7 @@ setup_worktree() {
     reset
     # reset 刪掉 .claude（含 worktree 目錄）但 git 仍記著它 → 先 prune，
     # 並用遞增名稱避免分支重複
-    ( cd "$SANDBOX" && git init -q . 2>/dev/null       && echo x > seed && git add seed       && git -c user.email=t@t -c user.name=t commit -qm init       && git worktree prune ) >/dev/null 2>&1
+    ( cd "$SANDBOX" && git -c init.defaultBranch=main init -q . 2>/dev/null       && echo x > seed && git add seed       && git -c user.email=t@t -c user.name=t commit -qm init       && git worktree prune ) >/dev/null 2>&1
     WT_SEQ=$((WT_SEQ + 1))
     WT="$SANDBOX/.claude/worktrees/wt$WT_SEQ"
     ( cd "$SANDBOX" && git worktree add -q "$WT" -b "wt$WT_SEQ" ) >/dev/null 2>&1
@@ -1662,7 +1662,7 @@ expect_not_contains "整套的結尾不寫部分執行"             "部分執�
 
 # 改到本檔：用 git diff -U0 的行號只挑改到的節。迷你測試檔放進一個真的 repo
 RG="$SANDBOX/rtrepo"; RGF="$RG/.claude/hooks/tests/run-tests.sh"; RGW="$SANDBOX/rtwt"
-rgq() { git -C "$RG" -c user.email=t@t -c user.name=t "$@" >/dev/null 2>&1; }
+rgq() { git -C "$RG" -c user.email=t@t -c user.name=t -c init.defaultBranch=main "$@" >/dev/null 2>&1; }
 rg_sel() { bash "$RGF" --changed HEAD --dry-run 2>&1; }
 rg_edit() { sed -i "s/$1/$1 x/" "$RGF"; }   # 改一行
 rg_undo() { rgq checkout -- .claude/hooks/tests/run-tests.sh; }
@@ -1930,7 +1930,7 @@ expect_contains "deny 訊息把測試範圍指向 verify.md" "\`commands/verify.
 
 # 本輪起點：合併**執行前**記下 HEAD（不事後讀會被 reset／rebase 改寫的 ORIG_HEAD）
 RS_FILE="$SANDBOX/.claude/taskmaster-data/.merge-round-start"
-rs_repo() { ( cd "$SANDBOX" && { [ -d .git ] || git init -q . ; } \
+rs_repo() { ( cd "$SANDBOX" && { [ -d .git ] || git -c init.defaultBranch=main init -q . ; } \
     && { git rev-parse -q --verify HEAD >/dev/null || { echo x > seed && git add seed \
          && git -c user.email=t@t -c user.name=t commit -qm init; }; } ) >/dev/null 2>&1; }
 reset; rs_repo; bg 'git merge --no-ff feature/x' >/dev/null
@@ -2400,9 +2400,11 @@ bs_start() {
 bs_msg() { bs "$1" | jq -r '.hookSpecificOutput.permissionDecisionReason'; }
 
 gbg_untag
-# 沙箱的初始分支名取決於跑測試那台機器的 `init.defaultBranch`（可能是 master）。
-# 本閘門的判斷正是「當前分支 == 預設分支嗎」，所以名字必須是確定的——先釘成 main。
-# 其他區塊都不依賴分支名（它們只是把 `main` 當字串寫進指令），改名不影響。
+# 本閘門的判斷正是「當前分支 == 預設分支嗎」，所以分支名必須是確定的。本檔每個 git init 都帶
+# `-c init.defaultBranch=main`（「全體 hooks」那節有檢查擋新增的），不看跑測試那台機器的設定；
+# 前面的區塊會真的 `checkout main`（例如 backup 閘門那組）。下面兩行是保險：萬一 HEAD 停在別的分支，
+# 改名成 main 再切過去。2026-11-09 之前 setup_worktree 沒帶它，CI Windows（master）留下
+# master 與 main 兩個分支，閘門把 master 當預設分支 → 本節 4 個案例只在 CI 紅。
 gitq branch -M main
 gitq checkout main
 reset
@@ -3208,6 +3210,9 @@ expect_eq "先 cd 到專案根再刪 → allow"               allow "$(rmd "cd \
 expect_eq "cwd 在子目錄、用 ../ 相對路徑 → ask"      ask   "$(rmd "rm ../$TD/.merge-pending" "$SANDBOX/src")"
 if command -v cygpath >/dev/null 2>&1; then
     expect_eq "Windows 形式的絕對路徑 → allow"       allow "$(rmd "rm \"$(cygpath -m "$SANDBOX")/$TD/.merge-pending\"")"
+else
+    # 補一個 ok 讓兩平台案例數相同：CI 拿 Ubuntu 的總數比對文件，文件寫的是本機 Windows 的
+    ok "（沒有 cygpath，略過 Windows 路徑案例）"
 fi
 # 2026-10-27 使用者回報的那條：/verify 清合併閘門時串了 echo 與 git status
 expect_eq "只刪狀態檔但串了其他指令 → 不表態"         none  "$(rmd "cd \"$SANDBOX\" && rm $TD/.merge-pending && echo \"[\$(date '+%Y-%m-%d')] cleared\" >> .claude/logs/hooks.log && git status -sb | head -1")"
@@ -3296,6 +3301,10 @@ mkdir -p "$SPL" "$SANDBOX/src"
 if ln -s "$SANDBOX" "$SPL/link" 2>/dev/null && [ -L "$SPL/link" ]; then
     expect_eq "scratchpad 裡 symlink 底下的目錄 → ask"     ask   "$(rmd "rm -rf $SPL/link/src")"
     expect_eq "scratchpad 裡 symlink 本身 → allow"         allow "$(rmd "rm -rf $SPL/link")"
+else
+    # 補成同樣 2 個 ok，兩平台案例數才相同（理由同上面的 cygpath）
+    ok "（建不出真的 symlink，略過：symlink 底下的目錄）"
+    ok "（建不出真的 symlink，略過：symlink 本身）"
 fi
 rm -rf "/tmp/claude-$$"
 # 容器與套件管理的 rm 子指令：舊的 Bash(rm:*) 不會問，字數規則也不能誤問
@@ -3337,7 +3346,7 @@ expect_empty "背景模式 hook 沒有輸出" "$out"
 ov_reset() {
     reset
     rm -rf "$SANDBOX/docs" "$SANDBOX/src"
-    ( cd "$SANDBOX" && { [ -d .git ] || git init -q . ; } \
+    ( cd "$SANDBOX" && { [ -d .git ] || git -c init.defaultBranch=main init -q . ; } \
       && { git rev-parse -q --verify HEAD >/dev/null || { echo x > seed && git add seed \
            && git -c user.email=t@t -c user.name=t commit -qm init; }; } \
       && git worktree prune ) >/dev/null 2>&1
@@ -3524,7 +3533,7 @@ pw_reset() {
     rm -rf "$PW"; mkdir -p "$PW/.claude/scripts" "$PW/.claude/taskmaster-data/plans"
     printf '#!/bin/bash\necho x >> "%s"\n' "$PW/calls" > "$PW/.claude/scripts/overview.sh"
     echo '{"name":"t","mode":"mvp"}' > "$PW/.claude/taskmaster-data/project.json"
-    git -C "$PW" init -q >/dev/null 2>&1
+    git -C "$PW" -c init.defaultBranch=main init -q >/dev/null 2>&1
 }
 pw_calls() { if [ -f "$PW/calls" ]; then grep -c . "$PW/calls"; else echo 0; fi; }
 pw_write() { local f="$1"; shift; run post-write.sh "$(w "$PW/$f")" CLAUDE_PROJECT_DIR="$PW" OVERVIEW_SYNC=1 "$@"; }
@@ -3578,7 +3587,7 @@ cp -r "$SANDBOX/.claude/scripts" "$SANDBOX/.claude/templates" "$OVCJK/.claude/"
 cp "$OVD/project.json" "$OVD/wbs.md" "$OVCJK/.claude/taskmaster-data/"
 cp "$SANDBOX/docs/05_architecture.md" "$OVCJK/docs/"
 OVCJKWT="$OVCJK/.claude/worktrees/工作 樹"
-( cd "$OVCJK" && git init -q . && git add -A && git -c user.email=t@t -c user.name=t commit -qm init \
+( cd "$OVCJK" && git -c init.defaultBranch=main init -q . && git add -A && git -c user.email=t@t -c user.name=t commit -qm init \
   && git worktree add -q -b cjkwt "$OVCJKWT" ) >/dev/null 2>&1
 mkdir -p "$OVCJKWT/.claude/taskmaster-data/plans"
 run post-write.sh "$(wcwd "$OVCJKWT/.claude/taskmaster-data/plans/1.2-x.md" "$OVCJKWT")" \
@@ -3902,7 +3911,7 @@ FXD="$HOOK_DIR/tests/fixtures/overview"
 FXR="$SANDBOX/任務 圖/fx"
 rm -rf "$SANDBOX/任務 圖"
 fx_repo() {
-    ( cd "$1" && git init -q . && git add -A && git -c user.email=t@t -c user.name=t commit -qm base ) >/dev/null 2>&1
+    ( cd "$1" && git -c init.defaultBranch=main init -q . && git add -A && git -c user.email=t@t -c user.name=t commit -qm base ) >/dev/null 2>&1
 }
 fx_ovq() { sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$1/.claude/taskmaster-data/overview/data.js" 2>/dev/null | jq -r "$2" 2>/dev/null; }
 
@@ -3980,7 +3989,7 @@ sc_ov()  { bash "$OV_SRC" "$SC/$1" >/dev/null 2>&1; }
 sc_q()   { sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$SC/$1/.claude/taskmaster-data/overview/data.js" 2>/dev/null | jq -r "$2" 2>/dev/null; }
 sc_sk()  { jq -r "$2" < "$SC/$1/.claude/taskmaster-data/overview/skeleton.json" 2>/dev/null; }
 sc_fx()  { rm -rf "$SC/$2"; bash "$FXD/make-fixture.sh" "$1" "$SC/$2" >/dev/null 2>&1; }
-sc_git() { ( cd "$SC/$1" && git init -q . 2>/dev/null; git add -A && git -c user.email=t@t -c user.name=t commit -qm base ) >/dev/null 2>&1; }
+sc_git() { ( cd "$SC/$1" && git -c init.defaultBranch=main init -q . 2>/dev/null; git add -A && git -c user.email=t@t -c user.name=t commit -qm base ) >/dev/null 2>&1; }
 sc_new() { rm -rf "$SC/$1"; mkdir -p "$SC/$1/.claude/taskmaster-data" "$SC/$1/docs"; echo '{"name":"掃描","mode":"mvp"}' > "$SC/$1/.claude/taskmaster-data/project.json"; }
 # sc_put <repo> <檔> <內容（printf 格式）>
 sc_put() { mkdir -p "$(dirname "$SC/$1/$2")"; printf "$3" > "$SC/$1/$2"; }
@@ -4885,6 +4894,13 @@ CASEMOD_RE='\$\{[#!]?([A-Za-z_][A-Za-z0-9_]*|[0-9]+|[@*])(\[[^]]*\])?[,^]'
 expect_eq ".claude/hooks/**、.claude/scripts/** 的 .sh 沒有新增 bash 4 的大小寫轉換展開" \
     "hooks/lib/rm-state-gate.sh:2 hooks/tests/run-tests.sh:2" \
     "$(cd "$HOOK_DIR/.." && grep -rcE --include='*.sh' "$CASEMOD_RE" hooks scripts | grep -v ':0$' | sort | paste -sd' ' -)"
+
+# 沙箱的初始分支名不能取決於跑測試那台機器的 init.defaultBranch：CI 的 Windows runner 是 master，
+# 本機是 main。2026-11-09 setup_worktree 沒釘分支名，分支切換閘門 4 個案例只在 CI Windows 紅了兩週
+GITINIT_RE='(^|[^[:alnum:]_./-])git( +-[Cc] +[^ ]+)* +init( |$)'
+expect_eq "run-tests.sh 的 git init 都釘了分支名（-c init.defaultBranch=… 或 -b …）——印出沒釘的行號" "" \
+    "$(grep -nE "$GITINIT_RE" "$HOOK_DIR/tests/run-tests.sh" | grep -vE '^[0-9]+:[[:space:]]*#' \
+        | grep -vE 'init\.defaultBranch=|init( +-q)? +-b ' | cut -d: -f1 | paste -sd' ' -)"
 
 reset
 for h in pre-tool-use.sh post-agent-report.sh user-prompt-submit.sh post-write.sh; do
