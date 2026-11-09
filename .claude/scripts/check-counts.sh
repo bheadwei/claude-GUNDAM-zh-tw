@@ -116,10 +116,9 @@ verify "範本數 templates/INDEX"    "$N_DOCTPL" .claude/skills/project-docs/te
 #
 # 為什麼：13 份範本已刪（ADR-2026-11-05-004）。指令或 agent 還寫著舊檔名，模型會去讀不存在的檔、
 # 或照舊流程產出已淘汰的文件，都不報錯。12、17 是 /ui-site 的 UI 鏈，不在名單裡。
-# workflow-template-manager.md 暫時例外：它退場時整檔刪除（文件計畫階段 5），屆時拿掉這個 --exclude。
 RETIRED_TPL='01_workflow_manual|03_behavior_driven_development_guide|06_api_design_specification|07_module_specification_and_tests|08_project_structure_guide|09_design_and_dependencies|11_code_review_and_refactoring_guide|13_security_and_readiness_checklists|15_documentation_and_maintenance_guide|16_wbs_development_plan_template|18_data_model_and_migration_spec|19_observability_and_slo_spec|21_ai_llm_integration_spec'
 CHECKED=$((CHECKED + 1))
-RESIDUE=$(grep -rnoE --exclude=check-counts.sh --exclude=workflow-template-manager.md "$RETIRED_TPL" \
+RESIDUE=$(grep -rnoE --exclude=check-counts.sh "$RETIRED_TPL" \
     .claude/agents .claude/commands .claude/rules .claude/skills .claude/guides .claude/hooks \
     .claude/scripts .claude/templates .claude/README.md README.md 2>/dev/null || true)
 if [ -n "$RESIDUE" ]; then

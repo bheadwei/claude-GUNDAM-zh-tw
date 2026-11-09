@@ -40,7 +40,7 @@
 #   agent_def_isolated "$MAIN_CLAUDE/agents" refactor-cleaner && echo 自帶隔離
 
 # 唯讀名單（依據與邊界：pre-agent-gate.sh 檔頭）。**general-purpose 絕不能進來。**
-AGENT_INFLIGHT_READONLY="Explore Plan claude-code-guide planner architect workflow-template-manager"
+AGENT_INFLIGHT_READONLY="Explore Plan claude-code-guide planner architect"
 
 # agent_def_isolated <agents 目錄> <agent_type>
 # 該 agent 的定義檔第一個 frontmatter 區塊寫了 `isolation: worktree` → 0。

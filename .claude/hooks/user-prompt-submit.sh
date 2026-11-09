@@ -161,15 +161,15 @@ if [ "$SUGGEST_MODE" != "low" ]; then
        || has '(^|[^a-z])bugs?([^a-z]|$)|broken|not working|unexpected|crash|當掉|閃退|卡住|重現'; then
         add "偵測到執行期 bug → **委派 debug-investigator**（\`subagent_type: \"debug-investigator\"\`）。它強制先穩定重現 → 二分縮小 → 可證偽假設 → 寫重現測試才動手修，並且會先讀 \`context/learned/\` 確認這個坑踩過沒有。建置/型別錯誤請改用 build-error-resolver。"
     fi
-    # 文件維護 —— 這條以前不存在，是 documentation-specialist 與
-    # workflow-template-manager 從未被啟動過的直接原因（agent-activity.jsonl 可查）
-    if has '文件|文檔|docs|documentation|readme|codemap|api 文件|api 文檔|註解文件|技術文件' \
+    # 專案文件與文件維護 —— 文件維護這條以前不存在，是 documentation-specialist 從未被啟動過的
+    # 直接原因（agent-activity.jsonl 可查）。
+    # PRD／ADR／架構文件排在前面、不必先命中「文件」：使用者說「幫我寫一份 PRD」時從不加這兩個字，
+    # 舊規則要先命中文件類關鍵字才看 PRD，整句沒有任何注入。prd／adr 左右不能是英文字母（address、quadratic）。
+    if has '(^|[^a-z])(prd|adr)([^a-z]|$)|架構文件|架構文檔|設計文檔|規格書'; then
+        add "偵測到專案文件（PRD／ADR／架構文件）→ 還沒有這份文件就用 **/docs-init** 產初稿（6 份文件的分工與範本：先載入 \`project-docs\` skill）；PRD 之後由 /verify 依 plan 的「PRD 情境變更」套回；ADR 單點選型用 **/adr**，跨模組、難回頭的設計決策**委派 architect**（\`subagent_type: \"architect\"\`）；架構文件跟程式碼對不上的事實**委派 documentation-specialist**（\`subagent_type: \"documentation-specialist\"\`）。"
+    elif has '文件|文檔|docs|documentation|readme|codemap|api 文件|api 文檔|註解文件|技術文件' \
        || has '整理.{0,10}(文件|文檔|docs)|更新.{0,10}(文件|文檔|docs|readme)|同步.{0,10}(文件|文檔|docs)'; then
-        if has 'prd|adr|架構文檔|設計文檔|規格書|流程模板'; then
-            add "偵測到流程性文件（PRD/ADR/設計文檔）→ **委派 workflow-template-manager**（\`subagent_type: \"workflow-template-manager\"\`）。"
-        else
-            add "偵測到文件維護 → **委派 documentation-specialist**（\`subagent_type: \"documentation-specialist\"\`），它會從程式碼反推 codemap／API 文檔／技術 README。不要自己一個一個檔案改。"
-        fi
+        add "偵測到文件維護 → **委派 documentation-specialist**（\`subagent_type: \"documentation-specialist\"\`），它會從程式碼同步 README、架構文件 architect 撰寫的部分、runbook 裡對不上的事實。不要自己一個一個檔案改。"
     fi
     # `ui`／`css` 前後不能是英文字母：裸子字串會命中 quick、build、guide、suite、access，
     # 把一堆跟前端無關的提問也導去載入 ui-style-compliance。

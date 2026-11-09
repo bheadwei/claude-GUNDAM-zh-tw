@@ -17,7 +17,7 @@
 │   ├── MCP_CONFIGS.md         # MCP Server 推薦清單
 │   ├── PAUSE_RESUME_GUIDE.md  # 暫停/恢復 SOP
 │   └── STATUSLINE_GUIDE.md    # StatusLine 客製化手冊
-├── agents/       (15 個)      # 專業 Agent 定義
+├── agents/       (14 個)      # 專業 Agent 定義
 ├── commands/     (29 個)      # Slash Command
 ├── rules/        ( 6 個)      # 自動載入規則
 ├── skills/       (28 個)      # 專案特定領域知識
@@ -39,7 +39,7 @@
     └── .current-task          # 當前進行中任務 ID
 ```
 
-## Agents（15 個）
+## Agents（14 個）
 
 | Agent | Model | 用途 |
 | :--- | :--- | :--- |
@@ -57,7 +57,6 @@
 | e2e-validation-specialist | sonnet | E2E 測試 |
 | refactor-cleaner | sonnet | 死碼清理 |
 | documentation-specialist | sonnet | 文檔生成 |
-| workflow-template-manager | sonnet | 模板管理 |
 
 實作（含 TDD）沒有專屬 agent：`/tdd` 由主模型照 `tdd-workflow` skill 做，
 多階段計畫逐階段派 `general-purpose` implementer（`subagent-execution` skill）。
