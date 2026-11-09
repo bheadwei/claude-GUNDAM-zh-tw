@@ -4,7 +4,7 @@ slug: "overview-readability"
 created: "2026-11-09"
 updated: "2026-11-09"
 status: "🔄 進行中"
-current_phase: 1
+current_phase: 2
 mode: "standard"
 files:
   - ".claude/scripts/overview.sh"
@@ -76,7 +76,7 @@ flowchart LR
 | p7 | 計畫選擇器               | 3    | `.claude/templates/overview/index.html`                                | 打開選擇器 → 只列未完成的 plan，本次那份預設勾選（截圖驗收）                                                                            |
 | p8 | 選取決定虛線框與右側對照 | 3    | `.claude/templates/overview/index.html`                                | 勾選兩份 plan → 虛線框畫在兩份 `plannedModules` 的聯集上（截圖驗收）                                                                    |
 
-### 階段 1: 產生器——完成的 plan 不算改動、改動只歸本次、計畫外收成一行 ⏳
+### 階段 1: 產生器——完成的 plan 不算改動、改動只歸本次、計畫外收成一行 ✅
 
 - **依賴**：無
 
