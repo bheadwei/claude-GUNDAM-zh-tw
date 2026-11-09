@@ -2,7 +2,7 @@
 wbs_task: "none"
 slug: "overview-from-code"
 created: "2026-11-05"
-updated: "2026-11-06"
+updated: "2026-11-09"
 status: "🔄 進行中"
 current_phase: 7
 mode: "standard"
@@ -524,7 +524,7 @@ flowchart LR
   - ui-builder 是 subagent：**本 plan 檔只讀**，階段狀態由主模型改；審閱 artifact 由主模型做，不交給 ui-builder
   - 階段報告附 `anti-ai.md` 產出後清單的逐項對照
 
-### 階段 7: 文件同步與 CI 常數檢查 🔄
+### 階段 7: 文件同步與 CI 常數檢查 ✅
 
 - **依賴**：階段 2, 3, 4, 5, 6；跨計畫：文件 1 已合併（05 範本的自動段標記與資料流節名）
 - [ ] `check-counts.sh`：`OVERVIEW_COLS_NOTES` 對 `project-docs/module-notes.md` 範例表頭；`documentation-specialist.md` 寫到的附屬檔路徑存在；**A7** `overview.sh` 的自動段標記常數對 05 範本裡的兩行標記；`overview.sh` 的 `OVERVIEW_FLOW_SECTION` 對 05 範本的資料流節名（比照 A7）
