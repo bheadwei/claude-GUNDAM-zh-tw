@@ -30,7 +30,7 @@ WBS 三種模式都有，由 `/task-init` 寫進 `.claude/taskmaster-data/wbs.md
 - `/task-init` 依使用者選擇的情境自動呼叫（傳入 `--demo` / `--mvp` / `--full`）
 - 使用者主動執行 `/docs-init` 互動選模式
 - demo 做大了要升級：`/docs-init --mvp` 或 `/docs-init --full`
-- 既有專案補文件：任何時候都能跑
+- 既有專案補文件：任何時候都能跑；舊文件多時第一題問要不要先盤點（步驟 1a）
 
 ---
 
@@ -43,7 +43,46 @@ WBS 三種模式都有，由 `/task-init` 寫進 `.claude/taskmaster-data/wbs.md
 - 使用 `AskUserQuestion` 逐題詢問
 - 記憶中收集問答，結束後一次性 Write 到 `.claude/qa-history/YYYY-MM-DD-HHMMSS-docs-init.md`
 
-### 步驟 1：確認模式
+### 步驟 1：偵測既有文件，再確認模式
+
+#### 1a. 既有文件多 → 先問要不要盤點
+
+不管有沒有帶參數都先算一次「不是 6 份之一」的 md：
+
+```bash
+git ls-files 'docs/*.md' \
+  | grep -Ev '^docs/(00_brief|prd|architecture|threat-model|runbook)\.md$|^docs/(decisions|archive)/|^docs/1[27]_'
+```
+
+（`docs/archive/` 是盤點後封存的去處，`docs/12_*`、`docs/17_*` 由 `/ui-site` 產生，都不算。）
+
+這份清單有 **5 份以上**，或沒有 `docs/00_brief.md` 而清單至少 1 份 → 視為既有專案，用 `AskUserQuestion` 問第一題：
+
+**題目：** `docs/` 已經有 N 份不在 6 份文件體系裡的文件，要先盤點嗎？
+
+| 選項 | 說明 |
+|------|------|
+| **先盤點 (Recommended)** | 派 `documentation-specialist` 讀每份開頭、分類，產報告到 `.claude/context/docs/`。**盤點只產報告、不改 `docs/`**；搬不搬檔看完報告再逐批決定 |
+| **直接產文件** | 跳過盤點，照下方「確認模式」產新文件；舊文件原樣留著 |
+
+清單不到門檻 → 不問，直接進「確認模式」。
+
+#### 1b. 盤點分支（選了「先盤點」才走）
+
+1. 派 `documentation-specialist`（`subagent_type: "documentation-specialist"`），prompt 寫「盤點既有文件」。
+   它回 `DONE` 與報告路徑 `.claude/context/docs/docs-inventory-<日期>.md`；此時 `git status` 不該有任何 `docs/` 的變更
+2. 把報告的 TL;DR 與各類檔數回述給使用者
+3. **逐批搬檔**：報告的「搬移批次」一批一題。先列出這批的檔案，再用 `AskUserQuestion` 問「第 N 批（<類>，k 檔）搬到 `docs/archive/`？」：
+   搬（Recommended）／跳過這批／停在這裡。選「搬」：
+   - `git mv` 每個檔到 `docs/archive/<原本在 docs/ 底下的相對路徑>`
+   - `rg` 找 repo 內指向舊路徑的連結，改成新路徑
+   - 一批一個 commit：`docs: 封存舊文件第 N 批（<類>）`，commit 裡只有 rename 與連結修正
+4. 不搬「現行，模板外」那類（交付物一個字都不改），**任何情況都不刪除檔案**
+5. **內容轉換是另一題**：搬完（或停下）後問「要從報告的『併入』類起草新格式的文件嗎？」：
+   起草（Recommended）／先不用。選「起草」→ 往下走「確認模式」，步驟 2 起把併入類的檔當草稿來源，每份照原步驟逐段讓使用者確認才寫；
+   單檔多條 ADR 拆成一條一檔用 `/adr`。選「先不用」→ 跳到步驟 8，提示之後再跑 `/docs-init`
+
+#### 1c. 確認模式
 
 若指令帶參數（`--demo` / `--mvp` / `--full`）→ 直接採用，跳到步驟 2。
 
@@ -67,7 +106,7 @@ WBS 三種模式都有，由 `/task-init` 寫進 `.claude/taskmaster-data/wbs.md
      產文件時**不要自己填答案**——寫進該文件的「待確認」
 1. `.claude/qa-history/YYYY-MM-DD-HHMMSS-task-init.md`（若由 `/task-init` 觸發，或 brief 不存在時的退路）
 2. `.claude/taskmaster-data/project.json`
-3. 既有 `docs/` 下的檔案（若為升級模式）
+3. 既有 `docs/` 下的檔案（若為升級模式）；走過 1b 的「起草」時，讀最新一份 `docs-inventory-*.md` 的「併入」類（已封存的到 `docs/archive/` 找）
 
 ### 步驟 3：brief（三種模式都有）
 
