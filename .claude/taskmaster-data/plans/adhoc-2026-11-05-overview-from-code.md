@@ -605,3 +605,12 @@ flowchart LR
 - 2026-11-06 階段 3 完成（合併前畫面審閱 https://claude.ai/artifact/94By9Ak7PjkQv9h7qLDGWp 使用者「確認」，`qa-history/2026-11-06-140000-overview-page-review.md`；審查 MEDIUM「`light-dark()` 沒有退路」已修：`:root` 先放淺色 hex、`@supports` 內才用 `light-dark()`）。`index.html` 50346 bytes，離 50KB 上限剩約 0.8KB——階段 6 改 64KB 前不要再往裡加。需要 Chrome 123／Firefox 120／Safari 17.5 才有深色，舊瀏覽器只有淺色
 - 2026-11-06 模板最低要求 bash 4（使用者決定，`qa-history/2026-11-06-110000-bash-min-version.md`）：既有 `mapfile`／`declare -A` 不改；R1 加的 `,,`／`^^` 靜態掃描先保留
 - 2026-11-06 階段 4 的 `make-fixture.sh` 加選項，但部件表 p11 沒列它；4 → 5 本來就循序，不影響平行判斷，沿用
+- 2026-11-09 階段 5 實作完成（待審查、合併）。[實測] `gen-large.sh 5000`、只有 `project.json`（沒有架構文件）、git 已 commit，facf1df（本階段前）對照本階段，shim 計外部行程（git/jq/awk/tr/cp/mv/rm/mkdir/date/wc/head 等）：`overview-scan.sh` 強制重掃 9 → 9（awk 2、git 3、jq 1、mv 1、tr 2，組成相同）、有快取 1 → 1；`overview.sh` 整條有快取 28 → 28。`overview.sh` 整條有快取的秒數：最小值 4.34–4.79s → 5.17–5.44s（多約 0.65–0.83 秒，≤ 1 秒）；機器同時有其他線在跑，交錯量 6 輪的平均 7.3s → 8.5s，雜訊大，看最小值。行程數沒變，多出的是 overview.jq 算 `inner` 的時間。data.js 28.8KB → 72.6KB（仍遠低於 512KB）
+- 2026-11-09 階段 5 偏離與補充：
+  - **> 60 檔的模組放在 `MAKE_FIXTURE_LARGE=1` 選項**（只有 messy-fullstack、產生時一起帶），不是常態加：常態加會讓既有節斷言的模組清單（`messy-fullstack → 模組 id 與階段 2 相同` 等）與說明層計數改變。帶選項時另寫 `project.json` 的 `overview.scan.depth: 1`：catalog 占全部程式檔 40% 以上，不設會被 `overview-scan.sh` 自動往下切成三個模組
+  - 兩組 fixture 的架構文件多了「## 4. 模組與依賴」與一對空的自動段標記，資料流節緊接 end 標記之後（X15 的真實版面）。messy-fullstack 因此多一則 warn「資料流「exporter 匯出 — 每日匯出（排程：每日 02:00）」對不到任何模組（模組改名？）」——既有測試沒有斷言 notices 總數，不用改
+  - **改了一條既有測試**：骨架掃描節「5.5 多一列 src/legacy/**」原本把列附加到檔尾；fixture 的 5.5 表後面多了第 4、5 節，附加到檔尾就不在表裡 → 改成用 `sed` 插在表內 `cache` 列之後，斷言不變
+  - `out` 的上限 15 以「筆」計（每筆 `[節點索引, 目標, 次數, source]`）；`outMore` 是沒出現在 `out` 的**目標數**（含只被摺疊檔碰到的目標），同一目標有部分筆被截掉時不算進 `outMore`
+  - 沒有程式檔的模組（只在架構文件）與骨架掃描失敗時，`inner` 是空的 `{root: "", nodes: [], …}` 而不是 null：ADR 只規定截斷與被大小上限丟掉時為 null，畫面顯示空圖
+  - `shrink_data` 的新兩級在 `JQ_SHRINK` 編號 0 與 8，執行順序 0、1–6、8、7（7 是「仍超過上限」那則提示，維持最後）
+  - 新節另加三案（計畫沒列、ADR 有寫）：測試檔不進 `inner`、框外排序「其他模組 → 資料庫 → 外部套件」、`OVERVIEW_INNER_MAX_OUT` 覆寫與 `outMore`。新節 36 案，案例數 1201 → 1237
