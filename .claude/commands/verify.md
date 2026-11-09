@@ -48,23 +48,10 @@ else { git diff --name-only "$START"; git ls-files --others --exclude-standard; 
 （指令尾端加 `# full-suite`，否則 `full-suite-gate` 會擋一次），`Tests:` 欄註明「取不到分支起點，改跑整套」。
 寧可多跑，不要因為起點不明而少跑。這些指令都帶了路徑，`full-suite-gate` 不攔，不需要 `# full-suite`。
 
-#### 唯一的例外：模板 repo 自己的 hook 測試依改動挑節
+#### 主 checkout 的起點
 
-**只在模板 repo 本身適用**，判斷：根目錄有 `scripts/sync-ui-sources.sh`（與 `session-start.sh` 判斷
-「這是模板 repo」用同一個檔；`copy-template` 不帶根目錄的 `scripts/`，新專案永遠不成立）。
-**新專案一律照上表**——一般專案的整套幾十秒，依改動挑反而會漏測。
-這裡例外是因為模板 repo 的測試是 hook 測試（`.claude/hooks/tests/run-tests.sh`）＋`check-counts.sh`，
-整套在 Windows/Git Bash 上約 50 分鐘。
-
-| 情境 | 跑什麼 |
-|---|---|
-| 主 checkout 的 `pre-pr` | `bash .claude/hooks/tests/run-tests.sh` 整套 |
-| 其他所有情境（worktree、中間合併、最後一個合併） | `bash .claude/hooks/tests/run-tests.sh --changed <起點>`：worktree 用上方的分支起點；中間合併用 `ORIG_HEAD`（cherry-pick 用 `'HEAD@{1}'`）；主 checkout 其他情境用下方的起點 |
-
-`check-counts.sh` 每次都跑。改動檔→節的對應表只寫在 `run-tests.sh` 的 `_changed_rule`。
-
-主 checkout 的起點＝有合併時是**本輪第一個合併執行前的 HEAD**（`merge-gate.sh` 在合併前記下），
-否則是**分支起點**：
+**所有專案通用**（唯一來源）：下方模板 repo 的例外、「文件同步關卡」第 3 項（資料流提醒）都用它。
+有合併時是**本輪第一個合併執行前的 HEAD**（`merge-gate.sh` 在合併前記下），否則是**分支起點**：
 
 ```bash
 TD="$(git rev-parse --show-toplevel)/.claude/taskmaster-data"
@@ -77,6 +64,23 @@ else
 fi
 [ -n "$S" ] && git merge-base --is-ancestor "$S" HEAD 2>/dev/null && echo "START: $S" || echo "START: unknown"
 ```
+
+印出 `START: unknown`（取不到起點）時的退路由用它的地方各自決定：模板 repo 的 hook 測試跑整套、資料流提醒照樣提醒。
+
+#### 唯一的例外：模板 repo 自己的 hook 測試依改動挑節
+
+**只在模板 repo 本身適用**，判斷：根目錄有 `scripts/sync-ui-sources.sh`（與 `session-start.sh` 判斷
+「這是模板 repo」用同一個檔；`copy-template` 不帶根目錄的 `scripts/`，新專案永遠不成立）。
+**新專案一律照上表**——一般專案的整套幾十秒，依改動挑反而會漏測。
+這裡例外是因為模板 repo 的測試是 hook 測試（`.claude/hooks/tests/run-tests.sh`）＋`check-counts.sh`，
+整套在 Windows/Git Bash 上約 50 分鐘。
+
+| 情境 | 跑什麼 |
+|---|---|
+| 主 checkout 的 `pre-pr` | `bash .claude/hooks/tests/run-tests.sh` 整套 |
+| 其他所有情境（worktree、中間合併、最後一個合併） | `bash .claude/hooks/tests/run-tests.sh --changed <起點>`：worktree 用上方的分支起點；中間合併用 `ORIG_HEAD`（cherry-pick 用 `'HEAD@{1}'`）；主 checkout 其他情境用上方「主 checkout 的起點」 |
+
+`check-counts.sh` 每次都跑。改動檔→節的對應表只寫在 `run-tests.sh` 的 `_changed_rule`。
 
 `START: unknown` → 跑整套。`--changed` 印「→ 整套」（或跑整套的任何情境）→ **放背景執行**：
 Bash 工具單次最長 10 分鐘，整套約 50 分鐘。在 worktree 裡它會拒絕（exit 3），確定要跑才加 `--full`。

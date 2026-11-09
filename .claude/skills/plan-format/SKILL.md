@@ -274,7 +274,8 @@ flowchart LR
 |---|---|---|
 | `/plan` | 建立、覆寫整份 | 初次規劃或使用者要求重寫 |
 | `/tdd`（主模型） | 只改階段狀態、current_phase、updated | 每完成一階段 |
-| `/verify` | 只標記整體 status=✅ 並歸檔（**帳本一起歸檔**） | 所有階段完成且驗證通過 |
+| `/verify` | 照實際結果修正「改善了什麼」的「之後」欄、標記整體 status=✅ 並歸檔（**帳本一起歸檔**） | 所有階段完成且驗證通過 |
+| `/verify` 文件同步關卡 | 只在「PRD 情境變更」小節末加一行 `已套回 PRD（YYYY-MM-DD）` | 把情境套回 `docs/prd.md` 之後（有這行就不重套） |
 | `/verify` 經 `overview.sh --actual` | 只寫 `overview:actual` 標記區塊之內 | 每次 `/verify`（PASS 或 FAIL） |
 | 使用者手動 | 任何時候 | 但會被 `/tdd` 下次讀取時覆寫階段狀態 |
 
@@ -293,7 +294,7 @@ flowchart LR
   否則歸檔後連結會斷
 
 WBS 版面與連結欄的完整規則見 `.claude/templates/wbs.template.md`（唯一來源）。
-**plan 是 WBS 長內容的去處之一**——驗證數據寫進該階段的「驗收」、帶給下一任務的疑慮寫進
+**plan 是 WBS 長內容的去處之一**——驗證數據寫進該階段的「驗收」（一筆一行帶日期）、帶給下一任務的疑慮寫進
 下一任務 plan 的「發現與決策」或該階段的「注意」，不要回頭塞進 WBS 的格子。
 
 反向連結由 plan frontmatter 的 `wbs_task` 提供，兩個方向都要維護才點得到。
