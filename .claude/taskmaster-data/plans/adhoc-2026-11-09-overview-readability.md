@@ -11,6 +11,7 @@ files:
   - ".claude/templates/overview/index.html"
   - ".claude/hooks/tests/run-tests.sh"
   - ".claude/hooks/tests/fixtures/overview/qa-check.js"
+  - ".claude/scripts/check-counts.sh"
   - ".claude/context/decisions/ADR-2026-11-09-*.md"
   - ".claude/qa-history/*-overview-readability-review.md"
 ---
@@ -114,7 +115,7 @@ flowchart LR
 - [ ]  每張卡片給穩定的 id；點目錄 → 在 `#tv` 內捲到該卡（`scrollIntoView`，`prefers-reduced-motion` 時不做平滑）— 驗證：截圖
 - [ ]  版面：寬於 760px 時目錄在左側、`position: sticky`；760px 以下（沿用既有斷點）改在卡片上方、橫向可捲或摺疊，不產生頁面水平捲軸 — 驗證：截圖
 - [ ]  輪詢重繪（`render` → `renderTasks`）後目錄與捲動位置都保留 — 驗證：截圖
-- [ ]  `bash .claude/scripts/check-counts.sh`：`index.html` 仍 ≤ 64KB、沒有 token 區外的 hex 色碼 — 驗證：`bash .claude/scripts/check-counts.sh`
+- [ ]  `bash .claude/scripts/check-counts.sh`：`index.html` 仍 ≤ 80KB、沒有 token 區外的 hex 色碼 — 驗證：`bash .claude/scripts/check-counts.sh`
 
 - **預估**：1.5h
 - **驗收**：
@@ -124,7 +125,7 @@ flowchart LR
   - plan status `✅ 完成` → 目錄那列是綠燈；最近一次驗證 FAIL 的 plan → 紅燈；🔄 → 黃燈；⏳ → 灰燈（截圖驗收）
   - 390px → 目錄在第一張卡的上方，`document.documentElement.scrollWidth <= innerWidth`（Playwright 量）
   - data.js 重產（`generatedAt` 變了）→ 重繪後目錄列數不變、`#tv.scrollTop` 與重繪前相同
-- **注意**：`check-counts.sh` 的上限是 64KB（ADR-003 寫 80KB 已被收緊），目前檔案已有模組展開的程式，動手前先 `wc -c` 看剩多少；階段 3 還要再加選擇器
+- **注意**：`check-counts.sh` 的上限已依 ADR-2026-11-09-001 調回 80KB，目前檔案已有模組展開的程式，動手前先 `wc -c` 看剩多少；階段 3 還要再加選擇器
 
 ### 階段 3: 地圖可選計畫 ⏳
 
