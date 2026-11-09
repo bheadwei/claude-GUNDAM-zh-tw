@@ -71,6 +71,15 @@ LOCK_STALE_SEC=120                 # 要比 --actual 的等待（60 秒）長，
 MAX_CHANGES=200                    # 每份 plan、地圖各列幾個改動檔，其餘依第一層目錄彙總進 changesRollup
 MAX_BYTES=${OVERVIEW_MAX_BYTES:-524288}
 [[ $MAX_BYTES =~ ^[0-9]+$ ]] || MAX_BYTES=524288
+# 架構文件資料流節的節名（`## <數字>. 資料流`，不綁節號）：與 05 範本同一字串
+OVERVIEW_FLOW_SECTION="資料流"
+# 模組展開（modules[].inner，ADR-2026-11-06-002 決策 1）：每模組節點、模組內邊、框外項目的上限
+OVERVIEW_INNER_MAX_NODES=${OVERVIEW_INNER_MAX_NODES:-60}
+OVERVIEW_INNER_MAX_EDGES=${OVERVIEW_INNER_MAX_EDGES:-200}
+OVERVIEW_INNER_MAX_OUT=${OVERVIEW_INNER_MAX_OUT:-15}
+[[ $OVERVIEW_INNER_MAX_NODES =~ ^[1-9][0-9]*$ ]] || OVERVIEW_INNER_MAX_NODES=60
+[[ $OVERVIEW_INNER_MAX_EDGES =~ ^[0-9]+$ ]] || OVERVIEW_INNER_MAX_EDGES=200
+[[ $OVERVIEW_INNER_MAX_OUT =~ ^[0-9]+$ ]] || OVERVIEW_INNER_MAX_OUT=15
 
 ACTUAL_PLAN="" ACTUAL_RESULT="" ACTUAL_REASON="" PRINT_PATH=0 PRINT_INFERRED=0 PRINT_STATUS=0 SYNC_ARCH=0 NOTES_MODE=""
 case "${1:-}" in
@@ -593,7 +602,8 @@ generate() {
         --rawfile notes notes.md --rawfile notesExist notesexist.txt --rawfile notesDiff notesdiff.txt \
         --arg notesBase "$NOTES_BASE" --argjson notesBaseOk "$NOTES_BASE_OK" \
         --argjson notesOff "$([ "$NOTES_OFF" -eq 1 ] && echo true || echo false)" \
-        --arg colsNotes "$OVERVIEW_COLS_NOTES" --arg outMode "$mode" \
+        --arg colsNotes "$OVERVIEW_COLS_NOTES" --arg outMode "$mode" --arg flowSec "$OVERVIEW_FLOW_SECTION" \
+        --argjson inMaxN "$OVERVIEW_INNER_MAX_NODES" --argjson inMaxE "$OVERVIEW_INNER_MAX_EDGES" --argjson inMaxO "$OVERVIEW_INNER_MAX_OUT" \
         -f overview.jq > out.json 2> err ) || return 1
     [ "$mode" = full ] || return 0
     local l1="" l2=""
@@ -618,14 +628,21 @@ def rollup:
 JQ
 
 # data.js 超過 OVERVIEW_MAX_BYTES 時一級一級丟（每級都是在上一級的結果上再丟）：
+#   0 非本次相關模組（不是本次 plan 預計會動、也沒有本次改動）的 inner（ADR-2026-11-06-002：最先丟）
 #   1 模組的路由清單（只留數量）   2 非本次 plan 的改動明細 → 目錄彙總   3 非本次 plan 的部件驗收
 #   4 非本次 plan 只留狀態（畫面仍列得出有哪些 plan）   5 落差明細（各類數量寫進那則 notice）
-#   6 地圖的本次改動清單 → 目錄彙總   7 不丟東西，只加一則「仍超過上限」（六級都丟完還放不下時才跑）
+#   6 地圖的本次改動清單 → 目錄彙總   8 全部模組的 inner（最後丟）
+#   7 不丟東西，只加一則「仍超過上限」（前面都丟完還放不下時才跑）。執行順序見 shrink_data
 # 只動寫進 data.js 的那份：--actual 寫回 plan 用的是沒丟過的資料，overview.md 不受影響。
 IFS= read -r -d '' JQ_SHRINK <<'JQ'
 def note($what): .notices += [{level: "info", text: "資料超過 \($kb) KB 上限，已省略：\($what)", action: null}];
+def dropinner(f; $what): if any(.modules[]; .inner != null and f) then .modules |= map(if f then .inner = null else . end) | note($what) else . end;
 .truncated = true
-| if $level == 1 then
+| if $level == 0 then
+    dropinner(.planned != true and (.changed // 0) == 0; "非本次相關模組的內部細節（模組展開）")
+  elif $level == 8 then
+    dropinner(true; "所有模組的內部細節（模組展開）")
+  elif $level == 1 then
     .modules |= map(if .routes then .routes.sample = [] else . end)
     | note("模組的路由清單（只留數量）")
   elif $level == 2 then
@@ -979,6 +996,30 @@ def parse_ledger:
 # 可以寫說明的模組：有程式檔、不是「其他」。--print-path 的提示與 --notes-todo 都只算這些
 | ([$mods0[] | select(.id != "other" and ($FC[.id] // 0) > 0)]) as $notable
 
+# ---- 資料流節（ADR-2026-11-06-002 決策 3）：`## <數字>. <節名>` 一節裡每個 ### 是一條流程，只取其後
+# mermaid 區塊的 participant／actor 宣告行。行號照原檔（含自動段）。id＝模組 id → 該模組；＝分組 id → 該分組全部模組
+| def uniq: reduce .[] as $x ([]; if index($x) != null then . else . + [$x] end);
+  (if ($hasArch | not) or $demo then []
+   else [$arch | lines | to_entries | reduce .[] as $e ({sec: 0, fence: false, mer: false, out: []};
+      $e.value as $l
+      | if .fence then
+          (if ($l | test("^\\s*```")) then .fence = false | .mer = false
+           elif .mer and .sec == 1 and (.out | length) > 0 then
+             (($l | capture("^\\s*(participant|actor)\\s+(?<id>[^\\s]+)")) // null) as $c
+             | if $c != null then .out[-1].participants += [$c.id] else . end
+           else . end)
+        elif ($l | test("^\\s*```")) then .fence = true | .mer = ($l | test("^\\s*```\\s*mermaid"))
+        elif ($l | test("^#{1,2}\\s")) then .sec = (if ($l | test("^##\\s+[0-9]+\\.\\s*" + $flowSec)) then 1 elif .sec == 1 then 2 else .sec end)
+        elif .sec == 1 and ($l | test("^###\\s")) then .out += [{title: ($l | htext), line: ($e.key + 1), participants: []}]
+        else . end)
+      | .out[]]
+   end) as $flows0
+| ($mods0 | group_by(.group) | map({key: .[0].group, value: map(.id)}) | from_entries) as $GMODS
+| ([$flows0[] | (.participants | uniq) as $ps
+    | {title, line, participants: $ps,
+       modules: ([$ps[] | . as $p | if ($modIds | index($p)) != null then $p else ($GMODS[$p] // [])[] end] | uniq)}]) as $flows
+| (reduce range(0; $flows | length) as $i ({}; reduce $flows[$i].modules[] as $m (.; .[$m] += [$i]))) as $MFLOWS
+
 # ---- WBS 任務：表頭有 # 任務 狀態 的表，依表頭找欄（舊節少欄也照讀）
 | ($colsWbs | words) as $needWbs
 | ([$wbs | tables[] | select(.header as $h | all($needWbs[]; . as $c | $h | index($c)))]) as $wt
@@ -1295,6 +1336,9 @@ def parse_ledger:
        else empty end),
     ($unknownMods | if length > 0 and ($demo | not) then {level: "warn", text: "任務標了模組表沒有的模組：\(.[:8] | join("、"))", action: "改 WBS 模組欄或補架構文件 5.5"} else empty end),
     (($sk.notices // [])[]),
+    ($flows[] | select((.modules | length) == 0)
+     | {level: "warn", text: "資料流「\(.title)」對不到任何模組（模組改名？）",
+        action: "\($archPath) 第 \(.line) 行：participant id 寫模組 id 或分組 id"}),
     ([$plans[] | select(.base == null and (.status | test("✅") | not)) | .file] | if length > 0 then {level: "warn", text: "找不到比較基準（帳本沒有 BASE=，也找不到預設分支），列不出這幾份 plan 改了哪些檔：\(join("、"))", action: "帳本記 BASE=<commit>（subagent-execution）"} else empty end),
     ([$plans[] | select((.hasParts | not) and (.status | test("✅") | not)) | .file] | if length > 0 then {level: "info", text: "這幾份 plan 沒有「一眼看懂」部件表，任務圖只列得出改了哪些檔：\(join("、"))", action: "格式見 plan-format skill"} else empty end),
     (([$NV[] | select((.why | length) > 0)] | length) as $bad
@@ -1328,6 +1372,41 @@ def parse_ledger:
        | reduce .[] as $x ([]; if any(.[]; . == $x) then . else . + [$x] end) | .[:3]) as $rep
     | "\(.id)\t\(.paths | join(","))\t\($rep | join(","))\t\(if .description == null then "missing" else "stale" end)"
   else
+  # ---- 模組展開（ADR-2026-11-06-002 決策 1）：只進 data.js（overview.md 與架構自動段不放檔案層級）。
+  # 掃描截斷時 null；沒有檔的模組是空的 inner（畫面顯示「沒有內部資料」）
+  ($sk.scan.truncated == true) as $innerOff
+  | ([($sk.fileEdges // [])[] | select($FM[.from] != null)] | group_by($FM[.from])
+     | map({key: $FM[.[0].from], value: .}) | from_entries) as $FEM
+  | ($FM | to_entries | group_by(.value) | map({key: .[0].value, value: (map(.key) | sort)}) | from_entries) as $MFS
+  | def lcp($a; $b): ([$a, $b] | map(length) | min) as $n
+      | $a[:([range(0; $n) | select($a[.] != $b[.])] | first) // $n];
+    def commondir: map(split("/") | .[:-1]) | if length == 0 then "" else reduce .[1:][] as $d (.[0]; lcp(.; $d)) | join("/") end;
+    def krank: {m: 0, db: 1, pkg: 2}[split(":")[0]] // 3;
+    # 摺疊：逐檔 → 超過上限時根下一層的子目錄各併成 <名>/ → 仍超過就依進出邊數留前 N-1 個，其餘計入 folded
+    def mkinner($id; $fs; $es):
+      ($fs | commondir) as $root
+      | (if $root == "" then 0 else ($root | length) + 1 end) as $cut
+      | ($fs | map({key: ., value: .[$cut:]}) | from_entries) as $REL
+      | (if ($fs | length) <= $inMaxN then $REL else $REL | map_values(if test("/") then sub("/.*$"; "/") else . end) end) as $N
+      | ([$N[]] | unique) as $u
+      | (if ($u | length) <= $inMaxN then $u
+         else (reduce $es[] as $e ({};
+                 .[$N[$e.from]] += 1
+                 | if $e.to != null and $FM[$e.to] == $id and $N[$e.to] != $N[$e.from] then .[$N[$e.to]] += 1 else . end)) as $deg
+           | $u | sort_by(-($deg[.] // 0), .) | .[:($inMaxN - 1)] | sort
+         end) as $keep
+      | ($keep | to_entries | map({key: .value, value: .key}) | from_entries) as $IX
+      | ([$es[] | select(.to != null and $FM[.to] == $id) | [$IX[$N[.from]], $IX[$N[.to]]]
+          | select(.[0] != null and .[1] != null and .[0] != .[1])]
+         | group_by(.) | map(.[0] + [length]) | sort_by(-.[2], .[0], .[1]) | .[:$inMaxE]) as $ie
+      | ([$es[] | (if .to == null then .ext elif ($FM[.to] // $id) != $id then "m:" + $FM[.to] else null end) as $t
+          | select($t != null) | {i: $IX[$N[.from]], t: $t, s: .source}]) as $ext
+      | ([$ext[] | select(.i != null) | [.i, .t, .s]] | group_by(.) | map([.[0][0], .[0][1], length, .[0][2]])) as $o0
+      | (reduce $o0[] as $x ({}; .[$x[1]] += $x[2])) as $TW
+      | ($o0 | sort_by((.[1] | krank), -$TW[.[1]], .[1], -.[2], .[0]) | .[:$inMaxO]) as $out
+      | {root: $root, nodes: $keep, folded: ([$fs[] | select($IX[$N[.]] == null)] | length),
+         edges: $ie, out: $out, outMore: (([$ext[].t] | unique | length) - ([$out[][1]] | unique | length))};
+    def inner_for($id): if $innerOff then null else mkinner($id; $MFS[$id] // []; $FEM[$id] // []) end;
   {schema: 2,
    generatedAt: $now,
    generator: {script: "overview.sh", version: 3},
@@ -1341,8 +1420,10 @@ def parse_ledger:
    current: ($cx[0] // null),
    currents: $cx,
    groups: $groups,
-   modules: mods_with($plans; $curTasks; $curMods; $changesList; $plannedMods),
+   modules: (mods_with($plans; $curTasks; $curMods; $changesList; $plannedMods)
+             | map(. + {inner: inner_for(.id), flows: ($MFLOWS[.id] // [])})),
    edges: $edges,
+   flows: $flows,
    tasks: taskout,
    drift: $drift,
    unmappedTasks: [$tasks[] | select(.modules | length == 0) | .id],
@@ -1649,14 +1730,14 @@ sync_arch() {
     esac
 }
 
-# data.js 超過上限就照 JQ_SHRINK 的順序一級一級丟，直到放得下（六級都丟完仍超過就照寫，另加一則「仍超過上限」）。
+# data.js 超過上限就照 JQ_SHRINK 的順序一級一級丟，直到放得下（都丟完仍超過就照寫，另加一則「仍超過上限」）。
 # 常態只多一次 wc：放得下就什麼都不做。80 是 data.js 外殼（註解行＋賦值）的位元組數。
 shrink_data() {
     local level size
     size=$(wc -c < "$TMP/data.json")
     [ $((size + 80)) -le "$MAX_BYTES" ] && return 0
     cp -f "$TMP/data.json" "$TMP/view.json"
-    for level in 1 2 3 4 5 6 7; do
+    for level in 0 1 2 3 4 5 6 8 7; do
         ( cd "$TMP" && LC_ALL=C.UTF-8 jq -c --argjson level "$level" --argjson kb $((MAX_BYTES / 1024)) \
             -f shrink.jq view.json > shrunk.json 2> err ) || return 1
         mv -f "$TMP/shrunk.json" "$TMP/view.json"
