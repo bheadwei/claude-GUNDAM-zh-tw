@@ -117,5 +117,5 @@ ADR-001（已採納）已經把地圖骨架改成掃程式碼（`overview-scan.s
 - 設計提案：`.claude/context/decisions/architect-2026-11-05-1730.md` 第 7、8 節
 - 相關（不修改）：ADR-2026-11-05-001（骨架掃描、drift）、002（module-notes 的名稱與分組）、003（畫面品質基準）
 - 相關：ADR-2026-11-05-004（架構文件屬 6 份之一）、005（分組名＝PRD 領域名）、006（plan 的 `files:` 與階段格式不變）
-- 實作在地圖計畫 `.claude/taskmaster-data/plans/adhoc-2026-11-05-overview-from-code.md`（調整項見 handoff）
+- 實作在地圖計畫 `.claude/taskmaster-data/plans/archive/adhoc-2026-11-05-overview-from-code.md`（調整項見 handoff）
 - 補充（2026-11-06，同日範本審閱後修訂）：ADR-2026-11-06-001 在自動段之後新增 architect 撰寫的「5. 資料流」節；本 ADR 的自動段**維持第 4 節**，上表、標記、`--sync-arch` 都不變

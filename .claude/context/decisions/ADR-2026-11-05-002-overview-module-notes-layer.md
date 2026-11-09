@@ -8,7 +8,7 @@ decision-makers: [使用者]
 > - Q1 同意方式：**可以**——按需產生，每次由 `/task-status` 用 AskUserQuestion 問，永遠不自動執行；
 >   `project.json` 設 `overview.notes: off` 可整個關閉說明層
 > - Q2 `module-notes.md`：**進 git**
-> - 實作計畫：`.claude/taskmaster-data/plans/adhoc-2026-11-05-overview-from-code.md`（階段 4）
+> - 實作計畫：`.claude/taskmaster-data/plans/archive/adhoc-2026-11-05-overview-from-code.md`（階段 4）
 
 # ADR-2026-11-05-002: 模組白話說明由 documentation-specialist 按需產生、存檔快取，品質由腳本驗證
 

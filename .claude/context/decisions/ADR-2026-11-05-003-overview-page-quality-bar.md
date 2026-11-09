@@ -8,7 +8,7 @@ decision-makers: [使用者]
 > - Q7 主題：**預設跟隨系統**，右上角加手動切換鈕，選擇記在 `localStorage`
 > - Q4 SSH 遠端：**維持 VS Code 轉送**，不做「匯出單一 html」，只在文件寫明怎麼開
 > - 注意：本 ADR 寫的頁面上限 80KB 與 `check-counts.sh` 現行的 50KB 不一致；計畫沿用較嚴的 50KB（預估 40–45KB 放得下）
-> - 實作計畫：`.claude/taskmaster-data/plans/adhoc-2026-11-05-overview-from-code.md`（階段 3）
+> - 實作計畫：`.claude/taskmaster-data/plans/archive/adhoc-2026-11-05-overview-from-code.md`（階段 3）
 
 # ADR-2026-11-05-003: 圖解畫面保留現行畫布互動，專修「不理想資料」下的呈現，並以 artifact 品質加上髒資料驗收
 

@@ -194,4 +194,4 @@ sequenceDiagram
 - 補充：ADR-2026-11-05-005（流程小標題引用 PRD 情境編號；PRD 規則不變，資料流不套回 PRD）、ADR-2026-11-05-006（plan 多一個不被程式解析的小節）
 - 相關：ADR-2026-11-05-004（文件仍 6 份）、ADR-2026-11-05-002（模組說明由 documentation-specialist 寫；資料流由 architect 寫，兩者不互相取代）、ADR-2026-11-06-002（地圖的模組展開與流程連結）
 - 查證：mermaid sequenceDiagram 的 `participant … as …`、`alt`／`else`、`box`（context7 `/mermaid-js/mermaid`）；參與者 id 含連字號支援（mermaid-js/mermaid PR #3524，2022-09 合併）
-- 實作：文件計畫 `.claude/taskmaster-data/plans/adhoc-2026-11-05-docs-system.md`（調整項見 `coordination/handoffs/architect-to-planner-2026-11-06-1100.md`；修訂後的調整見 `coordination/handoffs/architect-to-planner-2026-11-06-1400.md`）
+- 實作：文件計畫 `.claude/taskmaster-data/plans/archive/adhoc-2026-11-05-docs-system.md`（調整項見 `coordination/handoffs/architect-to-planner-2026-11-06-1100.md`；修訂後的調整見 `coordination/handoffs/architect-to-planner-2026-11-06-1400.md`）

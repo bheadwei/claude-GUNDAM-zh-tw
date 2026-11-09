@@ -3,7 +3,8 @@ wbs_task: "none"
 slug: "overview-from-code"
 created: "2026-11-05"
 updated: "2026-11-09"
-status: "🔄 進行中"
+status: "✅ 完成"
+archived: "2026-11-09"
 current_phase: 7
 mode: "standard"
 files:

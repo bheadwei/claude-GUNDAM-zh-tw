@@ -9,7 +9,7 @@ decision-makers: [使用者]
 >   Python（`import`／`from … import`、FastAPI 路由）與 JS/TS（`import`／`require`、前端 fetch 呼叫）優先；C#／Java 規則照做但不是驗收主軸
 > - Q5 寫程式碼檔時背景重掃、30 秒節流：**同意**
 > - Q6 codegraph adapter 先不做，只保留 `edges[].source` 的位置：**同意**
-> - 實作計畫：`.claude/taskmaster-data/plans/adhoc-2026-11-05-overview-from-code.md`
+> - 實作計畫：`.claude/taskmaster-data/plans/archive/adhoc-2026-11-05-overview-from-code.md`
 
 # ADR-2026-11-05-001: 專案地圖的骨架改以程式碼掃描為準，架構文件降為選配覆寫
 

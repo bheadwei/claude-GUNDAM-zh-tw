@@ -155,4 +155,4 @@ flows = [{ title: "orders 結帳 — 正常結帳（ORD-01、ORD-02）", line: 1
 - 部分修訂：ADR-2026-11-05-001（提案 3.1 第 6 步「第三方 import 丟掉」→ 模組層照舊丟、檔案層級保留並歸類）、ADR-2026-11-05-003 的頁面上限（地圖計畫 X9 的 50KB → 64KB，仍在本 ADR-003 的 80KB 內）
 - 相關：ADR-2026-11-06-001（資料流節的參與者規則）、ADR-2026-11-05-007（自動段不放檔案層級）、ADR-2026-11-05-002（說明層不變，檔案節點沒有 LLM 說明）
 - 依據：`.claude/context/decisions/overview-scan-bench-2026-11-05.md`（掃描行程與秒數）、`.claude/scripts/overview.sh` 的 `MAX_BYTES`（512KB）與 `shrink_data`
-- 實作：地圖計畫 `.claude/taskmaster-data/plans/adhoc-2026-11-05-overview-from-code.md`（新增兩個階段，見 handoff）
+- 實作：地圖計畫 `.claude/taskmaster-data/plans/archive/adhoc-2026-11-05-overview-from-code.md`（新增兩個階段，見 handoff）
