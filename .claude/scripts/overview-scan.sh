@@ -11,6 +11,9 @@
 # skeleton.json 只放逐檔的事實（檔案屬於哪個掃描模組、逐檔 import 與 http、逐檔路由）；彙總成模組邊、
 # 路由數、與架構文件 5.5 合併都在 overview.sh 做——5.5 有效時檔案會改歸 5.5 的模組，
 # 在這裡先彙總就得在那邊拆回來。第三方 import 也留著（`pkg:<名稱>`），模組邊才丟。
+# fileEdges 是同一批紀錄的檔案層級版（給 overview.sh 的模組展開，ADR-2026-11-06-002 決策 1、2）：
+# repo 內的檔 to 填路徑；其餘依序歸類成 db:<名>（SCAN_DB_PKGS＋overview.scan.dbPackages）、
+# 標準庫（丟掉）、pkg:<套件名>。由同一趟 awk 多輸出一種行（E），不加行程。
 #
 # 演算法：提案 architect-2026-11-05-1500.md 3.1 第 1–8 步，加上計畫的 X2（跨套件撞名加套件
 # 目錄名）、X3（目錄名含非 ASCII 時 id 用 m- 加 6 碼雜湊：mermaid 節點 id 必須是 ASCII）、
@@ -24,11 +27,25 @@
 # status、ls-files、tr、awk、grep、tr、awk、jq、mv 共 9 個（設定了 overview.scan 再多一個 jq）。
 #
 # 環境變數：OVERVIEW_MAX_MODULES（預設 40）、OVERVIEW_SCAN_MAX_FILES（預設 20000，
-# 超過只切模組、不掃 import 與路由）。project.json 的 overview.scan.{exclude,roots,depth} 可覆寫。
+# 超過只切模組、不掃 import 與路由）。project.json 的 overview.scan.{exclude,roots,depth,dbPackages} 可覆寫。
 
-SCAN_VERSION=3
+SCAN_VERSION=4
 # 與 hooks/post-write.sh 的同名常數相同（測試會比對）
 OVERVIEW_CODE_EXT="py ts tsx js jsx mjs cjs vue svelte go java kt cs rs"
+# 資料庫驅動、ORM、快取、搜尋引擎。Go／Java／C# 以前綴比對（`java.sql.Connection` → db:java.sql）
+SCAN_DB_PKGS="sqlalchemy psycopg psycopg2 asyncpg pymysql pyodbc pymssql sqlite3 pymongo motor redis elasticsearch oracledb cx_Oracle
+ pg mysql2 mssql mongodb mongoose ioredis @prisma/client typeorm sequelize knex drizzle-orm better-sqlite3
+ database/sql github.com/jackc/pgx github.com/go-sql-driver/mysql gorm.io/gorm
+ java.sql javax.persistence jakarta.persistence org.hibernate
+ System.Data.SqlClient Microsoft.Data.SqlClient Npgsql Microsoft.EntityFrameworkCore StackExchange.Redis"
+# 標準庫只列常用的，不追求完整：沒列到的會顯示成外部套件（ADR 決策 2）。node: 開頭一律算標準庫
+SCAN_STD_PY="os sys re json typing pathlib datetime time logging collections asyncio functools itertools math random
+ subprocess shutil glob io csv uuid hashlib base64 copy dataclasses enum abc contextlib threading multiprocessing
+ socket urllib http email argparse tempfile traceback unittest decimal statistics string textwrap pickle struct
+ zipfile gzip queue signal inspect warnings weakref platform secrets hmac operator heapq bisect pprint types
+ __future__ configparser"
+SCAN_STD_JS="fs path os url crypto http https http2 stream events util child_process buffer net tls dns zlib readline
+ querystring assert cluster worker_threads perf_hooks timers process vm module string_decoder dgram async_hooks v8 tty"
 
 MAX_MODULES=${OVERVIEW_MAX_MODULES:-40}
 [[ $MAX_MODULES =~ ^[1-9][0-9]*$ ]] || MAX_MODULES=40
@@ -49,12 +66,13 @@ G=(git -C "$ROOT" -c core.quotepath=off)
 
 PJ=""
 [ -f "$ROOT/.claude/taskmaster-data/project.json" ] && IFS= read -r -d '' PJ < "$ROOT/.claude/taskmaster-data/project.json"
-ROOTS="" DEPTH="" EXCL=()
+ROOTS="" DEPTH="" DBP="" EXCL=()
 if [[ $PJ == *'"scan"'* ]]; then
-    { IFS= read -r ROOTS; IFS= read -r DEPTH; mapfile -t EXCL; } < <(printf '%s' "$PJ" | jq -r '
+    { IFS= read -r ROOTS; IFS= read -r DEPTH; IFS= read -r DBP; mapfile -t EXCL; } < <(printf '%s' "$PJ" | jq -r '
         (.overview.scan // {}) as $s
         | (($s.roots // []) | map(tostring | sub("^\\./"; "") | sub("/+$"; "")) | join("\u0001")),
           (($s.depth // "") | tostring),
+          (($s.dbPackages // []) | map(tostring | gsub("\\s"; "")) | join(" ")),
           (($s.exclude // [])[] | tostring | sub("^\\./"; ""))' 2>/dev/null | tr -d '\r')
 else
     PJ=""   # 設定沒有 scan 段時，project.json 其他欄位的改動不必讓骨架重掃
@@ -292,6 +310,35 @@ function rec(f, t) {
     if (t == "" || t == f || ((f SUBSEP t) in done)) return
     done[f, t] = 1
     printf "I\t%s\t%s\timport\n", f, t
+    fedge(f, t, "import")
+}
+# fileEdges 的一筆（E 行：from、to、ext、source）。t 是 repo 內的檔 → to；pkg:<原始名> → 依序歸類成
+# db／標準庫（不輸出）／pkg（ADR-2026-11-06-002 決策 2）
+function fedge(f, t, src,   x) {
+    if (substr(t, 1, 4) != "pkg:") { printf "E\t%s\t%s\t\t%s\n", f, t, src; return }
+    x = extkind(substr(t, 5), extof(f))
+    if (x == "" || ((f SUBSEP x) in edone)) return
+    edone[f, x] = 1
+    printf "E\t%s\t\t%s\t%s\n", f, x, src
+}
+# 套件名：Python 第一段（呼叫端已取）、TS／JS 第一段或 scoped 兩段（呼叫端已取）、Go 前三段、Java／C# 前兩段
+function extkind(r, e,   js, d, i, n, X, s) {
+    js = e ~ /^(ts|tsx|js|jsx|mjs|cjs|vue|svelte)$/
+    if (js && substr(r, 1, 5) == "node:") return ""
+    if (r in isdb) return "db:" r
+    if (e == "go" || e == "java" || e == "kt" || e == "cs")
+        for (i = 1; i <= ndb; i++) { d = DBL[i]; if (index(r, d ".") == 1 || index(r, d "/") == 1) return "db:" d }
+    if (e == "py") return (r in stdpy_) ? "" : "pkg:" r
+    if (js) return (r in stdjs_) ? "" : "pkg:" r
+    if (e == "go") {
+        if (r !~ /^[^\/]*\./) return ""
+        n = split(r, X, "/"); s = X[1]; for (i = 2; i <= n && i <= 3; i++) s = s "/" X[i]
+        return "pkg:" s
+    }
+    if ((e == "java" || e == "kt") && r ~ /^(java|javax|kotlin)(\.|$)/) return ""
+    if (e == "cs" && r ~ /^System(\.|$)/) return ""
+    n = split(r, X, ".")
+    return "pkg:" (n >= 2 ? X[1] "." X[2] : r)
 }
 function trimq(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
 # 第一個字串常值（呼叫端給的是左括號之後的內容）；沒有就回 \001
@@ -497,6 +544,11 @@ function cs(f, l,   s, p) {
     }
 }
 
+BEGIN {
+    ndb = split(dbpkgs, DBL, " "); for (i = 1; i <= ndb; i++) isdb[DBL[i]] = 1
+    n = split(stdpy, A, " "); for (i = 1; i <= n; i++) stdpy_[A[i]] = 1
+    n = split(stdjs, A, " "); for (i = 1; i <= n; i++) stdjs_[A[i]] = 1
+}
 FNR == NR {
     print
     split($0, T, "\t")
@@ -559,7 +611,7 @@ END {
                 if (hmatch(p, RF[g, j])) { nc++; cand = g; break }
             }
         }
-        if (nc == 1 && !((f SUBSEP cand) in hdone)) { hdone[f, cand] = 1; printf "I\t%s\t%s\thttp\n", f, cand }
+        if (nc == 1 && !((f SUBSEP cand) in hdone)) { hdone[f, cand] = 1; printf "I\t%s\t%s\thttp\n", f, cand; fedge(f, cand, "http") }
     }
 }
 AWK
@@ -578,6 +630,8 @@ IFS= read -r -d '' JQ_SKEL <<'JQ'
                 fileCount: (.[5] | tonumber), paths: (if .[6] == "" then [] else [.[6]] end)}],
    files: ([$L[] | select(.[0] == "F") | {key: .[1], value: .[2]}] | from_entries),
    imports: [$L[] | select(.[0] == "I") | .[1:4]],
+   fileEdges: [$L[] | select(.[0] == "E")
+               | {from: .[1], to: (if .[2] == "" then null else .[2] end), ext: (if .[3] == "" then null else .[3] end), source: .[4]}],
    routes: [$L[] | select(.[0] == "R") | .[1:3]],
    notices: (if $trunc then [{level: "info",
                text: "程式檔 \($files) 個，超過掃描上限 \($maxFiles)：只依目錄切模組，沒有掃 import 與路由（地圖上沒有依賴線）",
@@ -603,6 +657,7 @@ GREP_PS=(--)
 for e in $OVERVIEW_CODE_EXT; do GREP_PS+=("*.$e"); done
 GREP_PS+=(go.mod '*/go.mod' ':(exclude).claude' ':(exclude)docs')
 for e in "${EXCL[@]}"; do [ -n "$e" ] && GREP_PS+=(":(exclude,glob)$e"); done
+DBALL="$SCAN_DB_PKGS $DBP"
 
 if [ "$TRUNC" = false ]; then
     { "${G[@]}" grep -z -n -I -E --untracked \
@@ -618,7 +673,8 @@ if [ "$TRUNC" = false ]; then
         -e '^[[:space:]]*@(Get|Post|Put|Delete|Patch|Request)Mapping' \
         -e '^[[:space:]]*\[(Http(Get|Post|Put|Delete|Patch)|Route)' \
         "${GREP_PS[@]}" || [ $? -eq 1 ]; } | tr '\0' '\t'
-fi | LC_ALL=C awk "$AWK_EDGES" "$OUT/.scan-files" - \
+fi | LC_ALL=C awk -v dbpkgs="${DBALL//$'\n'/ }" -v stdpy="${SCAN_STD_PY//$'\n'/ }" -v stdjs="${SCAN_STD_JS//$'\n'/ }" \
+       "$AWK_EDGES" "$OUT/.scan-files" - \
    | LC_ALL=C.UTF-8 jq -R -n -c --arg head "$HEAD" --argjson trunc "$TRUNC" --argjson maxFiles "$MAX_FILES" "$JQ_SKEL" \
    > "$OUT/.skeleton.tmp" || exit 1
 set +o pipefail

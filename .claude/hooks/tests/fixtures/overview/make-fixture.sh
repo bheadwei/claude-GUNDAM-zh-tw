@@ -10,6 +10,10 @@
 #   環境變數 MAKE_FIXTURE_NOTES=1（只有 messy-fullstack）：先 commit 基礎檔、再帶這個變數跑一次，只寫說明層
 #     taskmaster-data/module-notes.md（based_on＝目前的 HEAD）。6 列：backend-api、services、pages 合格；
 #     nope（id 不存在）、frontend-api（說明含 IP）、m-5d3b69（依據不在模組內）刻意違規
+#   環境變數 MAKE_FIXTURE_LARGE=1（只有 messy-fullstack，產生時一起帶）：多一個 61 個檔、分在 3 個子目錄的
+#     catalog 模組，不掛任何 WBS 任務（模組展開的摺疊用，見 messy_large）
+#   兩組的架構文件都在自動段標記之後接「## 5. 資料流」：shop-clean 的參與者都對得到模組；
+#   messy-fullstack 一條用分組 id（pkg-backend、pkg-frontend）、一條的參與者全部對不到模組
 #
 #   shop-clean      範例電商：5.1／5.5 都有效，WBS 每個任務都標了模組
 #   messy-fullstack 髒資料：Python 後端＋TS 前端、C4 架構圖、沒有 5.5、WBS 沒有模組欄、32 個任務
@@ -77,6 +81,40 @@ graph TD
 | svc-b | 服務 B | `src/services/b/**` | 會員 |
 | db | 資料庫 | `migrations/**`, `src/db/**` | 持久化 |
 | cache | 快取 | `src/cache/**` | 快取 |
+
+## 4. 模組與依賴
+
+<!-- overview:generated:start -->
+<!-- overview:generated:end -->
+## 5. 資料流
+
+### svc-a 下單 — 正常下單（ORD-01）
+
+```mermaid
+sequenceDiagram
+    participant web as 前端
+    participant gateway as API Gateway
+    participant svc-a as 訂單服務
+    participant db as 資料庫
+    web->>gateway: POST /orders
+    gateway->>svc-a: 建立訂單
+    svc-a->>db: 寫入訂單
+    svc-a-->>web: 訂單編號
+```
+
+### svc-b 會員 — 查點數（MEM-01）
+
+```mermaid
+sequenceDiagram
+    participant web as 前端
+    participant gateway as API Gateway
+    participant svc-b as 會員服務
+    participant cache as 快取
+    web->>gateway: GET /members/points
+    gateway->>svc-b: 查點數
+    svc-b->>cache: 讀快取
+    svc-b-->>web: 點數
+```
 MD
 
     put "$TD/wbs.md" <<'MD'
@@ -96,18 +134,18 @@ MD
 MD
 
     printf 'export const boot = () => 1\n' | put "$DEST/src/web/index.ts"
-    printf 'export const App = () => null\n' | put "$DEST/src/web/App.tsx"
+    printf "import axios from 'axios'\n\nexport const App = () => axios\n" | put "$DEST/src/web/App.tsx"
     printf 'export const a = 1\n' | put "$DEST/src/web/a.ts"
     printf 'from src.gateway.auth import check\n\ndef route(path):\n    return check(path)\n' | put "$DEST/src/gateway/router.py"
     printf 'def check(path):\n    return True\n' | put "$DEST/src/gateway/auth.py"
-    printf 'export const limit = 100\n' | put "$DEST/src/gateway/limit.ts"
-    printf 'from src.db.session import connect\n\ndef orders():\n    return connect()\n' | put "$DEST/src/services/a/orders.py"
+    printf "import { readFileSync } from 'node:fs'\n\nexport const limit = 100\n" | put "$DEST/src/gateway/limit.ts"
+    printf 'from src.db.session import connect\nimport httpx\nimport os\n\ndef orders():\n    return connect()\n' | put "$DEST/src/services/a/orders.py"
     printf 'class Order:\n    id = 0\n' | put "$DEST/src/services/a/models.py"
     printf 'from src.cache.client import get\n\ndef members():\n    return get("members")\n' | put "$DEST/src/services/b/members.py"
     printf 'def points(member):\n    return 0\n' | put "$DEST/src/services/b/points.py"
     printf 'def upgrade():\n    return "create table orders"\n' | put "$DEST/migrations/001_init.py"
-    printf 'def connect():\n    return None\n' | put "$DEST/src/db/session.py"
-    printf 'export const dbUrl = "sqlite://"\n' | put "$DEST/src/db/config.ts"
+    printf 'from sqlalchemy import create_engine\n\ndef connect():\n    return None\n' | put "$DEST/src/db/session.py"
+    printf "import { Pool } from 'pg'\n\nexport const dbUrl = 'sqlite://'\n" | put "$DEST/src/db/config.ts"
     printf 'def get(key):\n    return None\n' | put "$DEST/src/cache/client.py"
     printf 'export const key = (n: string) => `shop:${n}`\n' | put "$DEST/src/cache/keys.ts"
 }
@@ -156,6 +194,23 @@ MD
     } | put "$TD/module-notes.md"
 }
 
+# > 60 個檔的模組（模組展開的摺疊）：backend/app/catalog 根目錄 1 個檔＋3 個子目錄各 20 個。
+# 只在 MAKE_FIXTURE_LARGE 時加：多一個模組會改變既有節斷言的模組清單與說明層計數。
+# project.json 同時設 overview.scan.depth 1（切法與自動偵測相同），否則它占全部檔案 40% 以上、
+# 會被 overview-scan.sh 自動再往下切成三個模組。直接 printf 寫檔：put 每個檔開兩個行程，61 個檔在 Windows 要十幾秒
+messy_large() {
+    local c="$DEST/backend/app/catalog" i n
+    mkdir -p "$c/adapters" "$c/parsers" "$c/rules" || exit 1
+    printf 'from app.catalog.adapters.a01 import load\n\ndef run():\n    return load()\n' > "$c/catalog.py"
+    for i in $(seq 1 20); do
+        printf -v n '%02d' "$i"
+        printf 'def load():\n    return %d\n' "$i" > "$c/adapters/a$n.py"
+        printf 'from app.catalog.adapters.a%s import load\n\ndef parse():\n    return load()\n' "$n" > "$c/parsers/p$n.py"
+        printf 'from app.catalog.parsers.p%s import parse\n\ndef check():\n    return parse()\n' "$n" > "$c/rules/r$n.py"
+    done
+    printf '{"name":"查詢系統","mode":"mvp","overview":{"architectureDoc":"docs/architecture/01_system_architecture.md","scan":{"depth":1}}}\n' > "$TD/project.json"
+}
+
 messy_fullstack() {
     if [ -n "${MAKE_FIXTURE_NOTES:-}" ]; then messy_notes; return; fi
     if [ -n "${MAKE_FIXTURE_CHANGES:-}" ]; then messy_changes; return; fi
@@ -170,9 +225,9 @@ messy_fullstack() {
     messy_router api/users.py /api/users user_service list_users
     messy_router api/reports.py /api/reports report_service list_reports
     messy_router api/auth.py /api/auth ldap_service authenticate
-    messy_py services/user_service.py "from app.models.user import User\nfrom app.core.db import session\n\n" "def list_users():\n    return session().query(User).all()\n"
+    messy_py services/user_service.py "from app.models.user import User\nfrom app.core.db import session\nfrom sqlalchemy.orm import Session\n\n" "def list_users():\n    return session().query(User).all()\n"
     messy_py services/report_service.py "from app.models.report import Report\nfrom app.core.db import session\nfrom . import user_service\n\n" "def list_reports():\n    user_service.list_users()\n    return session().query(Report).all()\n"
-    messy_py services/ldap_service.py "from app.core.config import settings\n\n" "def authenticate():\n    return settings.ldap_url\n"
+    messy_py services/ldap_service.py "from app.core.config import settings\nimport httpx\nimport os\n\n" "def authenticate():\n    return settings.ldap_url\n"
     messy_py models/user.py "from app.core.db import Base\n\n" "class User(Base):\n    id = 0\n"
     messy_py models/report.py "from app.core.db import Base\n\n" "class Report(Base):\n    id = 0\n"
     messy_py core/config.py "" "class settings:\n    ldap_url = \"ldap://example.invalid\"\n    db_url = \"mssql://example.invalid\"\n    redis_url = \"redis://example.invalid\"\n"
@@ -185,7 +240,7 @@ messy_fullstack() {
     printf 'def test_users():\n    assert True\n' | put "$DEST/backend/tests/test_users.py"
     printf 'def test_reports():\n    assert True\n' | put "$DEST/backend/tests/test_reports.py"
 
-    messy_ts api/client.ts "" "export async function http(url: string) {\n  const res = await fetch(url)\n  return res.json()\n}\n"
+    messy_ts api/client.ts "import axios from 'axios'\nimport { readFileSync } from 'node:fs'\n\n" "export async function http(url: string) {\n  const res = await fetch(url)\n  return res.json()\n}\n"
     messy_ts api/users.ts "import { http } from './client'\n\n" "export const listUsers = () => http('/api/users')\nexport const loadMe = () => fetch('/api/auth/me')\n"
     messy_ts api/reports.ts "import { http } from './client'\n\n" "export const listReports = () => http('/api/reports')\nexport const createReport = (body: unknown) => fetch('/api/reports', { method: 'POST', body: JSON.stringify(body) })\n"
     messy_ts stores/auth.ts "import { loadMe } from '@/api/users'\n\n" "export const useAuth = () => loadMe()\n"
@@ -221,6 +276,36 @@ C4Context
 ## 技術選型
 
 後端 FastAPI、前端 React，資料庫 MSSQL。
+
+## 4. 模組與依賴
+
+<!-- overview:generated:start -->
+<!-- overview:generated:end -->
+## 5. 資料流
+
+### pkg-backend 報表 — 查報表（RPT-01）
+
+```mermaid
+sequenceDiagram
+    actor user as 使用者
+    participant pkg-frontend as 前端
+    participant pkg-backend as 後端
+    participant mssql as MSSQL
+    user->>pkg-frontend: 開報表頁
+    pkg-frontend->>pkg-backend: GET /api/reports
+    pkg-backend->>mssql: 查詢
+```
+
+### exporter 匯出 — 每日匯出（排程：每日 02:00）
+
+```mermaid
+sequenceDiagram
+    participant scheduler as 排程器
+    participant exporter as 匯出作業
+    participant mail as 郵件（外部）
+    scheduler->>exporter: 觸發
+    exporter-)mail: 寄出 CSV
+```
 MD
 
     put "$TD/wbs.md" <<'MD'
@@ -306,6 +391,7 @@ MD
         printf -- '---\nwbs_task: "%s"\nstatus: "⏳ 未開始"\nmode: "standard"\n---\n\n# 實作計畫：任務 %s\n\n### 階段 1: 實作 ⏳\n\n- [ ] 完成任務\n' "$id" "$id" \
             | put "$TD/plans/$id-task.md"
     done
+    [ -z "${MAKE_FIXTURE_LARGE:-}" ] || messy_large
 }
 
 # Maven／Gradle 多模組（X16）：兩個子專案（api 用 Maven、worker 用 Gradle），各 3 個套件、Java＋Kotlin 混合，

@@ -3996,7 +3996,8 @@ expect_eq "data.js schema 2 合約：drift 五個 key 都是陣列、模組 desc
     "2 codeNotInDoc,docNotInCode,taskModuleMismatch,tasksInferred,wbsUnknownModule true true true true" \
     "$(sc_q shop '"\(.schema) \(.drift | keys | join(",")) \(.drift | [.[] | type == "array"] | all) \(all(.modules[]; .description == null and .planned == false)) \((.currents | length > 0) and all(.currents[]; .phase == null and .phases == null and .activePhases == [])) \(has("status") and (.status | type) == "object")"')"
 sc_put shop src/search/a.py 'def a():\n    return 1\n'; sc_put shop src/search/b.py 'def b():\n    return 2\n'
-printf '| legacy | 舊系統 | `src/legacy/**` | 已停用 |\n' >> "$SC/shop/docs/05_architecture.md"
+# 接在 5.5 表最後一列（cache）之後：fixture 的表後面還有第 4、5 節，附加到檔尾就不在表裡了
+sed -i '/^| cache | /a | legacy | 舊系統 | `src/legacy/**` | 已停用 |' "$SC/shop/docs/05_architecture.md"
 sc_ov shop
 expect_eq "5.5 多一列 src/legacy/**、沒有對應檔 → legacy 存在且 source:doc" "doc 0" \
     "$(sc_q shop '.modules[] | select(.id == "legacy") | "\(.source) \(.fileCount)"')"
@@ -4600,6 +4601,162 @@ mn_ov messy
 expect_eq "fixture 的 notes → 合格的列有說明（backend-api、services、pages），違規的沒有" "backend-api pages services" \
     "$(mn_q messy '[.modules[] | select(.description != null) | .id] | sort | join(" ")')"
 rm -rf "$MN"
+
+# =========================================================================
+section "overview.sh — 模組展開資料（fileEdges、inner、資料流）"
+# =========================================================================
+# 地圖計畫階段 5（ADR-2026-11-06-002 決策 1–3）。每組資料一個獨立 repo，放在含中文與空格的目錄。
+MX="$SANDBOX/展開 測試"
+FXD="$HOOK_DIR/tests/fixtures/overview"
+rm -rf "$MX"; mkdir -p "$MX"
+mx_ov()  { bash "$OV_SRC" "$MX/$1" >/dev/null 2>&1; }
+mx_q()   { sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$MX/$1/.claude/taskmaster-data/overview/data.js" 2>/dev/null | jq -r "$2" 2>/dev/null | tr -d '\r'; }
+mx_sk()  { jq -r "$2" < "$MX/$1/.claude/taskmaster-data/overview/skeleton.json" 2>/dev/null | tr -d '\r'; }
+mx_new() { rm -rf "$MX/$1"; mkdir -p "$MX/$1/.claude/taskmaster-data" "$MX/$1/docs"; echo '{"name":"展開","mode":"mvp"}' > "$MX/$1/.claude/taskmaster-data/project.json"; }
+mx_put() { mkdir -p "$(dirname "$MX/$1/$2")"; printf -- "$3" > "$MX/$1/$2"; }
+mx_git() { ( cd "$MX/$1" && { [ -d .git ] || git init -q -b main . ; } && git add -A && git -c user.email=t@t -c user.name=t commit -qm "${2:-c}" ) >/dev/null 2>&1; }
+# mx_in <repo> <模組 id> <jq>：對該模組的 inner 跑 jq
+mx_in()  { mx_q "$1" ".modules[] | select(.id == \"$2\") | .inner | $3"; }
+mx_region() { sed -n '/^<!-- overview:generated:start/,/^<!-- overview:generated:end/p' "$1" | tr -d '\r'; }
+mx_after()  { local s; IFS= read -r -d '' s < "$1"; printf '%s' "${s#*"<!-- overview:generated:end -->"}"; }
+
+# ---- x：後端 orders（api.py→service.py、資料庫、外部套件、標準庫）＋前端 pages／stores（@/ 別名、HTTP、React）
+mx_new x
+mx_put x backend/pyproject.toml '[project]\nname = "b"\n'
+mx_put x backend/app/orders/api.py 'from app.orders.service import x\nfrom sqlalchemy.orm import Session\nimport httpx\nimport os\nimport mydb\nfrom fastapi import APIRouter\n\nrouter = APIRouter(prefix="/orders")\n\n@router.get("/{order_id}")\ndef one(order_id: int):\n    return x\n'
+mx_put x backend/app/orders/service.py 'x = 1\n'
+mx_put x frontend/package.json '{"name":"f"}\n'
+mx_put x frontend/src/pages/Cart.tsx "import React from 'react'\nimport cart from '@/stores/cart'\nimport { readFileSync } from 'node:fs'\n\nexport const one = (id: string) => fetch(\`/api/orders/\${id}\`)\n"
+mx_put x frontend/src/pages/Home.tsx 'export const Home = 1\n'
+mx_put x frontend/src/stores/cart.ts 'export default 1\n'
+mx_put x frontend/src/stores/user.ts 'export const u = 1\n'
+mx_put x backend/app/orders/test_api.py 'from app.orders.service import x\nimport pytest\n\ndef test_x():\n    assert x\n'
+mx_git x; mx_ov x
+expect_eq "api.py 寫 from app.orders.service import x → orders 的 inner.edges 有一條 api.py→service.py" 1 \
+    "$(mx_in x orders '(.nodes | index("api.py")) as $a | (.nodes | index("service.py")) as $s | [.edges[] | select(.[0] == $a and .[1] == $s)] | length')"
+expect_eq "api.py 寫 from sqlalchemy.orm import Session、import httpx、import os → orders 的 inner.out 含 db:sqlalchemy 與 pkg:httpx，沒有指向 os 的項目" \
+    "true true 0" "$(mx_in x orders '"\(any(.out[]; .[1] == "db:sqlalchemy")) \(any(.out[]; .[1] == "pkg:httpx")) \([.out[] | select(.[1] | test(":os$"))] | length)"')"
+expect_eq "skeleton.json 的 fileEdges：檔對檔 to 填路徑、ext null；資料庫 to null、ext db:sqlalchemy；標準庫 os 不進" "1 1 0" \
+    "$(mx_sk x '"\([.fileEdges[] | select(. == {from: "backend/app/orders/api.py", to: "backend/app/orders/service.py", ext: null, source: "import"})] | length) \([.fileEdges[] | select(. == {from: "backend/app/orders/api.py", to: null, ext: "db:sqlalchemy", source: "import"})] | length) \([.fileEdges[] | select((.ext // "") | test(":os$"))] | length)"')"
+expect_eq "前端 import … from '@/stores/cart'（stores 是另一模組）→ pages 的 inner.out 有一筆 m:stores、import（從 Cart.tsx）" 1 \
+    "$(mx_in x pages '(.nodes | index("Cart.tsx")) as $c | [.out[] | select(.[0] == $c and .[1] == "m:stores" and .[3] == "import")] | length')"
+expect_eq "前端 fetch 對到後端路由（X6）→ pages 的 inner.out 有一筆 m:orders、http" 1 \
+    "$(mx_in x pages '[.out[] | select(.[1] == "m:orders" and .[3] == "http")] | length')"
+expect_eq "import React from 'react' → 模組層 edges 只有 pages→orders（http）與 pages→stores（import）；pages 的 inner.out 多一筆 pkg:react；node:fs 不進" \
+    "pages>orders:http pages>stores:import|1 0" \
+    "$(mx_q x '[.edges[] | "\(.from)>\(.to):\(.source)"] | sort | join(" ")')|$(mx_in x pages '"\([.out[] | select(.[1] == "pkg:react")] | length) \([.out[] | select(.[1] | test("fs$"))] | length)"')"
+expect_eq "inner 的欄位照 ADR 決策 1：root 是模組的共同目錄、nodes 是相對路徑、folded 0、outMore 0；data.js schema 仍為 2" \
+    "backend/app/orders|api.py,service.py|0 0|2" \
+    "$(mx_in x orders '"\(.root)|\(.nodes | join(","))|\(.folded) \(.outMore)"')|$(mx_q x '.schema')"
+expect_eq "測試檔（orders/test_api.py）不進 inner：不是節點、它的 import pytest 不在 out" "false 0" \
+    "$(mx_in x orders '"\(.nodes | index("test_api.py") != null) \([.out[] | select(.[1] == "pkg:pytest")] | length)"')"
+expect_eq "框外依「其他模組 → 資料庫 → 外部套件」排序（pages：m、m、pkg；orders：db 在 pkg 前）" "m m pkg|db pkg pkg pkg" \
+    "$(mx_in x pages '[.out[][1] | split(":")[0]] | join(" ")')|$(mx_in x orders '[.out[][1] | split(":")[0]] | join(" ")')"
+OVERVIEW_INNER_MAX_OUT=2 mx_ov x
+expect_eq "OVERVIEW_INNER_MAX_OUT=2 → orders 的 out 只留 2 筆（db 優先、同類同次數依名稱）、其餘 2 個目標計入 outMore" "2|db:sqlalchemy,pkg:fastapi|2" \
+    "$(mx_in x orders '"\(.out | length)|\([.out[][1]] | join(","))|\(.outMore)"')"
+mx_ov x
+expect_eq "沒設 overview.scan.dbPackages → import mydb 歸成 pkg:mydb" "1 0" \
+    "$(mx_in x orders '"\([.out[] | select(.[1] == "pkg:mydb")] | length) \([.out[] | select(.[1] == "db:mydb")] | length)"')"
+echo '{"name":"展開","mode":"mvp","overview":{"scan":{"dbPackages":["mydb"]}}}' > "$MX/x/.claude/taskmaster-data/project.json"; mx_ov x
+expect_eq "project.json 設 overview.scan.dbPackages: [\"mydb\"]、程式寫 import mydb → inner.out 含 db:mydb、不含 pkg:mydb" "1 0" \
+    "$(mx_in x orders '"\([.out[] | select(.[1] == "db:mydb")] | length) \([.out[] | select(.[1] == "pkg:mydb")] | length)"')"
+
+# ---- 資料流節（決策 3）：三條流程＋第 6 節裡的 ###（不是資料流節，不算）
+{ printf '# 架構\n\n## 4. 模組與依賴\n\n<!-- overview:generated:start -->\n<!-- overview:generated:end -->\n## 5. 資料流\n\n'
+  printf '### orders 結帳 — 正常結帳（ORD-01）\n\n```mermaid\nsequenceDiagram\n    participant orders as 訂單服務\n    participant pay as 金流商（外部）\n    orders->>pay: 請款\n```\n\n'
+  printf '### pages 前端 — 看購物車（CART-01）\n\n```mermaid\nsequenceDiagram\n    actor user as 顧客\n    participant pkg-frontend as 前端\n    user->>pkg-frontend: 打開購物車\n```\n\n'
+  printf '### billing 對帳 — 每日對帳（排程：每日 02:00）\n\n```mermaid\nsequenceDiagram\n    participant billing as 對帳服務\n    participant bank as 銀行（外部）\n    billing->>bank: 下載對帳檔\n```\n\n'
+  printf '## 6. 其他\n\n### 不是流程\n\n```mermaid\nsequenceDiagram\n    participant orders as 訂單\n```\n'
+} > "$MX/x/docs/architecture.md"
+mx_ov x
+expect_eq "資料流節有一條流程宣告 participant orders、participant pay → flows[0] 的 participants 為 orders,pay、modules 為 [\"orders\"]、orders 的 flows 含 0" \
+    "orders,pay|[\"orders\"]|true" \
+    "$(mx_q x '"\(.flows[0].participants | join(","))|\(.flows[0].modules | tojson)|\(.modules[] | select(.id == "orders") | .flows | index(0) != null)"')"
+expect_eq "flows[].title 是 ### 後的整段標題、line 是它在架構文件的行號；資料流節以外的 ### 不算" \
+    "3|orders 結帳 — 正常結帳（ORD-01）|$(grep -n '^### orders 結帳' "$MX/x/docs/architecture.md" | cut -d: -f1)" \
+    "$(mx_q x '"\(.flows | length)|\(.flows[0].title)|\(.flows[0].line)"')"
+expect_eq "流程參與者 id 等於分組 id（pkg-frontend）→ 該分組每個模組（pages、stores）的 flows 都含 1；每個模組都有 flows 陣列" "true true true" \
+    "$(mx_q x '"\(.modules[] | select(.id == "pages") | .flows | index(1) != null) \(.modules[] | select(.id == "stores") | .flows | index(1) != null) \(all(.modules[]; (.flows | type) == "array"))"')"
+expect_eq "參與者全部對不到模組的流程 → notices 恰好一則「對不到任何模組」、含該流程標題；部分對不到（pay、user）的沒有" "1 1" \
+    "$(mx_q x '[.notices[] | select(.text | test("對不到任何模組"))] | "\(length) \([.[] | select(.text | contains("billing 對帳 — 每日對帳（排程：每日 02:00）"))] | length)"')"
+printf '# 架構\n\n## 4. 模組與依賴\n\n手寫的說明，沒有資料流節。\n' > "$MX/x/docs/architecture.md"; mx_ov x
+expect_eq "架構文件沒有資料流節 → flows 為 []、notices 沒有資料流相關的項目" "[] 0" "$(mx_q x '"\(.flows | tojson) \([.notices[] | select(.text | test("資料流"))] | length)"')"
+rm -f "$MX/x/docs/architecture.md"; mx_ov x
+expect_eq "沒有架構文件 → flows 為 []、每個模組的 flows 為 []" "[] true" "$(mx_q x '"\(.flows | tojson) \(all(.modules[]; .flows == []))"')"
+# 唯一的 mermaid 區塊是資料流節的 sequenceDiagram → 不被當成 5.1 容器圖（容器圖相關欄位與拿掉該區塊時相同）
+mx_seq() {
+    { printf '# 架構\n\n### 5.5 模組\n\n| id | 模組 | 路徑 |\n|---|---|---|\n| orders | 訂單 | `backend/app/orders/**` |\n| pages | 頁面 | `frontend/src/pages/**` |\n\n## 5. 資料流\n\n### orders 結帳 — 正常結帳\n\n'
+      [ "$1" = with ] && printf '```mermaid\nsequenceDiagram\n    participant orders as 訂單\n    participant pages as 頁面\n    pages->>orders: 結帳\n```\n'
+    } > "$MX/x/docs/architecture.md"
+    mx_ov x
+    mx_q x '[.groups, [.modules[] | {id, name, group, pos, declared}], .edges, [.notices[] | select(.text | test("容器圖"))]] | tojson'
+}
+mxs_with=$(mx_seq with); mxs_without=$(mx_seq without)
+expect_eq "架構文件唯一的 mermaid 是資料流節的 sequenceDiagram → 容器圖相關欄位與拿掉該區塊時相同、仍有「沒有可解析的容器圖」" "same 1" \
+    "$([ -n "$mxs_with" ] && [ "$mxs_with" = "$mxs_without" ] && echo same || echo diff) $(printf '%s' "$mxs_with" | grep -o '沒有可解析的容器圖' | wc -l | tr -d ' ')"
+rm -f "$MX/x/docs/architecture.md"
+
+# ---- 模組有 61 個檔、分在 3 個子目錄（make-fixture.sh 的 MAKE_FIXTURE_LARGE，見 fixture 檔頭）
+rm -rf "$MX/big"; MAKE_FIXTURE_LARGE=1 bash "$FXD/make-fixture.sh" messy-fullstack "$MX/big" >/dev/null 2>&1; mx_git big; mx_ov big
+expect_eq "模組有 61 個檔、分在 3 個子目錄 → inner.nodes 含 3 個以 / 結尾的節點（根目錄的檔照舊）、folded 0" "61 3 catalog.py 0" \
+    "$(mx_q big '.modules[] | select(.id == "catalog") | "\(.fileCount) \([.inner.nodes[] | select(endswith("/"))] | length) \([.inner.nodes[] | select(endswith("/") | not)] | join(",")) \(.inner.folded)"')"
+expect_eq "子目錄併成節點後，碰到它的模組內邊合併計次（rules/→parsers/ 20 次）" 20 \
+    "$(mx_in big catalog '(.nodes | index("rules/")) as $r | (.nodes | index("parsers/")) as $p | [.edges[] | select(.[0] == $r and .[1] == $p) | .[2]] | add')"
+expect_eq "MAKE_FIXTURE_LARGE 只多 catalog 一個模組：其餘 id 與 messy-fullstack 相同" \
+    "backend-api catalog components core frontend-api m-5d3b69 models other pages services stores" "$(mx_q big '[.modules[].id] | sort | join(" ")')"
+OVERVIEW_SCAN_MAX_FILES=10 bash "$OV_SRC" "$MX/big" >/dev/null 2>&1
+expect_eq "OVERVIEW_SCAN_MAX_FILES=10 → 所有模組的 inner 為 null、skeleton.json 沒有 fileEdges 項目" "true 0" \
+    "$(mx_q big 'all(.modules[]; has("inner") and .inner == null)') $(mx_sk big '(.fileEdges // []) | length')"
+
+# ---- 大小上限：alpha 是本次 plan 預計會動的模組，beta（40 個長檔名）不是、也沒有改動
+mx_new sh
+mx_put sh src/alpha/a.py 'a = 1\n'; mx_put sh src/alpha/b.py 'from src.alpha.a import a\n'
+for i in $(seq 10 49); do mx_put sh "src/beta/long_module_name_for_size_$i.py" "from src.beta.long_module_name_for_size_$((i == 49 ? 10 : i + 1)) import v\nv = $i\n"; done
+mx_put sh .claude/taskmaster-data/plans/1.1-x.md '---\nwbs_task: "1.1"\nstatus: "🔄 進行中"\nmode: "standard"\nfiles:\n  - "src/alpha/**"\n---\n\n# 實作計畫：任務 1.1\n\n### 階段 1: 實作 🔄\n'
+printf '1.1\n' > "$MX/sh/.claude/taskmaster-data/.current-task"
+mx_git sh; mx_ov sh
+mxfull=$(sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$MX/sh/.claude/taskmaster-data/overview/data.js" | wc -c | tr -d ' ')
+expect_eq "大小上限前提：alpha planned、beta 不是 planned 也沒有改動、兩個 inner 都在" "true false 0 true true" \
+    "$(mx_q sh '"\(.modules[] | select(.id == "alpha") | .planned) \(.modules[] | select(.id == "beta") | "\(.planned) \(.changed)") \(.modules[] | select(.id == "alpha") | .inner != null) \(.modules[] | select(.id == "beta") | .inner != null)"')"
+# 少 200 位元組：只要丟掉 beta 的 inner（約 3KB）就放得下。mxfull 含 sed 補的換行，貼著邊界（+79）會差 1 而不觸發
+OVERVIEW_MAX_BYTES=$((mxfull - 200)) mx_ov sh
+expect_eq "OVERVIEW_MAX_BYTES 容不下全部 inner → planned 為 false 且沒有本次改動的 beta 的 inner 為 null，planned 的 alpha 的 inner 仍在" "null true" \
+    "$(mx_q sh '"\(.modules[] | select(.id == "beta") | .inner) \(.modules[] | select(.id == "alpha") | .inner != null)"')"
+OVERVIEW_MAX_BYTES=1500 mx_ov sh
+expect_eq "再調小到既有四級都丟完仍超過 → 全部 inner 為 null、仍有「仍超過上限」的 warn" "true true" \
+    "$(mx_q sh 'all(.modules[]; has("inner") and .inner == null)') $(mx_q sh '[.notices[] | select(.level == "warn") | .text] | any(test("仍超過"))')"
+
+# ---- fixture：shop-clean、messy-fullstack 加了資料庫／外部套件／標準庫的 import 與資料流節
+rm -rf "$MX/shop"; bash "$FXD/make-fixture.sh" shop-clean "$MX/shop" >/dev/null 2>&1; mx_git shop; mx_ov shop
+expect_eq "shop-clean（加了 import 與資料流節）→ 模組、群組、邊仍與 shop-clean.golden 一致" "" \
+    "$(mx_q shop '(.modules[] | "module \(.id) \(.group)"), (.groups[] | "group \(.id) \(.label)"), (.edges[] | "edge \(.from) \(.to)")' | diff - <(tr -d '\r' < "$FXD/shop-clean.golden"))"
+expect_eq "shop-clean → db 模組的 inner.out 有 db:sqlalchemy、db:pg；svc-a 有 pkg:httpx、沒有 os" "true true true 0" \
+    "$(mx_in shop db '"\(any(.out[]; .[1] == "db:sqlalchemy")) \(any(.out[]; .[1] == "db:pg"))"') $(mx_in shop svc-a '"\(any(.out[]; .[1] == "pkg:httpx")) \([.out[] | select(.[1] | test(":os$"))] | length)"')"
+expect_eq "shop-clean → 有資料流、每條的參與者都對得到模組、沒有「對不到任何模組」" "true true 0" \
+    "$(mx_q shop '([.modules[].id]) as $ids | "\(.flows | length > 0) \(all(.flows[]; all(.participants[]; . as $p | $ids | index($p) != null))) \([.notices[] | select(.text | test("對不到任何模組"))] | length)"')"
+MXA="$MX/shop/docs/05_architecture.md"; mxa0=$(mx_after "$MXA"; printf x)
+bash "$OV_SRC" --sync-arch "$MX/shop" >/dev/null 2>&1
+expect_eq "--sync-arch 前後，架構文件 end 標記之後的資料流節位元組相同" same "$([ "$(mx_after "$MXA"; printf x)" = "$mxa0" ] && echo same || echo diff)"
+expect_eq "--sync-arch 的自動段不含檔案層級：模組表列數、mermaid 節點數都等於模組數" "6 6" \
+    "$(( $(mx_region "$MXA" | grep -c '^| ') - 1 )) $(mx_region "$MXA" | grep -cE '^    [A-Za-z0-9_-]+\[')"
+rm -rf "$MX/messy"; bash "$FXD/make-fixture.sh" messy-fullstack "$MX/messy" >/dev/null 2>&1; mx_git messy; mx_ov messy
+expect_eq "messy-fullstack → 參與者全部對不到模組的流程恰好一則 notice；分組 id（pkg-backend）那條對到後端模組" "1 true" \
+    "$(mx_q messy '"\([.notices[] | select(.text | test("對不到任何模組"))] | length) \(.flows[0].modules | index("services") != null)"')"
+expect_eq "messy-fullstack（加了 import 與資料流節）→ 模組 id 與階段 2 相同" \
+    "backend-api components core frontend-api m-5d3b69 models other pages services stores" "$(mx_q messy '[.modules[].id] | sort | join(" ")')"
+
+# ---- gen-large.sh 5000：上限與 fileEdges 總數
+rm -rf "$MX/g5k"; mx_new g5k; bash "$FXD/gen-large.sh" 5000 "$MX/g5k" >/dev/null 2>&1; mx_git g5k; mx_ov g5k
+expect_eq "gen-large.sh 5000 → 每個模組都有 inner、nodes ≤ 60、edges ≤ 200、out ≤ 15" "40 0" \
+    "$(mx_q g5k '"\([.modules[] | select(.inner != null)] | length) \([.modules[] | .inner | select((.nodes | length) > 60 or (.edges | length) > 200 or (.out | length) > 15)] | length)"')"
+expect_eq "gen-large.sh 5000 → 逐檔超過 60 的模組留 59 個節點、其餘計入 folded；other 依子目錄併成節點" "true true" \
+    "$(mx_q g5k '"\(all(.modules[] | select(.id != "other" and .fileCount > 60); (.inner.nodes | length) == 59 and .inner.folded == .fileCount - 59)) \(.modules[] | select(.id == "other") | all(.inner.nodes[]; endswith("/")))"')"
+mxfe=$(mx_sk g5k '.fileEdges | length'); mxsum=$(mx_q g5k '[.modules[].inner | select(. != null) | (.edges | length) + (.out | length)] | add')
+[ -n "$mxfe" ] && [ -n "$mxsum" ] && [ "$mxfe" -ge "$mxsum" ] 2>/dev/null && [ "$mxsum" -gt 0 ] 2>/dev/null \
+    && ok "gen-large.sh 5000 → skeleton.json 的 fileEdges 數（$mxfe）≥ 各模組 inner.edges＋inner.out 的總和（$mxsum）" \
+    || ng "gen-large.sh 5000 → fileEdges 數 ≥ inner.edges＋inner.out 總和" "fileEdges ≥ 總和 > 0" "fileEdges=$mxfe 總和=$mxsum"
+rm -rf "$MX"
 
 # =========================================================================
 section "update-template — .gitignore 只補缺少的短命狀態行"
