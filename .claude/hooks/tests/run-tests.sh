@@ -3847,6 +3847,18 @@ expect_eq "worktree 的 plan 跑 --actual 兩次 → exit 0、data.js 取 worktr
     "$rc1 $rc2 $(tgp '.source') $(grep -c 'overview:actual:start' "$TGWD/plans/1.2-x.md") $(tgp '.verify.result') $(grep -c 'overview:actual:start' "$TGD/plans/1.2-x.md")"
 tg_git worktree remove --force "$TGWT"
 
+# worktree 的 .current-task 指到、但 overlay 選了主 checkout 的同名 plan（worktree 那份沒改過）
+# → 那張卡仍算本次，改動取 worktree 的預設基準改動
+tg_reset; tg_plan 1.2-x.md ⏳ ⏳; tg_git add -A; tg_git commit -qm plan
+TGWT="$TG/.claude/worktrees/wt5"
+tg_git worktree add -q -b wt5 "$TGWT"
+mkdir -p "$TGWT/.claude/taskmaster-data" "$TGWT/src/api"; echo 1.2 > "$TGWT/.claude/taskmaster-data/.current-task"
+printf 'w\n' > "$TGWT/src/api/w.ts"; tg_ov
+expect_eq "worktree 的 .current-task 指到、overlay 取主 checkout 同名 plan → 卡片 current、changesFrom current、changes 含 worktree 的 src/api/w.ts" \
+    "main true current true" \
+    "$(tgp '"\(.source) \(.current) \(.changesFrom) \([.changes[].file] | index("src/api/w.ts") != null)"')"
+tg_git worktree remove --force "$TGWT"
+
 # worktree 帶著主 checkout 已歸檔的 plan 副本（版控帶進來、沒改過）→ 不進 plans[]、不被猜成本次
 tg_reset; tg_plan 1.2-x.md 🔄 ⏳; tg_git add -A; tg_git commit -qm plan
 TGWT="$TG/.claude/worktrees/wt3"
@@ -3926,6 +3938,9 @@ mkdir -p "$TG/src/big"; for i in $(seq 1 500); do echo x > "$TG/src/big/f$i.ts";
 tg_git add -A; tg_git commit -qm big; tg_ov
 expect_eq "300 任務・20 份 plan・每份 500 個改動 → data.js ≤ 512KB、truncated、20 份都是 changes ≤ 200 且明細＋彙總＝500" \
     "1 true 20" "$([ "$(wc -c < "$TGO/data.js" 2>/dev/null || echo 999999999)" -le 524288 ] && echo 1 || echo 0) $(tgq '.truncated') $(tgq '[.plans[] | select((.changes | length) <= 200 and ((.changes | length) + ([.changesRollup[].files] | add // 0)) == 500)] | length')"
+OVERVIEW_MAX_BYTES=60000 tg_ov
+expect_eq "縮到非本次 plan 變 stub → stub 仍帶 changesFrom（不會在畫面上變回「找不到比較基準」）" "true true" \
+    "$(tgq '[.plans[] | select(.stub)] | "\(length > 0) \(all(.changesFrom != null))"')"
 
 # 沒有 jq：PATH 拿掉 jq 所在的目錄。jq 跟 bash 同一個目錄（Linux 的 /usr/bin）時，
 # 改放一個除了 jq 以外全部 symlink 過去的目錄頂替

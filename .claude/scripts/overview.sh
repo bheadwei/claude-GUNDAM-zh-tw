@@ -1047,7 +1047,7 @@ def parse_ledger:
     | {key: (.head[0] + "|" + (.head[1] | sub("\\.progress\\.md$"; ".md"))), value: (.text | parse_ledger)}] | from_entries) as $LG
 
 # plan 的改動（from 說明來源）：已完成 → 不算；帳本的 BASE 有效 → 它之後的改動；
-# .current-task 明確指到（同來源）→ 該來源的預設基準（merge-base）；其他 → 不列。
+# .current-task 明確指到（同檔名、任一來源）→ 指到它的那個來源的預設基準（merge-base）；其他 → 不列。
 # 預設基準是整個工作區的改動，分給每份沒帳本的 plan 會讓同一批改動出現在每張卡上。
 # --actual 指定的那份照舊：/verify 寫「計畫 vs 實際」時 plan 多半已全部 ✅
 | def srcchanges($s): (($CH[$s + "|default"] // []) + ($CH[$s + "|untracked"] // [])) | unique_by(.file);
@@ -1058,9 +1058,10 @@ def parse_ledger:
     | if $completed and ($forced | not) then {base: null, ledger: false, list: [], from: "completed"}
       elif $lb != null and $CH[$src + "|" + $lb] != null then
         {base: $lb[:7], ledger: true, list: ((($CH[$src + "|" + $lb] // []) + ($CH[$src + "|untracked"] // [])) | unique_by(.file)), from: "ledger"}
-      elif $rec.cur or $forced then ($BS[$src + "|default"] // {kind: "none"}) as $d
+      elif $rec.curSrc != null or $forced then (if $forced then $src else $rec.curSrc end) as $cs
+        | ($BS[$cs + "|default"] // {kind: "none"}) as $d
         | if $d.kind == "none" or $d.kind == "fallback" then {base: null, ledger: false, list: [], from: "current"}
-          else {base: $d.short, ledger: false, list: srcchanges($src), from: "current"} end
+          else {base: $d.short, ledger: false, list: srcchanges($cs), from: "current"} end
       else {base: null, ledger: false, list: [], from: "none"}
       end;
 
@@ -1128,13 +1129,15 @@ def parse_ledger:
   ([$FILES[] | select(.head[1] | endswith(".progress.md") | not)
     | {src: .head[0], name: .head[1], text, mtime: ($MT[.head[0] + "|" + .head[1]] // 0), pp: (.text | parse_plan($needPart))}]) as $recs0
 | ($currents | tsv | map({src: .[0], v: .[1]})) as $cur0
-# .current-task 明確指到的 plan（同來源；比對規則與下方 plan_of 相同）
+# .current-task 明確指到的 plan 檔名（比對規則與下方 plan_of 相同）。不限同來源：worktree 沒改過的 plan
+# 副本不收，overlay 也可能選主 checkout 的同名那份；同檔名的每一份都算本次，改動取指到它的來源
 | ([$cur0[] | . as $c
-    | [$recs0[] | select(.src == $c.src)
+    | [$recs0[]
        | select((.name | rtrimstr(".md")) as $b | $b == $c.v or ($b | startswith($c.v + "-"))
                 or (.pp.fm.wbs_task // "") == $c.v)]
-    | sort_by(.name) | first | select(. != null) | .src + "|" + .name]) as $curKeys
-| ([$recs0[] | . + {cur: ((.src + "|" + .name) as $k | $curKeys | index($k) != null)}]) as $recs
+    | sort_by(.src != $c.src, .name) | first | select(. != null) | {name, src: $c.src}]) as $curKeys
+| ([$recs0[] | .name as $n | .src as $s
+    | . + {curSrc: ([$curKeys[] | select(.name == $n) | .src] | sort_by(. != $s) | first)}]) as $recs
 | ([$recs[] | . as $r | build_plan($r)]) as $built
 | ([$built[] | select(.source == "main")] | sort_by(.file)) as $mainPlans
 

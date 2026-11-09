@@ -900,11 +900,11 @@ function planCard(pl) {
     (xn ? '<details class="xtra"><summary>計畫外 ' + xn + ' 個檔</summary>' + ex.map(function (p) { return '<code>' + esc(p.name) + '</code>'; }).join('') +
       (xn > ex.length ? '<span class="fdesc">另 ' + (xn - ex.length) + ' 個檔沒列出</span>' : '') + '</details>' : '') +
     '<table class="pt"><thead><tr><th>檔案</th><th>部件</th><th>+/−</th><th>AI 做了什麼</th></tr></thead><tbody>' +
-    (pl.changes.map(function (c) {
+    (pl.changes.filter(function (c) { return c.planned; }).map(function (c) {
       var p = pl.parts.filter(function (x) { return x.id === c.part; })[0];
       return '<tr><td><code>' + esc(c.file) + '</code></td><td>' + esc(p ? (p.planned ? p.id + ' ' + p.name : '計畫外') : (c.planned ? '計畫內' : '—')) +
         '</td><td>' + esc(delta(c)) + '</td><td>' + esc(p && p.ai && p.ai.summary || '—') + '</td></tr>';
-    }).join('') || ((pl.changesRollup || []).length ? '' : '<tr><td colspan="4" class="fdesc">沒有改動</td></tr>')) +
+    }).join('') || ((pl.changesRollup || []).length ? '' : '<tr><td colspan="4" class="fdesc">' + (xn ? '沒有計畫內的改動' : '沒有改動') + '</td></tr>')) +
     (pl.changesRollup || []).map(function (r) {
       return '<tr><td><code>' + esc(r.dir) + '</code> ' + esc(r.files) + ' 個檔</td><td>未逐一列出</td><td>' + esc(nums(r)) + '</td><td>—</td></tr>';
     }).join('') + '</tbody></table></section>';
