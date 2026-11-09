@@ -165,6 +165,7 @@ button.chip{cursor:pointer;min-height:28px}
 .pt{width:100%;border-collapse:collapse;font-size:var(--fs-s);margin-top:12px}
 .pt th,.pt td{border-bottom:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top}
 .pt th{color:var(--muted);font-weight:500}
+.xtra{margin-top:8px;font-size:var(--fs-s)}.xtra summary{cursor:pointer;color:var(--chg)}.xtra code{display:inline-block;margin:4px 6px 0 0}
 .tnone{color:var(--muted);text-align:center;padding:64px 20px;line-height:1.7}
 @media (pointer:coarse){.pill,.tabs button,button.chip{min-height:44px}}
 @media (max-width:760px){.main{flex-direction:column}.panel{width:auto;max-height:38%;border-left:0;border-top:1px solid var(--line)}#mini,.hint{display:none}
@@ -862,7 +863,7 @@ panel.addEventListener('click', function (e) {
 });
 
 // ---------------------------------------------------------------- 任務圖
-// 每份 plan 一張卡：階段排成欄、部件是卡片（虛線＝還在計畫、實線＝做了），計畫外的改動另成一欄
+// 每份 plan 一張卡：階段排成欄、部件是卡片（虛線＝還在計畫、實線＝做了），計畫外的改動收成一行、點開才列檔名
 var PST = {planned: '計畫中', wip: '進行中', done: '完成', skipped: '計畫內沒做', failed: '失敗', extra: '計畫外'};
 function nums(a) { return (a.added || a.removed) ? '+' + (a.added || 0) + ' / −' + (a.removed || 0) : '—'; }
 function partFiles(p, pl) {
@@ -886,16 +887,18 @@ function planCard(pl) {
   var lone = pl.parts.filter(function (p) { return p.planned && ns.indexOf(p.phase) < 0; });
   var ex = pl.parts.filter(function (p) { return !p.planned; });
   if (lone.length) cols.push({t: '沒標階段', ps: lone});
-  if (ex.length) cols.push({t: '計畫外' + (pl.extraMore ? '（另 ' + pl.extraMore + ' 個檔）' : ''), ps: ex});
-  var v = pl.verify;
+  var xn = pl.extraCount || ex.length, v = pl.verify;
+  var from = {completed: '已完成：只顯示階段狀態', none: '沒有執行帳本、也不是本次任務：工作區改動見地圖的「本次改動」'}[pl.changesFrom];
   return '<section class="plan' + (pl.current ? ' cur' : '') + '"><h2>' + (pl.current ? '★ ' : '') + esc((pl.task ? pl.task + ' ' : '') + pl.title) +
     '<span class="tag">' + esc(pl.status || '—') + '</span>' + (pl.source !== 'main' ? '<span class="tag">' + esc(pl.source) + '</span>' : '') + '</h2>' +
     '<div class="meta"><code>' + esc(pl.file) + '</code>' + (pl.mode ? ' · ' + esc(pl.mode) : '') +
-    ' · ' + (pl.base ? '比較基準 <code>' + esc(pl.base) + '</code>' : '找不到比較基準') + '</div>' +
+    ' · ' + (from ? esc(from) : pl.base ? '比較基準 <code>' + esc(pl.base) + '</code>' : '找不到比較基準') + '</div>' +
     (v ? '<div class="vr ' + esc(v.result) + '">驗證 ' + esc(v.result) + (v.at ? '（' + esc(v.at) + '）' : '') + (v.reason ? ' — ' + esc(v.reason) : '') + '</div>' : '') +
     (cols.length ? '<div class="phs">' + cols.map(function (c) {
       return '<div class="ph"><h3>' + esc(c.t) + '</h3>' + (c.ps.map(function (p) { return partCard(p, pl); }).join('') || '<div class="fdesc">沒有部件</div>') + '</div>';
     }).join('') + '</div>' : '<div class="note">' + (pl.stub ? '資料太多，這份 plan 只留狀態（本次的 plan 不受影響）' : '這份 plan 沒有「一眼看懂」部件表，只列得出改了哪些檔') + '</div>') +
+    (xn ? '<details class="xtra"><summary>計畫外 ' + xn + ' 個檔</summary>' + ex.map(function (p) { return '<code>' + esc(p.name) + '</code>'; }).join('') +
+      (xn > ex.length ? '<span class="fdesc">另 ' + (xn - ex.length) + ' 個檔沒列出</span>' : '') + '</details>' : '') +
     '<table class="pt"><thead><tr><th>檔案</th><th>部件</th><th>+/−</th><th>AI 做了什麼</th></tr></thead><tbody>' +
     (pl.changes.map(function (c) {
       var p = pl.parts.filter(function (x) { return x.id === c.part; })[0];
