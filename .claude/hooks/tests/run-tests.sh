@@ -3941,6 +3941,8 @@ expect_eq "300 任務・20 份 plan・每份 500 個改動 → data.js ≤ 512KB
 OVERVIEW_MAX_BYTES=60000 tg_ov
 expect_eq "縮到非本次 plan 變 stub → stub 仍帶 changesFrom（不會在畫面上變回「找不到比較基準」）" "true true" \
     "$(tgq '[.plans[] | select(.stub)] | "\(length > 0) \(all(.changesFrom != null))"')"
+expect_eq "縮到非本次 plan 變 stub → stub 仍帶 plannedModules" "true true" \
+    "$(tgq '[.plans[] | select(.stub)] | "\(length > 0) \(all(.plannedModules | type == "array"))"')"
 
 # 沒有 jq：PATH 拿掉 jq 所在的目錄。jq 跟 bash 同一個目錄（Linux 的 /usr/bin）時，
 # 改放一個除了 jq 以外全部 symlink 過去的目錄頂替
@@ -4365,12 +4367,17 @@ expect_eq "shop-clean → drift 五類全空、tasks[] 沒有 inferred、overvie
 # ---- plan 疊層（A3）：shop-clean 的 .current-task 是 1.2
 DS_CP=2 ds_plan shop 1.2 "src/services/a/**" ✅ 🔄 🔄 ⏳; ds_ov shop
 expect_eq "本次任務 plan 的 files: 只有 src/services/a/** → 只有 svc-a 是 planned" "svc-a" "$(ds_q shop '[.modules[] | select(.planned) | .id] | join(",")')"
+ds_plan shop 1.7 "src/web/**"; ds_ov shop
+expect_eq "兩份 plan（files: src/services/a/**、src/web/**，本次是 1.2）→ plannedModules 各為 [svc-a]、[web]，planned 仍只有 svc-a" '["svc-a"] ["web"] svc-a' \
+    "$(ds_q shop '"\([.plans[] | select(.task == "1.2") | .plannedModules] | first | tojson) \([.plans[] | select(.task == "1.7") | .plannedModules] | first | tojson) \([.modules[] | select(.planned) | .id] | join(","))"')"
+rm -f "$DS/shop/.claude/taskmaster-data/plans/1.7-x.md"
 expect_eq "plan 的階段 2、3 標題都是 🔄 → currents[].activePhases 為 [2,3]、phases 4、phase 取 current_phase" "[2,3] 4 2" \
     "$(ds_q shop '.currents[0] | "\(.activePhases | tojson) \(.phases) \(.phase)"')"
 expect_eq "四段格式 plan（階段標題下一行是「依賴」）→ 階段名稱不含「依賴」、階段數等於 ### 階段 的數量、部件表照舊抽得到" "false 4 true" \
     "$(ds_q shop '.plans[] | select(.task == "1.2") | "\([.phases[].name] | any(test("依賴"))) \(.phases | length) \(.hasParts)"')"
 DS_CP=1 ds_plan shop 1.2 "" ✅ ⏳ ⏳ ⏳; ds_ov shop
 expect_eq "plan 沒有 files: → 沒有任何模組 planned" 0 "$(ds_q shop '[.modules[] | select(.planned)] | length')"
+expect_eq "plan 沒有 files: → plannedModules 是 []" "[]" "$(ds_q shop '.plans[] | select(.task == "1.2") | .plannedModules | tojson')"
 expect_eq "階段標題都不是 🔄、current_phase: 1 → activePhases 為 [1]" "[1]" "$(ds_q shop '.currents[0].activePhases | tojson')"
 
 # ---- 架構文件自動段（--sync-arch）

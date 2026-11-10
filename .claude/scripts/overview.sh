@@ -654,7 +654,7 @@ def dropinner(f; $what): if any(.modules[]; .inner != null and f) then .modules 
     | note("非本次 plan 的部件驗收")
   elif $level == 4 then
     .plans |= map(if .current then . else
-        {file, task, title, mode, status, currentPhase, source, base, verify, modules, current, completed, changesFrom, extraCount,
+        {file, task, title, mode, status, currentPhase, source, base, verify, modules, plannedModules, current, completed, changesFrom, extraCount,
          phases: [], hasParts: false, parts: [], extraMore: 0, changes: [], changesRollup: [], stub: true} end)
     | note("非本次 plan 的內容（只留狀態）")
   elif $level == 5 then
@@ -1121,7 +1121,7 @@ def parse_ledger:
        modules: ($touch | map(.module) | unique),
        # 任務推斷的兩個來源（提案 3.3）：files: 對到的模組；帳本 BASE 之後的 diff 對到的模組。
        # 沒有帳本時的預設基準是整條分支的改動，每份 plan 都一樣，不能拿來推斷某個任務
-       _fileMods: ([$pp.files[] | globmod | select(. != null)] | unique),
+       plannedModules: ([$pp.files[] | globmod | select(. != null)] | unique),
        _diffMods: (if $cf.ledger then [$cf.list[] | .file | modof | select(. != null)] | unique else [] end),
        _touch: $touch, _mtime: $rec.mtime, _text: $rec.text};
   def progress: [(.phases | map(select(.state == "done")) | length), (.verify != null), ._mtime];
@@ -1146,7 +1146,7 @@ def parse_ledger:
 # 同一任務有多份 plan 時取檔名排序第一份推斷得出的
 | (reduce $mainPlans[] as $pl ({};
      if $pl.task == null or .[$pl.task] != null then .
-     elif ($pl._fileMods | length) > 0 then .[$pl.task] = {mods: $pl._fileMods, by: "plan-files"}
+     elif ($pl.plannedModules | length) > 0 then .[$pl.task] = {mods: $pl.plannedModules, by: "plan-files"}
      elif ($pl._diffMods | length) > 0 then .[$pl.task] = {mods: $pl._diffMods, by: "diff"}
      else . end)) as $PM
 | ([$tasks0[] | ($PM[.id] // null) as $pm
@@ -1205,7 +1205,7 @@ def parse_ledger:
       | {phase: $pl.currentPhase, phases: ($pl.phases | length),
          activePhases: (if ($w | length) > 0 then $w elif $pl.currentPhase != null then [$pl.currentPhase] else [] end)} end;
   ($currents | map(. as $c | . + phinfo([$plans[] | select(.file == $c.plan)] | first))) as $cx
-| ([$cx[] | .plan as $f | $plans[] | select(.file == $f) | ._fileMods[]] | unique) as $plannedMods
+| ([$cx[] | .plan as $f | $plans[] | select(.file == $f) | .plannedModules[]] | unique) as $plannedMods
 
 # ---- 一頁現況（ADR-007 第 2 點）：overview.md 開頭「## 現況」與 data.js 的 status 是同一份，只看主 checkout。
 # WBS 的完成日多半只寫 MM-DD：當作今年，比今天晚就算去年
@@ -1369,7 +1369,7 @@ def parse_ledger:
        {level: "info", text: "module-notes.md 的 based_on（\(if $notesBase == "" then "沒寫" else $notesBase end)）不是有效的 commit，所有說明都標成可能過期", action: "請 documentation-specialist 重寫說明，based_on 填當下的 HEAD"}
      else empty end)
   ];
-  def public: map(del(._touch, ._mtime, ._text, ._fileMods, ._diffMods));
+  def public: map(del(._touch, ._mtime, ._text, ._diffMods));
   def taskout: [$tasks[] | {id, title, status, state, milestone, modules, inferred, inferredBy}];
 
   # --check-notes：一行一筆違規
