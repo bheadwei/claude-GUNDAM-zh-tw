@@ -766,7 +766,8 @@ function setSel(f) {
 }
 $('psel').addEventListener('click', function (e) {
   var b = e.target.closest('button[data-ps]'), k = b && b.dataset.ps;
-  if (k) setSel(function (p) { return k === 'all' || k === 'cur' && p.current; });
+  if (k === 'cur') { PSEL = null; planSel(D); map(D); }
+  else if (k) setSel(function (p) { return k === 'all'; });
 });
 $('psel').addEventListener('change', function (e) {
   var on = {}, f = e.target.dataset.pf;
