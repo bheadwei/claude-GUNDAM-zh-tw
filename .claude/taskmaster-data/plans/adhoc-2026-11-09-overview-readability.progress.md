@@ -25,3 +25,14 @@
 - 2026-11-09 18:55 審查通過（規格 ✅ 品質 ✅，0 CRITICAL／0 HIGH／2 MEDIUM／3 LOW）｜範圍=1ef199b..7a4d20d
 - 2026-11-09 18:55 Ruling: MEDIUM（輪詢重繪丟目錄焦點與內層捲動、修飾鍵點擊被攔）記技術債不加輪 — 只在 data.js 重產時重繪、驗收要求的 #tv.scrollTop 已保留 — 若錯，手機上每次重產後目錄橫向捲動歸零
 - 2026-11-09 18:55 階段完成 → plan 標 ✅，current_phase=3｜摘要=任務圖左側目錄，點了跳到該計畫卡｜測試=7/7
+
+## 階段 3: 地圖可選計畫
+- 2026-11-09 18:57 派工 implementer（opus）｜BASE=9b84fc2
+- 2026-11-10 09:10 回報 DONE_WITH_CONCERNS｜commit=1902706, feb86d5｜run-tests --changed 9b84fc2 通過 416／失敗 3（皆既有失敗）｜index.html 67021 bytes
+- 2026-11-10 09:10 Ruling: 疑慮 2（預設選取含已 ✅ 的 current plan、抽屜卻不列它）接受不改 — 為了讓預設畫面跟改版前完全一致，且 /verify 會清掉 .current-task — 若使用者覺得「選計畫（N）」數字對不上抽屜，再改成只算未完成的
+- 2026-11-10 09:10 Ruling: 疑慮 1（390px 選計畫鈕在圖例列最右、要滑才看得到）沿用既有手機版行為 — 不擴範圍 — 實機截圖若使用者覺得找不到再調
+- 2026-11-10 09:20 審查 PASS（MEDIUM 1、LOW 2）｜報告 context/quality/code-quality-specialist-2026-11-10-0915.md
+- 2026-11-10 09:25 Ruling: MEDIUM（「只選本次」設成固定 file、current 已 ✅ 或換 .current-task 時跟預設不同）主模型直接修，改走 PSEL=null 預設路徑 — 一行、且是 09:10 裁決帶出的後果 — 無｜commit=27f2b9d｜playwright 驗：預設 svc-a、清除空、只選本次回 svc-a、全選 4
+- 2026-11-10 09:25 Ruling: 兩個 LOW（psel 消失時 aria-expanded 殘留、stub 測試只驗型別）不修 — 既有 header 按鈕同樣寫法、內容由 shop 案例涵蓋 — 技術債
+- 2026-11-10 09:25 審查通過（規格 ✅ 品質 ✅）｜範圍=9b84fc2..27f2b9d
+- 2026-11-10 09:25 階段完成 → plan 標 ✅，status=✅ 完成｜摘要=地圖可選計畫，虛線框與預計但沒動讀選取聯集｜測試=416/419（3 既有失敗）

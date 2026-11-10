@@ -2,8 +2,8 @@
 wbs_task: "none"
 slug: "overview-readability"
 created: "2026-11-09"
-updated: "2026-11-09"
-status: "🔄 進行中"
+updated: "2026-11-10"
+status: "✅ 完成"
 current_phase: 3
 mode: "standard"
 files:
@@ -127,7 +127,7 @@ flowchart LR
   - data.js 重產（`generatedAt` 變了）→ 重繪後目錄列數不變、`#tv.scrollTop` 與重繪前相同
 - **注意**：`check-counts.sh` 的上限已依 ADR-2026-11-09-001 調回 80KB，目前檔案已有模組展開的程式，動手前先 `wc -c` 看剩多少；階段 3 還要再加選擇器
 
-### 階段 3: 地圖可選計畫 ⏳
+### 階段 3: 地圖可選計畫 ✅
 
 - **依賴**：階段 1（選擇器只列 `completed` 為 false 的 plan）、階段 2（同改 `index.html`）
 
