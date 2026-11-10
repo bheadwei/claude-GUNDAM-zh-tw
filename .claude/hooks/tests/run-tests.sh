@@ -3948,11 +3948,13 @@ expect_eq "縮到非本次 plan 變 stub → stub 仍帶 plannedModules" "true t
 
 # 沒有 jq：PATH 拿掉 jq 所在的目錄。jq 跟 bash 同一個目錄（Linux 的 /usr/bin）時，
 # 改放一個除了 jq 以外全部 symlink 過去的目錄頂替
+# 每個含 jq 的目錄各做一個複本：jq 同時在 ~/.local/bin 與 /usr/bin 時，共用一個複本會讓 /usr/bin 的 bash、sed 一起消失
 nojq_path() {
-    local d out="" farm="$SANDBOX/nojq-farm" parts
+    local d out="" farm parts n=0
     IFS=':' read -ra parts <<< "$PATH"
     for d in "${parts[@]}"; do
         if [ -e "$d/jq" ] || [ -e "$d/jq.exe" ]; then
+            n=$((n + 1)); farm="$SANDBOX/nojq-farm-$n"
             if [ ! -d "$farm" ]; then
                 mkdir -p "$farm"
                 ln -s "$d"/* "$farm/" 2>/dev/null
@@ -4691,7 +4693,7 @@ expect_eq "10 個模組中 3 個沒說明、2 個過期 → --print-path 有「�
     "$(bash "$OV_SRC" --print-path "$MN/ten" 2>/dev/null | grep -c '^提示：3 個模組沒有說明、2 個可能過期')"
 out=$(bash "$OV_SRC" --notes-todo "$MN/ten" 2>/dev/null | tr -d '\r')
 expect_eq "--notes-todo → 只列沒有說明或過期的模組（m1 m2 stale、m8 m9 m10 missing）" "m1 stale|m10 missing|m2 stale|m8 missing|m9 missing" \
-    "$(printf '%s\n' "$out" | awk -F'\t' '{ print $1, $4 }' | sort | paste -sd'|' -)"
+    "$(printf '%s\n' "$out" | awk -F'\t' '{ print $1, $4 }' | LC_ALL=C sort | paste -sd'|' -)"
 expect_eq "--notes-todo → 每行 4 欄、第 3 欄 1–3 個檔且都在該模組路徑內" "" \
     "$(printf '%s\n' "$out" | awk -F'\t' '{ n = split($3, f, ","); if (NF != 4 || n < 1 || n > 3) print "欄數或檔數不對：" $0; for (i = 1; i <= n; i++) if (index(f[i], "src/" $1 "/") != 1) print "不在模組內：" f[i] }')"
 echo '{"name":"說明","mode":"mvp","overview":{"notes":"off"}}' > "$MN/ten/.claude/taskmaster-data/project.json"; mn_ov ten
