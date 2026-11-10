@@ -816,6 +816,10 @@ function fileItems(list, withMod) {
       (c.summary ? '<span class="fdesc">' + esc(c.summary) + '</span>' : '') + '</button></li>';
   }).join('');
 }
+var DOC_RE = /^docs?\/|\.(md|mdx|rst|adoc|txt)$/i;
+function looseFiles(label, list) {
+  return list.length ? '<details class="xtra"><summary>' + label + ' ' + list.length + ' 個檔</summary><ul class="flist">' + fileItems(list, false) + '</ul></details>' : '';
+}
 function rollItems(list) {
   return (list || []).map(function (r) {
     return '<li class="fdesc">' + esc(r.dir) + ' 另 ' + esc(r.files) + ' 個檔（+' + esc(r.added) + ' / −' + esc(r.removed) + '，未逐一列出）</li>';
@@ -885,6 +889,8 @@ function summary() {
   if (!D) { panel.innerHTML = ''; return; }
   var ch = D.changes, mods = {}, pd = planDiff();
   ch.forEach(function (c) { if (c.module) mods[c.module] = 1; });
+  var inMod = ch.filter(function (c) { return c.module; }), loose = ch.filter(function (c) { return !c.module; });
+  var docs = loose.filter(function (c) { return DOC_RE.test(c.file); }), rest = loose.filter(function (c) { return !DOC_RE.test(c.file); });
   var cs = (D.currents || (D.current ? [D.current] : [])).filter(function (c) { return c.task; });
   var cur = cs.length ? cs.map(function (c) { var p = phaseText(c); return '任務 ' + esc(c.task) + (p ? '（' + p + '）' : ''); }).join('、') + (cs[0].guessed ? '（推測）' : '') : '沒有標記中的任務';
   var b = D.changesBase, um = D.unmappedTasks;
@@ -893,7 +899,8 @@ function summary() {
     (D.truncated ? '<br>資料太多，部分省略（見頂端提示）' : '') + '</div>' +
     (pd.idle.length ? '<h3>預計但沒動（' + pd.idle.length + '）</h3>' + modChips(pd.idle) : '') +
     (pd.extra.length ? '<h3>沒預計卻動了（' + pd.extra.length + '）</h3>' + modChips(pd.extra) : '') +
-    '<ul class="flist">' + (fileItems(ch, true) || (D.changesRollup.length ? '' : '<li class="fdesc">工作區與分支上都沒有改動</li>')) + rollItems(D.changesRollup) + '</ul>' +
+    '<ul class="flist">' + (fileItems(inMod, true) || (ch.length || D.changesRollup.length ? '' : '<li class="fdesc">工作區與分支上都沒有改動</li>')) + rollItems(D.changesRollup) + '</ul>' +
+    looseFiles('文件', docs) + looseFiles('其他（不屬於任何模組）', rest) +
     (D.archived && D.archived.unmapped ? '<div class="fdesc">已歸檔的完成任務有 ' + D.archived.unmapped + ' 個沒有標模組，不算進任何模組</div>' : '') +
     (um.length ? '<h3>還沒對到模組的任務（' + um.length + '）</h3><div class="chips">' + um.slice(0, 12).map(function (t) { return '<span class="chip">' + esc(t) + '</span>'; }).join('') +
       (um.length > 12 ? '<span class="fdesc">＋' + (um.length - 12) + '</span>' : '') + '</div><div class="fdesc">→ /task-status 會提議補 WBS 的模組欄</div>' : '') +
