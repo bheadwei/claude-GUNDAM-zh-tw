@@ -654,7 +654,7 @@ def dropinner(f; $what): if any(.modules[]; .inner != null and f) then .modules 
     | note("非本次 plan 的部件驗收")
   elif $level == 4 then
     .plans |= map(if .current then . else
-        {file, task, title, mode, status, currentPhase, source, base, verify, modules, current,
+        {file, task, title, mode, status, currentPhase, source, base, verify, modules, plannedModules, current, completed, changesFrom, extraCount,
          phases: [], hasParts: false, parts: [], extraMore: 0, changes: [], changesRollup: [], stub: true} end)
     | note("非本次 plan 的內容（只留狀態）")
   elif $level == 5 then
@@ -1046,21 +1046,30 @@ def parse_ledger:
 | ([$FILES[] | select(.head[1] | endswith(".progress.md"))
     | {key: (.head[0] + "|" + (.head[1] | sub("\\.progress\\.md$"; ".md"))), value: (.text | parse_ledger)}] | from_entries) as $LG
 
-# plan 的比較基準：帳本的 BASE → 該來源的預設基準（merge-base）→ 都沒有就沒有改動清單
+# plan 的改動（from 說明來源）：已完成 → 不算；帳本的 BASE 有效 → 它之後的改動；
+# .current-task 明確指到（同檔名、任一來源）→ 指到它的那個來源的預設基準（merge-base）；其他 → 不列。
+# 預設基準是整個工作區的改動，分給每份沒帳本的 plan 會讓同一批改動出現在每張卡上。
+# --actual 指定的那份照舊：/verify 寫「計畫 vs 實際」時 plan 多半已全部 ✅
 | def srcchanges($s): (($CH[$s + "|default"] // []) + ($CH[$s + "|untracked"] // [])) | unique_by(.file);
-  def changes_for($src; $name):
-    ($PB[$src + "|" + $name]) as $lb
-    | if $lb != null and $CH[$src + "|" + $lb] != null then
-        {base: $lb[:7], ledger: true, list: ((($CH[$src + "|" + $lb] // []) + ($CH[$src + "|untracked"] // [])) | unique_by(.file))}
-      else ($BS[$src + "|default"] // {kind: "none"}) as $d
-        | if $d.kind == "none" or $d.kind == "fallback" then {base: null, ledger: false, list: []}
-          else {base: $d.short, ledger: false, list: srcchanges($src)} end
+  def changes_for($rec; $completed):
+    ($rec.src) as $src | ($rec.name) as $name
+    | ($PB[$src + "|" + $name]) as $lb
+    | ($vSrc == $src and $vFile == $name) as $forced
+    | if $completed and ($forced | not) then {base: null, ledger: false, list: [], from: "completed"}
+      elif $lb != null and $CH[$src + "|" + $lb] != null then
+        {base: $lb[:7], ledger: true, list: ((($CH[$src + "|" + $lb] // []) + ($CH[$src + "|untracked"] // [])) | unique_by(.file)), from: "ledger"}
+      elif $rec.curSrc != null or $forced then (if $forced then $src else $rec.curSrc end) as $cs
+        | ($BS[$cs + "|default"] // {kind: "none"}) as $d
+        | if $d.kind == "none" or $d.kind == "fallback" then {base: null, ledger: false, list: [], from: "current"}
+          else {base: $d.short, ledger: false, list: srcchanges($cs), from: "current"} end
+      else {base: null, ledger: false, list: [], from: "none"}
       end;
 
   def build_plan($rec):
-    ($rec.text | parse_plan($needPart)) as $pp
+    $rec.pp as $pp
     | ($LG[$rec.src + "|" + $rec.name] // {phase: {}, part: {}}) as $lg
-    | changes_for($rec.src; $rec.name) as $cf
+    | ((($pp.fm.status // "") | test("✅")) or (($pp.phases | length) > 0 and all($pp.phases[]; .state == "done"))) as $completed
+    | changes_for($rec; $completed) as $cf
     | (if $vSrc == $rec.src and $vFile == $rec.name
        then {result: $vResult, at: $vAt, reason: (if $vReason == "" then null else ($vReason | gsub("[\r\n]+"; " ")) end)}
        else $pp.verify end) as $verify
@@ -1084,7 +1093,8 @@ def parse_ledger:
         | (($mine | length) > 0) as $t
         | ($lg.part[$id] // {}) as $lp
         | ($lg.phase[(.phase // -1) | tostring] // {}) as $lph
-        | . + {state: (if $ps == "done" then (if $t then "done" else "skipped" end)
+        | . + {state: (if $cf.from == "completed" then $ps
+                       elif $ps == "done" then (if $t then "done" else "skipped" end)
                        elif $vr == "FAIL" then (if $t then "failed" else "skipped" end)
                        elif $vr == "PASS" then (if $t then "done" else "skipped" end)
                        elif $ps == "wip" or $t then "wip" else "planned" end),
@@ -1100,24 +1110,34 @@ def parse_ledger:
        task: (($pp.fm.wbs_task // "") | if . == "" or . == "none" then null else . end),
        title: ($pp.title // $rec.name), mode: ($pp.fm.mode // null), status: ($pp.fm.status // ""),
        currentPhase: (($pp.fm.current_phase // "") | tonumber? // null),
-       source: $rec.src, base: $cf.base,
+       source: $rec.src, base: $cf.base, completed: $completed, changesFrom: $cf.from,
        phases: [$pp.phases[] | .n as $n
                 | if .state != "done" and any($parts[]; .phase == $n and .state == "failed") then .state = "failed" else . end],
        hasParts: ($pp.partsTable != null),
-       parts: ($parts + $xparts), extraMore: ([($ex | length) - 30, 0] | max),
+       parts: ($parts + $xparts), extraMore: ([($ex | length) - 30, 0] | max), extraCount: ($ex | length),
        verify: $verify,
        changes: [$ch[] | {file, added, removed, new, part, planned, module}],
        changesRollup: ($cf.list[$maxChanges:] | rollup),
        modules: ($touch | map(.module) | unique),
        # 任務推斷的兩個來源（提案 3.3）：files: 對到的模組；帳本 BASE 之後的 diff 對到的模組。
        # 沒有帳本時的預設基準是整條分支的改動，每份 plan 都一樣，不能拿來推斷某個任務
-       _fileMods: ([$pp.files[] | globmod | select(. != null)] | unique),
+       plannedModules: ([$pp.files[] | globmod | select(. != null)] | unique),
        _diffMods: (if $cf.ledger then [$cf.list[] | .file | modof | select(. != null)] | unique else [] end),
        _touch: $touch, _mtime: $rec.mtime, _text: $rec.text};
   def progress: [(.phases | map(select(.state == "done")) | length), (.verify != null), ._mtime];
 
   ([$FILES[] | select(.head[1] | endswith(".progress.md") | not)
-    | {src: .head[0], name: .head[1], text, mtime: ($MT[.head[0] + "|" + .head[1]] // 0)}]) as $recs
+    | {src: .head[0], name: .head[1], text, mtime: ($MT[.head[0] + "|" + .head[1]] // 0), pp: (.text | parse_plan($needPart))}]) as $recs0
+| ($currents | tsv | map({src: .[0], v: .[1]})) as $cur0
+# .current-task 明確指到的 plan 檔名（比對規則與下方 plan_of 相同）。不限同來源：worktree 沒改過的 plan
+# 副本不收，overlay 也可能選主 checkout 的同名那份；同檔名的每一份都算本次，改動取指到它的來源
+| ([$cur0[] | . as $c
+    | [$recs0[]
+       | select((.name | rtrimstr(".md")) as $b | $b == $c.v or ($b | startswith($c.v + "-"))
+                or (.pp.fm.wbs_task // "") == $c.v)]
+    | sort_by(.src != $c.src, .name) | first | select(. != null) | {name, src: $c.src}]) as $curKeys
+| ([$recs0[] | .name as $n | .src as $s
+    | . + {curSrc: ([$curKeys[] | select(.name == $n) | .src] | sort_by(. != $s) | first)}]) as $recs
 | ([$recs[] | . as $r | build_plan($r)]) as $built
 | ([$built[] | select(.source == "main")] | sort_by(.file)) as $mainPlans
 
@@ -1126,7 +1146,7 @@ def parse_ledger:
 # 同一任務有多份 plan 時取檔名排序第一份推斷得出的
 | (reduce $mainPlans[] as $pl ({};
      if $pl.task == null or .[$pl.task] != null then .
-     elif ($pl._fileMods | length) > 0 then .[$pl.task] = {mods: $pl._fileMods, by: "plan-files"}
+     elif ($pl.plannedModules | length) > 0 then .[$pl.task] = {mods: $pl.plannedModules, by: "plan-files"}
      elif ($pl._diffMods | length) > 0 then .[$pl.task] = {mods: $pl._diffMods, by: "diff"}
      else . end)) as $PM
 | ([$tasks0[] | ($PM[.id] // null) as $pm
@@ -1163,7 +1183,6 @@ def parse_ledger:
       end)) as $plans0
 
 # 「本次」：主 checkout 與各 worktree 的 .current-task 全部標出；都沒有 → 最近改過、還沒完成的 plan
-| ($currents | tsv | map({src: .[0], v: .[1]})) as $cur0
 | def plan_of($v):
     [$plans0[] | select((.file | ltrimstr("plans/") | rtrimstr(".md")) as $b
                         | $b == $v or ($b | startswith($v + "-")) or .task == $v)] | first;
@@ -1174,7 +1193,8 @@ def parse_ledger:
    else [[$plans0[] | select(.status | test("⏳|🔄"))] | sort_by(._mtime) | last // empty
          | {task, plan: .file, source, guessed: true}] end) as $currents
 | ([$currents[].task | select(. != null)]) as $curTasks
-| ($plans0 | map(. + {current: (.file as $f | any($currents[]; .plan == $f))})
+| ($plans0 | map((.file as $f | any($currents[]; .plan == $f)) as $c
+     | . + {current: $c, changesFrom: (if $c and .changesFrom == "none" then "guessed" else .changesFrom end)})
    | sort_by([(if .current then 0 else 1 end), .file])) as $plans
 | ([$plans[] | select(.current and .task == null) | .modules[]] | unique) as $curMods
 
@@ -1186,7 +1206,7 @@ def parse_ledger:
       | {phase: $pl.currentPhase, phases: ($pl.phases | length),
          activePhases: (if ($w | length) > 0 then $w elif $pl.currentPhase != null then [$pl.currentPhase] else [] end)} end;
   ($currents | map(. as $c | . + phinfo([$plans[] | select(.file == $c.plan)] | first))) as $cx
-| ([$cx[] | .plan as $f | $plans[] | select(.file == $f) | ._fileMods[]] | unique) as $plannedMods
+| ([$cx[] | .plan as $f | $plans[] | select(.file == $f) | .plannedModules[]] | unique) as $plannedMods
 
 # ---- 一頁現況（ADR-007 第 2 點）：overview.md 開頭「## 現況」與 data.js 的 status 是同一份，只看主 checkout。
 # WBS 的完成日多半只寫 MM-DD：當作今年，比今天晚就算去年
@@ -1339,7 +1359,7 @@ def parse_ledger:
     ($flows[] | select((.modules | length) == 0)
      | {level: "warn", text: "資料流「\(.title)」對不到任何模組（模組改名？）",
         action: "\($archPath) 第 \(.line) 行：participant id 寫模組 id 或分組 id"}),
-    ([$plans[] | select(.base == null and (.status | test("✅") | not)) | .file] | if length > 0 then {level: "warn", text: "找不到比較基準（帳本沒有 BASE=，也找不到預設分支），列不出這幾份 plan 改了哪些檔：\(join("、"))", action: "帳本記 BASE=<commit>（subagent-execution）"} else empty end),
+    ([$plans[] | select(.base == null and (.changesFrom == "ledger" or .changesFrom == "current")) | .file] | if length > 0 then {level: "warn", text: "找不到比較基準（帳本沒有 BASE=，也找不到預設分支），列不出這幾份 plan 改了哪些檔：\(join("、"))", action: "帳本記 BASE=<commit>（subagent-execution）"} else empty end),
     ([$plans[] | select((.hasParts | not) and (.status | test("✅") | not)) | .file] | if length > 0 then {level: "info", text: "這幾份 plan 沒有「一眼看懂」部件表，任務圖只列得出改了哪些檔：\(join("、"))", action: "格式見 plan-format skill"} else empty end),
     (([$NV[] | select((.why | length) > 0)] | length) as $bad
      | if $NR.header != null then {level: "warn", text: "module-notes.md 的表頭不對（\($NR.header)），地圖上沒有任何說明", action: "bash .claude/scripts/overview.sh --check-notes"}
@@ -1350,7 +1370,7 @@ def parse_ledger:
        {level: "info", text: "module-notes.md 的 based_on（\(if $notesBase == "" then "沒寫" else $notesBase end)）不是有效的 commit，所有說明都標成可能過期", action: "請 documentation-specialist 重寫說明，based_on 填當下的 HEAD"}
      else empty end)
   ];
-  def public: map(del(._touch, ._mtime, ._text, ._fileMods, ._diffMods));
+  def public: map(del(._touch, ._mtime, ._text, ._diffMods));
   def taskout: [$tasks[] | {id, title, status, state, milestone, modules, inferred, inferredBy}];
 
   # --check-notes：一行一筆違規
@@ -1469,7 +1489,7 @@ def delta: if (.added // 0) + (.removed // 0) > 0 then "+\(.added // 0) / −\(.
 def taskgraph:
   . as $p
   | [$p.parts[] | select(.planned)] as $pl
-  | [$p.parts[] | select(.planned | not)] as $ex
+  | ($p.extraCount // 0) as $xn
   | [$p.phases[].n] as $pns
   | if ($p.parts | length) == 0 then "（plan 沒有「一眼看懂」部件表，也沒有計畫外的改動）" else
     ("```mermaid",
@@ -1485,10 +1505,11 @@ def taskgraph:
          ($ps[] | "    \(.id | nid)[\"\(.state | sicon) \(.name | lab)\"]"),
          "  end"),
      ($pl[] | select(.phase as $n | $pns | index($n) | not) | "  \(.id | nid)[\"\(.state | sicon) \(.name | lab)\"]"),
-     ($ex[] | "  \(.id | nid)[\"＋ 計畫外 \(.name | lab)\"]"),
+     (if $xn > 0 then "  xall[\"＋ 計畫外 \($xn) 個檔\"]" else empty end),
      (range(0; ($pl | length) - 1) as $i
        | "  \($pl[$i].id | nid) \(if $pl[$i].state == "done" and $pl[$i + 1].state == "done" then "-->" else "-.->" end) \($pl[$i + 1].id | nid)"),
-     ($p.parts[] | "  class \(.id | nid) \(.state)"),
+     ($pl[] | "  class \(.id | nid) \(.state)"),
+     (if $xn > 0 then "  class xall extra" else empty end),
      "```") end;
 def ptable:
   . as $p

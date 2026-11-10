@@ -7,7 +7,7 @@
 <!--
   原檔：.claude/templates/overview/index.html（唯一來源）。overview.sh 會複製到
   taskmaster-data/overview/，那份被覆蓋是正常的——要改畫面改這份。
-  限制（check-counts 會擋）：整份 ≤ 64KB；不載任何外部網址（file:// 要能離線開）；
+  限制（check-counts 會擋）：整份 ≤ 80KB；不載任何外部網址（file:// 要能離線開）；
   不用 module script（file:// 下會被 CORS 擋）；顏色只寫在 :root token 區塊。
   檢查腳本：.claude/hooks/tests/fixtures/overview/qa-check.js（給 Playwright browser_evaluate）。
 -->
@@ -66,6 +66,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .ntc{border-radius:6px;padding:4px 8px;overflow-wrap:anywhere}
 .ntc.warn{background:var(--warn-bg)}.ntc.info{background:var(--info-bg)}
 .ntc .act{color:var(--muted);margin-left:8px}
+.prow{display:flex;align-items:center;gap:8px;cursor:pointer;overflow-wrap:anywhere}
 .drawer h3{font-size:var(--fs-s);color:var(--muted);font-weight:500;margin:8px 0 0}
 .main{flex:1;min-height:0;display:flex}
 #stage{flex:1;min-width:0;position:relative;overflow:hidden;background-color:var(--canvas);
@@ -144,7 +145,11 @@ button.chip{cursor:pointer;min-height:28px}
 .tabs button.on{background:var(--accent);color:var(--on-accent)}
 .tabs button:focus-visible{outline-offset:-2px}
 #tv{display:none;flex:1;min-height:0;overflow:auto;padding:16px 20px}
-.v-tasks #tv{display:block}.v-tasks .main,.v-tasks .legend{display:none}
+.v-tasks #tv{display:block}.v-tasks .main,.v-tasks .legend,.v-tasks #psel{display:none}
+.tw{display:flex;gap:16px;align-items:flex-start;max-width:1500px;margin:0 auto}.tcards{flex:1;min-width:0}
+.toc{position:sticky;top:0;flex:none;width:230px;max-height:calc(100vh - 140px);overflow:auto;display:grid;gap:2px;font-size:var(--fs-s)}
+.toc a{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;color:var(--fg);text-decoration:none;overflow-wrap:anywhere}
+.toc a:hover{background:var(--info-bg)}
 .plan{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:0 auto 16px;max-width:1240px}
 .plan.cur{border-color:var(--chg);box-shadow:0 0 0 1px var(--chg)}
 .plan h2{font:700 var(--fs-l) var(--f-display);margin:0 0 4px}
@@ -165,9 +170,10 @@ button.chip{cursor:pointer;min-height:28px}
 .pt{width:100%;border-collapse:collapse;font-size:var(--fs-s);margin-top:12px}
 .pt th,.pt td{border-bottom:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top}
 .pt th{color:var(--muted);font-weight:500}
+.xtra{margin-top:8px;font-size:var(--fs-s)}.xtra summary{cursor:pointer;color:var(--chg)}.xtra code{display:inline-block;margin:4px 6px 0 0}
 .tnone{color:var(--muted);text-align:center;padding:64px 20px;line-height:1.7}
 @media (pointer:coarse){.pill,.tabs button,button.chip{min-height:44px}}
-@media (max-width:760px){.main{flex-direction:column}.panel{width:auto;max-height:38%;border-left:0;border-top:1px solid var(--line)}#mini,.hint{display:none}
+@media (max-width:760px){.main{flex-direction:column}.tw{flex-direction:column;gap:8px}.toc{position:static;display:flex;width:100%;max-height:none;overflow-x:auto;gap:4px}.toc a{flex:none;white-space:nowrap;border:1px solid var(--line)}.panel{width:auto;max-height:38%;border-left:0;border-top:1px solid var(--line)}#mini,.hint{display:none}
   .bar{position:relative;gap:8px}.ttl{flex-basis:100%}.bar h1{padding-right:72px}
   #theme{position:absolute;top:8px;right:max(16px,env(safe-area-inset-right))}
   .legend{flex-wrap:nowrap;overflow-x:auto;max-width:100%;scrollbar-width:thin}
@@ -186,6 +192,7 @@ button.chip{cursor:pointer;min-height:28px}
     <button class="pill" data-f="todo" aria-pressed="false"><i class="dot s-todo"></i>未開始</button>
     <button class="pill" data-f="chg" aria-pressed="false"><i class="dot s-chg"></i>本次改動</button>
     <button class="pill" data-f="plan" aria-pressed="false"><i class="dash"></i>plan 預計會動</button>
+    <button class="pill" id="pbtn" aria-expanded="false" aria-controls="psel" hidden></button>
   </div>
   <div class="chipbar">
     <button class="pill warn" id="nbtn" aria-expanded="false" aria-controls="ntc" hidden></button>
@@ -195,6 +202,7 @@ button.chip{cursor:pointer;min-height:28px}
 </header>
 <div id="ntc" class="drawer" hidden></div>
 <div id="drift" class="drawer" hidden></div>
+<div id="psel" class="drawer" hidden></div>
 <div class="main">
   <div id="stage">
     <svg id="cv" xmlns="http://www.w3.org/2000/svg" aria-label="專案架構畫布">
@@ -259,6 +267,7 @@ function delta(c) {
 }
 
 var world = $('world'), stage = $('stage'), root = document.documentElement, mini = $('mini'), panel = $('panel'), probe = $('probe');
+var PSEL = null, PM = {};
 var D = null, MODS = [], BY = {}, GB = [], ALL = {x: 0, y: 0, w: 1, h: 1}, CHG = {}, TASK = {}, FILTER = {};
 var S = {tx: 0, ty: 0, k: 1}, selected = null, vp = null, fitted = false, pending = false;
 var INNER = null, SAVED = null, IN = {}, nsel = null;
@@ -398,7 +407,7 @@ function draw(d) {
     var cls = 'mod' + (m.files.length ? ' has-chg' : '') + (m.declared === false ? ' undecl' : '') + (m.current ? ' cur' : '');
     var g = el('g', {'class': cls, transform: 'translate(' + m.x + ',' + m.y + ')', 'data-id': m.id}, world);
     el('title', {}, g, m.name + '（' + m.id + '）' + (m.paths.length ? ' ' + m.paths.join(', ') : ''));
-    if (m.planned) el('rect', {'class': 'planf', x: -6, y: -6, width: m.w + 12, height: m.h + 12, rx: 16}, g);
+    if (PM[m.id]) el('rect', {'class': 'planf', x: -6, y: -6, width: m.w + 12, height: m.h + 12, rx: 16}, g);
     el('rect', {'class': 'box', width: m.w, height: m.h, rx: 12}, g);
     el('circle', {'class': 'l-' + m.status, cx: 24, cy: 30, r: 13, opacity: 0.22}, g);
     el('circle', {'class': 'l-' + m.status, cx: 24, cy: 30, r: 7}, g);
@@ -601,7 +610,7 @@ function leave() {
 // ---------------------------------------------------------------- 圖例篩選
 function shown(m) {
   var on = Object.keys(FILTER).filter(function (k) { return FILTER[k]; });
-  return !on.length || on.some(function (k) { return k === 'chg' ? m.files.length > 0 : k === 'plan' ? m.planned : m.status === k; });
+  return !on.length || on.some(function (k) { return k === 'chg' ? m.files.length > 0 : k === 'plan' ? PM[m.id] : m.status === k; });
 }
 function filter() {
   world.querySelectorAll('.mod').forEach(function (n) { n.classList.toggle('dim', !shown(BY[n.dataset.id])); });
@@ -724,13 +733,48 @@ theme();
 // ---------------------------------------------------------------- 頁首：提示與落差
 function toggleDrawer(btn) {
   var open = btn.getAttribute('aria-expanded') !== 'true';
-  ['nbtn', 'dbtn'].forEach(function (id) {
+  ['nbtn', 'dbtn', 'pbtn'].forEach(function (id) {
     var b = $(id); b.setAttribute('aria-expanded', String(open && b === btn)); $(b.getAttribute('aria-controls')).hidden = !(open && b === btn);
   });
   drawVp();
 }
 $('nbtn').onclick = function () { toggleDrawer(this); };
 $('dbtn').onclick = function () { toggleDrawer(this); };
+$('pbtn').onclick = function () { toggleDrawer(this); };
+// 選取以 plan 的 file 為鍵；沒動過選擇器（PSEL 為 null）就跟著每次資料的本次 plan 走
+function planSel(d) {
+  var open = d.plans.filter(function (p) { return !p.completed; }), sel = {};
+  if (PSEL) open.forEach(function (p) { if (PSEL[p.file]) sel[p.file] = 1; });
+  else d.plans.forEach(function (p) { if (p.current) sel[p.file] = 1; });
+  if (PSEL) PSEL = sel;
+  PM = {};
+  d.plans.forEach(function (p) { if (sel[p.file]) (p.plannedModules || []).forEach(function (m) { PM[m] = 1; }); });
+  var n = open.filter(function (p) { return sel[p.file]; }).length;
+  $('pbtn').hidden = !open.length;
+  $('pbtn').textContent = '選計畫（' + n + '）';
+  if (!open.length) $('psel').hidden = true;
+  $('psel').innerHTML = '<div class="chips"><button class="pill" data-ps="all">全選</button><button class="pill" data-ps="cur">只選本次</button><button class="pill" data-ps="none">清除</button></div>' +
+    open.map(function (p) {
+      return '<label class="prow"><input type="checkbox" data-pf="' + esc(p.file) + '"' + (sel[p.file] ? ' checked' : '') + '><i class="dot s-' + lamp(p) + '"></i>' +
+        (p.current ? '★ ' : '') + esc((p.task ? p.task + ' ' : '') + p.title) + '<span class="fdesc">預計 ' + (p.plannedModules || []).length + ' 個模組</span></label>';
+    }).join('');
+}
+function setSel(f) {
+  PSEL = {};
+  D.plans.forEach(function (p) { if (f(p)) PSEL[p.file] = 1; });
+  planSel(D); map(D);
+}
+$('psel').addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-ps]'), k = b && b.dataset.ps;
+  if (k === 'cur') { PSEL = null; planSel(D); map(D); }
+  else if (k) setSel(function (p) { return k === 'all'; });
+});
+$('psel').addEventListener('change', function (e) {
+  var on = {}, f = e.target.dataset.pf;
+  $('psel').querySelectorAll('input:checked').forEach(function (x) { on[x.dataset.pf] = 1; });
+  setSel(function (p) { return on[p.file]; });
+  $('psel').querySelectorAll('input').forEach(function (x) { if (x.dataset.pf === f) x.focus(); });
+});
 function dtext(x) {
   if (x == null || typeof x !== 'object') return String(x);
   if (x.task && x.declared) return x.task + '：WBS 標 ' + [].concat(x.declared).join('、') + '，實際動到 ' + [].concat(x.actual || []).join('、');
@@ -772,6 +816,10 @@ function fileItems(list, withMod) {
       (c.summary ? '<span class="fdesc">' + esc(c.summary) + '</span>' : '') + '</button></li>';
   }).join('');
 }
+var DOC_RE = /^docs?\/|\.(md|mdx|rst|adoc|txt)$/i;
+function looseFiles(label, list) {
+  return list.length ? '<details class="xtra"><summary>' + label + ' ' + list.length + ' 個檔</summary><ul class="flist">' + fileItems(list, false) + '</ul></details>' : '';
+}
 function rollItems(list) {
   return (list || []).map(function (r) {
     return '<li class="fdesc">' + esc(r.dir) + ' 另 ' + esc(r.files) + ' 個檔（+' + esc(r.added) + ' / −' + esc(r.removed) + '，未逐一列出）</li>';
@@ -786,9 +834,9 @@ function phaseText(c) {
   return a.length ? 'plan 第 ' + esc(a.join('、')) + '／' + esc(c.phases) + ' 階段' : '';
 }
 function planDiff() {
-  var any = MODS.some(function (m) { return m.planned; });
-  return {idle: MODS.filter(function (m) { return m.planned && !m.files.length; }),
-    extra: any ? MODS.filter(function (m) { return !m.planned && m.files.length; }) : []};
+  var any = MODS.some(function (m) { return PM[m.id]; });
+  return {idle: MODS.filter(function (m) { return PM[m.id] && !m.files.length; }),
+    extra: any ? MODS.filter(function (m) { return !PM[m.id] && m.files.length; }) : []};
 }
 function links(m) {
   var out = [], inn = [];
@@ -821,8 +869,8 @@ function select(id) {
     '<button class="pill" id="pexp">展開內部</button>' +
     '<div class="note' + (m.status === 'issue' ? ' issue' : '') + '">' + esc(m.statusReason) + '</div>' +
     (m.declared === false ? '<div class="note issue">容器圖有、模組表（5.5）沒有這個模組</div>' : '') +
-    (m.planned ? '<div class="note plan">本次 plan 預計會動這個模組' + (pd.idle.indexOf(m) >= 0 ? '，但目前沒有改動（預計但沒動）' : '') + '</div>' : '') +
-    (pd.extra.indexOf(m) >= 0 ? '<div class="note plan">本次 plan 沒預計動這個模組，卻有改動（沒預計卻動了）</div>' : '') +
+    (PM[m.id] ? '<div class="note plan">選取的 plan 預計會動這個模組' + (pd.idle.indexOf(m) >= 0 ? '，但目前沒有改動（預計但沒動）' : '') + '</div>' : '') +
+    (pd.extra.indexOf(m) >= 0 ? '<div class="note plan">選取的 plan 沒預計動這個模組，卻有改動（沒預計卻動了）</div>' : '') +
     ((m.mismatch || []).length ? '<div class="note">' + m.mismatch.map(function (x) { return esc(x.task + ' ' + (kind[x.kind] || x.kind)); }).join('<br>') + '</div>' : '') +
     (ds && ds.text ? '<h3>說明' + (ds.stale ? '（可能過期：之後改過這個模組的檔）' : '') + '</h3><div class="fdesc">' + esc(ds.text) + '</div>' +
       ((ds.evidence || []).length ? '<div class="chips">' + ds.evidence.map(function (p) { return '<code class="chip">' + esc(p) + '</code>'; }).join('') + '</div>' : '') : '') +
@@ -841,6 +889,8 @@ function summary() {
   if (!D) { panel.innerHTML = ''; return; }
   var ch = D.changes, mods = {}, pd = planDiff();
   ch.forEach(function (c) { if (c.module) mods[c.module] = 1; });
+  var inMod = ch.filter(function (c) { return c.module; }), loose = ch.filter(function (c) { return !c.module; });
+  var docs = loose.filter(function (c) { return DOC_RE.test(c.file); }), rest = loose.filter(function (c) { return !DOC_RE.test(c.file); });
   var cs = (D.currents || (D.current ? [D.current] : [])).filter(function (c) { return c.task; });
   var cur = cs.length ? cs.map(function (c) { var p = phaseText(c); return '任務 ' + esc(c.task) + (p ? '（' + p + '）' : ''); }).join('、') + (cs[0].guessed ? '（推測）' : '') : '沒有標記中的任務';
   var b = D.changesBase, um = D.unmappedTasks;
@@ -849,11 +899,12 @@ function summary() {
     (D.truncated ? '<br>資料太多，部分省略（見頂端提示）' : '') + '</div>' +
     (pd.idle.length ? '<h3>預計但沒動（' + pd.idle.length + '）</h3>' + modChips(pd.idle) : '') +
     (pd.extra.length ? '<h3>沒預計卻動了（' + pd.extra.length + '）</h3>' + modChips(pd.extra) : '') +
-    '<ul class="flist">' + (fileItems(ch, true) || (D.changesRollup.length ? '' : '<li class="fdesc">工作區與分支上都沒有改動</li>')) + rollItems(D.changesRollup) + '</ul>' +
+    '<ul class="flist">' + (fileItems(inMod, true) || (ch.length || D.changesRollup.length ? '' : '<li class="fdesc">工作區與分支上都沒有改動</li>')) + rollItems(D.changesRollup) + '</ul>' +
+    looseFiles('文件', docs) + looseFiles('其他（不屬於任何模組）', rest) +
     (D.archived && D.archived.unmapped ? '<div class="fdesc">已歸檔的完成任務有 ' + D.archived.unmapped + ' 個沒有標模組，不算進任何模組</div>' : '') +
     (um.length ? '<h3>還沒對到模組的任務（' + um.length + '）</h3><div class="chips">' + um.slice(0, 12).map(function (t) { return '<span class="chip">' + esc(t) + '</span>'; }).join('') +
       (um.length > 12 ? '<span class="fdesc">＋' + (um.length - 12) + '</span>' : '') + '</div><div class="fdesc">→ /task-status 會提議補 WBS 的模組欄</div>' : '') +
-    '<h3>說明</h3><div class="fdesc">模組由程式碼掃描而來；架構文件有模組表時採用它的名稱與分組。點模組看說明、連線與任務，點檔案會飛到所屬模組。縮小只看燈號，放大到 55% 以上顯示路徑、說明、檔名、任務，110% 以上再顯示每個檔改了多少。虛線框＝本次 plan 預計會動。</div>';
+    '<h3>說明</h3><div class="fdesc">模組由程式碼掃描而來；架構文件有模組表時採用它的名稱與分組。點模組看說明、連線與任務，點檔案會飛到所屬模組。縮小只看燈號，放大到 55% 以上顯示路徑、說明、檔名、任務，110% 以上再顯示每個檔改了多少。虛線框＝選取的 plan 預計會動（「選計畫」可改）。</div>';
 }
 panel.addEventListener('click', function (e) {
   var b = e.target.closest('button[data-m],button[data-k]'), a = b && IN[b.dataset.k];
@@ -862,7 +913,7 @@ panel.addEventListener('click', function (e) {
 });
 
 // ---------------------------------------------------------------- 任務圖
-// 每份 plan 一張卡：階段排成欄、部件是卡片（虛線＝還在計畫、實線＝做了），計畫外的改動另成一欄
+// 每份 plan 一張卡：階段排成欄、部件是卡片（虛線＝還在計畫、實線＝做了），計畫外的改動收成一行、點開才列檔名
 var PST = {planned: '計畫中', wip: '進行中', done: '完成', skipped: '計畫內沒做', failed: '失敗', extra: '計畫外'};
 function nums(a) { return (a.added || a.removed) ? '+' + (a.added || 0) + ' / −' + (a.removed || 0) : '—'; }
 function partFiles(p, pl) {
@@ -877,7 +928,7 @@ function partCard(p, pl) {
     (ai.summary ? '<span>' + esc(ai.summary) + (ai.source === 'phase' ? '（階段摘要）' : '') + '</span>' : '') +
     '<span class="fdesc">' + esc(nums(ai)) + (ai.tests ? ' · 測試 ' + esc(ai.tests) : '') + '</span></div>';
 }
-function planCard(pl) {
+function planCard(pl, i) {
   var cols = (pl.phases || []).map(function (ph) {
     return {t: '階段 ' + ph.n + ' ' + ph.name + ' · ' + (PST[ph.state] || ph.state),
       ps: pl.parts.filter(function (p) { return p.planned && p.phase === ph.n; })};
@@ -886,30 +937,45 @@ function planCard(pl) {
   var lone = pl.parts.filter(function (p) { return p.planned && ns.indexOf(p.phase) < 0; });
   var ex = pl.parts.filter(function (p) { return !p.planned; });
   if (lone.length) cols.push({t: '沒標階段', ps: lone});
-  if (ex.length) cols.push({t: '計畫外' + (pl.extraMore ? '（另 ' + pl.extraMore + ' 個檔）' : ''), ps: ex});
-  var v = pl.verify;
-  return '<section class="plan' + (pl.current ? ' cur' : '') + '"><h2>' + (pl.current ? '★ ' : '') + esc((pl.task ? pl.task + ' ' : '') + pl.title) +
+  var xn = pl.extraCount || ex.length, v = pl.verify;
+  var from = {completed: '已完成：只顯示階段狀態', none: '沒有執行帳本、也不是本次任務：工作區改動見地圖的「本次改動」', guessed: '推測的本次任務（沒有 .current-task）：工作區改動不分給它，見地圖的「本次改動」'}[pl.changesFrom];
+  return '<section id="p' + i + '" class="plan' + (pl.current ? ' cur' : '') + '"><h2>' + (pl.current ? '★ ' : '') + esc((pl.task ? pl.task + ' ' : '') + pl.title) +
     '<span class="tag">' + esc(pl.status || '—') + '</span>' + (pl.source !== 'main' ? '<span class="tag">' + esc(pl.source) + '</span>' : '') + '</h2>' +
     '<div class="meta"><code>' + esc(pl.file) + '</code>' + (pl.mode ? ' · ' + esc(pl.mode) : '') +
-    ' · ' + (pl.base ? '比較基準 <code>' + esc(pl.base) + '</code>' : '找不到比較基準') + '</div>' +
+    ' · ' + (from ? esc(from) : pl.base ? '比較基準 <code>' + esc(pl.base) + '</code>' : '找不到比較基準') + '</div>' +
     (v ? '<div class="vr ' + esc(v.result) + '">驗證 ' + esc(v.result) + (v.at ? '（' + esc(v.at) + '）' : '') + (v.reason ? ' — ' + esc(v.reason) : '') + '</div>' : '') +
     (cols.length ? '<div class="phs">' + cols.map(function (c) {
       return '<div class="ph"><h3>' + esc(c.t) + '</h3>' + (c.ps.map(function (p) { return partCard(p, pl); }).join('') || '<div class="fdesc">沒有部件</div>') + '</div>';
     }).join('') + '</div>' : '<div class="note">' + (pl.stub ? '資料太多，這份 plan 只留狀態（本次的 plan 不受影響）' : '這份 plan 沒有「一眼看懂」部件表，只列得出改了哪些檔') + '</div>') +
+    (xn ? '<details class="xtra"><summary>計畫外 ' + xn + ' 個檔</summary>' + ex.map(function (p) { return '<code>' + esc(p.name) + '</code>'; }).join('') +
+      (xn > ex.length ? '<span class="fdesc">另 ' + (xn - ex.length) + ' 個檔沒列出</span>' : '') + '</details>' : '') +
     '<table class="pt"><thead><tr><th>檔案</th><th>部件</th><th>+/−</th><th>AI 做了什麼</th></tr></thead><tbody>' +
-    (pl.changes.map(function (c) {
+    (pl.changes.filter(function (c) { return c.planned; }).map(function (c) {
       var p = pl.parts.filter(function (x) { return x.id === c.part; })[0];
       return '<tr><td><code>' + esc(c.file) + '</code></td><td>' + esc(p ? (p.planned ? p.id + ' ' + p.name : '計畫外') : (c.planned ? '計畫內' : '—')) +
         '</td><td>' + esc(delta(c)) + '</td><td>' + esc(p && p.ai && p.ai.summary || '—') + '</td></tr>';
-    }).join('') || ((pl.changesRollup || []).length ? '' : '<tr><td colspan="4" class="fdesc">沒有改動</td></tr>')) +
+    }).join('') || ((pl.changesRollup || []).length ? '' : '<tr><td colspan="4" class="fdesc">' + (xn ? '沒有計畫內的改動' : '沒有改動') + '</td></tr>')) +
     (pl.changesRollup || []).map(function (r) {
       return '<tr><td><code>' + esc(r.dir) + '</code> ' + esc(r.files) + ' 個檔</td><td>未逐一列出</td><td>' + esc(nums(r)) + '</td><td>—</td></tr>';
     }).join('') + '</tbody></table></section>';
 }
+function lamp(pl) {
+  var s = pl.status || '';
+  return pl.verify && pl.verify.result === 'FAIL' || s.indexOf('🚫') >= 0 ? 'issue' : pl.completed ? 'done' : s.indexOf('🔄') >= 0 ? 'wip' : 'todo';
+}
+function tocItem(pl, i) {
+  return '<a href="#p' + i + '" data-p="p' + i + '"><i class="dot s-' + lamp(pl) + '"></i>' + (pl.current ? '★ ' : '') + esc((pl.task ? pl.task + ' ' : '') + pl.title) + '</a>';
+}
+$('tv').addEventListener('click', function (e) {
+  var a = e.target.closest('a[data-p]'), t = a && $(a.dataset.p);
+  if (!t) return;
+  e.preventDefault();
+  t.scrollIntoView({block: 'start', behavior: reduce ? 'auto' : 'smooth'});
+});
 function renderTasks(d) {
   var tv = $('tv'), st = tv.scrollTop, ps = d.plans || [];
   $('ttab').textContent = '任務圖' + (ps.length ? '（' + ps.length + '）' : '');
-  tv.innerHTML = ps.length ? ps.map(planCard).join('')
+  tv.innerHTML = ps.length ? '<div class="tw"><nav class="toc" aria-label="任務目錄">' + ps.map(tocItem).join('') + '</nav><div class="tcards">' + ps.map(planCard).join('') + '</div></div>'
     : '<div class="tnone">plans/ 底下沒有計畫。<br>跑 /plan 之後，這裡會依階段列出每個部件做了沒、改了哪些檔。</div>';
   tv.scrollTop = st;
 }
@@ -971,6 +1037,7 @@ function render(d) {
   $('title').innerHTML = '專案圖解 — ' + esc(d.project && d.project.name) + (d.project && d.project.architectureDraft ? '<span class="draft">架構草稿</span>' : '');
   renderTasks(d);
   header(d);
+  planSel(d);
   map(d);
   firstFit();
   apply();
