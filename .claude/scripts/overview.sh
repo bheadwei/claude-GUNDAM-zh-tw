@@ -1193,7 +1193,8 @@ def parse_ledger:
    else [[$plans0[] | select(.status | test("⏳|🔄"))] | sort_by(._mtime) | last // empty
          | {task, plan: .file, source, guessed: true}] end) as $currents
 | ([$currents[].task | select(. != null)]) as $curTasks
-| ($plans0 | map(. + {current: (.file as $f | any($currents[]; .plan == $f))})
+| ($plans0 | map((.file as $f | any($currents[]; .plan == $f)) as $c
+     | . + {current: $c, changesFrom: (if $c and .changesFrom == "none" then "guessed" else .changesFrom end)})
    | sort_by([(if .current then 0 else 1 end), .file])) as $plans
 | ([$plans[] | select(.current and .task == null) | .modules[]] | unique) as $curMods
 

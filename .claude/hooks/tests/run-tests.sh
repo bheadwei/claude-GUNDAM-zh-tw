@@ -3736,6 +3736,8 @@ expect_eq "changesFrom none 的 plan 不進「找不到比較基準」（本次�
 tg_two_plans; tg_ov
 expect_eq "沒有 .current-task（本次是猜的）→ 沒有 plan 拿到 c.ts、地圖 changes 仍有、currents[0].guessed" "0 true true" \
     "$(tgq '"\([.plans[].changes[] | select(.file == "src/api/c.ts")] | length) \([.changes[].file] | index("src/api/c.ts") != null) \(.currents[0].guessed)"')"
+expect_eq "沒有 .current-task → 猜成本次的那份 changesFrom guessed（卡片不寫「也不是本次任務」），另一份仍是 none" "guessed none" \
+    "$(tgq '"\([.plans[] | select(.current) | .changesFrom] | join(",")) \([.plans[] | select(.current | not) | .changesFrom] | join(","))"')"
 
 # --actual 指定的 plan 不套「已完成」與「只歸本次」：/verify 寫計畫 vs 實際時 plan 多半已全部 ✅
 tg_reset; TP_STATUS="✅ 完成" tg_plan 1.2-x.md ✅ ✅; printf 'a\n' > "$TG/src/api/a.ts"; tg_git add -A; tg_git commit -qm a

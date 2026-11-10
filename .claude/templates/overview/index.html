@@ -938,7 +938,7 @@ function planCard(pl, i) {
   var ex = pl.parts.filter(function (p) { return !p.planned; });
   if (lone.length) cols.push({t: '沒標階段', ps: lone});
   var xn = pl.extraCount || ex.length, v = pl.verify;
-  var from = {completed: '已完成：只顯示階段狀態', none: '沒有執行帳本、也不是本次任務：工作區改動見地圖的「本次改動」'}[pl.changesFrom];
+  var from = {completed: '已完成：只顯示階段狀態', none: '沒有執行帳本、也不是本次任務：工作區改動見地圖的「本次改動」', guessed: '推測的本次任務（沒有 .current-task）：工作區改動不分給它，見地圖的「本次改動」'}[pl.changesFrom];
   return '<section id="p' + i + '" class="plan' + (pl.current ? ' cur' : '') + '"><h2>' + (pl.current ? '★ ' : '') + esc((pl.task ? pl.task + ' ' : '') + pl.title) +
     '<span class="tag">' + esc(pl.status || '—') + '</span>' + (pl.source !== 'main' ? '<span class="tag">' + esc(pl.source) + '</span>' : '') + '</h2>' +
     '<div class="meta"><code>' + esc(pl.file) + '</code>' + (pl.mode ? ' · ' + esc(pl.mode) : '') +
