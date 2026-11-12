@@ -5049,6 +5049,209 @@ if [ -f "$CC_SRC" ] && [ -f "$CC_DS" ] && [ -d "$HOOK_DIR/../skills/project-docs
 else
     ok "（不是模板 repo，沒有 check-counts.sh 或 documentation-specialist.md，略過）"
 fi
+# =========================================================================
+section "agent-events.sh — 即時事件記錄（live-events.jsonl）"
+# =========================================================================
+# ADR-2026-11-12-002。這支 hook 只寫不讀、永遠無輸出；測試驗的是寫出去的那一行。
+AE_BOX="$SANDBOX/ae"
+AE_LOG="$AE_BOX/.claude/logs/live-events.jsonl"
+AE_CALLS="$AE_BOX/.overview-calls"
+AE_PAYLOAD_SID="ae-sid-1"
+
+ae_reset() {
+    rm -rf "$AE_BOX"
+    mkdir -p "$AE_BOX/.claude/taskmaster-data" "$AE_BOX/.claude/scripts" "$AE_BOX/.claude/logs"
+    printf '{}' > "$AE_BOX/.claude/taskmaster-data/project.json"
+    printf '#!/bin/bash\necho "$*" >> "%s"\n' "$AE_CALLS" > "$AE_BOX/.claude/scripts/overview.sh"
+}
+ae_wt() {
+    AE_WT="$AE_BOX/.claude/worktrees/wt-a"
+    mkdir -p "$AE_WT/src"
+    printf 'gitdir: %s/.git/worktrees/wt-a\n' "$AE_BOX" > "$AE_WT/.git"
+}
+# ae_run <payload> [ENV=VAL ...]：執行 hook，stdout 原樣回傳
+ae_run() {
+    local payload="$1"; shift
+    printf '%s' "$payload" | env CLAUDE_PROJECT_DIR="$AE_BOX" OVERVIEW_SYNC=1 OVERVIEW_LIVE_WINDOW_SEC=60 "$@" \
+        bash "$HOOK_DIR/agent-events.sh" 2>/dev/null
+}
+ae_last() { tail -n 1 "$AE_LOG" 2>/dev/null; }
+ae_f()    { ae_last | jq -r "$1" 2>/dev/null; }
+ae_lines() { [ -f "$AE_LOG" ] && wc -l < "$AE_LOG" | tr -d ' ' || echo 0; }
+ae_calls() { [ -f "$AE_CALLS" ] && wc -l < "$AE_CALLS" | tr -d ' ' || echo 0; }
+# ae_ev <事件名> [jq 物件片段]：基本 payload（cwd 在沙箱主 checkout）
+ae_ev() { jq -nc --arg e "$1" --arg c "${AE_CWD:-$AE_BOX}" --arg s "$AE_PAYLOAD_SID" \
+    '{session_id:$s, cwd:$c, hook_event_name:$e}'; }
+ae_with() { printf '%s' "$1" | jq -c "$2"; }
+
+ae_reset
+
+# --- SubagentStart（實測形狀：aid／at 在頂層）
+out=$(ae_run "$(ae_with "$(ae_ev SubagentStart)" '. + {agent_id:"a1b2c3", agent_type:"implementer"}')")
+expect_empty "SubagentStart：stdout 為空" "$out"
+expect_eq "SubagentStart：多一行" 1 "$(ae_lines)"
+expect_eq "SubagentStart：v 為 1" 1 "$(ae_f '.v')"
+expect_eq "SubagentStart：ev" SubagentStart "$(ae_f '.ev')"
+expect_eq "SubagentStart：aid 與 payload 相同" a1b2c3 "$(ae_f '.aid')"
+expect_eq "SubagentStart：at 與 payload 相同" implementer "$(ae_f '.at')"
+expect_eq "SubagentStart：sid" "$AE_PAYLOAD_SID" "$(ae_f '.sid')"
+expect_eq "SubagentStart：src 為 main" main "$(ae_f '.src')"
+expect_eq "SubagentStart：t 與 ms 都是整數、ms 在 0–999" true \
+    "$(ae_last | jq '(.t|type=="number" and .==floor) and (.ms|type=="number" and .==floor and .>=0 and .<=999)')"
+expect_eq "SubagentStart：沒有 tool／file／act／need／nt／text 以外的欄位" \
+    "act,aid,at,ev,file,ms,need,nt,sid,src,t,text,tool,v" "$(ae_last | jq -r 'keys|join(",")')"
+
+# --- 主 session 的 PostToolUse Write（沒有 agent_id）
+ae_run "$(ae_with "$(ae_ev PostToolUse)" ". + {tool_name:\"Write\", tool_input:{file_path:\"$AE_BOX/src/a.ts\", content:\"FILECONTENT-XYZ\"}}")" >/dev/null
+expect_eq "主 session Write：照寫一行" 2 "$(ae_lines)"
+expect_eq "主 session Write：aid 為空字串" "" "$(ae_f '.aid')"
+expect_eq "主 session Write：file 為相對路徑" src/a.ts "$(ae_f '.file')"
+expect_eq "主 session Write：act" "編輯 a.ts" "$(ae_f '.act')"
+case "$(ae_last)" in *FILECONTENT-XYZ*) ng "Write：事件行不含檔案內容" "不含" "含" ;; *) ok "Write：事件行不含檔案內容" ;; esac
+
+# --- worktree：cwd 在 worktree 子目錄
+ae_wt
+ae_run "$(ae_with "$(AE_CWD="$AE_WT/src" ae_ev PostToolUse)" ". + {agent_id:\"w1\", tool_name:\"Write\", tool_input:{file_path:\"$AE_WT/src/x.ts\"}}")" >/dev/null
+expect_eq "worktree：src 為 worktree:wt-a" worktree:wt-a "$(ae_f '.src')"
+expect_eq "worktree：絕對路徑轉成相對 worktree 根" src/x.ts "$(ae_f '.file')"
+expect_eq "worktree：事件仍寫進主 checkout 的 logs" 3 "$(ae_lines)"
+ae_run "$(ae_with "$(AE_CWD="$AE_WT/src" ae_ev PostToolUse)" ". + {tool_name:\"Write\", tool_input:{file_path:\"$AE_BOX/elsewhere.ts\"}}")" >/dev/null
+expect_eq "檔案不在該 checkout 內：file 為空" "" "$(ae_f '.file')"
+
+# --- Bash／PowerShell 的 act
+ae_bash() { ae_run "$(ae_ev "${3:-PostToolUse}" | jq -c --arg c "$1" --arg d "$2" '. + {tool_name:"Bash", tool_input:({command:$c} + (if $d == "" then {} else {description:$d} end))}')" >/dev/null; }
+ae_bash "npm test -- --watch" "Run the unit tests"
+expect_eq "Bash 有 description：act 為「跑 <description>」" "跑 Run the unit tests" "$(ae_f '.act')"
+ae_bash "npm test -- --token abc" ""
+expect_eq "Bash 沒有 description：只記第一個詞" "跑 npm" "$(ae_f '.act')"
+ae_bash "API_KEY=xyz-secret-1 curl -H 'Authorization: Bearer abc-secret-2' https://x.test" ""
+expect_eq "Bash 開頭賦值：act 為「跑 curl」" "跑 curl" "$(ae_f '.act')"
+case "$(ae_last)" in *xyz-secret-1*|*abc-secret-2*) ng "Bash：事件行不含賦值值與 header" "不含" "含" ;; *) ok "Bash：事件行不含賦值值與 header" ;; esac
+ae_bash "FOO=1 BAR=2 /usr/bin/make all" ""
+expect_eq "Bash 多個賦值＋絕對路徑：act 為「跑 make」" "跑 make" "$(ae_f '.act')"
+ae_bash "A=1 B=2" ""
+expect_eq "Bash 整串都是賦值：act 為「跑指令」" "跑指令" "$(ae_f '.act')"
+ae_bash 'TOKEN="pa ss word" deploy.sh' ""
+expect_eq "Bash 賦值值含空白（有引號）：act 為「跑 deploy.sh」" "跑 deploy.sh" "$(ae_f '.act')"
+case "$(ae_last)" in *"pa ss"*|*word*) ng "Bash 帶引號的賦值：事件行不含值" "不含" "含" ;; *) ok "Bash 帶引號的賦值：事件行不含值" ;; esac
+ae_bash "echo hi" "Say hi" PreToolUse
+expect_eq "PreToolUse Bash：也記 act" "跑 Say hi" "$(ae_f '.act')"
+ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"PowerShell", tool_input:{command:"Get-ChildItem -Recurse"}}')" >/dev/null
+expect_eq "PowerShell：同 Bash 規則" "跑 Get-ChildItem" "$(ae_f '.act')"
+
+# --- Edit：不含 old_string／new_string
+ae_run "$(ae_with "$(ae_ev PostToolUse)" ". + {tool_name:\"Edit\", tool_input:{file_path:\"$AE_BOX/lib/m.py\", old_string:\"OLDSECRET-AAA\", new_string:\"NEWSECRET-BBB\"}}")" >/dev/null
+case "$(ae_last)" in *OLDSECRET-AAA*|*NEWSECRET-BBB*) ng "Edit：事件行不含 old_string／new_string" "不含" "含" ;; *) ok "Edit：事件行不含 old_string／new_string" ;; esac
+expect_eq "Edit：act 與 file" "編輯 m.py|lib/m.py" "$(ae_f '[.act,.file]|join("|")')"
+
+# --- UserPromptSubmit：不記 prompt
+ae_run "$(ae_with "$(ae_ev UserPromptSubmit)" '. + {prompt:"密碼是 hunter2"}')" >/dev/null
+case "$(ae_last)" in *hunter2*|*密碼*) ng "UserPromptSubmit：事件行不含 prompt" "不含" "含" ;; *) ok "UserPromptSubmit：事件行不含 prompt" ;; esac
+expect_eq "UserPromptSubmit：act 與 text 都是空字串" "|" "$(ae_f '[.act,.text]|join("|")')"
+expect_eq "UserPromptSubmit：ev" UserPromptSubmit "$(ae_f '.ev')"
+
+# --- need
+ae_run "$(ae_with "$(ae_ev PermissionRequest)" '. + {agent_id:"p1", tool_name:"Bash", tool_input:{command:"rm -rf /tmp/x", description:"Delete temp dir"}}')" >/dev/null
+expect_eq "PermissionRequest：need 為 approve" approve "$(ae_f '.need')"
+expect_eq "PermissionRequest（Bash）：text 為「Bash：<description>」" "Bash：Delete temp dir" "$(ae_f '.text')"
+ae_run "$(ae_with "$(ae_ev PermissionRequest)" '. + {tool_name:"Bash", tool_input:{command:"SECRET=s3 curl x"}}')" >/dev/null
+expect_eq "PermissionRequest（Bash 無 description）：text 只記第一個詞" "Bash：curl" "$(ae_f '.text')"
+ae_run "$(ae_with "$(ae_ev PermissionRequest)" ". + {tool_name:\"Write\", tool_input:{file_path:\"$AE_BOX/src/k.ts\", content:\"zzz\"}}")" >/dev/null
+expect_eq "PermissionRequest（Write）：text 為「Write：<檔名>」" "Write：k.ts" "$(ae_f '.text')"
+ae_run "$(ae_with "$(ae_ev PermissionRequest)" '. + {tool_name:"WebFetch", tool_input:{url:"https://secret.test/?k=1"}}')" >/dev/null
+expect_eq "PermissionRequest（其他工具）：text 只寫工具名" "WebFetch" "$(ae_f '.text')"
+ae_notif() { ae_run "$(ae_ev Notification | jq -c --arg t "$1" '. + {notification_type:$t, message:"Claude needs your permission to use Bash"}')" >/dev/null; }
+ae_notif permission_prompt
+expect_eq "Notification permission_prompt：need approve、nt 照記" "approve|permission_prompt" "$(ae_f '[.need,.nt]|join("|")')"
+expect_eq "Notification：text 為 message" "Claude needs your permission to use Bash" "$(ae_f '.text')"
+for nt in idle_prompt elicitation_dialog; do
+    ae_notif "$nt"; expect_eq "Notification $nt：need 為 reply" "reply|$nt" "$(ae_f '[.need,.nt]|join("|")')"
+done
+for nt in auth_success elicitation_complete elicitation_response; do
+    n0=$(ae_lines); ae_notif "$nt"
+    expect_eq "Notification $nt：need 為 null 但仍寫一行" "null|$((n0 + 1))" "$(ae_f '.need|tostring')|$(ae_lines)"
+done
+ae_run "$(ae_with "$(ae_ev PreToolUse)" '. + {tool_name:"AskUserQuestion", tool_input:{questions:[{question:"要用 PostgreSQL 還是 SQLite？", options:[]},{question:"第二題"}]}}')" >/dev/null
+expect_eq "PreToolUse AskUserQuestion：need reply、text 為第一題" "reply|要用 PostgreSQL 還是 SQLite？" "$(ae_f '[.need,.text]|join("|")')"
+ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"AskUserQuestion", tool_input:{questions:[{question:"Q"}]}}')" >/dev/null
+expect_eq "PostToolUse AskUserQuestion：不開 need" null "$(ae_f '.need|tostring')"
+ae_run "$(ae_with "$(ae_ev SubagentStop)" '. + {agent_id:"a1b2c3", last_assistant_message:"LASTMSG-SECRET"}')" >/dev/null
+case "$(ae_last)" in *LASTMSG-SECRET*) ng "SubagentStop：事件行不含 last_assistant_message" "不含" "含" ;; *) ok "SubagentStop：事件行不含 last_assistant_message" ;; esac
+expect_eq "SubagentStop：ev 與 aid" "SubagentStop|a1b2c3" "$(ae_f '[.ev,.aid]|join("|")')"
+
+# --- 上限
+long80=$(printf 'あ%.0s' $(seq 1 200))
+ae_bash "x" "$long80"
+expect_eq "act 超過 80 字（全形）：截到 80 字" 80 "$(ae_f '.act|length')"
+ae_run "$(ae_ev Notification | jq -c --arg m "$long80" '. + {notification_type:"idle_prompt", message:$m}')" >/dev/null
+expect_eq "text 超過 120 字：截到 120 字" 120 "$(ae_f '.text|length')"
+ae_run "$(ae_ev Notification | jq -c --arg m "$long80" '. + {notification_type:("ｎ" + $m), message:"m"}')" >/dev/null
+expect_eq "nt 超過 30 字：截到 30 字" 30 "$(ae_f '.nt|length')"
+deep=$(printf 'ｄ%.0s' $(seq 1 150))
+ae_run "$(ae_ev PostToolUse | jq -c --arg d "$deep" --arg b "$AE_BOX" '. + {agent_id:$d, tool_name:"Write", tool_input:{file_path:($b + "/" + $d + "/" + $d + ".ts")}}')" >/dev/null
+expect_eq "aid 超過 40 字：截到 40 字" 40 "$(ae_f '.aid|length')"
+expect_eq "file 超過 120 字：留尾段、前面補 …（整行 <1024 時最多 120 字）" true \
+    "$(ae_last | jq '(.file|length) <= 120 and (.file|length) > 0')"
+big=$(printf 'あ%.0s' $(seq 1 300))
+ae_run "$(jq -nc --arg v "$big" --arg b "$AE_BOX" '{session_id:$v, cwd:$b, hook_event_name:"PermissionRequest", agent_id:$v, agent_type:$v, tool_name:$v, tool_input:{file_path:($b + "/" + $v + ".ts"), description:$v, command:$v}, notification_type:$v, message:$v}')" >/dev/null
+expect_eq "全部欄位都塞滿全形字：整行 < 1024 bytes（含換行）" true \
+    "$([ "$(ae_last | wc -c | tr -d ' ')" -lt 1024 ] && echo true || echo false)"
+expect_eq "全部欄位都塞滿：仍是合法 JSON" ev "$(ae_last | jq -r 'keys|map(select(.=="ev"))|.[0]')"
+ae_run "$(jq -nc --arg v "$big" --arg b "$AE_BOX" '{session_id:"s", cwd:$b, hook_event_name:"PostToolUse", tool_name:"Bash", tool_input:{command:"x", description:$v}}')" >/dev/null
+expect_eq "act 與 text 擠在一起超過 1000 bytes：整行仍 < 1024" true \
+    "$([ "$(ae_last | wc -c | tr -d ' ')" -lt 1024 ] && echo true || echo false)"
+ae_run "$(jq -nc --arg v "$big" --arg b "$AE_BOX" '{session_id:"s", cwd:$b, hook_event_name:"Notification", notification_type:"idle_prompt", message:$v, agent_id:$v, agent_type:$v}')" >/dev/null
+expect_eq "text 縮到 40 字後 act 也縮：整行仍 < 1024" true \
+    "$([ "$(ae_last | wc -c | tr -d ' ')" -lt 1024 ] && echo true || echo false)"
+ae_run "$(jq -nc --arg b "$AE_BOX" '{session_id:"s", cwd:$b, hook_event_name:"PostToolUse", tool_name:"Bash", tool_input:{command:"x", description:"line1\nline2\ttab"}}')" >/dev/null
+expect_eq "description 含換行：仍然只有一行" 1 "$(ae_last | wc -l | tr -d ' ')"
+
+# --- 閘門不得讀這份檔
+expect_eq "pre-agent-gate.sh、lib/agent-inflight.sh 不讀 live-events" "" \
+    "$(grep -l 'live-events' "$HOOK_DIR/pre-agent-gate.sh" "$HOOK_DIR/lib/agent-inflight.sh" 2>/dev/null)"
+
+# --- 逃生門與降級
+ae_reset
+out=$(ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" OVERVIEW=off); rc=$?
+expect_eq "OVERVIEW=off：不寫檔、不觸發、exit 0、無輸出" "0|0|0|" "$rc|$(ae_lines)|$(ae_calls)|$out"
+out=$(ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" OVERVIEW_LIVE=off); rc=$?
+expect_eq "OVERVIEW_LIVE=off：不寫檔、不觸發、exit 0、無輸出" "0|0|0|" "$rc|$(ae_lines)|$(ae_calls)|$out"
+out=$(env CLAUDE_PROJECT_DIR="$AE_BOX" PATH=/nonexistent /bin/bash "$HOOK_DIR/agent-events.sh" 2>/dev/null \
+    <<< "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')"); rc=$?
+expect_eq "沒有 jq：exit 0、stdout 空、不寫檔" "0|0|" "$rc|$(ae_lines)|$out"
+out=$(ae_run 'this is {not json'); rc=$?
+expect_eq "輸入不是 JSON：exit 0、stdout 空、不寫檔" "0|0|" "$rc|$(ae_lines)|$out"
+out=$(ae_run ''); rc=$?
+expect_eq "空輸入：exit 0、不寫檔" "0|0" "$rc|$(ae_lines)"
+out=$(ae_run '[1,2]'); rc=$?
+expect_eq "輸入是 JSON 但不是物件：exit 0、不寫檔" "0|0" "$rc|$(ae_lines)"
+
+# --- 觸發 overview.sh --live
+ae_reset
+rm -f "$AE_BOX/.claude/taskmaster-data/project.json"
+ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" >/dev/null
+expect_eq "沒有 project.json（模板 repo 本身）：照寫事件但不觸發 --live" "1|0" "$(ae_lines)|$(ae_calls)"
+ae_reset
+for i in 1 2 3 4 5; do
+    ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" >/dev/null
+done
+expect_eq "視窗內連續 5 個事件：overview.sh 只被呼叫 1 次" 1 "$(ae_calls)"
+expect_contains "觸發的是 --live" "--live" "$(cat "$AE_CALLS" 2>/dev/null)"
+expect_eq "視窗內其餘事件留 .live-dirty" true \
+    "$([ -f "$AE_BOX/.claude/taskmaster-data/overview/.live-dirty" ] && echo true || echo false)"
+expect_eq "5 個事件都有寫" 5 "$(ae_lines)"
+ae_reset
+rm -f "$AE_CALLS"
+ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" OVERVIEW_LIVE_WINDOW_SEC=0 >/dev/null
+ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" OVERVIEW_LIVE_WINDOW_SEC=0 >/dev/null
+expect_eq "視窗為 0 秒：每個事件都觸發" 2 "$(ae_calls)"
+
+# --- session-start 輪替
+ae_reset
+for i in $(seq 1 3500); do printf '{"v":1,"n":%d}\n' "$i"; done > "$AE_LOG"
+printf '' | env CLAUDE_PROJECT_DIR="$AE_BOX" bash "$HOOK_DIR/session-start.sh" >/dev/null 2>&1
+expect_eq "session 啟動時 live-events.jsonl 3500 行：截成最後 3000 行" "3000|501" \
+    "$(ae_lines)|$(head -n 1 "$AE_LOG" | jq -r '.n')"
 
 # =========================================================================
 section "全體 hooks — 語法與健壯性"

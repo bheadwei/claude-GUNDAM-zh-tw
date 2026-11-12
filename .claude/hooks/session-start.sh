@@ -276,6 +276,7 @@ rotate_log() {
 rotate_log "$CLAUDE_DIR/logs/agent-activity.log"   8000   # 多行/筆，約 ~570 筆
 rotate_log "$CLAUDE_DIR/logs/agent-activity.jsonl" 5000   # 單行/筆
 rotate_log "$CLAUDE_DIR/logs/hooks.log"            2000
+rotate_log "$CLAUDE_DIR/logs/live-events.jsonl"    3000   # 單行/筆，現況分頁的事件（agent-events.sh）
 rotate_log "$CLAUDE_DIR/logs/context-reports.log"  1000
 
 # ============================================================================
