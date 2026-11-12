@@ -4,7 +4,7 @@ slug: "overview-live"
 created: "2026-11-12"
 updated: "2026-11-12"
 status: "🔄 進行中"
-current_phase: 5
+current_phase: 6
 mode: "standard"
 files:
   - ".claude/scripts/overview.sh"
@@ -213,12 +213,12 @@ flowchart LR
   - VS Code Remote-SSH 終端機手動驗：跑 `/task-status` → 本機瀏覽器自動打開、畫面不閃
 - **注意**：Windows 從 Git Bash `nohup &` 起的原生 python.exe，在 Bash tool 的 shell 結束後會不會被收掉沒有實測過——手動驗不過時依 ADR-003 第 5 節依序改試 `cmd //c start "" /b <python> …`、`powershell -NoProfile -Command Start-Process -WindowStyle Hidden …`，採用第一個通過的，寫進「發現與決策」與 `overview-serve.sh` 檔頭；都不通過 → Windows 退回 file:// 並記進 KNOWN-GAPS（KNOWN-GAPS 不在本 plan `files:`，屆時回報由主模型處理）
 
-### 階段 5: 「目前任務」分組、標籤與人在做資料 ⏳
+### 階段 5: 「目前任務」分組、標籤與人在做資料 ✅
 - **依賴**：階段 1, 2
-- [ ] `overview.sh` 的 jq：由 `$cx` 依 plan（沒有 plan 時依 task）分組成 `curGroups: [{key, task, title, plan, sources, where, guessed, phase, phases, activePhases}]`。同一份 plan 出現在主 checkout 與 worktree → 一組，`where` 取主 checkout；只在 worktree 的 → `where` 為該 worktree。保留既有 `current`／`currents` 欄位不改形狀 — 驗證：`bash .claude/hooks/tests/run-tests.sh overview`
-- [ ] WBS 解析多讀「負責」欄（沒有這欄的舊節照讀、值為空）；`gather` 多一次 `git for-each-ref --sort=-committerdate refs/heads refs/remotes`；產 `humans: [{who, task, title, status, branch}]`：負責不是 `—`、不是我、狀態不是 ✅／⏭️ 的任務；分支名含任務編號（`2.1` 或 `2-1`，前後是 `/`、`-`、`_` 或字串邊界）就填最近一條。「我」＝`git config user.name` 與 `git config user.email`（`gather` 多讀這兩個值），負責欄與其中任一相同（不分大小寫、去頭尾空白）就算我（決策 Q5） — 驗證：同上
-- [ ] WBS 任務多記 `doneOn`：狀態是 `✅ MM-DD` → `"MM-DD"`，其他（含只寫 ✅ 沒日期）→ `null`。給階段 6 算「今天完成的任務數」（決策 Q6） — 驗證：同上
-- [ ] `index.html`：拿掉全部 ★（地圖模組名、模組側欄、選計畫抽屜、目錄、卡片標題）；有 current 的地方改成小標籤「目前任務」（推測的寫「目前任務（推測）」）；標題列依 `curGroups` 畫標籤「目前任務 <編號> <名稱>（主 checkout／worktree xxx）」，超過 2 條收成「目前任務 N 條 ▾」 — 驗證：截圖
+- [x] `overview.sh` 的 jq：由 `$cx` 依 plan（沒有 plan 時依 task）分組成 `curGroups: [{key, task, title, plan, sources, where, guessed, phase, phases, activePhases}]`。同一份 plan 出現在主 checkout 與 worktree → 一組，`where` 取主 checkout；只在 worktree 的 → `where` 為該 worktree。保留既有 `current`／`currents` 欄位不改形狀 — 驗證：`bash .claude/hooks/tests/run-tests.sh overview`
+- [x] WBS 解析多讀「負責」欄（沒有這欄的舊節照讀、值為空）；`gather` 多一次 `git for-each-ref --sort=-committerdate refs/heads refs/remotes`；產 `humans: [{who, task, title, status, branch}]`：負責不是 `—`、不是我、狀態不是 ✅／⏭️ 的任務；分支名含任務編號（`2.1` 或 `2-1`，前後是 `/`、`-`、`_` 或字串邊界）就填最近一條。「我」＝`git config user.name` 與 `git config user.email`（`gather` 多讀這兩個值），負責欄與其中任一相同（不分大小寫、去頭尾空白）就算我（決策 Q5） — 驗證：同上
+- [x] WBS 任務多記 `doneOn`：狀態是 `✅ MM-DD` → `"MM-DD"`，其他（含只寫 ✅ 沒日期）→ `null`。給階段 6 算「今天完成的任務數」（決策 Q6） — 驗證：同上
+- [x] `index.html`：拿掉全部 ★（地圖模組名、模組側欄、選計畫抽屜、目錄、卡片標題）；有 current 的地方改成小標籤「目前任務」（推測的寫「目前任務（推測）」）；標題列依 `curGroups` 畫標籤「目前任務 <編號> <名稱>（主 checkout／worktree xxx）」，超過 2 條收成「目前任務 N 條 ▾」 — 驗證：截圖
 - **預估**：2h
 - **驗收**：
   - 主 checkout 與 worktree wt-a 的 `.current-task` 都是 1.2 → `curGroups` 1 筆、`sources` 為 `["main","worktree:wt-a"]`、`where` 為主 checkout
@@ -360,3 +360,4 @@ flowchart LR
 - 2026-11-12 階段 4：使用者的 VM（RHEL 8）預設 `python3` 是 3.6.8，搜尋順序改為 `python3` → `python3.13`…`python3.7` → `python` → `py -3`，另加 `OVERVIEW_SERVE_PYTHON`（路徑不可含空格）；本機自動選到 python3.12。自加 `OVERVIEW_SERVE_PORT_BASE`（測試避開真伺服器）
 - 2026-11-12 階段 4 審查（品質＋安全，安全為主模型加派）後的決定：每次新起都換新 token、舊網址失效（ADR-003 第 1 節已改）；鎖內記持有者 pid，持有者已死立即清、活著不偷鎖、等滿約 10 秒退回 file://；閒置計時只在 token 正確的請求重設；關目錄列出、加 `Referrer-Policy: no-referrer`；開瀏覽器背景執行；共用主機可設 `BROWSER=true` 不自動開
 - 2026-11-12 階段 4 未驗：Windows 背景行程存活、Windows 60 秒與 VS Code Remote-SSH 兩條手動驗收；macOS bash 3.2 的 `/dev/tcp`。README／WORKFLOW 寫「每 3 秒重讀」與實際輪詢不一致，留給階段 7 核對
+- 2026-11-12 階段 5：`where` 用 `"main"`／`"worktree:<名>"`（頁面轉中文）；`humans.status` 沿用既有 state 代號；`humans.branch` 取 committerdate 最近一條，本地與 `origin/` 同名取本地、只在遠端才帶 `origin/`；WBS 沒有任何負責人時不跑 `git for-each-ref`；`doneOn` 只認 `✅ MM-DD`（帶年份回 null）。技術債：負責欄多人（`alice, bob`）整欄比對，不會認出「我」。頁面 74596 bytes

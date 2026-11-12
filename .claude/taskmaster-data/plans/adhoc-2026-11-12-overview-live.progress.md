@@ -74,3 +74,15 @@
 - 2026-11-12 15:57 修復 R1 完成｜commit=d96a2ef｜3 MEDIUM＋7 LOW 全修並補測試｜overview-serve 節失敗 0、check-counts 720 一致、無殘留行程
 - 2026-11-12 15:57 審查通過（規格 ✅ 品質 ✅ 安全 ✅，R1 發現以 diff 逐項核對）｜範圍=3342b90..d96a2ef
 - 2026-11-12 15:57 階段完成 → plan 標 ✅，current_phase=5｜摘要=本機伺服器與 /task-status 自動開頁｜測試=82/82
+- 2026-11-12 15:57 合併 main（bb0636f，帶入反 AI 規則）→ 只動文件，check-counts 720 一致
+
+## 階段 5: 「目前任務」分組、標籤與人在做資料
+- 2026-11-12 15:57 派工 implementer（sonnet，主 checkout，循序）｜BASE=bb0636f
+- 2026-11-12 16:10 回報 DONE｜commit=e6d9ee9（資料面）, f86b56b（畫面）｜產出 overview.sh, index.html, run-tests.sh 新節｜overview 9 節 484/0、check-counts 720 一致｜頁面 74596 bytes
+- 2026-11-12 16:10 規格核對（截圖 p5/v3o.png）：3 條收成「目前任務 3 條 ▾」、展開列 3 條含位置、★ 已拿掉 ✅；展開時標題列長高交審查判斷
+- 2026-11-12 16:10 派審查 code-quality-specialist｜範圍=bb0636f..f86b56b
+- 2026-11-12 16:11 審查 R1：PASS（0 CRITICAL／0 HIGH／2 MEDIUM／2 LOW，context/quality/code-quality-specialist-2026-11-12-1700-p5.md）
+- 2026-11-12 16:11 Ruling: 2 MEDIUM（for-each-ref 無負責人時略過、同名分支取本地；補分支比對邊界測試）與 chrome 略過說明交回同一 implementer — 會影響 humans 顯示正確性且修法單純 — 若錯，多一次派工；負責欄多人比對不修，記技術債
+- 2026-11-12 16:20 修復 R1 完成｜commit=f183aee｜for-each-ref 無負責人略過、同名取本地、補 5 個分支邊界案例、chrome 略過不計數｜overview 489/0、check-counts 720 一致
+- 2026-11-12 16:20 審查通過（規格 ✅ 品質 ✅，R1 以 diff 核對）｜範圍=bb0636f..f183aee
+- 2026-11-12 16:20 階段完成 → plan 標 ✅，current_phase=6｜摘要=目前任務分組標籤、拿掉 ★、人在做資料｜測試=489/489
