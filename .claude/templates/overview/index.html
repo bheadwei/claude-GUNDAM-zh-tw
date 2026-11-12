@@ -190,6 +190,61 @@ button.chip{cursor:pointer;min-height:28px}
 .pt th{color:var(--muted);font-weight:500}
 .xtra{margin-top:8px;font-size:var(--fs-s)}.xtra summary{cursor:pointer;color:var(--chg)}.xtra code{display:inline-block;margin:4px 6px 0 0}
 .tnone{color:var(--muted);text-align:center;padding:64px 20px;line-height:1.7}
+#nv{display:none;flex:1;min-height:0;overflow:auto;padding:16px 20px}
+.v-now #nv{display:block}.v-now .main,.v-now .legend,.v-now .chipbar,.v-now .drawer,.v-now #lede,.v-now #status:not(.stale){display:none}
+#still,#live{display:none}#still{margin-left:auto}.v-now #theme{margin-left:0}.v-now #still{display:inline-flex}.v-now #live{display:flex}
+#live{align-items:center;gap:8px;color:var(--muted);font-size:var(--fs-s);font-variant-numeric:tabular-nums}
+.gone{padding:8px 16px;background:var(--warn-bg);border-bottom:1px solid var(--wip);color:var(--wip-fg);font-weight:500}
+.dboard{max-width:1280px;margin:0 auto;display:grid;gap:24px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px;display:grid;gap:4px;align-content:start}
+.kn{font:800 var(--fs-far)/1.2 var(--f-display);font-variant-numeric:tabular-nums;justify-self:start}
+.ku{font-size:var(--fs-m);font-weight:500;color:var(--muted)}.kn>span{white-space:nowrap}
+.kl{color:var(--muted);font-size:var(--fs-s)}
+.kpi.need{border-color:var(--wip);background:var(--warn-bg)}.kpi.need .kn{color:var(--wip-fg)}
+.kpi.run .kn{color:var(--accent)}.kpi.fin .kn{color:var(--done-fg)}.kpi.clash .kn{color:var(--issue-fg)}
+.kpi.zero{opacity:.55;border-color:var(--line);background:var(--surface)}
+.dh{font:700 var(--fs-l) var(--f-display);margin:0 0 8px}
+.dgrid{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+.dmain{flex:999 1 560px;min-width:0}.dside{flex:1 1 300px;min-width:0;display:grid;gap:16px}
+.needs,.glanes,.groups,.feed,.clist{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.groups{gap:16px}
+.needs li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px;padding:12px 16px;border-radius:8px;background:var(--warn-bg);border:1px solid var(--wip)}
+.nk{font-weight:700;color:var(--wip-fg);flex:none;min-width:48px}.ntx{flex:1 1 280px;min-width:0;overflow-wrap:anywhere}
+.ago{color:var(--muted);font-size:var(--fs-s);font-variant-numeric:tabular-nums}
+.tgrp{display:grid;gap:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--group)}
+.tgh{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}.tgh b{font-size:var(--fs-l);overflow-wrap:anywhere}
+.tgh .steps{flex:1 1 160px;margin:0 4px}.gclash{color:var(--issue-fg);font-size:var(--fs-s);font-weight:700}
+.lane{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 16px;display:grid;gap:4px}
+.lane.stuck{border-color:var(--wip)}.lane.stuck .lclock{color:var(--wip-fg)}
+.lhead{display:flex;flex-wrap:wrap;align-items:center;gap:0 8px}.lwhere{color:var(--muted);font-size:var(--fs-s);flex:1 1 auto;min-width:0}
+.lclock{font-variant-numeric:tabular-nums;color:var(--muted)}
+.ldo{overflow-wrap:anywhere}.ldesc{color:var(--muted);font-size:var(--fs-s);overflow-wrap:anywhere}
+.lfoot{display:flex;align-items:center;gap:8px;margin-top:4px}
+.pbar{flex:1;height:6px;border-radius:3px;background:var(--group);overflow:hidden;position:relative}
+.pbar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--accent)}.pbar.ind i{width:30%}
+.pdot{width:8px;height:8px;border-radius:50%;background:var(--accent);position:relative;flex:none}
+.lane.stuck .pdot{background:var(--wip)}#live .pdot{background:var(--done)}
+.feed{gap:0}.feed li{display:grid;grid-template-columns:auto 1fr;gap:0 12px;padding:8px 0;border-top:1px solid var(--line)}
+.feed li:first-child{border-top:0}.ft{color:var(--muted);font-size:var(--fs-s);font-variant-numeric:tabular-nums;grid-row:span 2}
+.fx{color:var(--muted);font-size:var(--fs-s);grid-column:2;overflow-wrap:anywhere}.fv.ok{color:var(--done-fg)}.fv.wait{color:var(--wip-fg)}
+.dcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+.dcard.clash{border-color:var(--issue)}.dcard.clash .dh{color:var(--issue-fg)}
+.clist{gap:4px}.clist code{font:var(--fs-s) var(--f-mono);word-break:break-all}.clist .fx{display:block}
+@media (prefers-reduced-motion:no-preference){
+  .pbar i{transition:width .3s ease-out}
+  .lane:not(.stuck) .pdot::after,#live .pdot::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--accent);opacity:0;animation:ring 2s ease-out infinite}
+  #live .pdot::after{border-color:var(--done)}
+  .pbar.ind i{animation:slide 1.6s ease-in-out infinite}
+  .bump{animation:bump .3s ease-out}.enter{animation:enter .3s ease-out}.leave{animation:leave .3s ease-out forwards}
+  .still .pdot::after,.still .pbar.ind i{animation-play-state:paused}
+}
+@media (prefers-reduced-motion:reduce){.v-now #still{display:none}}
+@keyframes ring{0%{transform:scale(.6);opacity:.7}100%{transform:scale(1.6);opacity:0}}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}
+@keyframes bump{50%{transform:scale(1.15)}}
+@keyframes enter{0%{opacity:0}}
+@keyframes leave{to{opacity:0}}
 @media (pointer:coarse){.pill,.tabs button,button.chip{min-height:44px}}
 @media (max-width:760px){.main{flex-direction:column}.tw{flex-direction:column;gap:8px}.toc{position:static;display:flex;width:100%;max-height:none;overflow-x:auto;gap:4px}.toc a{flex:none;white-space:nowrap;border:1px solid var(--line)}.panel{width:auto;max-height:38%;border-left:0;border-top:1px solid var(--line)}#mini,.hint{display:none}
   .bar{position:relative;gap:8px}.ttl{flex-basis:100%}.bar h1{padding-right:72px}
@@ -200,9 +255,9 @@ button.chip{cursor:pointer;min-height:28px}
 </head>
 <body>
 <header class="bar">
-  <div class="ttl"><h1 id="title">專案圖解</h1><div id="status">載入中…</div><div id="lede" hidden></div><div id="curbar" class="curbar" hidden></div>
+  <div class="ttl"><h1 id="title">專案圖解</h1><div id="status">載入中…</div><div id="live" hidden><i class="pdot"></i><span id="livetx"></span></div><div id="lede" hidden></div><div id="curbar" class="curbar" hidden></div>
     <nav id="crumb" class="crumb" aria-label="目前位置" hidden><button class="pill" id="cfull">全圖</button><span aria-hidden="true">›</span><span id="cname" aria-current="page"></span></nav></div>
-  <nav class="tabs" aria-label="檢視"><button data-v="map" class="on">專案地圖</button><button data-v="tasks" id="ttab">任務圖</button></nav>
+  <nav class="tabs" aria-label="檢視"><button data-v="now">現況</button><button data-v="map">專案地圖</button><button data-v="tasks" id="ttab">任務圖</button></nav>
   <div class="legend" role="group" aria-label="篩選模組">
     <button class="pill" data-f="done" aria-pressed="false"><i class="dot s-done"></i>完成</button>
     <button class="pill" data-f="wip" aria-pressed="false"><i class="dot s-wip"></i>開發中</button>
@@ -216,8 +271,10 @@ button.chip{cursor:pointer;min-height:28px}
     <button class="pill warn" id="nbtn" aria-expanded="false" aria-controls="ntc" hidden></button>
     <button class="pill" id="dbtn" aria-expanded="false" aria-controls="drift" hidden></button>
   </div>
+  <button class="pill" id="still" aria-pressed="false">暫停動畫</button>
   <button class="pill" id="theme" aria-pressed="false">深色</button>
 </header>
+<div id="gone" class="gone" role="status" hidden>伺服器已結束（閒置 30 分鐘），重跑 /task-status</div>
 <div id="ntc" class="drawer" hidden></div>
 <div id="drift" class="drawer" hidden></div>
 <div id="psel" class="drawer" hidden></div>
@@ -239,6 +296,7 @@ button.chip{cursor:pointer;min-height:28px}
   <aside class="panel" id="panel"></aside>
 </div>
 <div id="tv"></div>
+<div id="nv"></div>
 
 <!-- classic script：file:// 下 module script 會被 CORS 擋 -->
 <script src="data.js"></script>
@@ -740,9 +798,9 @@ mini.addEventListener('pointerup', function () { mdrag = false; });
 
 // ---------------------------------------------------------------- 主題
 var THEME = 'overview-theme', dark = matchMedia('(prefers-color-scheme: dark)');
-function stored() { try { return localStorage.getItem(THEME); } catch (e) { return null; } }
+function stored(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function theme() {
-  var t = stored();
+  var t = stored(THEME);
   if (t === 'light' || t === 'dark') root.dataset.theme = t; else { delete root.dataset.theme; t = dark.matches ? 'dark' : 'light'; }
   $('theme').setAttribute('aria-pressed', String(t === 'dark'));
 }
@@ -982,6 +1040,11 @@ function curBar(d) {
     ? '<details class="curmore"' + dk('curbar') + '><summary class="tag cur">目前任務 ' + gs.length + ' 條 ▾</summary><div class="curlist">' + gs.map(curRow).join('') + '</div></details>'
     : gs.map(curRow).join('');
 }
+function stepsBar(phs) {
+  return '<ol class="steps" aria-label="階段進度">' + phs.map(function (ph) {
+    return '<li class="' + esc(ph.state) + '" title="階段 ' + ph.n + ' ' + esc(ph.name) + ' · ' + esc(PST[ph.state] || ph.state) + '"></li>';
+  }).join('') + '</ol>';
+}
 function ptitle(pl) { return (pl.task ? taskIds(pl.task) + ' ' : '') + pl.title; }
 function partCard(p, pl) {
   var ai = p.ai || {}, fs = p.planned ? partFiles(p, pl) : [];
@@ -1027,9 +1090,7 @@ function planCard(pl, i) {
     '<div class="meta"><code>' + esc(pl.file) + '</code>' + (pl.mode ? ' · ' + esc(pl.mode) : '') +
     ' · ' + (from ? esc(from) : pl.base ? '比較基準 <code>' + esc(pl.base) + '</code>' : '找不到比較基準') + '</div>' +
     (v ? '<div class="vr ' + esc(v.result) + '">驗證 ' + esc(v.result) + (v.at ? '（' + esc(v.at) + '）' : '') + (v.reason ? ' — ' + esc(v.reason) : '') + '</div>' : '') +
-    (many ? '<ol class="steps" aria-label="階段進度">' + phs.map(function (ph) {
-      return '<li class="' + esc(ph.state) + '" title="階段 ' + ph.n + ' ' + esc(ph.name) + ' · ' + esc(PST[ph.state] || ph.state) + '"></li>';
-    }).join('') + '</ol><div class="stepl"><span>完成 ' + done.length + '／' + phs.length + ' 個階段</span><span>' +
+    (many ? stepsBar(phs) + '<div class="stepl"><span>完成 ' + done.length + '／' + phs.length + ' 個階段</span><span>' +
       (wi ? '現在：階段 ' + wi.n + ' ' + esc(wi.name) : '全部完成') + '</span></div>' : '') +
     (cols.length ? '<div class="phs">' + cols.map(function (c) {
       return '<div class="ph"><h3>' + esc(c.t) + '</h3>' + (c.ps.map(function (p) { return partCard(p, pl); }).join('') || '<div class="fdesc">沒有部件</div>') + '</div>';
@@ -1074,6 +1135,7 @@ function renderTasks(d) {
 }
 function view(v) {
   root.classList.toggle('v-tasks', v === 'tasks');
+  root.classList.toggle('v-now', v === 'now');
   document.querySelectorAll('.tabs button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
   if (location.hash !== '#' + v) history.replaceState(null, '', '#' + v);
   if (v === 'map') { if (pending && D) map(D); firstFit(); apply(); }
@@ -1086,6 +1148,181 @@ function firstFit() {
 document.querySelector('.tabs').addEventListener('click', function (e) {
   var b = e.target.closest('button[data-v]'); if (b) view(b.dataset.v);
 });
+
+// ---------------------------------------------------------------- 現況
+// live.js 的欄位定義見 overview.sh 檔頭「即時聚合」。更新只改變動的卡（以 data-id 對應），不重建 #nv
+var LIVE = null, ANIM = false, STUCK_S = 600, NONE = '_none';
+var NEED = {approve: '等批准', reply: '等回覆'};
+var HST = {blocked: '阻塞', wip: '進行中', todo: '待處理'};
+var FEEDV = {agent_start: ['開始', ''], agent_done: ['完成', 'ok'], need_open: ['等你', 'wait'], need_done: ['已處理', '']};
+function secs() { return Date.now() / 1000; }
+function pad(n) { return ('0' + n).slice(-2); }
+function clock(s) {
+  s = Math.max(0, Math.floor(s));
+  var m = Math.floor(s / 60);
+  return (m >= 60 ? Math.floor(m / 60) + ':' + pad(m % 60) : m) + ':' + pad(s % 60);
+}
+function hm(t) { var d = new Date(t * 1000); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+function mk(tag, cls, html) { var e = document.createElement(tag); e.className = cls; e.innerHTML = html; return e; }
+function txt(n, sel, s) {
+  var e = n.querySelector(sel), t = clean(s);
+  e.hidden = !t;
+  if (e.textContent === t) return false;
+  e.textContent = t;
+  return true;
+}
+function html(e, h) { if (e.innerHTML !== h) e.innerHTML = h; }
+function flash(e, c) {
+  e.classList.remove(c); void e.offsetWidth; e.classList.add(c);
+  setTimeout(function () { e.classList.remove(c); }, 400);
+}
+function nextLive(n) { while (n && n.classList.contains('leave')) n = n.nextSibling; return n; }
+// 依 id 對應：留下的節點是同一個 DOM 物件、只在順序不對時搬；新的淡入、消失的淡出後移除
+function sync(box, items, make, update) {
+  var have = {}, seen = {}, prev = null;
+  [].forEach.call(box.children, function (n) { if (!n.classList.contains('leave')) have[n.dataset.id] = n; });
+  items.forEach(function (it) {
+    var n = have[it.id];
+    if (!n) { n = make(); n.dataset.id = it.id; if (ANIM) flash(n, 'enter'); }
+    update(n, it);
+    seen[it.id] = 1;
+    var want = nextLive(prev ? prev.nextSibling : box.firstChild);
+    if (n !== want) box.insertBefore(n, want);
+    prev = n;
+  });
+  Object.keys(have).forEach(function (k) {
+    if (seen[k]) return;
+    var n = have[k];
+    n.classList.add('leave');
+    setTimeout(function () { n.remove(); }, ANIM && !reduce ? 300 : 0);
+  });
+}
+function nowShell() {
+  var k = function (id, label) { return '<div class="kpi ' + id + ' zero" id="k-' + id + '"><div class="kn">0</div><div class="kl">' + label + '</div></div>'; };
+  $('nv').innerHTML = '<div class="dboard"><div class="kpis">' + k('need', '需要你') + k('run', '在跑的線') + k('fin', '今天完成') + k('clash', '撞檔') + '</div>' +
+    '<section id="needbox" hidden><h2 class="dh">需要你</h2><ul class="needs" id="needs"></ul></section>' +
+    '<div class="dgrid"><section class="dmain"><h2 class="dh">現在在跑</h2><div class="tnone" id="nnone">還沒有即時資料：agent 開始工作後這裡會出現</div>' +
+    '<div class="tnone" id="gnone" hidden>現在沒有在跑的線</div><div class="groups" id="groups"></div></section>' +
+    '<aside class="dside"><section class="dcard" id="feedbox" hidden><h2 class="dh">動態</h2><ul class="feed" id="feed"></ul></section>' +
+    '<section class="dcard clash" id="clashbox" hidden><h2 class="dh">撞檔</h2><ul class="clist" id="clashes"></ul></section>' +
+    '<section class="dcard" id="humbox" hidden><h2 class="dh">人在做</h2><ul class="clist" id="humans"></ul></section></aside></div></div>';
+}
+function kpi(id, n, h) {
+  var k = $('k-' + id), e = k.querySelector('.kn'), had = e.innerHTML;
+  k.classList.toggle('zero', !n);
+  if (had === h) return;
+  e.innerHTML = h;
+  if (ANIM) flash(e, 'bump');
+}
+function who(x) { return clean(x.who) + '（' + whereText(x.where) + '）'; }
+function stuckFor(l) { return secs() - l.lastAt > STUCK_S; }
+function needItems() {
+  if (!LIVE) return [];
+  return LIVE.needs.map(function (x) {
+    return {id: 'n|' + x.id, k: NEED[x.kind] || x.kind, tx: who(x) + (x.text ? '：' + clean(x.text) : ''), ago: Math.floor((secs() - x.since) / 60) + ' 分鐘前'};
+  }).concat(LIVE.lanes.filter(stuckFor).map(function (l) {
+    return {id: 's|' + l.id, k: '卡住', tx: who(l) + (l.doing ? '：' + clean(l.doing) : ''), ago: Math.floor((secs() - l.lastAt) / 60) + ' 分鐘沒有動靜'};
+  }));
+}
+function needSet(n, it) { txt(n, '.nk', it.k); txt(n, '.ntx', it.tx); txt(n, '.ago', it.ago); }
+function laneSet(n, l) {
+  var f = l.files, bar = n.querySelector('.pbar');
+  txt(n, '.lwho', l.who);
+  txt(n, '.lwhere', whereText(l.where) + (l.readonly ? ' · 唯讀' : ''));
+  if (txt(n, '.ldo', l.doing || l.desc || '剛開始') && ANIM) flash(n.querySelector('.ldo'), 'enter');
+  txt(n, '.ldesc', l.doing ? l.desc : '');
+  txt(n, '.lfiles', f ? f.done + '／' + f.total + ' 個檔' : '');
+  bar.classList.toggle('ind', !f);
+  bar.firstChild.style.width = f && f.total ? Math.round(100 * f.done / f.total) + '%' : '';
+  n.dataset.since = l.since;
+  n.classList.toggle('stuck', stuckFor(l));
+  n.querySelector('.lclock').textContent = clock(secs() - l.since);
+}
+function laneMake() {
+  return mk('article', 'lane', '<div class="lhead"><i class="pdot"></i><b class="lwho"></b><span class="lwhere"></span><span class="lclock"></span></div>' +
+    '<div class="ldo"></div><div class="ldesc"></div><div class="lfoot"><div class="pbar"><i></i></div><span class="ago lfiles"></span></div>');
+}
+function planOf(g) {
+  var ps = (D && D.plans || []).filter(function (p) { return p.file === g.plan; });
+  return ps.filter(function (p) { return p.source === g.where; })[0] || ps[0];
+}
+function groupHead(g) {
+  if (!g) return '<b>未歸屬</b>';
+  var pl = planOf(g), phs = pl && pl.phases || [], a = phaseList(g), meta = [whereText(g.where)];
+  var ph = a.length === 1 && phs.filter(function (p) { return p.n === a[0]; })[0];
+  if (a.length && g.phases) meta.push('階段 ' + a.join('、') + '／' + g.phases + (ph ? ' ' + ph.name : ''));
+  var cl = LIVE ? LIVE.clashes.filter(function (c) { return c.lines.some(function (x) { return g.sources.indexOf(x) >= 0; }); }).length : 0;
+  return '<b>' + esc((g.task ? taskIds(g.task) + ' ' : '') + (g.title || '') + (g.guessed ? '（推測）' : '')) + '</b><span class="ago">' + esc(meta.join(' · ')) + '</span>' +
+    (cl ? '<span class="gclash">撞檔 ' + cl + '</span>' : '') + (phs.length > 1 ? stepsBar(phs) : '');
+}
+function phaseList(g) { return g.activePhases && g.activePhases.length ? g.activePhases : g.phase != null ? [g.phase] : []; }
+function groupSet(n, it) {
+  html(n.querySelector('.tgh'), groupHead(it.g));
+  n.querySelector('.ldesc').hidden = it.lanes.length > 0;
+  sync(n.querySelector('.glanes'), it.lanes, laneMake, laneSet);
+}
+function groupMake() { return mk('section', 'tgrp', '<div class="tgh"></div><div class="ldesc">沒有在跑的線</div><div class="glanes"></div>'); }
+function feedSet(n, f) {
+  var v = FEEDV[f.kind] || [f.kind, ''];
+  html(n, '<span class="ft">' + hm(f.t) + '</span><span><b>' + esc(f.who) + '</b> <span class="fv ' + v[1] + '">' + esc(v[0]) + '</span></span>' +
+    '<span class="fx">' + esc([f.text, f.where && f.where !== 'main' ? whereText(f.where) : ''].filter(Boolean).join(' · ')) + '</span>');
+}
+function renderNow() {
+  if (!$('nv').firstChild) nowShell();
+  var L = LIVE, gs = D && D.curGroups || [], keys = {}, by = {};
+  gs.forEach(function (g) { keys[g.key] = 1; });
+  (L ? L.lanes : []).forEach(function (l) { var k = keys[l.group] ? l.group : NONE; (by[k] = by[k] || []).push(l); });
+  var items = gs.map(function (g) { return {id: g.key, g: g, lanes: by[g.key] || []}; });
+  if (by[NONE]) items.push({id: NONE, g: null, lanes: by[NONE]});
+  $('nnone').hidden = !!L;
+  $('gnone').hidden = !L || items.length > 0;
+  $('groups').hidden = !L;
+  sync($('groups'), L ? items : [], groupMake, groupSet);
+  var fd = L ? L.feed.slice(0, 12) : [];
+  $('feedbox').hidden = !fd.length;
+  sync($('feed'), fd.map(function (f) { return Object.assign({id: f.t + '|' + f.kind + '|' + f.id}, f); }), function () { return mk('li', '', ''); }, feedSet);
+  var cs = L ? L.clashes : [];
+  $('clashbox').hidden = !cs.length;
+  html($('clashes'), cs.map(function (c) { return '<li><code>' + esc(c.file) + '</code><span class="fx">' + esc(c.lines.map(whereText).join(' ／ ')) + '</span></li>'; }).join(''));
+  var hs = D && D.humans || [];
+  $('humbox').hidden = !hs.length;
+  html($('humans'), hs.map(function (h) {
+    return '<li><b>' + esc(h.who) + '</b> ' + esc(h.task + ' ' + (h.title || '')) + '<span class="fx">' + esc((HST[h.status] || h.status) + ' · ' + (h.branch || '尚無分支')) + '</span></li>';
+  }).join(''));
+  var dt = L ? L.doneToday : {agents: 0, tasks: 0};
+  kpi('run', L ? L.lanes.length : 0, String(L ? L.lanes.length : 0));
+  kpi('fin', dt.agents + dt.tasks, '<span>' + dt.agents + '<span class="ku"> 個 agent · </span></span><span>' + dt.tasks + '<span class="ku"> 個任務</span></span>');
+  kpi('clash', cs.length, String(cs.length));
+  $('live').hidden = !L || GONE;
+  if (L) $('livetx').textContent = '即時 · 最後變動 ' + String(L.at || '').slice(11, 16);
+  tick();
+}
+function tick() {
+  if (!$('needs')) return;
+  var ns = needItems();
+  $('needbox').hidden = !ns.length;
+  sync($('needs'), ns, function () { return mk('li', '', '<span class="nk"></span><span class="ntx"></span><span class="ago"></span>'); }, needSet);
+  kpi('need', ns.length, String(ns.length));
+  var t = secs(), byId = {};
+  (LIVE ? LIVE.lanes : []).forEach(function (l) { byId[l.id] = l; });
+  $('groups').querySelectorAll('.lane').forEach(function (n) {
+    var l = byId[n.dataset.id];
+    n.querySelector('.lclock').textContent = clock(t - n.dataset.since);
+    if (l) n.classList.toggle('stuck', stuckFor(l));
+  });
+}
+function setStill(on) {
+  root.classList.toggle('still', on);
+  $('still').setAttribute('aria-pressed', String(on));
+  $('still').textContent = on ? '繼續動畫' : '暫停動畫';
+}
+$('still').onclick = function () {
+  var on = !root.classList.contains('still');
+  try { localStorage.setItem('overview-still', on ? '1' : ''); } catch (e) {}
+  setStill(on);
+};
+setStill(stored('overview-still') === '1');
+setInterval(tick, 1000);
 
 // ---------------------------------------------------------------- 資料
 function setStatus(text, stale) { var s = $('status'); s.textContent = text; s.className = stale ? 'stale' : ''; }
@@ -1131,6 +1368,7 @@ function render(d) {
   renderTasks(d);
   header(d);
   curBar(d);
+  renderNow();
   planSel(d);
   map(d);
   firstFit();
@@ -1141,8 +1379,8 @@ function okText(d) { return '資料時間 ' + when(d) + (d.scan && d.scan.files 
 
 // 輪詢：每次插一個新的 classic script（帶 ?t= 避開快取）。載入前把 window.OVERVIEW 設成 null，
 // 載入後仍是 null ＝ 檔案寫到一半（語法錯誤）或暫時不存在 → 保留上一份、顯示「更新中」。
-// 這招成立的前提是 data.js 只有一句賦值（overview.sh 保證）。
-var timer = null, inflight = false, last = null;
+// 這招成立的前提是 data.js 只有一句賦值（overview.sh 保證）。live.js 同理（每 2 秒）。
+var timer = null, ltimer = null, inflight = false, linflight = false, last = null, GONE = false;
 function check() {
   if (inflight) return;
   inflight = true;
@@ -1161,20 +1399,54 @@ function check() {
     if (!last || next.generatedAt !== last.generatedAt) { last = next; render(next); }
     else if (D) setStatus(okText(D), false);
   }
-  s.onload = done; s.onerror = done;
+  s.onload = done; s.onerror = function () { done(); serverCheck(); };
   document.head.appendChild(s);
 }
-function start() { if (!timer) timer = setInterval(check, POLL_MS); }
-function stop() { clearInterval(timer); timer = null; }
+function checkLive() {
+  if (linflight) return;
+  linflight = true;
+  window.OVERVIEW_LIVE = null;
+  var s = document.createElement('script');
+  s.src = 'live.js?t=' + Date.now();
+  function done() {
+    s.remove(); linflight = false;
+    var n = window.OVERVIEW_LIVE;
+    if (n && (!LIVE || n.at !== LIVE.at)) {
+      LIVE = Object.assign({}, n, {lanes: n.lanes || [], needs: n.needs || [], clashes: n.clashes || [], feed: n.feed || [],
+        doneToday: n.doneToday || {agents: 0, tasks: 0}});
+      renderNow();
+    }
+    ANIM = !!LIVE;
+  }
+  s.onload = done; s.onerror = function () { done(); serverCheck(); };
+  document.head.appendChild(s);
+}
+// 伺服器閒置結束（ADR-2026-11-12-003）：載入失敗時問 .serve-id，連不上才算結束；200／404 是伺服器還在（只是檔案還沒產生）
+function serverCheck() {
+  if (!/^http/.test(location.protocol)) return;
+  fetch('.serve-id', {cache: 'no-store'}).then(function () { setGone(false); }, function () { setGone(true); });
+}
+function setGone(on) {
+  if (GONE === on) return;
+  GONE = on;
+  $('gone').hidden = !on;
+  $('live').hidden = on || !LIVE;
+  if (on) stop(); else if (document.visibilityState === 'visible') { check(); checkLive(); start(); }
+}
+function start() { if (!timer) { timer = setInterval(check, POLL_MS); ltimer = setInterval(checkLive, 2000); } }
+function stop() { clearInterval(timer); clearInterval(ltimer); timer = ltimer = null; }
 document.addEventListener('visibilitychange', function () {
-  if (document.visibilityState === 'visible') { check(); start(); } else stop();
+  if (document.visibilityState !== 'visible') stop();
+  else if (GONE) serverCheck();
+  else { check(); checkLive(); start(); }
 });
 new ResizeObserver(function () { drawVp(); }).observe(stage);
 
-view(location.hash === '#tasks' ? 'tasks' : 'map');
+view(location.hash === '#tasks' ? 'tasks' : location.hash === '#map' ? 'map' : 'now');
 document.fonts.ready.then(function () {
   if (window.OVERVIEW) { last = window.OVERVIEW; render(last); }
-  else { setStatus('找不到 data.js——跑一次 /task-status 產生', true); summary(); }
+  else { setStatus('找不到 data.js——跑一次 /task-status 產生', true); summary(); renderNow(); }
+  checkLive();
   if (document.visibilityState === 'visible') start();
 });
 })();
