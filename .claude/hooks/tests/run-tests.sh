@@ -65,6 +65,7 @@ _changed_rule() {
         .claude/hooks/tests/fixtures/overview/*)             echo "=overview" ;;
         # hook 與被測的腳本：跑提到它的節
         .claude/hooks/*.sh|.claude/scripts/overview.sh|.claude/scripts/overview-scan.sh)      echo "=${1##*/}" ;;
+        .claude/scripts/overview-serve.*)                    echo "=overview-serve" ;;
         # 只挑常數檢查那節：寫 =check-counts.sh 會連帶挑到只是提到檔名的 copy-template 節
         .claude/scripts/check-counts.sh)                     echo "=專案圖解常數對範本" ;;
         # 不被 hook 測試執行的東西
@@ -5285,6 +5286,244 @@ for i in $(seq 1 3500); do printf '{"v":1,"n":%d}\n' "$i"; done > "$AE_LOG"
 printf '' | env CLAUDE_PROJECT_DIR="$AE_BOX" bash "$HOOK_DIR/session-start.sh" >/dev/null 2>&1
 expect_eq "session 啟動時 live-events.jsonl 3500 行：截成最後 3000 行" "3000|501" \
     "$(ae_lines)|$(head -n 1 "$AE_LOG" | jq -r '.n')"
+
+# =========================================================================
+section "overview-serve.sh — 專案圖解本機伺服器（起停、身分確認、開瀏覽器、退路）"
+# =========================================================================
+# ADR-2026-11-12-003。起的是真的 overview-serve.py，port 用 OVERVIEW_SERVE_PORT_BASE 避開真的伺服器；
+# 開瀏覽器的分支一律是記錄參數的假腳本。每個案例結束都 --stop，本節最後確認沒有殘留的行程。
+SVS="$HOOK_DIR/../scripts/overview-serve.sh"
+SV="$SANDBOX/sv"
+SV_OV="$SV/.claude/taskmaster-data/overview"
+SV_BIN="$SANDBOX/sv-bin"
+SV_FP="$SANDBOX/sv-fp"
+SV_CALLS="$SANDBOX/sv-calls"
+SV_PIDS=""
+SV_X=()
+
+sv_pick_py() {
+    local c
+    for c in python3 python python3.13 python3.12 python3.11 python3.10 python3.9 python3.8 python3.7; do
+        if [ "$("$c" -c 'import sys;print(sys.version_info>=(3,7))' 2>/dev/null)" = True ]; then
+            command -v "$c"; return 0
+        fi
+    done
+    return 1
+}
+sv_free_base() {
+    "$SV_BIN/python3" -c '
+import random, socket
+while True:
+    b = random.randint(20000, 40000)
+    socks = []
+    try:
+        for p in range(b, b + 24):
+            s = socket.socket(); s.bind(("127.0.0.1", p)); socks.append(s)
+    except OSError:
+        continue
+    finally:
+        for s in socks: s.close()
+    print(b); break'
+}
+sv_reset() {
+    rm -rf "$SV" "$SV_BIN" "$SV_FP" "$SV_CALLS"
+    mkdir -p "$SV_BIN" "$SV_FP" "$SV_OV"
+    local py t; py=$(sv_pick_py)
+    printf '#!/bin/sh\nexec "%s" "$@"\n' "$py" > "$SV_BIN/python3"
+    for t in open xdg-open cmd fake-browser; do
+        printf '#!/bin/sh\necho "%s $*" >> "%s"\nexit ${FAKE_OPEN_RC:-0}\n' "$t" "$SV_CALLS" > "$SV_BIN/$t"
+    done
+    chmod +x "$SV_BIN"/*
+    for t in git sed uname mkdir rm rmdir sleep; do ln -sf "$(command -v $t)" "$SV_FP/$t"; done
+    printf '#!/bin/sh\necho False\n' > "$SV_FP/python3"; chmod +x "$SV_FP/python3"
+    ( cd "$SV" && git -c init.defaultBranch=main init -q . ) >/dev/null 2>&1
+    echo '{"name":"t"}' > "$SV/.claude/taskmaster-data/project.json"
+    echo hi > "$SV_OV/index.html"
+    SV_BASE=$(sv_free_base); SV_X=(); FAKE_OPEN_RC=0; export FAKE_OPEN_RC
+}
+sv_run() {
+    env -u BROWSER -u DISPLAY -u WAYLAND_DISPLAY -u SSH_CONNECTION -u OVERVIEW_SERVE_PLATFORM \
+        PATH="$SV_BIN:$PATH" OVERVIEW_SERVE_PORT_BASE="$SV_BASE" ${SV_X[@]+"${SV_X[@]}"} \
+        bash "$SVS" "$@" "$SV" 2>/dev/null
+}
+sv_stop() {
+    local pid; pid=$(sed -n 's/.*"pid": *\([0-9]*\).*/\1/p' "$SV_OV/.serve" 2>/dev/null)
+    [ -n "$pid" ] && SV_PIDS="$SV_PIDS $pid"
+    SV_X=(); sv_run --stop >/dev/null
+}
+sv_http() {
+    ( exec 3<>"/dev/tcp/127.0.0.1/$1" && printf '%s %s HTTP/1.0\r\nHost: x\r\nContent-Length: 0\r\n\r\n' "$2" "$3" >&3 \
+        && { while IFS= read -r -t 3 l <&3; do printf '%s\n' "$l"; done; } ) 2>/dev/null
+}
+sv_code() { sv_http "$@" | sed -n '1{s/\r//;s/^[^ ]* //;s/ .*//;p;}'; }
+sv_url_port() { local r=${1#http://127.0.0.1:}; echo "${r%%/*}"; }
+sv_url_path() { echo "/${1#http://127.0.0.1:*/}"; }
+sv_last() { printf '%s\n' "$1" | sed -n '$p'; }
+sv_wait_for() { local i; for ((i = 0; i < 60; i++)); do ( exec 3<>"/dev/tcp/127.0.0.1/$1" ) 2>/dev/null && return 0; sleep 0.1; done; return 1; }
+SV_OCC=""
+sv_occupy() {
+    "$SV_BIN/python3" -c '
+import socket, sys, time
+b, n = int(sys.argv[1]), int(sys.argv[2]); keep = []
+for p in range(b, b + n):
+    s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(("127.0.0.1", p)); s.listen(1); keep.append(s)
+time.sleep(60)' "$1" "$2" >/dev/null 2>&1 &
+    SV_OCC="$SV_OCC $!"
+    sv_wait_for "$1"
+}
+sv_unoccupy() { local p; for p in $SV_OCC; do kill "$p" 2>/dev/null; wait "$p" 2>/dev/null; done; SV_OCC=""; }
+sv_calls() { cat "$SV_CALLS" 2>/dev/null; }
+SV_URL_RE='^http://127\.0\.0\.1:[0-9]+/[A-Za-z0-9_-]+/index\.html$'
+
+# --- 沒在跑 → 起一個；有 $BROWSER 且是新啟動 → 呼叫 1 次；再呼叫一次 → 不起第二個、不再開瀏覽器
+sv_reset; SV_X=(BROWSER="$SV_BIN/fake-browser")
+out=$(sv_run); rc=$?; url=$(sv_last "$out"); port=$(sv_url_port "$url"); upath=$(sv_url_path "$url")
+pid1=$(sed -n 's/.*"pid": *\([0-9]*\).*/\1/p' "$SV_OV/.serve")
+expect_eq "沒在跑 → exit 0" 0 "$rc"
+[[ $url =~ $SV_URL_RE ]] && ok "沒在跑 → stdout 最後一行是 http://127.0.0.1:<port>/<token>/index.html" \
+    || ng "stdout 最後一行是帶 token 的網址" "$SV_URL_RE" "$out"
+expect_eq "GET 該網址 → 200" 200 "$(sv_code "$port" GET "$upath")"
+expect_eq "GET 不帶 token 的 /index.html → 404" 404 "$(sv_code "$port" GET /index.html)"
+expect_eq "GET 錯的 token → 404" 404 "$(sv_code "$port" GET /AAAAAAAAAAAAAAAAAAAAAA/index.html)"
+expect_eq "GET /<token>/.serve → 404（不外洩狀態檔）" 404 "$(sv_code "$port" GET "${upath%index.html}.serve")"
+expect_contains "回應標頭含 Cache-Control: no-store" "Cache-Control: no-store" "$(sv_http "$port" GET "$upath")"
+expect_eq "新啟動 → \$BROWSER 呼叫 1 次、參數是網址" "fake-browser $url" "$(sv_calls)"
+SV_X=(BROWSER="$SV_BIN/fake-browser"); out2=$(sv_run)
+pid2=$(sed -n 's/.*"pid": *\([0-9]*\).*/\1/p' "$SV_OV/.serve")
+expect_eq "已在跑再呼叫 → 印同一個網址" "$url" "$(sv_last "$out2")"
+expect_eq "已在跑再呼叫 → 不起第二個（.serve 的 pid 不變）" "$pid1" "$pid2"
+expect_eq "已在跑再呼叫 → \$BROWSER 沒再被呼叫" 1 "$(sv_calls | wc -l | tr -d ' ')"
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) perm=$([ -f "$SV_OV/.serve" ] && echo -rw-------) ;;
+    *) perm=$(ls -l "$SV_OV/.serve" | cut -c1-10) ;;
+esac
+expect_eq ".serve 權限為 600（Windows 只確認檔案存在）" "-rw-------" "$perm"
+cmdline=$(tr '\0' ' ' < "/proc/$pid1/cmdline" 2>/dev/null)
+case "$cmdline$(cat "$SV_OV/.serve")" in *0.0.0.0*) bind_ok="含 0.0.0.0" ;; *) bind_ok=no-wildcard ;; esac
+expect_eq "行程命令列與 .serve 不含 0.0.0.0" no-wildcard "$bind_ok"
+if command -v ss >/dev/null 2>&1; then listen=$(ss -ltn 2>/dev/null | grep ":$port ")
+elif command -v netstat >/dev/null 2>&1; then listen=$(netstat -an 2>/dev/null | grep -E "[.:]$port .*LISTEN")
+else listen="127.0.0.1:$port"; fi
+case "$listen" in *"127.0.0.1:$port"*) l_ok=127; case "$listen" in *"0.0.0.0:$port"*|*"*:$port"*|*"[::]:$port"*) l_ok=wildcard ;; esac ;; *) l_ok="none: $listen" ;; esac
+expect_eq "ss／netstat 確認只聽 127.0.0.1（兩者都沒有時退回只看 .serve）" 127 "$l_ok"
+sv_stop
+expect_eq "--stop → .serve 刪除" no "$([ -f "$SV_OV/.serve" ] && echo yes || echo no)"
+expect_eq "--stop → 伺服器不再回應" "" "$(sv_code "$port" GET "$upath")"
+sv_run --stop >/dev/null; expect_eq "沒在跑時 --stop → exit 0" 0 $?
+
+# --- 8765（起始 port）被佔 → 用下一個
+sv_reset; sv_occupy "$SV_BASE" 1
+out=$(sv_run); url=$(sv_last "$out")
+expect_eq "起始 port 被別的程式佔住 → 用下一個 port、印它的網址" "$((SV_BASE + 1))" "$(sv_url_port "$url")"
+expect_eq "…該網址 GET → 200" 200 "$(sv_code "$(sv_url_port "$url")" GET "$(sv_url_path "$url")")"
+sv_stop; sv_unoccupy
+
+# --- 狀態檔記的 port 上是別人的伺服器 → 不沿用、另起
+sv_reset
+foreign=$((SV_BASE + 5))
+"$SV_BIN/python3" -m http.server "$foreign" --bind 127.0.0.1 >/dev/null 2>&1 &
+SV_OCC="$!"; sv_wait_for "$foreign"
+printf '{"port": %s, "token": "abcdefghijklmnopqrstuv", "pid": 1, "started": "x"}' "$foreign" > "$SV_OV/.serve"
+out=$(sv_run); url=$(sv_last "$out")
+expect_eq "狀態檔的 port 上是別人的伺服器 → 另起一個（port 不是別人的）" "$SV_BASE" "$(sv_url_port "$url")"
+expect_eq "….serve 更新成新的 port" "$SV_BASE" "$(sed -n 's/.*"port": *\([0-9]*\).*/\1/p' "$SV_OV/.serve")"
+sv_stop; sv_unoccupy
+
+# --- 兩個同時跑 → 只有一個伺服器
+sv_reset; o1="$SANDBOX/sv-o1"; o2="$SANDBOX/sv-o2"
+sv_run > "$o1" & p1=$!
+sv_run > "$o2" & p2=$!
+wait "$p1" "$p2"
+u1=$(sv_last "$(cat "$o1")"); u2=$(sv_last "$(cat "$o2")")
+[[ $u1 =~ $SV_URL_RE ]] && expect_eq "兩個同時跑 → 印同一個網址（只有一個伺服器）" "$u1" "$u2" \
+    || ng "兩個同時跑 → 兩者都印網址" "$SV_URL_RE" "$u1 | $u2"
+expect_eq "…且該網址 GET → 200" 200 "$(sv_code "$(sv_url_port "$u1")" GET "$(sv_url_path "$u1")")"
+sv_stop; rm -f "$o1" "$o2"
+
+# --- 20 個 port 都不能用
+sv_reset; sv_occupy "$SV_BASE" 20
+out=$(sv_run); rc=$?
+expect_eq "20 個 port 都被佔 → exit 0" 0 "$rc"
+expect_eq "20 個 port 都被佔 → 最後一行是 file:// 網址" "file://$SV_OV/index.html" "$(sv_last "$out")"
+expect_eq "20 個 port 都被佔 → 印兩行（原因＋網址）" 2 "$(printf '%s\n' "$out" | wc -l | tr -d ' ')"
+expect_eq "…沒有留下 .serve" no "$([ -f "$SV_OV/.serve" ] && echo yes || echo no)"
+sv_stop; sv_unoccupy
+
+# --- 沒有 3.7 以上的 Python
+sv_reset
+out=$(env -u BROWSER -u DISPLAY -u WAYLAND_DISPLAY -u SSH_CONNECTION PATH="$SV_FP" OVERVIEW_SERVE_PORT_BASE="$SV_BASE" "$BASH" "$SVS" "$SV" 2>/dev/null); rc=$?
+expect_eq "只有印不出 True 的假 python3 → exit 0" 0 "$rc"
+expect_eq "…最後一行是 file:// 網址" "file://$SV_OV/index.html" "$(sv_last "$out")"
+expect_contains "…印出原因" "找不到 Python 3.7 以上，改用檔案開啟；SSH 遠端請改用 Live Preview" "$out"
+
+# --- 開瀏覽器的平台分支（假腳本記參數）
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=MINGW64_NT-10.0)
+out=$(sv_run); url=$(sv_last "$out"); calls=$(sv_calls)
+expect_eq "Windows、沒 \$BROWSER、新啟動 → 假 cmd 呼叫 1 次" 1 "$(printf '%s' "$calls" | grep -c '^cmd ')"
+expect_contains "…參數含 start 與網址" "start" "$calls"; expect_contains "…參數含網址" "$url" "$calls"
+SV_X=(OVERVIEW_SERVE_PLATFORM=MINGW64_NT-10.0); sv_run >/dev/null
+expect_eq "Windows、已在跑 → 不再呼叫 cmd" 1 "$(sv_calls | wc -l | tr -d ' ')"
+sv_stop
+
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=Darwin)
+out=$(sv_run); url=$(sv_last "$out")
+expect_eq "macOS、沒 \$BROWSER、新啟動 → 假 open 呼叫 1 次、參數是網址" "open $url" "$(sv_calls)"
+sv_stop
+
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=Linux DISPLAY=:0)
+out=$(sv_run); url=$(sv_last "$out")
+expect_eq "Linux、有 DISPLAY → 假 xdg-open 呼叫 1 次、參數是網址" "xdg-open $url" "$(sv_calls)"
+sv_stop
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=Linux DISPLAY=:0 SSH_CONNECTION="1 2 3 4")
+out=$(sv_run); url=$(sv_last "$out")
+expect_eq "Linux、有 DISPLAY、有 SSH_CONNECTION → 仍呼叫 xdg-open 1 次" "xdg-open $url" "$(sv_calls)"
+sv_stop
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=Linux WAYLAND_DISPLAY=wayland-0)
+out=$(sv_run); url=$(sv_last "$out")
+expect_eq "Linux、有 WAYLAND_DISPLAY → 假 xdg-open 呼叫 1 次" "xdg-open $url" "$(sv_calls)"
+sv_stop
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=Linux)
+out=$(sv_run); url=$(sv_last "$out")
+expect_eq "Linux、沒有 DISPLAY 也沒有 WAYLAND_DISPLAY → 不呼叫任何開瀏覽器指令" "" "$(sv_calls)"
+expect_eq "…只印網址（一行）" "$url" "$out"
+sv_stop
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=Linux SSH_CONNECTION="1 2 3 4")
+out=$(sv_run); url=$(sv_last "$out"); port=$(sv_url_port "$url")
+expect_eq "Linux、沒 DISPLAY、有 SSH_CONNECTION → 不呼叫任何開瀏覽器指令" "" "$(sv_calls)"
+expect_contains "…多印 ssh -L 轉發指令" "ssh -L $port:127.0.0.1:$port" "$out"
+[[ $url =~ $SV_URL_RE ]] && ok "…最後一行仍是網址" || ng "…最後一行仍是網址" "$SV_URL_RE" "$url"
+sv_stop
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=Darwin FAKE_OPEN_RC=1)
+out=$(sv_run); rc=$?; url=$(sv_last "$out")
+expect_eq "假 open exit 1 → overview-serve.sh 仍 exit 0" 0 "$rc"
+[[ $url =~ $SV_URL_RE ]] && ok "…最後一行仍是網址" || ng "…最後一行仍是網址" "$SV_URL_RE" "$out"
+sv_stop
+
+# --- 閒置自行結束、下次重起
+sv_reset; SV_X=(OVERVIEW_SERVE_IDLE_MIN=0.03)
+out=$(sv_run); port=$(sv_url_port "$(sv_last "$out")")
+for ((i = 0; i < 100; i++)); do [ -f "$SV_OV/.serve" ] || break; sleep 0.1; done
+expect_eq "閒置超過 OVERVIEW_SERVE_IDLE_MIN → .serve 被刪" no "$([ -f "$SV_OV/.serve" ] && echo yes || echo no)"
+expect_eq "…伺服器不再回應" "" "$(sv_code "$port" GET /)"
+SV_X=(); out=$(sv_run); url=$(sv_last "$out")
+expect_eq "…下次呼叫重起、網址可用" 200 "$(sv_code "$(sv_url_port "$url")" GET "$(sv_url_path "$url")")"
+sv_stop
+
+# --- 沒有 project.json
+sv_reset; rm -f "$SV/.claude/taskmaster-data/project.json"
+out=$(sv_run); rc=$?
+expect_eq "沒有 project.json → 什麼都不印" "" "$out"
+expect_eq "沒有 project.json → exit 0" 0 "$rc"
+expect_eq "沒有 project.json → 不建 .serve" no "$([ -f "$SV_OV/.serve" ] && echo yes || echo no)"
+
+# --- 收尾：不能有殘留行程
+sv_stop; sv_unoccupy
+alive=""
+for p in $SV_PIDS; do kill -0 "$p" 2>/dev/null && alive="$alive $p"; done
+expect_eq "本節結束沒有殘留的伺服器行程" "" "$alive"
+for p in $alive; do kill "$p" 2>/dev/null; done
+rm -rf "$SV" "$SV_BIN" "$SV_FP" "$SV_CALLS"
 
 # =========================================================================
 section "全體 hooks — 語法與健壯性"
