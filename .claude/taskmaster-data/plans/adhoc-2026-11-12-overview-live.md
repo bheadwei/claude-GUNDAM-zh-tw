@@ -134,7 +134,7 @@ flowchart LR
   - 其餘專案圖解守門（外部網址、module script、token 區外 hex 色碼）照綠
 - **注意**：資料沒改寫時頁首「資料時間」會停在上次內容變動的時間，這是對的；不要為了讓它跳而寫回 `generatedAt`。上限放在階段 1 改，是因為現行約 67KB、階段 2／5／7／8 都往 index.html 加東西，越早放寬越不會在中途被 check-counts 擋
 
-### 階段 2: 大包 plan 聚焦（任務圖） ⏳
+### 階段 2: 大包 plan 聚焦（任務圖） 🔄
 - **依賴**：階段 1
 - [ ] `planCard`：每份 plan 上方一條階段進度帶（每階段一格，完成／進行中／未開始三色，滑過顯示階段名），下方一行「完成 N／M 個階段 · 現在：階段 X 名稱」 — 驗證：截圖
 - [ ] 只展開「進行中＋下一個」階段的部件；再後面的寫成一行「之後：階段 11 退款、階段 12 對帳報表…」；已完成階段收成一行 `<details>`「已完成 N 個階段」，展開列每階段 `+/−` 與測試數 — 驗證：截圖
@@ -153,7 +153,7 @@ flowchart LR
   - 390px 與 1440px、淺／深色四張截圖，沒有文字溢出卡片
 - **注意**：截圖用的大 plan 示範資料在 scratchpad 產（可參考預覽腳本的 `phase_defs`），不進 repo。預覽腳本踩過 class 撞名：`.bar`、`.dash`、`.mini` 已被頁面使用，新 class 先 grep 一次
 
-### 階段 3: agent 事件記錄（hook） ⏳
+### 階段 3: agent 事件記錄（hook） 🔄
 - **依賴**：無
 - [ ] **先錄真實 payload**：裝臨時探針（把 stdin 存到 scratchpad）錄 SubagentStart、SubagentStop、Notification、PermissionRequest、subagent 內的 Pre/PostToolUse、AskUserQuestion 各一筆，確認：subagent 內的 PermissionRequest／Notification 有沒有 `agent_id`、SubagentStart 的 `cwd` 是不是 worktree 根、`async: true` 在目前版本是否正常（官方文件已查，見 ADR-002 第 1 節；這裡只做實測）、Notification 實際出現哪些 `notification_type`（`agent_needs_input` 不在官方清單，探針沒錄到就不列進開啟者）。結果寫進「發現與決策」，探針用完移除 — 驗證：scratchpad 有各事件的 payload 檔
 - [ ] 新增 `.claude/hooks/agent-events.sh`：一次 `jq` 把 payload 壓成一行事件（格式見下）附加到 `$MAIN_CLAUDE/logs/live-events.jsonl`；永遠無輸出、exit 0 — 驗證：`bash .claude/hooks/tests/run-tests.sh agent-events.sh`
