@@ -137,6 +137,11 @@ fi
 if [ ! -d "$OV_DIR" ]; then
     mkdir -p "$OV_DIR" 2>/dev/null && printf '*\n' > "$OV_DIR/.gitignore" 2>/dev/null
 fi
+# 過渡守衛：overview.sh 還不認 --live 時會把它當成 WORK_ROOT。只在真的要觸發時才檢查
+if ! grep -q -- '--live' "$OV_SH" 2>/dev/null; then
+    : > "$OV_DIR/.live-dirty" 2>/dev/null
+    exit 0
+fi
 printf '%s\n' "$AE_T" > "$OV_DIR/.live-at" 2>/dev/null
 
 if [ "${OVERVIEW_SYNC:-}" = "1" ]; then

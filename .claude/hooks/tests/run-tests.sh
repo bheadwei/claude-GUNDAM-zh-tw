@@ -5062,7 +5062,7 @@ ae_reset() {
     rm -rf "$AE_BOX"
     mkdir -p "$AE_BOX/.claude/taskmaster-data" "$AE_BOX/.claude/scripts" "$AE_BOX/.claude/logs"
     printf '{}' > "$AE_BOX/.claude/taskmaster-data/project.json"
-    printf '#!/bin/bash\necho "$*" >> "%s"\n' "$AE_CALLS" > "$AE_BOX/.claude/scripts/overview.sh"
+    printf '#!/bin/bash\n# supports --live\necho "$*" >> "%s"\n' "$AE_CALLS" > "$AE_BOX/.claude/scripts/overview.sh"
 }
 ae_wt() {
     AE_WT="$AE_BOX/.claude/worktrees/wt-a"
@@ -5245,6 +5245,18 @@ rm -f "$AE_CALLS"
 ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" OVERVIEW_LIVE_WINDOW_SEC=0 >/dev/null
 ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" OVERVIEW_LIVE_WINDOW_SEC=0 >/dev/null
 expect_eq "視窗為 0 秒：每個事件都觸發" 2 "$(ae_calls)"
+
+ae_reset
+printf '#!/bin/bash\necho "$*" >> "%s"\n' "$AE_CALLS" > "$AE_BOX/.claude/scripts/overview.sh"
+ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" >/dev/null
+expect_eq "overview.sh 還不認 --live：不呼叫、仍留 .live-dirty" "0|true" \
+    "$(ae_calls)|$([ -f "$AE_BOX/.claude/taskmaster-data/overview/.live-dirty" ] && echo true || echo false)"
+
+# --- settings.json 接線
+expect_eq "settings.json：agent-events.sh 的接線全部 async: true" true \
+    "$(jq '[.hooks[][].hooks[] | select(.command | contains("agent-events.sh"))] | all(.async == true)' "$HOOK_DIR/../settings.json")"
+expect_eq "settings.json：agent-events.sh 至少 8 條接線" true \
+    "$(jq '[.hooks[][].hooks[] | select(.command | contains("agent-events.sh"))] | length >= 8' "$HOOK_DIR/../settings.json")"
 
 # --- session-start 輪替
 ae_reset
