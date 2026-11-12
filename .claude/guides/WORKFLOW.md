@@ -154,11 +154,16 @@ wbs-archive.md  已完成里程碑的完整任務列（含實際耗時，可回�
 資料流清單的每一條都連到架構文件；`Esc` 或麵包屑的「全圖」回到全圖。
 兩份產物（`data.js`、`overview.md`）都不進 git。
 
-**在 SSH 遠端機器上開發時**：`file://` 網址指的是遠端的檔，本機瀏覽器打不開。兩種開法——
-用 VS Code Remote 連到遠端，以 Live Preview 這類預覽擴充打開遠端的 `.claude/taskmaster-data/overview/index.html`
-（VS Code 會把預覽的 port 轉送到本機，畫面照樣每 3 秒重讀）；
-或把整個 `overview/` 資料夾下載回本機再打開（`index.html` 與 `data.js` 要在同一個資料夾，畫面不連外網）。
-沒有匯出功能，下載回來的是當下那一份，不會自己更新。
+**網址怎麼來**：`/task-status` 會起一個本機伺服器（`.claude/scripts/overview-serve.sh`，只綁 127.0.0.1、
+網址帶 token、閒置 30 分鐘自己結束），最後一行是 `http://127.0.0.1:<port>/<token>/index.html`，要整段複製。
+新起時會自動開瀏覽器；已在跑只印網址。需要 Python 3.7 以上，沒有時退回 `file://` 路徑。
+VS Code 的 Simple Browser（Ctrl+Shift+P → `Simple Browser: Show`）貼網址也能看。
+**不要用 Live Server**：資料每幾秒更新一次，它會整頁重載、畫面一直閃。
+
+**在 SSH 遠端機器上開發時**：伺服器跑在遠端，本機瀏覽器要經 port 轉發才連得到。
+用 VS Code Remote 開的終端機跑 `/task-status`，port 會自動轉發、瀏覽器在本機打開；
+純 SSH 時 `/task-status` 會多印一行 `ssh -L <port>:127.0.0.1:<port> <你的主機>`，在自己電腦另開終端機執行後貼上網址。
+關閉伺服器：`bash .claude/scripts/overview-serve.sh --stop`。
 
 舊專案跑完 `update-template` 後，下一次開 session 就會自動產生第一份。
 產生器與資料格式見 `.claude/scripts/overview.sh` 檔頭（唯一來源）。

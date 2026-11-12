@@ -163,7 +163,7 @@ claude_v2026/
 （或 `bash .claude/scripts/overview.sh --print-path`）。不用手動重產：寫 wbs／plan／架構文件或程式碼檔時
 hook 在背景更新，畫面每 3 秒自己重讀。地圖可拖曳平移、縮放（放大會顯示更多細節）、
 雙擊模組聚焦，左下角有小地圖可跳轉；點模組可展開看內部檔案與 import，右側欄列出它參與的資料流；
-產物在 `taskmaster-data/overview/`，不進 git。SSH 遠端開發用 VS Code Remote 開，或把 `overview/` 整個下載回本機。
+產物在 `taskmaster-data/overview/`，不進 git。網址是 `/task-status` 起的本機伺服器（`overview-serve.sh`，只綁 127.0.0.1、網址帶 token、閒置 30 分鐘自動結束；需要 Python 3.7 以上，沒有就退回 `file://`）。SSH 遠端開發在自己電腦用 `ssh -L <port>:127.0.0.1:<port> <主機>` 轉發 port 後貼上網址（VS Code Remote 會自動轉發）。
 關閉用環境變數 `OVERVIEW=off`。使用方式見 `.claude/guides/WORKFLOW.md`「想看整體長什麼樣」，
 產生器與設定見 `.claude/scripts/overview.sh` 檔頭。
 
