@@ -38,7 +38,7 @@ informed: [planner]
 | `SubagentStart` | 全部 | 開始 | lane 開始（`since`） |
 | `SubagentStop` | 全部 | 結束 | lane 結束、`doneToday`、關掉該 agent 的 need。**lane 結束只認這個**（2026-09-11 的坑） |
 | `PreToolUse` | `AskUserQuestion\|Bash\|PowerShell` | 開始跑指令／發問 | `doing`；AskUserQuestion 開一筆 need |
-| `PostToolUse` | `Write\|Edit\|MultiEdit\|Bash\|PowerShell\|AskUserQuestion` | 寫了哪個檔／指令跑完／問題答完 | `doing`、寫入集（撞檔）、關 need |
+| `PostToolUse` | `*`（全部工具；白名單外的只記 `ev`／`tool`／`sid`／`aid`／`at`／`src`，`act` 為 `用 <tool>`，不讀 `tool_input`） | 寫了哪個檔／指令跑完／問題答完／用了其他工具 | `doing`、寫入集（撞檔）、關 need |
 | `PermissionRequest` | 全部 | 要使用者批准 | 開一筆 `approve` need |
 | `Notification` | 全部（不設 matcher） | 通知種類 | `permission_prompt`／`idle_prompt`／`elicitation_dialog` 開 need |
 | `UserPromptSubmit` | — | 只記「使用者送出了」，**不記 prompt 內容** | 關主 session 的 need |
@@ -94,7 +94,7 @@ informed: [planner]
 
 - 「第一個詞」要跳過賦值，是因為 `API_KEY=xyz curl …` 的第一個詞就是秘密本身
 - Bash 的 `description` 是模型寫的摘要，理論上仍可能帶出敏感字；接受這個殘餘風險（80 字上限、只在本機、`logs/` 不進 git），換來「正在做」看得懂
-- MCP 工具、WebFetch 等沒接線的工具一律不記
+- MCP 工具、WebFetch 等白名單外的工具：PostToolUse 只記工具名（`act` 為 `用 <tool>`），`tool_input`／`tool_response` 一律不讀；PreToolUse 不接
 - 檔案在 `.claude/logs/` 下，由 `.claude/logs/.gitignore` 排除進版控、`copy-template` 不複製
 
 ### 4. 寫到哪一邊、worktree 怎麼讀
@@ -125,7 +125,7 @@ worktree 被刪掉時它的事件檔一起消失——那些線多半已經結�
 
 **關閉規則**（由 `--live` 依 `(t, ms)` 排序後判斷，不靠檔案行序）：
 
-1. 同 `sid`＋同 `aid` 在開啟者**之後**出現**任何非開啟者事件** → 已處理。理由：Claude Code 在等使用者時那條線不會有別的動作；有動作就代表使用者回應了（批准、拒絕、回答都算）。拒絕批准時不會有 PostToolUse（`learned/2026-10-15-posttooluse-skips-failures.md`），但模型接著的下一個動作、或 SubagentStop 會關掉它
+1. 同 `sid`＋同 `aid` 在開啟者**之後**出現**任何非開啟者事件** → 已處理。理由：Claude Code 在等使用者時那條線不會有別的動作；有動作就代表使用者回應了（批准、拒絕、回答都算）。PostToolUse 接全部工具，所以批准後一定有下一筆事件（WebFetch、MCP 這類只觸發 PermissionRequest 的工具也一樣）。拒絕批准時不會有 PostToolUse（`learned/2026-10-15-posttooluse-skips-failures.md`），但模型接著的下一個動作、或 SubagentStop 會關掉它
 2. 該 `aid` 的 `SubagentStop` → 已處理
 3. 主 session（`aid` 為空）的 need：同 `sid` 的 `UserPromptSubmit` 也關閉
 4. 同 `sid`／`aid` 只留最新一筆開啟者

@@ -1,6 +1,6 @@
 #!/bin/bash
 # agent-events.sh — SubagentStart／SubagentStop／Notification／PermissionRequest／UserPromptSubmit／Stop／
-#                   PreToolUse(AskUserQuestion|Bash|PowerShell)／PostToolUse(Write|Edit|MultiEdit|Bash|PowerShell|AskUserQuestion)
+#                   PreToolUse(AskUserQuestion|Bash|PowerShell)／PostToolUse(全部工具)
 #
 # 把事件壓成一行附加到 $MAIN_CLAUDE/logs/live-events.jsonl，給專案圖解的「現況」分頁用。
 # 契約（事件格式、白名單、need 規則、為什麼不能當閘門）：ADR-2026-11-12-002。
@@ -68,9 +68,11 @@ AE_LINE=$(printf '%s' "$INPUT" | jq -c --argjson tt "${AE_T:-0}" --argjson msv "
 
   select(type == "object" and (.hook_event_name | type) == "string" and .hook_event_name != "")
   | . as $p
-  | (if ($p.tool_input | type) == "object" then $p.tool_input else {} end) as $ti
   | ($p.hook_event_name) as $ev
   | ($p.tool_name | str) as $tool
+  | (["Write", "Edit", "MultiEdit", "Bash", "PowerShell", "AskUserQuestion"] | index($tool) != null) as $listed
+  | (($ev == "PreToolUse" or $ev == "PostToolUse") and ($listed | not)) as $other
+  | (if ($p.tool_input | type) == "object" and ($other | not) then $p.tool_input else {} end) as $ti
   | ($ti.file_path | norm) as $fp
   | ($ti.description | str) as $desc
   | ($ti.command | word) as $w
@@ -84,6 +86,7 @@ AE_LINE=$(printf '%s' "$INPUT" | jq -c --argjson tt "${AE_T:-0}" --argjson msv "
   | (if ($ev == "PreToolUse" or $ev == "PostToolUse") and $isshell then
        (if $desc != "" then "跑 " + $desc elif $w != "" then "跑 " + $w else "跑指令" end)
      elif ($ev == "PreToolUse" or $ev == "PostToolUse") and $iswrite and $fp != "" then "編輯 " + ($fp | fname)
+     elif $other then "用 " + ($tool | cap(40))
      else "" end) as $act
   | (if $ev == "PermissionRequest" then
        (if $isshell then $tool + "：" + (if $desc != "" then $desc elif $w != "" then $w else "指令" end)
@@ -123,7 +126,7 @@ OV_SH="$MAIN_CLAUDE/scripts/overview.sh"
 
 OV_DIR="$MAIN_CLAUDE/taskmaster-data/overview"
 AE_AT=0
-[ -f "$OV_DIR/.live-at" ] && IFS= read -r AE_AT < "$OV_DIR/.live-at"
+[ -f "$OV_DIR/.live-at" ] && read -r AE_AT _ < "$OV_DIR/.live-at"
 [[ $AE_AT =~ ^[0-9]+$ ]] || AE_AT=0
 AE_WIN=${OVERVIEW_LIVE_WINDOW_SEC:-2}
 [[ $AE_WIN =~ ^[0-9]+$ ]] || AE_WIN=2
@@ -142,7 +145,8 @@ if ! grep -q -- '--live' "$OV_SH" 2>/dev/null; then
     : > "$OV_DIR/.live-dirty" 2>/dev/null
     exit 0
 fi
-printf '%s\n' "$AE_T" > "$OV_DIR/.live-at" 2>/dev/null
+# 視窗秒數一起記：--live 跑完要持鎖等到視窗結束、補跑視窗內留下的 .live-dirty，用的是這裡同一個值
+printf '%s %s\n' "$AE_T" "$AE_WIN" > "$OV_DIR/.live-at" 2>/dev/null
 
 if [ "${OVERVIEW_SYNC:-}" = "1" ]; then
     bash "$OV_SH" --live "$WORK_ROOT" </dev/null >/dev/null 2>&1

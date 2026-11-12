@@ -162,7 +162,7 @@
         ]
       },
       {
-        "matcher": "Write|Edit|MultiEdit|Bash|PowerShell|AskUserQuestion",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
