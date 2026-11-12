@@ -3564,6 +3564,13 @@ if command -v node >/dev/null 2>&1; then
     expect_eq "不到 3 個檔 → 沒有共同路徑" "" "$(pfq .two)"
     expect_eq "沒有目錄被 6 成檔案共有 → 沒有共同路徑" "" "$(pfq .scattered)"
     expect_eq "沒有共同路徑 → 寫完整路徑" "docs/x.md" "$(pfq .none)"
+    expect_eq "任務編號次編號不連續 21.2,21.5,21.9 → 原樣列出" "21.2, 21.5, 21.9" "$(pfq .idsGap)"
+    expect_eq "任務編號跨主編號 21.9,21.10,22.1 → 原樣列出" "21.9, 21.10, 22.1" "$(pfq .idsCross)"
+    expect_eq "恰好 60% 的檔案共有一個目錄 → 算共同路徑" "a/b/c/" "$(pfq .sixty)"
+    expect_eq "不到 60%（2／7）→ 沒有共同路徑" "" "$(pfq .fiftyNine)"
+    expect_eq "全是根目錄的檔 → 沒有共同路徑" "" "$(pfq .rootFiles)"
+else
+    printf '  \033[90mℹ\033[0m 沒有 node，略過任務圖純函式測試（不計入通過數）\n'
 fi
 
 # 鎖：兩支同時跑 → 結果合法、鎖不殘留；過期的鎖要接手；新鮮的鎖讓位並留下 .dirty

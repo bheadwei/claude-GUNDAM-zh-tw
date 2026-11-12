@@ -939,7 +939,9 @@ function partFiles(p, pl) {
 }
 function taskIds(t) {
   var a = String(t || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
-  return a.length > 2 ? a[0] + '–' + a[a.length - 1] : a.join(', ');
+  var m = a.map(function (x) { return /^(\d+)\.(\d+)$/.exec(x); });
+  var run = a.length > 2 && m.every(function (x, i) { return x && (i === 0 || (x[1] === m[0][1] && +x[2] === +m[i - 1][2] + 1)); });
+  return run ? a[0] + '–' + a[a.length - 1] : a.join(', ');
 }
 function commonDir(fs) {
   if (fs.length < 3) return '';
@@ -975,7 +977,9 @@ function planCard(pl, i) {
   var phs = pl.phases || [], key = 'plan|' + pl.source + '|' + pl.file;
   var isOpen = function (ph) { return ph.state !== 'done' && ph.state !== 'skipped'; };
   var open = phs.filter(isOpen), done = phs.filter(function (ph) { return ph.state === 'done'; });
-  var many = phs.length > 1, focus = many ? open.slice(0, 2) : phs, later = many ? open.slice(2) : [];
+  var many = phs.length > 1, wi = open.filter(function (ph) { return ph.state === 'wip'; })[0] || open[0];
+  var after = open.filter(function (ph) { return ph.n > (wi ? wi.n : 0) && ph !== wi; })[0];
+  var focus = many ? [wi, after].filter(Boolean) : phs, later = many ? open.filter(function (ph) { return ph !== wi && ph !== after; }) : [];
   var seen = {}, all = pl.changes.map(function (c) { return c.file; }).concat(pl.parts.reduce(function (a, p) { return a.concat(p.planned ? partFiles(p, pl) : []); }, []));
   all = all.filter(function (f) { return seen[f] ? false : (seen[f] = true); });
   pl = Object.assign({}, pl, {pre: commonDir(all)});
@@ -989,7 +993,7 @@ function planCard(pl, i) {
   if (lone.length) cols.push({t: '沒標階段', ps: lone});
   var xn = pl.extraCount || ex.length, v = pl.verify;
   var from = {completed: '已完成：只顯示階段狀態', none: '沒有執行帳本、也不是本次任務：工作區改動見地圖的「本次改動」', guessed: '推測的本次任務（沒有 .current-task）：工作區改動不分給它，見地圖的「本次改動」'}[pl.changesFrom];
-  var planned = pl.changes.filter(function (c) { return c.planned; }), nfile = planned.length + (pl.changesRollup || []).length;
+  var planned = pl.changes.filter(function (c) { return c.planned; }), nfile = planned.length + (pl.changesRollup || []).reduce(function (n, r) { return n + (r.files || 0); }, 0);
   return '<section id="p' + i + '" class="plan' + (pl.current ? ' cur' : '') + '"><h2>' + (pl.current ? '★ ' : '') + esc(ptitle(pl)) +
     '<span class="tag">' + esc(pl.status || '—') + '</span>' + (pl.source !== 'main' ? '<span class="tag">' + esc(pl.source) + '</span>' : '') + '</h2>' +
     '<div class="meta"><code>' + esc(pl.file) + '</code>' + (pl.mode ? ' · ' + esc(pl.mode) : '') +
@@ -998,7 +1002,7 @@ function planCard(pl, i) {
     (many ? '<ol class="steps" aria-label="階段進度">' + phs.map(function (ph) {
       return '<li class="' + esc(ph.state) + '" title="階段 ' + ph.n + ' ' + esc(ph.name) + ' · ' + esc(PST[ph.state] || ph.state) + '"></li>';
     }).join('') + '</ol><div class="stepl"><span>完成 ' + done.length + '／' + phs.length + ' 個階段</span><span>' +
-      (open.length ? '現在：階段 ' + open[0].n + ' ' + esc(open[0].name) : '全部完成') + '</span></div>' : '') +
+      (wi ? '現在：階段 ' + wi.n + ' ' + esc(wi.name) : '全部完成') + '</span></div>' : '') +
     (cols.length ? '<div class="phs">' + cols.map(function (c) {
       return '<div class="ph"><h3>' + esc(c.t) + '</h3>' + (c.ps.map(function (p) { return partCard(p, pl); }).join('') || '<div class="fdesc">沒有部件</div>') + '</div>';
     }).join('') + '</div>' : many ? '' : '<div class="note">' + (pl.stub ? '資料太多，這份 plan 只留狀態（本次的 plan 不受影響）' : '這份 plan 沒有「一眼看懂」部件表，只列得出改了哪些檔') + '</div>') +
@@ -1008,17 +1012,17 @@ function planCard(pl, i) {
     }).join('') + '</ol></details>' : '') +
     (xn ? '<details class="xtra"' + dk(key + '|extra') + '><summary>計畫外 ' + xn + ' 個檔</summary>' + ex.map(function (p) { return '<code>' + esc(p.name) + '</code>'; }).join('') +
       (xn > ex.length ? '<span class="fdesc">另 ' + (xn - ex.length) + ' 個檔沒列出</span>' : '') + '</details>' : '') +
-    '<details class="fdet"' + dk(key + '|files') + '><summary>檔案明細 ' + nfile + ' 個</summary>' +
+    (nfile ? '<details class="fdet"' + dk(key + '|files') + '><summary>檔案明細 ' + nfile + ' 個</summary>' +
     (pl.pre ? '<div class="prefix">共同路徑：' + esc(pl.pre) + '</div>' : '') +
     '<table class="pt"><thead><tr><th>檔案</th><th>部件</th><th>+/−</th><th>AI 做了什麼</th></tr></thead><tbody>' +
     (planned.map(function (c) {
       var p = pl.parts.filter(function (x) { return x.id === c.part; })[0];
       return '<tr><td><code>' + esc(shortf(c.file, pl.pre)) + '</code></td><td>' + esc(p ? (p.planned ? p.id + ' ' + p.name : '計畫外') : (c.planned ? '計畫內' : '—')) +
         '</td><td>' + esc(delta(c)) + '</td><td>' + esc(p && p.ai && p.ai.summary || '—') + '</td></tr>';
-    }).join('') || ((pl.changesRollup || []).length ? '' : '<tr><td colspan="4" class="fdesc">' + (xn ? '沒有計畫內的改動' : '沒有改動') + '</td></tr>')) +
+    }).join('')) +
     (pl.changesRollup || []).map(function (r) {
       return '<tr><td><code>' + esc(r.dir) + '</code> ' + esc(r.files) + ' 個檔</td><td>未逐一列出</td><td>' + esc(nums(r)) + '</td><td>—</td></tr>';
-    }).join('') + '</tbody></table></details></section>';
+    }).join('') + '</tbody></table></details>' : '') + '</section>';
 }
 function lamp(pl) {
   var s = pl.status || '';
