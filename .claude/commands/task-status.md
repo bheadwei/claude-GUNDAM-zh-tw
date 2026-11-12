@@ -42,6 +42,7 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
    - `overview-serve.sh`：確保本機伺服器在跑（閒置 30 分鐘自己結束，不用手動關），**把它印的最後一行放在輸出的最後一行**，
      格式 `http://127.0.0.1:<port>/<token>/index.html`。說明 token 是防同機其他使用者與惡意網頁讀取，網址要整段複製。
      新起時會自動開瀏覽器，已在跑只印網址；SSH 遠端且沒有桌面時它會多印一行 `ssh -L …` 的 port 轉發指令，照樣轉告。
+     Python 依 `python3` → `python3.13`…`python3.7` → `python` → `py -3` 找第一個 3.7 以上的；預設 `python3` 太舊時可用環境變數 `OVERVIEW_SERVE_PYTHON=/usr/bin/python3.11` 指定
      它印的是 `file://…`（找不到 Python 3.7 以上、或起不來）→ 照實轉告它印的原因，並把該 `file://` 路徑當最後一行
    - 補充給使用者：VS Code 的 Simple Browser（Ctrl+Shift+P → `Simple Browser: Show`）貼上網址也能看；
      **不要用 Live Server**——資料每幾秒更新一次，它會整頁重載、畫面一直閃

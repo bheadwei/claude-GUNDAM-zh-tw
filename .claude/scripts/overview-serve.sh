@@ -6,7 +6,7 @@
 #
 # 只在「新起」時開瀏覽器；伺服器已在跑只印網址。開瀏覽器失敗不影響 exit code。
 # 沒有 Python 3.7 以上、或起不來時印 file:// 路徑與原因，exit 0。沒有 project.json 什麼都不印。
-# 環境變數：OVERVIEW_SERVE_PLATFORM（覆寫 uname -s，測試用）；其餘見 overview-serve.py。
+# 環境變數：OVERVIEW_SERVE_PYTHON（指定直譯器，指定了就只試它）、OVERVIEW_SERVE_PLATFORM（覆寫 uname -s，測試用）；其餘見 overview-serve.py。
 #
 # Windows Git Bash：用 nohup … & 起原生 python.exe，shell 結束後會不會被收掉未實測（ADR 第 5 節待實測）。
 # 若實測不通過，依 ADR 改試 `cmd //c start "" /b <python> …`、再試 PowerShell Start-Process。
@@ -94,10 +94,16 @@ fi
 
 if running; then echo "$(url)"; exit 0; fi
 
+py_ok() { [ "$($1 -c 'import sys;print(sys.version_info>=(3,7))' 2>/dev/null)" = True ]; }
 PY=""
-for c in "python3" "python" "py -3"; do
-    if [ "$($c -c 'import sys;print(sys.version_info>=(3,7))' 2>/dev/null)" = True ]; then PY=$c; break; fi
-done
+if [ -n "${OVERVIEW_SERVE_PYTHON:-}" ]; then
+    py_ok "$OVERVIEW_SERVE_PYTHON" && PY=$OVERVIEW_SERVE_PYTHON
+else
+    for c in python3 python3.13 python3.12 python3.11 python3.10 python3.9 python3.8 python3.7 python "py -3"; do
+        case "$c" in python3.*) command -v "$c" >/dev/null 2>&1 || continue ;; esac
+        if py_ok "$c"; then PY=$c; break; fi
+    done
+fi
 [ -n "$PY" ] || fallback "找不到 Python 3.7 以上，改用檔案開啟；SSH 遠端請改用 Live Preview"
 
 rm -f "$SERVE" "$OV/.serve.err"

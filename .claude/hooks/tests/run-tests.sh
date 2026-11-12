@@ -5457,6 +5457,24 @@ expect_eq "只有印不出 True 的假 python3 → exit 0" 0 "$rc"
 expect_eq "…最後一行是 file:// 網址" "file://$SV_OV/index.html" "$(sv_last "$out")"
 expect_contains "…印出原因" "找不到 Python 3.7 以上，改用檔案開啟；SSH 遠端請改用 Live Preview" "$out"
 
+# --- Python 搜尋順序：python3 太舊時改用帶版號的；OVERVIEW_SERVE_PYTHON 指定時只試它
+sv_reset; printf '#!/bin/sh\necho False\n' > "$SV_BIN/python3"
+printf '#!/bin/sh\necho py312 >> "%s"\nexec "%s" "$@"\n' "$SV_CALLS" "$(sv_pick_py)" > "$SV_BIN/python3.12"; chmod +x "$SV_BIN/python3.12"
+out=$(sv_run); url=$(sv_last "$out")
+[[ $url =~ $SV_URL_RE ]] && ok "python3 是假的、另有合格的 python3.12 → 起得來" || ng "起得來" "$SV_URL_RE" "$out"
+expect_contains "…用的是 python3.12" py312 "$(sv_calls)"
+sv_stop
+sv_reset; SV_X=(OVERVIEW_SERVE_PYTHON="$(sv_pick_py)")
+printf '#!/bin/sh\necho False\n' > "$SV_BIN/python3"
+out=$(sv_run); url=$(sv_last "$out")
+[[ $url =~ $SV_URL_RE ]] && ok "OVERVIEW_SERVE_PYTHON 指向合格直譯器 → 起得來" || ng "起得來" "$SV_URL_RE" "$out"
+sv_stop
+sv_reset; SV_X=(OVERVIEW_SERVE_PYTHON="$SV_FP/python3")
+out=$(sv_run); rc=$?
+expect_eq "OVERVIEW_SERVE_PYTHON 指向不合格的 → exit 0" 0 "$rc"
+expect_eq "…退回 file://（即使 PATH 上有合格的 python3）" "file://$SV_OV/index.html" "$(sv_last "$out")"
+expect_contains "…印出原因" "找不到 Python 3.7 以上" "$out"
+
 # --- 開瀏覽器的平台分支（假腳本記參數）
 sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=MINGW64_NT-10.0)
 out=$(sv_run); url=$(sv_last "$out"); calls=$(sv_calls)
