@@ -452,8 +452,10 @@ gather_source() {
 
 gather() {
     local f wt
-    for f in bundle.txt mtimes.tsv changes.tsv bases.tsv currents.tsv planbase.tsv archive.txt; do : > "$TMP/$f"; done
+    for f in bundle.txt mtimes.tsv changes.tsv bases.tsv currents.tsv planbase.tsv archive.txt branches.txt gituser.txt; do : > "$TMP/$f"; done
     SEEN_BASE=()
+    git -C "$MAIN_ROOT" for-each-ref --sort=-committerdate --format='%(refname:short)' refs/heads refs/remotes > "$TMP/branches.txt" 2>/dev/null
+    printf '%s\n%s\n' "$(git -C "$MAIN_ROOT" config user.name 2>/dev/null)" "$(git -C "$MAIN_ROOT" config user.email 2>/dev/null)" > "$TMP/gituser.txt"
     gather_source main "$MAIN_ROOT"
     while IFS= read -r wt; do
         [ -n "$wt" ] && [ -d "$wt" ] || continue
@@ -574,7 +576,7 @@ generate() {
     else
         printf '{}\n' > "$TMP/skel.json"; SKEL=skel.json
         [ -f "$OUT/skeleton.json" ] && SKEL=../skeleton.json
-        for f in bundle.txt mtimes.tsv changes.tsv bases.tsv currents.tsv planbase.tsv archive.txt; do : > "$TMP/$f"; done
+        for f in bundle.txt mtimes.tsv changes.tsv bases.tsv currents.tsv planbase.tsv archive.txt branches.txt gituser.txt; do : > "$TMP/$f"; done
     fi
     notes_prep "$mode"
     now=$(date '+%Y-%m-%dT%H:%M:%S.%3N%:z')
@@ -590,7 +592,7 @@ generate() {
         --slurpfile proj proj.json \
         --rawfile bundle bundle.txt --rawfile mtimes mtimes.tsv --rawfile changes changes.tsv \
         --rawfile bases bases.tsv --rawfile planbase planbase.tsv --rawfile currents currents.tsv \
-        --rawfile archive archive.txt \
+        --rawfile archive archive.txt --rawfile branches branches.txt --rawfile gitu gituser.txt \
         --slurpfile skel "$SKEL" --arg scanState "$SCAN_STATE" --argjson scanMs "$SCAN_MS" \
         --arg now "$now" --arg draftMark "$DRAFT_MARK" --arg oneLiner "$ONE_LINER" \
         --arg genStart "$OVERVIEW_GEN_START" --arg genEnd "$OVERVIEW_GEN_END" \
@@ -1028,6 +1030,8 @@ def parse_ledger:
     | (.["狀態"] | tstate) as $st
     | {id: (.["#"] | unbt), title: (.["任務"] | trim), status: ($st | temoji), state: $st, statusText: (.["狀態"] // ""),
        milestone: $ms, hasCol: $hasCol,
+       owner: ((.["負責"] // "") | unbt),
+       doneOn: (if $st == "done" then ((.["狀態"] // "") | capture("✅\\s*(?<d>[0-9]{1,2}-[0-9]{1,2})")? | .d) // null else null end),
        modules: (if $hasCol then (.[$wcol] | splitlist) else [] end)}]) as $tasks0
 | ([$tasks0[] | .id as $t | .modules[] | select(. as $m | $modIds | index($m) | not) | "\($t)（\(.)）"]) as $unknownMods
 | ($tasks0 | map(select(.hasCol | not)) | length) as $noColCount
@@ -1208,6 +1212,30 @@ def parse_ledger:
   ($currents | map(. as $c | . + phinfo([$plans[] | select(.file == $c.plan)] | first))) as $cx
 | ([$cx[] | .plan as $f | $plans[] | select(.file == $f) | .plannedModules[]] | unique) as $plannedMods
 
+# 目前任務分組：同一份 plan（沒有 plan 時同一個任務）在主 checkout 與 worktree 只算一組，where 取主 checkout
+| ([$cx[] | {k: (.plan // ("t:" + (.task // .source))), c: .}]) as $cxk
+| ($cxk | reduce .[].k as $k ([]; if index($k) != null then . else . + [$k] end)) as $cgKeys
+| ([$cgKeys[] | . as $k | [$cxk[] | select(.k == $k) | .c] as $m
+    | ([$m[].source]) as $srcs
+    | ($m[0]) as $f
+    | ([$m[].task | select(. != null)] | first) as $t
+    | {key: $k, task: $t,
+       title: (([$tasks[] | select(.id == $t) | .title] | first) // ([$plans[] | select(.file == $f.plan) | .title] | first)),
+       plan: $f.plan, sources: $srcs,
+       where: (if ($srcs | index("main")) != null then "main" else $srcs[0] end),
+       guessed: any($m[]; .guessed == true),
+       phase: $f.phase, phases: $f.phases, activePhases: $f.activePhases}]) as $curGroups
+
+# 人在做：WBS 負責欄有人、不是我、還沒完成的任務；分支名含任務編號（前後是 / - _ 或字串邊界）就填最近一條
+| ([$gitu | lines | .[0:2][] | trim | ascii_downcase | select(. != "")]) as $me
+| ($branches | lines | map(select(. != ""))) as $brs
+| ([$tasks[] | . as $t
+    | select(($t.owner | blank | not) and ($t.state != "done" and $t.state != "skip")
+             and (($me | index($t.owner | ascii_downcase)) == null))
+    | ("(^|[/_-])" + ($t.id | gsub("[^0-9A-Za-z]"; "[.-]")) + "($|[/_-])") as $re
+    | {who: .owner, task: .id, title, status: .state,
+       branch: ([$brs[] | select(test($re))] | first)}]) as $humans
+
 # ---- 一頁現況（ADR-007 第 2 點）：overview.md 開頭「## 現況」與 data.js 的 status 是同一份，只看主 checkout。
 # WBS 的完成日多半只寫 MM-DD：當作今年，比今天晚就算去年
 | def daynum($y; $m; $d):
@@ -1371,7 +1399,7 @@ def parse_ledger:
      else empty end)
   ];
   def public: map(del(._touch, ._mtime, ._text, ._diffMods));
-  def taskout: [$tasks[] | {id, title, status, state, milestone, modules, inferred, inferredBy}];
+  def taskout: [$tasks[] | {id, title, status, state, milestone, modules, inferred, inferredBy, doneOn}];
 
   # --check-notes：一行一筆違規
   if $outMode == "check" then
@@ -1439,6 +1467,8 @@ def parse_ledger:
    notices: notices_for($plans),
    current: ($cx[0] // null),
    currents: $cx,
+   curGroups: $curGroups,
+   humans: $humans,
    groups: $groups,
    modules: (mods_with($plans; $curTasks; $curMods; $changesList; $plannedMods)
              | map(. + {inner: inner_for(.id), flows: ($MFLOWS[.id] // [])})),

@@ -4554,6 +4554,81 @@ expect_eq "task-status.md 含 overview.sh --sync-arch 與 overview.sh --status" 
     "$(grep -q 'overview.sh --sync-arch' "$HOOK_DIR/../commands/task-status.md" && echo 1 || echo 0) $(grep -q 'overview.sh --status' "$HOOK_DIR/../commands/task-status.md" && echo 1 || echo 0)"
 
 # =========================================================================
+section "overview.sh — 目前任務分組、人在做、完成日"
+# =========================================================================
+# 沿用 tg_* 輔助函式（單獨跑時前面節只取定義，所以每個案例自己 tg_reset、自己建 worktree）。
+# git 的使用者設定與全域設定隔離：不碰主機的 ~/.gitconfig，「沒設」的案例才確定。
+ph_ov() { env HOME="$SANDBOX/nohome" XDG_CONFIG_HOME="$SANDBOX/nohome" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+              bash "$TG/.claude/scripts/overview.sh" "$TG" >/dev/null 2>&1; }
+# 每個參數一列「編號|負責|狀態」；PH_NOOWNER=1 時用沒有負責欄的舊表頭
+ph_wbs() {
+    {
+        echo "# WBS — 測試"; echo; echo "## M1 基礎"; echo
+        if [ -n "${PH_NOOWNER:-}" ]; then echo "| # | 任務 | 模組 | 狀態 | 優先 |"; echo "|---|---|---|---|---|"
+        else echo "| # | 任務 | 模組 | 狀態 | 優先 | 依賴 | 預估 | 負責 | 連結 |"; echo "|---|---|---|---|---|---|---|---|---|"; fi
+        local r id ow st
+        for r in "$@"; do
+            IFS='|' read -r id ow st <<< "$r"
+            if [ -n "${PH_NOOWNER:-}" ]; then echo "| $id | 任務 $id | api | $st | 高 |"
+            else echo "| $id | 任務 $id | api | $st | 高 | — | 1h | $ow | — |"; fi
+        done
+    } > "$TGD/wbs.md"
+}
+ph_wt() {   # $1 = worktree 名；$2 = .current-task 內容
+    tg_git add -A; tg_git commit -qm plan
+    tg_git worktree add -q -b "$1" "$TG/.claude/worktrees/$1"
+    mkdir -p "$TG/.claude/worktrees/$1/.claude/taskmaster-data"
+    echo "$2" > "$TG/.claude/worktrees/$1/.claude/taskmaster-data/.current-task"
+}
+
+tg_reset "1.2|api|🔄 進行中"; tg_plan 1.2-x.md 🔄 ⏳; echo 1.2 > "$TGD/.current-task"; ph_wt wt-a 1.2; ph_ov
+expect_eq "主 checkout 與 worktree wt-a 的 .current-task 都是 1.2 → curGroups 1 筆、sources 兩個來源、where 為主 checkout" "1 [\"main\",\"worktree:wt-a\"] main 1.2" \
+    "$(tgq '"\(.curGroups | length) \(.curGroups[0].sources | tojson) \(.curGroups[0].where) \(.curGroups[0].task)"')"
+expect_eq "curGroups 有 plan、title、guessed、phase 欄位；currents 照舊 2 筆" "plans/1.2-x.md 任務 1.2 false 1 2" \
+    "$(tgq '.curGroups[0] | "\(.plan) \(.title) \(.guessed) \(.phase)"') $(tgq '.currents | length')"
+tg_git worktree remove --force "$TG/.claude/worktrees/wt-a"
+
+tg_reset "1.2|api|🔄 進行中" "3.1|api|🔄 進行中"; tg_plan 1.2-x.md 🔄 ⏳; TP_TASK=3.1 tg_plan 3.1-y.md 🔄 ⏳
+echo 1.2 > "$TGD/.current-task"; ph_wt wt-b 3.1; ph_ov
+expect_eq "主 checkout 1.2、worktree wt-b 3.1 → curGroups 2 筆，3.1 的 where 為 worktree:wt-b" "2 main worktree:wt-b" \
+    "$(tgq '"\(.curGroups | length) \(.curGroups[] | select(.task == "1.2") | .where) \(.curGroups[] | select(.task == "3.1") | .where)"')"
+tg_git worktree remove --force "$TG/.claude/worktrees/wt-b"
+
+tg_reset "1.2|api|🔄 進行中"; tg_plan 1.2-x.md 🔄 ⏳; ph_ov
+expect_eq "都沒有 .current-task、猜出最近改過的 plan → curGroups 1 筆、guessed true" "1 true main" \
+    "$(tgq '"\(.curGroups | length) \(.curGroups[0].guessed) \(.curGroups[0].where)"')"
+
+tg_reset "1.2|api|🔄 進行中"; ph_ov
+expect_eq "沒有 plan、沒有 .current-task → curGroups 為空陣列" "[]" "$(tgq '.curGroups | tojson')"
+
+tg_reset; ph_wbs "1.5|alice|🚫 阻塞" "1.6|—|⏳ 待處理" "1.7|bob|✅ 11-10"; ph_ov
+expect_eq "負責 alice、狀態 🚫、沒有分支 → humans 有 blocked 且 branch 為 null；— 與 ✅ 的不列" '[{"who":"alice","task":"1.5","title":"任務 1.5","status":"blocked","branch":null}]' \
+    "$(tgq '.humans | tojson')"
+tg_git branch feat/1.5-points; tg_git branch feat/11.5-x; ph_ov
+expect_eq "建立分支 feat/1.5-points → branch 填上；feat/11.5-x 不算 1.5" "feat/1.5-points" "$(tgq '.humans[0].branch')"
+tg_git branch -D feat/1.5-points; tg_git branch feat/1-5-dash; ph_ov
+expect_eq "分支名用 1-5 寫法也算" "feat/1-5-dash" "$(tgq '.humans[0].branch')"
+tg_git branch -D feat/1-5-dash; ph_ov
+expect_eq "只剩 feat/11.5-x → branch 為 null" "null" "$(tgq '.humans[0].branch')"
+
+tg_reset; ph_wbs "2.1|alice|🔄 進行中" "2.2|bob@x.io|⏳ 待處理" "2.3|carol|⏳ 待處理"
+git -C "$TG" config user.name Alice; git -C "$TG" config user.email bob@x.io; ph_ov
+expect_eq "user.name 為 Alice、負責 alice → 不列；user.email 為 bob@x.io、負責 bob@x.io → 不列；carol 兩者都不符 → 列" "carol" \
+    "$(tgq '[.humans[].who] | join(",")')"
+ph_wbs "2.1|alice|🔄 進行中" "2.2|BOB@X.io|⏳ 待處理" "2.3|carol|⏳ 待處理"; ph_ov
+expect_eq "負責欄 BOB@X.io 與 user.email 大小寫不同也算我；alice 與 user.name 相同仍不列" "carol" "$(tgq '[.humans[].who] | join(" ")')"
+git -C "$TG" config --unset user.name; git -C "$TG" config --unset user.email; ph_ov
+expect_eq "沒設 git user.name／email → 所有有負責人的未完成任務都列" "alice BOB@X.io carol" "$(tgq '[.humans[].who] | join(" ")')"
+
+tg_reset; ph_wbs "3.1|alice|✅ 11-12" "3.2|alice|✅" "3.3|alice|🔄 進行中" "3.4|—|⏳ 待處理"; ph_ov
+expect_eq "✅ 11-12 → doneOn 為 11-12；✅（沒日期）、🔄、⏳ → null" "11-12 null null null" \
+    "$(tgq '[.tasks[] | .doneOn // "null"] | join(" ")')"
+
+tg_reset; PH_NOOWNER=1 ph_wbs "4.1|x|🔄 進行中" "4.2|x|⏳ 待處理"; ph_ov
+expect_eq "沒有「負責」欄的 WBS → humans 為空陣列、tasks 照讀" "[] 4.1,4.2" \
+    "$(tgq '"\(.humans | tojson) \([.tasks[].id] | join(","))"')"
+
+# =========================================================================
 section "overview-scan.sh — 前後端 HTTP 連線、Maven／Gradle 慣例路徑"
 # =========================================================================
 # 沿用上一節的 ds_* 輔助函式（單獨跑這一節時上一節只取定義，所以這裡自己建目錄）
