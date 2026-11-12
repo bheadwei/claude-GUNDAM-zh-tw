@@ -4,7 +4,7 @@ slug: "overview-live"
 created: "2026-11-12"
 updated: "2026-11-12"
 status: "🔄 進行中"
-current_phase: 6
+current_phase: 7
 mode: "standard"
 files:
   - ".claude/scripts/overview.sh"
@@ -234,20 +234,20 @@ flowchart LR
   - 沒有「負責」欄的 WBS → `humans` 為空陣列，其餘輸出不變
 - **注意**：`taskIds()` 壓編號的函式在階段 2 已有，標籤沿用
 
-### 階段 6: 即時聚合 `overview.sh --live` → live.js ⏳
+### 階段 6: 即時聚合 `overview.sh --live` → live.js ✅
 - **依賴**：階段 3, 5
-- [ ] `overview.sh --live [<工作目錄>]`：不掃描、不收 git 改動；讀主 checkout 的 `logs/live-events.jsonl` 最後 3000 行＋`.claude/worktrees/*/.claude/logs/live-events.jsonl`（`claude -w` 的 session 把事件寫在 worktree 裡，見 KNOWN-GAPS 的 resolve-roots 那條；這些檔裡 `src` 是 `main` 的改標成 `worktree:<資料夾名>`）、`logs/agent-activity.jsonl`（只取 `agent_start` 的 `description`，用 `agent_id` join）、現有 data.js（`curGroups`、`plans` 的部件與階段）；一支 jq 算完，寫 `overview/live.js`，內容是單一句 `window.OVERVIEW_LIVE = {...};` — 驗證：`bash .claude/hooks/tests/run-tests.sh overview`
-- [ ] 鎖：自己的 `.live.lock`，拿不到就留 `.live-dirty` 走人；持鎖者做完看到 `.live-dirty` 再跑一輪（最多 3 輪）。不搶完整重產的 `.lock`
-- [ ] 完整重產（`run_once`）結束時也跑一次 live 聚合，`curGroups` 變了 lanes 的歸屬跟著變
-- [ ] 輸出欄位與規則（寫進 overview.sh 檔頭，唯一來源）：
+- [x] `overview.sh --live [<工作目錄>]`：不掃描、不收 git 改動；讀主 checkout 的 `logs/live-events.jsonl` 最後 3000 行＋`.claude/worktrees/*/.claude/logs/live-events.jsonl`（`claude -w` 的 session 把事件寫在 worktree 裡，見 KNOWN-GAPS 的 resolve-roots 那條；這些檔裡 `src` 是 `main` 的改標成 `worktree:<資料夾名>`）、`logs/agent-activity.jsonl`（只取 `agent_start` 的 `description`，用 `agent_id` join）、現有 data.js（`curGroups`、`plans` 的部件與階段）；一支 jq 算完，寫 `overview/live.js`，內容是單一句 `window.OVERVIEW_LIVE = {...};` — 驗證：`bash .claude/hooks/tests/run-tests.sh overview`
+- [x] 鎖：自己的 `.live.lock`，拿不到就留 `.live-dirty` 走人；持鎖者做完看到 `.live-dirty` 再跑一輪（最多 3 輪）。不搶完整重產的 `.lock`
+- [x] 完整重產（`run_once`）結束時也跑一次 live 聚合，`curGroups` 變了 lanes 的歸屬跟著變
+- [x] 輸出欄位與規則（寫進 overview.sh 檔頭，唯一來源）：
   - `lanes`：12 小時內 SubagentStart 了、還沒 SubagentStop 的 agent，加上最近 15 分鐘有事件、最後一筆不是 Stop 的 session（`who` 為「主 session」或「worktree session」）。每筆 `{id, who, desc, where, readonly, group, since, lastAt, doing, files}`；`readonly` 依 `AGENT_INFLIGHT_READONLY`（從 `hooks/lib/agent-inflight.sh` 讀，不抄一份）；`doing` 取該 lane 最後一筆有 `act` 的事件；`files` 為 `{done, total}`＝該 lane 寫過的檔 ∩ 所屬組進行中階段的部件檔／部件檔總數，沒有部件檔為 `null`
   - `group` 歸屬：① lane 的 `src` 在某組 `sources` 裡 → 該組；② 否則用同 `sid` 的 session 事件所在 `src` 找組（Agent 帶 `isolation: worktree` 派出的 subagent 走這條：同一任務的某階段拆去 worktree 跑，仍歸原任務組）；③ 都找不到 → `null`
   - 事件一律先依 `(t, ms)` 排序再判斷，不靠檔案行序（async 寫入順序不保證，ADR-002 第 2 節）；`v` 不認得的整行略過
   - `needs`（規則以 ADR-002 第 5 節為準）：開啟者＝PermissionRequest、Notification 的 `nt` 為 `permission_prompt`（approve）／`idle_prompt`／`elicitation_dialog`（reply）、PreToolUse `AskUserQuestion`（reply）；其他 `nt` 不是開啟者但可當關閉者；同 `sid`＋同 `aid`（主 session 的 `aid` 為空）之後出現**任何非開啟者事件**、或該 agent SubagentStop、或（主 session 的 need）同 `sid` 的 UserPromptSubmit → 視為已處理不列；PermissionRequest 前後 10 秒內同 `sid`／`aid` 的 Notification `permission_prompt` 合併成一筆；同 `sid`／`aid` 只留最新一筆；開啟超過 4 小時 → 不列。每筆 `{id, kind: approve|reply, who, where, text, since}`。「卡住」不在這裡算，由頁面用 `lastAt` 即時判斷（階段 7）
   - `clashes`：線＝checkout（`src`）；寫入集＝該 checkout 12 小時內事件記到的寫入 ∪ 該 checkout 所屬組 plan 的 `files:`。某個**實際寫入的檔**出現在另一條線的寫入集（實寫或 glob 命中）→ 一筆 `{file, lines:[…]}`；兩邊都只是 plan glob 重疊不算。同一個 checkout 內兩個**都還在跑**的 agent 寫同一個檔也算
   - `doneToday: {agents, tasks}`（決策 Q6 兩個都要）：`agents`＝本機時區今天 SubagentStop 的不重複 `aid` 數；`tasks`＝data.js 裡 `doneOn` 等於今天 `MM-DD` 的 WBS 任務數（只看 wbs.md，已歸檔的不算）。`feed`（agent 開始／完成、need 出現／處理，最近 30 筆，新的在前）、`at`（產生時間）
-- [ ] 內容（去掉 `at`）沒變就不重寫 live.js；壞行用 `fromjson?` 略過
-- [ ] `worktree-orchestration` 邊界表的 overview 那格加 `live.js` 一句
+- [x] 內容（去掉 `at`）沒變就不重寫 live.js；壞行用 `fromjson?` 略過
+- [x] `worktree-orchestration` 邊界表的 overview 那格加 `live.js` 一句
 - **預估**：3h
 - **驗收**：
   - live.js 只有一句賦值，以 `window.OVERVIEW_LIVE = ` 開頭、`;` 結尾
@@ -361,3 +361,5 @@ flowchart LR
 - 2026-11-12 階段 4 審查（品質＋安全，安全為主模型加派）後的決定：每次新起都換新 token、舊網址失效（ADR-003 第 1 節已改）；鎖內記持有者 pid，持有者已死立即清、活著不偷鎖、等滿約 10 秒退回 file://；閒置計時只在 token 正確的請求重設；關目錄列出、加 `Referrer-Policy: no-referrer`；開瀏覽器背景執行；共用主機可設 `BROWSER=true` 不自動開
 - 2026-11-12 階段 4 未驗：Windows 背景行程存活、Windows 60 秒與 VS Code Remote-SSH 兩條手動驗收；macOS bash 3.2 的 `/dev/tcp`。README／WORKFLOW 寫「每 3 秒重讀」與實際輪詢不一致，留給階段 7 核對
 - 2026-11-12 階段 5：`where` 用 `"main"`／`"worktree:<名>"`（頁面轉中文）；`humans.status` 沿用既有 state 代號；`humans.branch` 取 committerdate 最近一條，本地與 `origin/` 同名取本地、只在遠端才帶 `origin/`；WBS 沒有任何負責人時不跑 `git for-each-ref`；`doneOn` 只認 `✅ MM-DD`（帶年份回 null）。技術債：負責欄多人（`alice, bob`）整欄比對，不會認出「我」。頁面 74596 bytes
+- 2026-11-12 階段 6：`readonly` 照 `AGENT_INFLIGHT_READONLY`（code-quality-specialist 不在名單、為 false；原驗收寫錯）；clashes 加「兩線同組且只靠 plan glob 命中不算」與 `agents` 欄；data.js 的 `plans[]` 多帶 `files`；排序 `sort_by([.t,.ms,.i])` 穩定、相同 (t, ms) 依行序；沒做 aid 為空的退路（階段 3 實測不需要）。jq 1.6 由審查者用本機 `/usr/bin/jq` 1.6 實跑，輸出與 1.8.1 逐字相同
+- 2026-11-12 階段 6 審查後：**PostToolUse 改接全部工具**（matcher `"*"`，官方 hooks reference「`"*"`, `""`, or omitted | Match all」，含 MCP 工具），白名單外的工具只記工具名、`act` 為「用 <tool>」，不讀 tool_input——否則批准 WebFetch／MCP 後 need 永遠不關。代價：每次工具呼叫多一支 async hook；事件量變多，3000 行涵蓋的時間變短。`.live-at` 格式改為「觸發時間 視窗秒數」，`--live` 每輪後持鎖等到視窗結束再看 `.live-dirty`（最多 3 輪、單次等待 ≤10 秒）。殘留極小競態：視窗最後一刻或放鎖前幾毫秒寫的 dirty 要等下一次觸發

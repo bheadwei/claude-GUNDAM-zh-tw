@@ -86,3 +86,19 @@
 - 2026-11-12 16:20 修復 R1 完成｜commit=f183aee｜for-each-ref 無負責人略過、同名取本地、補 5 個分支邊界案例、chrome 略過不計數｜overview 489/0、check-counts 720 一致
 - 2026-11-12 16:20 審查通過（規格 ✅ 品質 ✅，R1 以 diff 核對）｜範圍=bb0636f..f183aee
 - 2026-11-12 16:20 階段完成 → plan 標 ✅，current_phase=6｜摘要=目前任務分組標籤、拿掉 ★、人在做資料｜測試=489/489
+
+## 階段 6: 即時聚合 overview.sh --live → live.js
+- 2026-11-12 16:20 派工 implementer（opus：規則多、單支 jq 判斷密集，求一次做對）｜BASE=30485ee
+- 2026-11-12 16:44 回報 DONE_WITH_CONCERNS｜commit=9e21c43, ff73c2e｜產出 overview.sh（--live、JQ_LIVE、JQ_GLOB、plans[].files、檔頭即時聚合段）、run-tests.sh 新節 82 案例、worktree-orchestration 一句｜overview 10 節 553/0、check-counts 720 一致｜3000 行 --live 469–573 ms
+- 2026-11-12 16:44 Ruling: 接受 readonly 照 lib 名單（code-quality-specialist 為 false）— plan 驗收寫錯：它要寫報告不是唯讀，lib 是唯一來源 — 若錯，頁面只差一個「唯讀」標記
+- 2026-11-12 16:44 Ruling: 接受 clashes 自加「同組只靠 glob 命中不算」與 agents 欄位、data.js 加 plans[].files — 前者避免同任務拆 worktree 每次寫入都報撞檔；後兩者是撞檔顯示所需 — 交審查確認
+- 2026-11-12 16:44 觀察：jq 1.6 未實測（下載被權限拒絕，這台 1.8.1），交審查逐一人工確認
+- 2026-11-12 16:44 派審查 code-quality-specialist（opus，與實作同級）｜範圍=30485ee..ff73c2e
+- 2026-11-12 16:52 審查 R1：WARNING（0 CRITICAL／1 HIGH／4 MEDIUM／2 LOW，context/quality/code-quality-specialist-2026-11-12-1651-p6.md）；jq 1.6 由審查者用 /usr/bin/jq 1.6 實跑，與 1.8.1 輸出逐字相同
+- 2026-11-12 16:52 Ruling: HIGH（視窗內最後一筆事件被吞）採「live_rounds 持鎖等到視窗結束再看 dirty」— 保留節流；另一修法（視窗內沒鎖就照起）會讓每筆事件都起一支 --live — 若錯，--live 行程最多多活 2 秒
+- 2026-11-12 16:52 Ruling: MEDIUM-1 PostToolUse 改接全部工具（只記 ev/tool，act「用 <tool>」）— 「需要你」是本改版核心，批准 WebFetch／MCP 後 need 永遠掛著不可接受 — 代價：每次工具呼叫多一支 async hook 行程（Windows 約 170ms 但不阻塞）
+- 2026-11-12 16:52 修復 R1 派回同一 implementer（opus）
+- 2026-11-12 17:02 修復 R1 完成｜commit=5cb64b9, c848980｜7 點全修並補測試｜overview＋agent-events 11 節 644/0、check-counts 720 一致｜3000 行 472–538 ms
+- 2026-11-12 17:02 查證（claude-code-guide）：官方 hooks reference 明文「"*", "", or omitted → Match all」，MCP 工具同樣匹配 → matcher "*" 正確
+- 2026-11-12 17:02 審查通過（規格 ✅ 品質 ✅，HIGH 與 MEDIUM 以 diff＋測試核對）｜範圍=30485ee..c848980
+- 2026-11-12 17:02 階段完成 → plan 標 ✅，current_phase=7｜摘要=--live 聚合 agent、需要你、撞檔、今天完成到 live.js｜測試=644/644
