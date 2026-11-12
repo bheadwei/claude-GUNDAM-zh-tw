@@ -13,7 +13,6 @@ import functools
 import hmac
 import json
 import os
-import re
 import secrets
 import sys
 import threading
@@ -23,7 +22,6 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote
 
 PORT_TRIES = 20
-TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{16,}$")
 
 
 def env_float(name, default):
@@ -40,19 +38,25 @@ class Handler(SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Referrer-Policy", "no-referrer")
         super().end_headers()
 
     def log_message(self, *args):
         pass
 
+    def list_directory(self, path):
+        self.send_error(404)
+        return None
+
     def _route(self):
         """回傳 token 之後的相對路徑；token 不對、或碰到點開頭的檔案則回 None 並已回 404。"""
-        Handler.activity[0] = time.monotonic()
         raw = self.path.split("?", 1)[0].split("#", 1)[0]
         parts = raw.split("/", 2)
-        if len(parts) < 3 or parts[0] != "" or not hmac.compare_digest(parts[1], self.token):
+        if (len(parts) < 3 or parts[0] != ""
+                or not hmac.compare_digest(parts[1].encode("utf-8", "replace"), self.token.encode())):
             self.send_error(404)
             return None
+        Handler.activity[0] = time.monotonic()
         return parts[2]
 
     def _reply(self, body=b""):
@@ -92,15 +96,6 @@ class Handler(SimpleHTTPRequestHandler):
         threading.Thread(target=self.server.shutdown, daemon=True).start()
 
 
-def read_token(serve_file):
-    try:
-        with open(serve_file, encoding="utf-8") as f:
-            t = json.load(f).get("token", "")
-        return t if isinstance(t, str) and TOKEN_RE.match(t) else None
-    except (OSError, ValueError, AttributeError):
-        return None
-
-
 def bind(handler, base):
     last = None
     for port in range(base, base + PORT_TRIES):
@@ -128,7 +123,7 @@ def main():
     serve_file = os.path.join(directory, ".serve")
     os.umask(0o077)
 
-    token = read_token(serve_file) or secrets.token_urlsafe(16)
+    token = secrets.token_urlsafe(16)
     Handler.token = token
     Handler.activity = [time.monotonic()]
     server = bind(functools.partial(Handler, directory=directory),
@@ -153,14 +148,13 @@ def main():
         server.serve_forever(poll_interval=min(0.5, interval))
     finally:
         server.server_close()
-        if read_token(serve_file) == token:
-            try:
-                with open(serve_file, encoding="utf-8") as f:
-                    mine = json.load(f).get("pid") == os.getpid()
-                if mine:
-                    os.remove(serve_file)
-            except (OSError, ValueError):
-                pass
+        try:
+            with open(serve_file, encoding="utf-8") as f:
+                mine = json.load(f).get("pid") == os.getpid()
+            if mine:
+                os.remove(serve_file)
+        except (OSError, ValueError):
+            pass
     return 0
 
 

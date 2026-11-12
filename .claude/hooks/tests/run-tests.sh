@@ -5373,7 +5373,7 @@ time.sleep(60)' "$1" "$2" >/dev/null 2>&1 &
     sv_wait_for "$1"
 }
 sv_unoccupy() { local p; for p in $SV_OCC; do kill "$p" 2>/dev/null; wait "$p" 2>/dev/null; done; SV_OCC=""; }
-sv_calls() { cat "$SV_CALLS" 2>/dev/null; }
+sv_calls() { sleep 0.3; cat "$SV_CALLS" 2>/dev/null; }
 SV_URL_RE='^http://127\.0\.0\.1:[0-9]+/[A-Za-z0-9_-]+/index\.html$'
 
 # --- 沒在跑 → 起一個；有 $BROWSER 且是新啟動 → 呼叫 1 次；再呼叫一次 → 不起第二個、不再開瀏覽器
@@ -5402,11 +5402,21 @@ expect_eq ".serve 權限為 600（Windows 只確認檔案存在）" "-rw-------"
 cmdline=$(tr '\0' ' ' < "/proc/$pid1/cmdline" 2>/dev/null)
 case "$cmdline$(cat "$SV_OV/.serve")" in *0.0.0.0*) bind_ok="含 0.0.0.0" ;; *) bind_ok=no-wildcard ;; esac
 expect_eq "行程命令列與 .serve 不含 0.0.0.0" no-wildcard "$bind_ok"
-if command -v ss >/dev/null 2>&1; then listen=$(ss -ltn 2>/dev/null | grep ":$port ")
+l_src="ss／netstat"
+if command -v ss >/dev/null 2>&1; then listen=$(ss -ltn 2>/dev/null | grep -E "[.:]$port ")
 elif command -v netstat >/dev/null 2>&1; then listen=$(netstat -an 2>/dev/null | grep -E "[.:]$port .*LISTEN")
-else listen="127.0.0.1:$port"; fi
-case "$listen" in *"127.0.0.1:$port"*) l_ok=127; case "$listen" in *"0.0.0.0:$port"*|*"*:$port"*|*"[::]:$port"*) l_ok=wildcard ;; esac ;; *) l_ok="none: $listen" ;; esac
-expect_eq "ss／netstat 確認只聽 127.0.0.1（兩者都沒有時退回只看 .serve）" 127 "$l_ok"
+else listen="127.0.0.1:$port"; l_src="無 ss/netstat，只驗 .serve"; fi
+case "$listen" in
+    *"127.0.0.1:$port"*|*"127.0.0.1.$port"*) l_ok=127
+        case "$listen" in *"0.0.0.0:$port"*|*"0.0.0.0.$port"*|*"*:$port"*|*"*.$port"*|*"[::]:$port"*|*"::.$port"*) l_ok=wildcard ;; esac ;;
+    *) l_ok="none: $listen" ;;
+esac
+expect_eq "只聽 127.0.0.1（依據：$l_src）" 127 "$l_ok"
+mkdir -p "$SV_OV/sub"
+expect_eq "GET 沒有 index.html 的目錄 → 404，不列檔名" 404 "$(sv_code "$port" GET "${upath%index.html}sub/")"
+expect_contains "回應標頭含 Referrer-Policy: no-referrer" "Referrer-Policy: no-referrer" "$(sv_http "$port" GET "$upath")"
+expect_eq "非 ASCII 的路徑 → 404、不丟例外" 404 "$(sv_code "$port" GET "/é/index.html")"
+expect_eq "…之後伺服器仍正常回應" 200 "$(sv_code "$port" GET "$upath")"
 sv_stop
 expect_eq "--stop → .serve 刪除" no "$([ -f "$SV_OV/.serve" ] && echo yes || echo no)"
 expect_eq "--stop → 伺服器不再回應" "" "$(sv_code "$port" GET "$upath")"
@@ -5441,6 +5451,13 @@ u1=$(sv_last "$(cat "$o1")"); u2=$(sv_last "$(cat "$o2")")
 expect_eq "…且該網址 GET → 200" 200 "$(sv_code "$(sv_url_port "$u1")" GET "$(sv_url_path "$u1")")"
 sv_stop; rm -f "$o1" "$o2"
 
+# --- 殘留的鎖：持有者已死 → 不用等 10 秒
+sv_reset; mkdir "$SV_OV/.serve.lock"; echo 99999999 > "$SV_OV/.serve.lock/pid"
+SECONDS=0; out=$(sv_run); took=$SECONDS; url=$(sv_last "$out")
+[[ $url =~ $SV_URL_RE ]] && ok "殘留鎖的 pid 已死 → 起得來" || ng "殘留鎖的 pid 已死 → 起得來" "$SV_URL_RE" "$out"
+[ "$took" -lt 5 ] && ok "…不用等鎖逾時（${took} 秒）" || ng "…不用等鎖逾時" "< 5 秒" "${took} 秒"
+sv_stop
+
 # --- 20 個 port 都不能用
 sv_reset; sv_occupy "$SV_BASE" 20
 out=$(sv_run); rc=$?
@@ -5458,7 +5475,8 @@ expect_eq "…最後一行是 file:// 網址" "file://$SV_OV/index.html" "$(sv_l
 expect_contains "…印出原因" "找不到 Python 3.7 以上，改用檔案開啟；SSH 遠端請改用 Live Preview" "$out"
 
 # --- Python 搜尋順序：python3 太舊時改用帶版號的；OVERVIEW_SERVE_PYTHON 指定時只試它
-sv_reset; printf '#!/bin/sh\necho False\n' > "$SV_BIN/python3"
+sv_reset
+for t in python3 python3.13 python3.11 python3.10 python3.9 python3.8 python3.7; do printf '#!/bin/sh\necho False\n' > "$SV_BIN/$t"; chmod +x "$SV_BIN/$t"; done
 printf '#!/bin/sh\necho py312 >> "%s"\nexec "%s" "$@"\n' "$SV_CALLS" "$(sv_pick_py)" > "$SV_BIN/python3.12"; chmod +x "$SV_BIN/python3.12"
 out=$(sv_run); url=$(sv_last "$out")
 [[ $url =~ $SV_URL_RE ]] && ok "python3 是假的、另有合格的 python3.12 → 起得來" || ng "起得來" "$SV_URL_RE" "$out"

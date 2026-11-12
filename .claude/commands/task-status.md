@@ -37,13 +37,17 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
      **不要自己加標記**；exit 1（標記不成對）→ 把 stderr 的修法轉告使用者，其餘步驟照做
    - `--status`：印出的「## 現況」一節**原樣放在輸出最前面**（≤ 30 行：一句話、里程碑、進行中與 plan 階段、
      阻塞、下一個、最近 14 天完成數、落差數）。**不要自己重拼這些數字**——它和地圖頁首是同一份資料
-   - `--print-path`：印出 `file:///…/overview/index.html`，只當退路用（見下），**不要**當成最後一行
-     （同一個資料夾裡的 `overview.md` 是 Markdown 版，兩份都不進 git）
+   - `--print-path`：只為了它多印的 `提示：…` 行（見下）；它印的 `file://` 路徑**不要**放進輸出，
+     網址一律以 `overview-serve.sh` 為準（同一個資料夾裡的 `overview.md` 是 Markdown 版，兩份都不進 git）
    - `overview-serve.sh`：確保本機伺服器在跑（閒置 30 分鐘自己結束，不用手動關），**把它印的最後一行放在輸出的最後一行**，
-     格式 `http://127.0.0.1:<port>/<token>/index.html`。說明 token 是防同機其他使用者與惡意網頁讀取，網址要整段複製。
-     新起時會自動開瀏覽器，已在跑只印網址；SSH 遠端且沒有桌面時它會多印一行 `ssh -L …` 的 port 轉發指令，照樣轉告。
-     Python 依 `python3` → `python3.13`…`python3.7` → `python` → `py -3` 找第一個 3.7 以上的；預設 `python3` 太舊時可用環境變數 `OVERVIEW_SERVE_PYTHON=/usr/bin/python3.11` 指定
-     它印的是 `file://…`（找不到 Python 3.7 以上、或起不來）→ 照實轉告它印的原因，並把該 `file://` 路徑當最後一行
+     格式 `http://127.0.0.1:<port>/<token>/index.html`。說明 token 是防同機其他使用者與惡意網頁讀取，網址要整段複製；
+     每次新起都換新 token，舊網址會失效。新起時會自動開瀏覽器，已在跑只印網址；SSH 遠端且沒有桌面時它會多印一行
+     `ssh -L …` 的 port 轉發指令，照樣轉告。它印的最後一行是 `file://…`（找不到 Python 3.7 以上、或起不來）→
+     照實轉告它印的原因，這個 `file://` 就是最後一行（退路，SSH 遠端打不開）
+   - Python 依 `python3` → `python3.13`…`python3.7` → `python` → `py -3` 找第一個 3.7 以上的；預設 `python3` 太舊時可用環境變數
+     `OVERVIEW_SERVE_PYTHON=/usr/bin/python3.11` 指定（路徑不可含空格）
+   - 共用主機（多人登入同一台）上，開瀏覽器時網址會出現在 `ps`；可設 `BROWSER=true`（`true` 什麼都不做）讓它不自動開，
+     自己貼網址
    - 補充給使用者：VS Code 的 Simple Browser（Ctrl+Shift+P → `Simple Browser: Show`）貼上網址也能看；
      **不要用 Live Server**——資料每幾秒更新一次，它會整頁重載、畫面一直閃
    **只印路徑，不要 Read `overview/data.js` 或 `overview/overview.md`**——那是給人看的衍生物，

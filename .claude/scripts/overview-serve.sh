@@ -80,16 +80,20 @@ if running; then
 fi
 
 LOCKED=0
-trap '[ "$LOCKED" = 1 ] && rmdir "$LOCK" 2>/dev/null' EXIT
+trap '[ "$LOCKED" = 1 ] && rm -rf "$LOCK"' EXIT
 for ((i = 1; i <= 100; i++)); do
-    if mkdir "$LOCK" 2>/dev/null; then LOCKED=1; break; fi
+    if mkdir "$LOCK" 2>/dev/null; then LOCKED=1; echo $$ > "$LOCK/pid"; break; fi
     if running; then echo "$(url)"; exit 0; fi
-    # 等了 10 秒還鎖著：持鎖的那支當掉了，清掉重來一次
-    [ "$i" = 100 ] && rmdir "$LOCK" 2>/dev/null
+    holder=$(sed -n '1p' "$LOCK/pid" 2>/dev/null)
+    # 持有者已死就立刻清鎖重拿；還活著絕不偷，等到上限後退回 file://。
+    # 沒有 pid 檔（剛 mkdir 還沒寫、或舊格式殘留）等滿上限才當成殘留清掉
+    if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then rm -rf "$LOCK"; continue; fi
+    if [ "$i" = 100 ] && [ -z "$holder" ]; then rm -rf "$LOCK"; continue; fi
     sleep 0.1
 done
 if [ "$LOCKED" != 1 ]; then
-    mkdir "$LOCK" 2>/dev/null && LOCKED=1 || fallback "拿不到啟動鎖，改用檔案開啟；SSH 遠端請改用 Live Preview"
+    if mkdir "$LOCK" 2>/dev/null; then LOCKED=1; echo $$ > "$LOCK/pid"
+    else fallback "別的行程正在啟動伺服器，改用檔案開啟；稍後再跑一次即可取得網址"; fi
 fi
 
 if running; then echo "$(url)"; exit 0; fi
@@ -123,7 +127,7 @@ rm -f "$OV/.serve.err"
 
 URL=$(url)
 opened=0
-open_with() { "$@" >/dev/null 2>&1 </dev/null || true; opened=1; }
+open_with() { ( "$@" >/dev/null 2>&1 </dev/null & ); opened=1; }
 PLATFORM="${OVERVIEW_SERVE_PLATFORM:-$(uname -s 2>/dev/null)}"
 if [ -n "${BROWSER:-}" ]; then
     open_with "$BROWSER" "$URL"
