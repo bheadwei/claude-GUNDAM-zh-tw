@@ -34,43 +34,14 @@
 
 ## 判級由 hook 強制（不靠自律）
 
-`pre-tool-use.sh` 在你要寫入程式碼檔時檢查 `.claude/taskmaster-data/.current-task-mode`：
-
-- **不存在** → 擋下該次寫入，要求你先判級、宣告理由、寫入模式檔，再重試
-- **超過 8 小時未更新** → 自動清除並重新要求判級（`TASKMODE_TTL_HOURS` 可調）
-
-宣告格式（一句話，讓使用者能當場否決）：
+寫程式碼檔前沒有 `.claude/taskmaster-data/.current-task-mode`（或超過 8 小時未更新）會被
+`pre-tool-use.sh` 擋下，deny 訊息附判級表與寫入指令。**別等被擋才判**——先判定、宣告、寫入：
 
 > 判定 **quick**（2 個檔、沒動 API 或 schema）→ 直接實作 + 1 個 happy-path 驗證，跳過 plan/TDD。
 
-寫入：`echo standard > .claude/taskmaster-data/.current-task-mode`
-
-**不受閘門攔截的寫入**：`.md`、`.json`、`.claude/**`、`docs/**`、依賴與建置產物。
-純問答、檢視、研究不需分級。
-
-### 逃生門
-
-| 方式 | 效果 |
-|---|---|
-| `/suggest-mode off` | 完全關閉閘門（連同其他建議注入） |
-| `TASKMODE_GATE=off` | 環境變數，單次或整個 session 關閉 |
-
-## 設定檔
-
-`.claude/taskmaster-data/.current-task-mode`，純文字單值 `quick` / `standard` / `critical`。
-
-寫入時機：`/task-next` 選定任務時、hook 觸發判級時、`/tdd <mode>` 行內參數覆寫時。
-清除時機：`/verify` 完成任務時，或 hook 的 TTL 過期（後者是機器保證，前者是自律）。
-
-## 各指令如何讀取
-
-| 指令 | 行為差異 |
-|---|---|
-| `/plan` | 門檻見 `plan-format` skill 的「何時不該用 /plan」（唯一來源） |
-| `/tdd` | quick 走 Fast Lane（不強制 test-first、不檢查覆蓋率）；standard／critical 標準流程，每階段審查照上方「審查節奏」 |
-| `/verify` | quick → `verify quick`；standard → `verify full`；critical → `verify pre-pr` |
-
-覆蓋率門檻的唯一來源是 `testing-standards` skill，不在其他地方重述。
+不攔：`.md`、`.json`、`.claude/**`、`docs/**`、依賴與建置產物；純問答、檢視、研究不需分級。
+逃生門：`/suggest-mode off` 或 `TASKMODE_GATE=off`。
+`/plan`、`/tdd`、`/verify` 依模式的行為差異寫在各自的指令檔。
 
 ## 例外與升級
 
@@ -83,6 +54,4 @@
 
 ## 相關
 
-- `testing-standards` skill — 覆蓋率門檻
-- `plan-format` skill — Plan 啟動門檻與格式
-- `.claude/hooks/pre-tool-use.sh` — 閘門實作
+`testing-standards`（覆蓋率）・`plan-format`（plan 門檻）・`.claude/hooks/pre-tool-use.sh`（閘門）

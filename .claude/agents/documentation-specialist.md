@@ -1,6 +1,6 @@
 ---
 name: documentation-specialist
-description: 文件同步專家。Use PROACTIVELY 在 API 路由、架構或主要功能變更後（`/verify` 文件同步關卡的 `.doc-impact` 清單非空時），從程式碼同步 README、架構文件 architect 撰寫的部分、runbook 裡跟程式碼對不上的事實；被要求替舊專案補架構文件時從程式碼反推草稿（選配）；寫專案地圖的模組說明；舊專案跑 `/docs-init` 時盤點既有 `docs/`（只產報告）。不寫 PRD、ADR 與架構決策（那是 `/docs-init`、`/adr`、architect）。
+description: 文件同步專家。Use PROACTIVELY 在 API 路由、架構或主要功能變更後（`/verify` 文件同步關卡的 `.doc-impact` 清單非空時），或使用者說「整理／更新文件」「README 跟程式碼對不上」時；也用於替舊專案從程式碼反推架構文件草稿、寫專案地圖模組說明、`/docs-init` 盤點既有 `docs/`。不寫 PRD、ADR 與架構決策（那是 `/docs-init`、`/adr`、architect）。
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
 model: sonnet
 ---

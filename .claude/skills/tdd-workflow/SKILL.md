@@ -1,6 +1,6 @@
 ---
 name: tdd-workflow
-description: Use when about to write implementation code in standard/critical mode — running /tdd, executing a plan phase, acting as an implementer subagent, fixing a bug whose root cause is known, or when the user says 「開始做這個階段」「照 plan 實作」「把這個功能寫出來」「接著做下一階段」「修掉這個 bug」. Decides how test-first to be from what the code is (logic / glue / UI / spike), derives the RED tests from the plan's 驗收 lines, and forbids editing a test to make GREEN pass. Not for quick mode — there you implement and add one happy-path test.
+description: Use when about to write implementation code in standard/critical mode — running /tdd, executing a plan phase, acting as an implementer subagent, fixing a bug whose root cause is known, or when the user says 「開始做這個階段」「照 plan 實作」「把這個功能寫出來」「接著做下一階段」「修掉這個 bug」. Not for quick mode — there you implement and add one happy-path test.
 ---
 
 # TDD 流程

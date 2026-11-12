@@ -96,7 +96,7 @@ async def test_refund_over_limit_returns_400(client):
 - 換依賴用 `app.dependency_overrides`，**不要** patch 路由模組裡的函式
 - **一定要在 fixture 結尾 `clear()`**——`app` 是模組層級的單例，沒清掉的 override
   會漏到下一個測試，造成「單獨跑會過、一起跑會掛」
-- 斷言回應的**信封格式**（`coding-style.md` 的 API 回應格式），不只斷言狀態碼
+- 斷言回應的**信封格式**（`api-design` skill「本模板的專案約定」），不只斷言狀態碼
 
 ## 6. 資料庫隔離
 

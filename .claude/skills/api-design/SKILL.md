@@ -113,6 +113,21 @@ Location: /api/v1/users/abc-123
 
 ## Response Format
 
+### 本模板的專案約定（唯一來源；原在 `rules/coding-style.md`）
+
+**同一個專案的所有 API 用同一種信封**，四個部分都要有：
+
+| 部分 | 成功時 | 失敗時 |
+|---|---|---|
+| 成功／狀態指示 | 有（例：`success: true`） | 有（`success: false`） |
+| 資料酬載 | `data` | `null` |
+| 錯誤訊息 | `null` | `error`（含 `code`、`message`，驗證錯誤加欄位層級 `details`） |
+| 分頁中繼資料（集合才有） | `total`、`page`、`limit` | — |
+
+- 狀態指示**不取代** HTTP 狀態碼：兩者必須一致（見上方 Common Mistakes 的「200 for everything」）
+- 專案已有既有格式就照它；下面的 Option A／B 範例是形狀參考，挑一種之後**整個專案只用那一種**
+- 欄位命名（`limit` 或 `per_page`）跟著專案既有慣例，不混用
+
 ### Success Response
 
 ```json

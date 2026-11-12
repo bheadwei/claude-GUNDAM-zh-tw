@@ -388,7 +388,7 @@ worktree 裡連 plan 都沒有，agent 不知道要實作什麼。
 ——這裡原本那份就漂到「修 bug（建置/型別錯誤）」與「建置/型別錯誤」變成兩列同一件事。
 `quick` 只派粗體那一棒、拒派要先宣告理由、Red Flags 反合理化表，也都在該 skill 裡。
 
-鏈怎麼推進、哪些 agent 會建 handoff、安全平行的判準見 `.claude/rules/agent-orchestration.md`。
+鏈怎麼推進見 `using-taskmaster` skill；哪些 agent 會建 handoff 見 `.claude/coordination/README.md`；平行的判準見 `worktree-orchestration` skill。
 
 ---
 

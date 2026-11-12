@@ -1,6 +1,6 @@
 ---
 name: sql-patterns
-description: 關聯式資料庫的通用設計與查詢原則，加上 PostgreSQL／SQL Server／SQLite 的**跨引擎差異對照**（線上加索引、加欄位、UPSERT、分頁語法、型態選用）。Use when 要寫或調效能 SQL、選索引、設計資料表、查詢變慢、或要把某個引擎的作法搬到另一個引擎。**MUST BE USED before 把任何 SQL 寫法從一個引擎照搬到另一個引擎** —— 語法看起來通用但線上行為差很多。PostgreSQL 深入內容見 `postgres-patterns`（唯一來源）；文件型資料庫見 `nosql-patterns`。
+description: Use when 要寫或調效能 SQL、選索引、設計資料表、查詢變慢、或要把作法從一個引擎搬到另一個（PostgreSQL／SQL Server／SQLite）。**MUST BE USED before 把任何 SQL 寫法從一個引擎照搬到另一個引擎** —— 語法看起來通用但線上行為差很多。PostgreSQL 深入見 `postgres-patterns`；文件型資料庫見 `nosql-patterns`。
 ---
 
 # SQL 模式（跨引擎）

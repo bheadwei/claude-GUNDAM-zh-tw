@@ -1,12 +1,12 @@
 ---
 name: worktree-orchestration
-description: Use when running work in parallel across git worktrees — creating isolated checkouts, dispatching agents into them, merging back in dependency order, and cleaning up. Also the reference for which state files follow a worktree and which stay in the main checkout, and for parallel lines that share a local database, fixed ports, timing-sensitive tests or CPU（「幾條線同時跑測試」「共用同一台 DB」「要不要加個鎖排隊」）. Load before /task-next 的平行開發、/worktree、or dispatching an agent with isolation worktree.
+description: Use when deciding whether two tasks or agents can run at the same time, or running work in parallel across git worktrees and merging them back（「這兩個能不能一起做」「幾條線同時跑測試」「共用同一台 DB」「要不要加個鎖排隊」）. Load before /task-next 的平行開發、/worktree、dispatching an agent with isolation worktree, or changing which state file a hook reads inside a worktree.
 ---
 
 # Worktree 編排
 
 **這是 worktree 相關程序的唯一來源。** `/task-next` 的平行段、`/worktree` 指令、
-`rules/agent-orchestration.md` 的「安全平行」都指向本檔，不各自重述。
+`rules/agent-orchestration.md` 的「平行」都指向本檔，不各自重述。平行與否的判準在「平行的判準」節。
 
 ## 何時值得開 worktree
 
@@ -19,10 +19,29 @@ description: Use when running work in parallel across git worktrees — creating
 | **同一個功能拆成很多小步驟** | ❌ 步驟間有依賴，隔離只會讓你一直在合併 |
 | 任務會頻繁改到同一批共用檔 | ❌ 衝突成本大於平行收益 |
 | 沒有 plan／plan 沒寫 `files:` | ❌ 範圍未知 → 保守視為不可平行 |
-| 其中一方是**讀／跑整個 repo** 的掃描／驗證類 agent | ✅ **隔離是唯一選項**——它的寫入集是空的，`files:` 無交集對它永遠成立卻擋不住「讀撞到寫」。名單與理由見 `rules/agent-orchestration.md`「安全平行」 |
+| 其中一方是**讀／跑整個 repo** 的掃描／驗證類 agent | ✅ **隔離是唯一選項**——它的寫入集是空的，`files:` 無交集對它永遠成立卻擋不住「讀撞到寫」。名單與理由見下方「平行的判準」 |
 | **baseline 還沒 commit**（測試基礎設施、前置修復還在工作區） | ❌ worktree 是乾淨 checkout，agent 會在一個**缺那些東西**的環境裡開工，等於要它從零重建——而且**沒有任何錯誤訊息**。先 commit 再開，見「派工前務必做的一件事」 |
 
 **並行數 2-4 個。** 再多你自己看不過來，磁碟與 context 成本也會超過收益。
+
+**循序是預設、平行是選項。** 平行不是反模式，「會互改同一批檔案」才是。
+
+### 平行的判準：範圍不重疊只是必要條件
+
+（2026-11-12 從 `rules/agent-orchestration.md`「安全平行」搬來，本節是唯一來源。）
+
+- **依據**是各任務 plan 的 `files:`（見 `plan-format`）。沒 plan／沒 `files:` → 保守視為不可平行
+- **寫入集無交集只是必要條件，不是充分條件。** 它只看「寫撞寫」，漏掉「讀撞寫」：
+  `security-infrastructure-auditor`、`code-quality-specialist`、`test-automation-engineer`、
+  `e2e-validation-specialist`、`refactor-cleaner` **讀或執行整個 repo**，寫入集卻幾乎是空的——
+  「範圍不重疊」對它們永遠成立，而它們必然讀到併行寫入者的半成品。這幾個要平行**只能靠 worktree 隔離**，
+  不能靠範圍判斷（事故見 `context/learned/2026-09-16-concurrent-read-write-not-file-overlap.md`）
+- **worktree 的隔離只到檔案層**：`symlinkDirectories` 與共用執行資源見下方兩節
+- **強制者是 `.claude/hooks/pre-agent-gate.sh`**（理由與事故在它的訊息裡，勿在此重述）。
+  讀撞寫這條它驗得出來，而且在這個情境下**不採 deny-once**
+- **閘門承認的例外**：唯讀 agent（被派時放行、在跑時不計入併行寫入者），名單只在
+  `.claude/hooks/lib/agent-inflight.sh` 的 `AGENT_INFLIGHT_READONLY`（唯一來源，兩道閘門共用）；
+  以及 agent frontmatter 寫 `isolation: worktree`（`refactor-cleaner`），等同派工時帶 `isolation: "worktree"`
 
 ---
 

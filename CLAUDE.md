@@ -9,49 +9,31 @@
 
 ## 目錄地雷
 
-
-| 路徑                                        | 注意                                                                                                            |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `workshop/VibeCoding_Workshop.pptx`         | **由使用者手動編輯。** 不要跑 `generate_pptx.py` 重生，會洗掉手改內容                                           |
-| `.claude/context/`、`.claude/coordination/` | 執行時產物，已排除複製。修改 agent 的報告/交接格式時記得對應更新`_REPORT_TEMPLATE.md` 與 `_HANDOFF_TEMPLATE.md` |
-| `.claude/taskmaster-data/overview/`         | 專案圖解的產物，不進 git、hook 會在背景重產。**要改畫面就改 `.claude/templates/overview/index.html`**，改產物會被下一次重產蓋掉 |
-| 本 repo 的 ADR                               | 模板 repo 沒有 `docs/`，自己的 ADR **仍放 `.claude/context/decisions/`**（ADR-2026-11-05-004 的例外）。`/adr`、`architect` 寫給新專案的落點是 `docs/decisions/`，在這個 repo 用它們時改寫到 `.claude/context/decisions/` |
+| 路徑 | 注意 |
+|---|---|
+| `workshop/VibeCoding_Workshop.pptx` | **由使用者手動編輯。** 不要跑 `generate_pptx.py` 重生，會洗掉手改內容 |
+| `.claude/context/`、`.claude/coordination/` | 執行時產物，已排除複製。改 agent 的報告/交接格式時同步 `_REPORT_TEMPLATE.md` 與 `_HANDOFF_TEMPLATE.md` |
+| `.claude/taskmaster-data/overview/` | 專案圖解的產物，不進 git、hook 會在背景重產。**要改畫面就改 `.claude/templates/overview/index.html`** |
+| 本 repo 的 ADR | 模板 repo 沒有 `docs/`，自己的 ADR **仍放 `.claude/context/decisions/`**（ADR-2026-11-05-004 的例外）。在這個 repo 用 `/adr`、`architect` 時改寫到這裡 |
 
 ## 改動時的連帶檢查
 
-- **要加或改 `.claude/` 底下任何東西** → **先讀 `writing-extensions` skill**（五層決策表）。這個模板踩過四次「選錯層」，都是把該用 hook 的事寫成文字規則
-- **改了注入內容**（`using-taskmaster`、關鍵字路由、rules）→ 跑一輪 `.claude/tests/skill-compliance/run-compliance.sh`。hook 測試證明不了「模型會不會照做」
-- **新增 agent／skill／command／rule** → 跑 `bash .claude/scripts/check-counts.sh`，它會列出所有該同步卻沒同步的計數（CI 也會跑）
-- **改 `.claude/` 的目錄結構** → 同步 `scripts/copy-template.sh` 的 `EXCLUDES` **和** `scripts/copy-template.ps1` 的 `$excludeDirs` / `$excludeFiles`（兩份要一致，容易漏改 ps1）
-- **新增 skill** → 更新 `.claude/skills/INDEX.md`，否則沒人知道它存在
-- **新增 `.claude/ui/` 風格** → 一律用 `scripts/sync-ui-sources.sh --import <來源>:<id>`（自己抽的照 `_sources.json` 的 `self-extracted` 欄位定義手寫 `SOURCE.json`），再補 `CATALOG.md` 兩處（分類索引＋清單，附繁中一句話）；來源是新的上游時，同步 `_sources.json` 與 `_licenses/`。`check-counts.sh` 會擋缺 `SOURCE.json`、沒列進 CATALOG、抽不到配色或字型段落的風格。AI 痕跡判準見 `ui-style-compliance/anti-ai.md`
-- **改 hook** → 跑 `bash .claude/hooks/tests/run-tests.sh --changed <起點>`（只跑改到的節，放背景）。整套在 Windows 約 50 分鐘，只在 pre-pr 與 CI 跑；何時跑整套見 `commands/verify.md` 步驟 4（唯一來源）。新分支要補案例。語法壞掉會由 `post-write.sh` 在寫入當下印出 `bash -n` 的錯誤（只出聲不擋；`post-write.sh` 自己壞掉時無人可報，那無解）
-- **寫「那件事做完了沒」的閘門** → **`PostToolUse` 只代表工具呼叫返回了**。`Agent` 是非同步的（tool response 帶 `async_launched`），拿它當完成訊號會讓計數恆為 0 而且完全無聲——`pre-agent-gate.sh` 這樣壞了一整段時間。真正的結束事件是 `SubagentStop`。先用一筆真實資料對時間差再寫測試（見 `context/learned/2026-09-11-async-dispatch-breaks-posttooluse-gates.md`）
-- **新增 hook 事件接線** → 同步 `.claude/settings.json` **和** `.claude/hooks/README.md`（檔案結構樹 + 各 hook 功能表）。hook 腳本數沒變時 `check-counts.sh` 不會提醒你
-- **改 agent 的報告落點或 handoff 行為** → `post-agent-report.sh` 的 `AREA` 對應表要同步，**否則稽核永遠找不到報告**
-- **新增 `context/` 的 area 子目錄** → 同步 `copy-template.sh` 的 `for d in ...` **和** `copy-template.ps1` 的 `$contextAreas`（四份腳本的骨架規則要一致：`copy-template.{sh,ps1}` 建目錄、`update-template.{sh,ps1}` 只補 `README.md`／`_*.md`／`.gitkeep`）
-- **改 hook 讀寫的狀態檔** → 先想清楚它屬「短命旗標」還是「共享產物」，照 `worktree-orchestration` skill 的邊界表選 `WORK_CLAUDE` 或 `MAIN_CLAUDE`。用錯的話平行開發會靜默壞掉
-- **改閘門的路徑排除規則** → 一律先相對化到 `WORK_ROOT` 再比對，樣式錨定開頭。用絕對路徑子字串比對會被 `.claude/worktrees/` 誤命中
-- **改 `using-taskmaster` skill** → 它由 `session-start.sh` 全文注入，**每個 session 都會載入**；加東西前先想清楚值不值得佔常駐 context
+- **加或改 `.claude/` 底下任何東西** → 先讀 `writing-extensions` skill（五層決策表）。踩過四次「該用 hook 卻寫成文字規則」
+- **改了注入內容**（`using-taskmaster`、關鍵字路由、rules）→ 跑 `.claude/tests/skill-compliance/run-compliance.sh`。hook 測試證明不了模型會不會照做
+- **改 `using-taskmaster`** → 它每個 session 全文注入，加東西前先想值不值得佔常駐 context
+- **新增 agent／skill／command／rule** → `bash .claude/scripts/check-counts.sh`（CI 也跑）；新增 skill 另更新 `.claude/skills/INDEX.md`
+- **改 `.claude/` 目錄結構** → 同步 `copy-template.sh` 的 `EXCLUDES` **和** `copy-template.ps1` 的 `$excludeDirs`／`$excludeFiles`（容易漏 ps1）
+- **新增 `context/` 的 area 子目錄** → 同步 `copy-template.sh` 的 `for d in ...` **和** `copy-template.ps1` 的 `$contextAreas`；`update-template.{sh,ps1}` 只補 `README.md`／`_*.md`／`.gitkeep`
+- **新增 `.claude/ui/` 風格** → 用 `scripts/sync-ui-sources.sh --import <來源>:<id>`，再補 `CATALOG.md` 兩處（分類索引＋清單）；自己抽的照 `_sources.json` 的 `self-extracted` 欄位手寫 `SOURCE.json`；新上游同步 `_sources.json` 與 `_licenses/`。AI 痕跡判準見 `ui-style-compliance/anti-ai.md`
+- **改 hook** → `bash .claude/hooks/tests/run-tests.sh --changed <起點>`（放背景），新分支要補案例；整套何時跑見 `commands/verify.md` 步驟 4。動 hook 前先看 `.claude/context/decisions/KNOWN-GAPS.md` 的四個暫不修問題
+- **新增 hook 事件接線** → 同步 `.claude/settings.json` **和** `.claude/hooks/README.md`（`check-counts.sh` 不會提醒）
+- **寫「那件事做完了沒」的閘門** → `PostToolUse` 只代表工具返回；`Agent` 是非同步的，結束事件是 `SubagentStop`（見 `context/learned/2026-09-11-async-dispatch-breaks-posttooluse-gates.md`）
+- **改 agent 的報告落點或 handoff 行為** → 同步 `post-agent-report.sh` 的 `AREA` 對應表，否則稽核找不到報告
+- **改 hook 讀寫的狀態檔** → 照 `worktree-orchestration` skill 的邊界表選 `WORK_CLAUDE`（短命旗標）或 `MAIN_CLAUDE`（共享產物），用錯平行開發會靜默壞掉
+- **改閘門的路徑排除規則** → 先相對化到 `WORK_ROOT` 再比對、樣式錨定開頭，否則會被 `.claude/worktrees/` 誤命中
+- **合併衝突檔含 `.claude/hooks/**`** → 不要等「委派 conflict-resolver」的提示（hook 語法壞了提示不會出現），自己看 `git status`
 
 ## 已知落差
 
-- **發佈仍是 pull 式**：`copy-template` / `update-template` 要手動跑。真正的自動更新要走 Claude Code plugin marketplace（改版號即更新），但 plugin **帶不了 `rules/`**，且指令會變 `/taskmaster:task-next`。`using-taskmaster` 已示範「rules 改寫成 SessionStart 注入的 skill」這條遷移路徑
-- **沒有 constitution**：`rules/` 是模板通用規範，缺「這個專案不可違反的原則」那一層
-- **workshop 第 5 章教的機制已不存在**：`workshop/docs/slides/ch5_advanced.md`（4 處）與 `01_workshop_prd.md`（2 處）還在教「從 `custom-rule&skill/` 複製 94 個技能包」，但備份池已於 v5.6 移除。新說法是「委派 `skill-curator`」（它查官方文檔、寫觸發式 description、接線、驗證）。**開課前務必修**。未動的原因：`.md` 與手改的 `.pptx` 關係未確認
-- **壓力測試已實跑一輪，但測不到正向題**（2026-09-09，結果與判讀在 `.claude/tests/skill-compliance/results/20260909-130333/_判讀.md`，該目錄不進版控）。三件事：
-  - 8 份有 5 份的目標物（`src/`、API、schema）**在模板 repo 不存在**，受測 session 只能正確地回「給我專案路徑」→ 正向題永遠半殘。**這批必須在有應用程式碼的專案裡跑**
-  - **受測者讀得到考卷**：prompt 04／05 都主動指出題目一字不差存在 `prompts/*.txt`。這次它選擇不看評分標準，但下次照答案演我們分不出來
-  - `-p` 非互動模式拿不到權限提示 → 受測 session 寫不了 `.claude/**`、跑不了 Bash 腳本
-  - 已驗出的結論：反向題 2/2 PASS（注入沒硬到壓過使用者指示）、任務分級與升級有效；**文件路由（01／02）兩次都沒走**，證實了 Red Flags 表「最常被漏掉的一棒」那句判斷
-- **衝突檔本身是 live hook 時，「委派 `conflict-resolver`」的注入靜默失效**（2026-09-11 實測）。衝突標記讓 hook 語法壞掉 → PostToolUse 只噴語法錯誤，該出現的提示沒出現。這推翻了「hook 一定會提醒你委派」這個隱含假設，而本模板最常做的事就是改 hook。沒有簡單解；務實做法是**衝突檔含 `.claude/hooks/**` 時不要等提示，自己看 `git status`**
-- **hook 已知但暫不修的四個問題**（2026-11-05 確認仍在程式裡，使用者決定先不處理）：
-  - `lib/resolve-roots.sh` 在 `claude -w` 開的 session 裡把 worktree 當成主 checkout：`CLAUDE_PROJECT_DIR` 本身就指向 worktree，只比對它就判成 `IN_WORKTREE=0`，短命旗標與共享產物會落在同一邊
-  - hook 在 Windows 慢：每個 `bash`／`jq` 子行程約 170ms，整套測試約 50 分鐘
-  - `lib/full-suite-gate.sh` 把 `bash -n …/run-tests.sh`（只檢查語法）當成跑整套，在 worktree 裡會擋一次
-  - `post-bash.sh` 不檢查合併是不是發生在本 repo：在 repo 外（`git -C` 別處、`cd` 到別的 repo）跑 `git merge` 也會記進 `.merge-pending`，擋下下一次合併
-
-### 已修的落差
-
-搬到 `.claude/context/decisions/FIXED-LOG.md`（歷史紀錄不需常駐，且會無限成長）。
-懷疑某個落差是否還存在、或要動相關機制之前去 grep 它。
+未修的在 `.claude/context/decisions/KNOWN-GAPS.md`，已修的在同目錄 `FIXED-LOG.md`。
+懷疑某個行為是已知問題、或要動相關機制（hook、發佈流程、壓力測試）之前去 grep。

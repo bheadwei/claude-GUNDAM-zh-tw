@@ -61,7 +61,7 @@
 #   一般情境的 deny-once 行為**完全不變**。
 #
 # 完整教訓見 context/learned/2026-09-16-concurrent-read-write-not-file-overlap.md，
-# 判準的文字版見 rules/agent-orchestration.md「安全平行」。
+# 判準的文字版見 skills/worktree-orchestration/SKILL.md「平行的判準」。
 #
 # ---------------------------------------------------------------- 不必擋的兩類
 #

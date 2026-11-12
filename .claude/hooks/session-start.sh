@@ -120,9 +120,7 @@ emit_context() {
 
     if [ -n "$skill_body" ]; then
         payload="<EXTREMELY_IMPORTANT>
-你在一個 TaskMaster 專案裡。以下是 \`using-taskmaster\` skill 全文——它規定了
-你何時**必須**委派專業 subagent、以及動工前必須先讀專案踩過的坑。
-其餘 skill 用 Skill 工具按需載入。
+TaskMaster 專案。以下是 \`using-taskmaster\` skill 全文（其餘 skill 按需載入）：
 
 ${skill_body}
 </EXTREMELY_IMPORTANT>"

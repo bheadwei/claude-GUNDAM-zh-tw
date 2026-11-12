@@ -77,10 +77,10 @@
 
 | 規則 | 內容 |
 | :--- | :--- |
-| coding-style | 克制原則、註解預設不寫、不可變性、依職責拆檔、錯誤處理、CWD、Context 管理 |
+| coding-style | 克制原則、註解預設不寫、先研究再實作、不可變性、依職責拆檔、commit 格式、CWD、Context 管理 |
 | task-mode | quick/standard/critical 三檔分級（由 `pre-tool-use.sh` 強制判級） |
 | git-workflow | 先開分支、多 session ref 驗證、destructive 前打 backup tag（由 `lib/git-backup-gate.sh` 強制） |
-| agent-orchestration | 鏈怎麼推進、handoff 接力、安全平行（路由表在 `using-taskmaster` skill） |
+| agent-orchestration | general-purpose 退路、依模式委派、反模式、平行的底線（路由與接力在 `using-taskmaster` skill） |
 | security | commit 前安全檢查 |
 | interactive-qa | AskUserQuestion 一次一題 |
 
@@ -112,7 +112,7 @@
 ## Context 系統（跨 Agent 共享）
 
 11 個 agent 完成時寫報告到 `.claude/context/<area>/`（對應表在 `hooks/post-agent-report.sh` 的 `AREA`），
-需要後續處理的透過 handoffs 交接工作（誰會建 handoff 見 `rules/agent-orchestration.md`）。
+需要後續處理的透過 handoffs 交接工作（誰會建 handoff 見 `coordination/README.md`）。
 
 ```bash
 # 查看最新報告

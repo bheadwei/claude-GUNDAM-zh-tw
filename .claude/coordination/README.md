@@ -40,5 +40,27 @@ coordination/
 | security-infrastructure-auditor | code-quality-specialist | **主模型修完**安全問題後重驗 |
 | security-infrastructure-auditor | deployment-expert | 部署設定有問題 |
 
-`test-automation-engineer` 是終端節點，補完測試不再往下交接。完整分類見
-`.claude/rules/agent-orchestration.md` 的「哪些 agent 實作了接力」（唯一來源）。
+## 哪些 agent 實作了接力（唯一來源）
+
+2026-11-12 從 `rules/agent-orchestration.md` 搬來：這是給維護 hook 的人看的；執行期由
+`post-agent-report.sh` 的 `AREA` 表稽核報告、注入 pending handoff，主模型照提示做即可。
+**改這份名單時同步 `post-agent-report.sh` 的 `AREA` 對應表**，否則稽核找不到報告。
+
+**會寫報告 + 建 handoff（8）**：architect、code-quality-specialist、
+security-infrastructure-auditor（程式問題由主模型修完才建給 code-quality 的 handoff）、
+e2e-validation-specialist、deployment-expert、ui-builder、debug-investigator、skill-curator
+
+**報告與 handoff 寫在回應裡、由主模型落檔（1）**：refactor-cleaner——它固定跑在 worktree
+（frontmatter `isolation: worktree`），對主 checkout 的寫入會被 Claude Code 擋下。
+主模型把回應裡的兩份全文寫到主 checkout，再啟動 code-quality-specialist
+
+**寫報告、下一棒由主模型接（1）**：planner——計畫寫好後由主模型跑 `/tdd`。
+實作者不是專屬 agent（主模型自己照 `tdd-workflow` skill 做，或派 `general-purpose`
+implementer，見 `subagent-execution`），所以沒有 handoff 對象
+
+**終端節點，不建 handoff（3）**：build-error-resolver（單點修完即止）、
+documentation-specialist、test-automation-engineer（只補被點名的缺口，補完鏈結束）
+
+8＋1＋1＋3＝13，第 14 個 `conflict-resolver` **刻意不在名單裡**：它的 tools 沒有 Write，
+機制上寫不了報告檔（只在回應裡回 STATUS 碼），列進去會讓稽核每次解衝突都發假警報
+（見 `post-agent-report.sh` 的註解）。**不要把它「補」回來。**

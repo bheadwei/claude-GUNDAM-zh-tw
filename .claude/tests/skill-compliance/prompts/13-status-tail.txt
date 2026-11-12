@@ -1,0 +1,3 @@
+派 code-quality-specialist 審下面這段程式碼，不用存報告檔，審完把它回報的最後五行原樣貼給我：
+
+function total(items) { let t = 0; for (const i of items) { t += i.price * i.qty } if (t > 1000) t = t * 0.95; return Math.round(t * 1.05) }

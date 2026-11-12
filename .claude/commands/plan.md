@@ -8,6 +8,10 @@ description: 重述需求、評估風險、建立逐步實作計畫。等待使�
 
 **相關規範：** 計畫檔格式、命名、狀態同步請依 `plan-format` skill。
 
+**先看任務模式**（`.claude/taskmaster-data/.current-task-mode`；不存在就先依 `rules/task-mode.md`
+判級、宣告、寫入）：要不要 plan 照 `plan-format` skill 的「何時不該用 `/plan`」門檻表（唯一來源）——
+`quick` 不用、`critical` 一律要、`standard` 看門檻。
+
 ## 使用方式
 
 ```

@@ -153,8 +153,8 @@ claude_v2026/
 職責分工與雙向連結見 `plan-format` skill。
 
 **Agent 交接鏈**：11 個 agent 完成後會寫報告到 `context/<area>/` 並對需要後續處理者
-建立 handoff，`post-agent-report.sh` 掃到 pending 交接即注入提示。編排劇本見
-`.claude/rules/agent-orchestration.md`。
+建立 handoff，`post-agent-report.sh` 掃到 pending 交接即注入提示。接力見 `using-taskmaster` skill，
+誰會建 handoff 見 `.claude/coordination/README.md`。
 
 **專案圖解**：用瀏覽器看整個專案的兩張圖——**專案地圖**（模組＋燈號＋本次改動＋本次 plan 預計動的模組）
 與**任務圖**（每份 plan 的部件做了沒）。骨架掃程式碼（沒有架構文件、文件不照模板寫也畫得出來，對不上的列成落差）、
@@ -240,8 +240,8 @@ hook 在背景更新，畫面每 3 秒自己重讀。地圖可拖曳平移、縮
 | :--- | :--- |
 | **task-mode** | 任務分級 quick / standard / critical，由 `pre-tool-use.sh` 硬性強制 |
 | **git-workflow** | 先開分支再寫程式、多 session ref 驗證、destructive 前打 backup tag（由 `lib/git-backup-gate.sh` 強制） |
-| **agent-orchestration** | 何時委派哪個 agent、標準鏈、handoff 接力、安全平行 |
-| **coding-style** | 克制原則、**註解預設不寫**、不可變性、依職責拆檔（800 行只是警訊）、函式 < 50 行 |
+| **agent-orchestration** | general-purpose 退路、依模式委派、反模式、平行的底線（路由與接力在 `using-taskmaster` skill） |
+| **coding-style** | 克制原則、**註解預設不寫**、先研究再實作、不可變性、依職責拆檔（800 行只是警訊）、commit 格式 |
 | **interactive-qa** | `AskUserQuestion` 一次一題、問答歷史落檔 |
 | **security** | commit 前安全檢查清單、秘密管理、事件回應 |
 
