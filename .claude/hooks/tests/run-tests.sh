@@ -3540,7 +3540,7 @@ if [ -n "$OV_CHROME" ] && [ -x "$OV_CHROME" ]; then
     cp "$OV_TPL" "$OVK/index.html"
     awk -v inj="$HOOK_DIR/tests/fixtures/overview/keep-state.js" '/<\/body>/ { print "<script>"; while ((getline l < inj) > 0) print l; print "</script>" } { print }' "$OVK/index.html" > "$OVK/page.html"
     OV_RES=$("$OV_CHROME" --headless=new --no-sandbox --disable-gpu --window-size=1440,1000 --virtual-time-budget=9000 \
-        --dump-dom "file://$OVK/page.html" 2>/dev/null | sed -n 's/.*<pre id="result">\(.*\)<\/pre>.*/\1/p' | sed 's/&quot;/"/g; s/&amp;/\&/g')
+        --dump-dom "file://$OVK/page.html#map" 2>/dev/null | sed -n 's/.*<pre id="result">\(.*\)<\/pre>.*/\1/p' | sed 's/&quot;/"/g; s/&amp;/\&/g')
     rq() { printf '%s' "$OV_RES" | jq -r "$1" 2>/dev/null; }
     expect_eq "換一份內容不同的 data.js → 縮放不變" "true" "$(rq '(.A.zl != null) and (.A.zl == .B.zl)')"
     expect_eq "換一份內容不同的 data.js → 選取的模組不變" "true" "$(rq '(.A.sel != null) and (.A.sel == .B.sel)')"
@@ -5978,6 +5978,79 @@ for p in $SV_PIDS; do kill -0 "$p" 2>/dev/null && alive="$alive $p"; done
 expect_eq "本節結束沒有殘留的伺服器行程" "" "$alive"
 for p in $alive; do kill "$p" 2>/dev/null; done
 rm -rf "$SV" "$SV_BIN" "$SV_FP" "$SV_CALLS"
+
+# =========================================================================
+section "overview 現況分頁 — index.html 的 #now（headless chrome）"
+# =========================================================================
+# 計畫 adhoc-2026-11-12-overview-live 階段 7。fixtures/overview/now-check.js 塞進範本複本跑，live.js 由它現算
+# （時間要對得上頁面的時鐘）。沒有 chrome 就整節略過、不計入通過；伺服器那段另外要 Python 3.7 以上。
+NW="$SANDBOX/現況 分頁"; NW_TPL="$HOOK_DIR/../templates/overview/index.html"; NW_JS="$HOOK_DIR/tests/fixtures/overview/now-check.js"
+NW_CHROME="${OV_CHROME:-$(ls -d "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null | tail -1)}"
+[ -z "$NW_CHROME" ] && NW_CHROME=$(command -v chromium chromium-browser google-chrome 2>/dev/null | head -1)
+nw_page() { awk -v inj="$NW_JS" '/<\/body>/ { print "<script>"; while ((getline l < inj) > 0) print l; print "</script>" } { print }' "$NW_TPL" > "$1"; }
+nw_data() {
+    jq -nc '{schema: 2, generatedAt: "2026-11-12T10:00:00.000+08:00", project: {name: "現況"}, modules: [], groups: [], edges: [], tasks: [],
+      changes: [], changesRollup: [], notices: [], unmappedTasks: [],
+      curGroups: [{key: "g1", task: "1.2", title: "結帳", plan: "plans/1.2-x.md", sources: ["main"], where: "main", guessed: false, phase: 2, phases: 3, activePhases: [2]},
+                  {key: "g2", task: "3.1", title: "CI", plan: null, sources: ["worktree:wt-b"], where: "worktree:wt-b", guessed: false, phase: null, phases: null, activePhases: []}],
+      plans: [{file: "plans/1.2-x.md", source: "main", task: "1.2", title: "結帳", parts: [], changes: [], changesRollup: [],
+               phases: [{n: 1, name: "購物車", state: "done"}, {n: 2, name: "結帳頁", state: "wip"}, {n: 3, name: "退款", state: "planned"}]}],
+      humans: [{who: "alice", task: "2.1", title: "點數", status: "blocked", branch: null}]}' | sed 's/^/window.OVERVIEW = /; s/$/;/' > "$1/data.js"
+}
+nw_run() {
+    "$NW_CHROME" --headless=new --no-sandbox --disable-gpu --user-data-dir="$NW/prof" --window-size=1440,1000 --virtual-time-budget="${NW_BUDGET:-12000}" "$@" \
+        --dump-dom "$NW_URL" 2>/dev/null | sed -n 's/.*<pre id="result">\(.*\)<\/pre>.*/\1/p' | sed 's/&quot;/"/g; s/&amp;/\&/g'
+}
+if [ -n "$NW_CHROME" ] && [ -x "$NW_CHROME" ]; then
+    rm -rf "$NW"; mkdir -p "$NW"; nw_data "$NW"; nw_page "$NW/index.html"; NW_URL="file://$NW/index.html"
+    NW_RES=$(nw_run); nq() { printf '%s' "$NW_RES" | jq -r "$1" 2>/dev/null; }
+    expect_eq "開頁沒有 hash → 現況分頁，分頁列順序是現況、專案地圖、任務圖" "true 現況,專案地圖,任務圖" "$(nq '"\(.hashless.v) \(.hashless.tabs | join(","))"')"
+    expect_eq "現況分頁看不到圖例篩選、落差與提示" "false false" "$(nq '"\(.hashless.legend) \(.hashless.chipbar)"')"
+    expect_eq "切到地圖分頁 → 圖例篩選、落差與提示回來、暫停動畫按鈕收起；切回現況又藏起來" "true true false false false" \
+        "$(nq '"\(.map.legend) \(.map.chipbar) \(.map.still) \(.back.legend) \(.back.chipbar)"')"
+    expect_eq "沒有 live.js → 顯示「還沒有即時資料」、數字全 0 且變淡" "還沒有即時資料：agent 開始工作後這裡會出現 0,0,0,0 true" \
+        "$(nq '"\(.none.nnone) \([.none.kpis[].t | .[0:1]] | join(",")) \([.none.kpis[].zero] | all)"')"
+    expect_eq "沒有 live.js →「今天完成」寫「0 個 agent · 0 個任務」" "0 個 agent · 0 個任務" "$(nq '.none.kpis["k-fin"].t')"
+    expect_eq "file:// 開頁、沒有 live.js → 不顯示伺服器結束提示" null "$(nq '.none.gone')"
+    expect_eq "needs 2 筆＋1 條 lane 的 lastAt 是 11 分鐘前 →「需要你」3、清單 3 行" "3 3" "$(nq '"\(.A.kpis["k-need"].t) \(.A.needs | length)"')"
+    expect_contains "卡住那行寫「11 分鐘沒有動靜」" "11 分鐘沒有動靜" "$(nq '.A.needs[2]')"
+    expect_eq "卡住的 lane 卡標成 stuck" true "$(nq '.A.stuck')"
+    expect_eq "數字為 0 的格變淡（撞檔 0）、不為 0 的不變淡（在跑的線 4）" "true false" "$(nq '"\(.A.kpis["k-clash"].zero) \(.A.kpis["k-run"].zero)"')"
+    expect_eq "doneToday {agents:7,tasks:1} →「7 個 agent · 1 個任務」" "7 個 agent · 1 個任務" "$(nq '.A.kpis["k-fin"].t')"
+    expect_eq "doneToday {agents:0,tasks:2} →「0 個 agent · 2 個任務」且不變淡" "0 個 agent · 2 個任務 false" "$(nq '"\(.B.kpis["k-fin"].t) \(.B.kpis["k-fin"].zero)"')"
+    expect_eq "doneToday {agents:0,tasks:0} → 變淡" true "$(nq '.C.kpis["k-fin"].zero')"
+    expect_eq "lane 的 since 是 5 分鐘前 → 經過時間 5:00，下一次跳是 5:01" "5:00 5:01" "$(nq '"\(.clock0) \(.clock1)"')"
+    expect_eq "files {done:1,total:3} → 進度條 33%" "33%" "$(nq '.A.bar')"
+    expect_eq "files 為 null → 來回滑動的進度條" "true slide" "$(nq '"\(.A.ind) \(.A.anim)"')"
+    expect_eq "2 個 curGroups、一組 3 張卡、group 為 null 的 1 張 → 3 個組框，第三個是「未歸屬」" "1.2 結帳|3,3.1 CI|0,未歸屬|1" "$(nq '.A.groups | join(",")')"
+    expect_eq "第一次載入 live.js 的卡不淡入（不整頁一起動）" false "$(nq '.A.firstEnter')"
+    expect_eq "live.js 多一筆 lane → 新卡淡入，原有卡仍是同一個 DOM 物件" "true true" "$(nq '"\(.B.enter) \(.B.same)"')"
+    expect_eq "按「暫停動畫」→ 文字變「繼續動畫」、存進 localStorage、動畫停住" "繼續動畫 1 paused" "$(nq '"\(.still.text) \(.still.ls) \(.still.play)"')"
+    NW_RES=$(nw_run --force-prefers-reduced-motion)
+    expect_eq "prefers-reduced-motion: reduce → 所有元素（含 ::after）的 animation-name 為 none" 0 "$(nq '.reduceBad')"
+    expect_eq "重開頁面仍是暫停（按鈕寫「繼續動畫」）" "繼續動畫" "$(nq '.hashless.still')"
+    if sv_pick_py >/dev/null; then
+        sv_reset; rm -f "$SV_OV/index.html"; nw_data "$SV_OV"; nw_page "$SV_OV/index.html"
+        SV_X=(BROWSER=true); NW_URL=$(sv_last "$(sv_run)"); SV_X=()
+        nw_pid=$(sed -n 's/.*"pid": *\([0-9]*\).*/\1/p' "$SV_OV/.serve" 2>/dev/null)
+        NW_RES=$(NW_BUDGET=9000 nw_run)
+        expect_eq "伺服器活著、還沒有 live.js → 不顯示伺服器結束提示，顯示「還沒有即時資料」" "null 還沒有即時資料：agent 開始工作後這裡會出現" \
+            "$(nq '"\(.alive.gone) \(.alive.nnone)"')"
+        expect_eq "伺服器結束後下一輪輪詢 → 頁首出現提示、現況畫面仍在" "伺服器已結束（閒置 30 分鐘），重跑 /task-status true 專案圖解 — 現況" \
+            "$(nq '"\(.dead.gone) \(.deadNv) \(.deadTitle)"')"
+        sv_stop
+        for _ in $(seq 1 30); do kill -0 "$nw_pid" 2>/dev/null || break; sleep 0.1; done
+        expect_eq "現況分頁的伺服器案例結束後沒有殘留行程" no "$([ -n "$nw_pid" ] && kill -0 "$nw_pid" 2>/dev/null && echo yes || echo no)"
+        [ -n "$nw_pid" ] && kill "$nw_pid" 2>/dev/null
+        rm -rf "$SV" "$SV_BIN" "$SV_FP" "$SV_CALLS"
+    else
+        printf '  \033[90mℹ\033[0m 沒有 Python 3.7 以上，略過伺服器結束提示的測試（不計入通過數）\n'
+    fi
+    rm -rf "$NW"
+else
+    printf '  \033[90mℹ\033[0m 沒有 chrome，略過現況分頁的畫面測試（不計入通過數）\n'
+fi
+expect_eq "現況分頁不拆檔：templates/overview/ 沒有 now.js" no "$([ -e "$HOOK_DIR/../templates/overview/now.js" ] && echo yes || echo no)"
 
 # =========================================================================
 section "全體 hooks — 語法與健壯性"
