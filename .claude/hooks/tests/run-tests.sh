@@ -4628,6 +4628,32 @@ tg_reset; PH_NOOWNER=1 ph_wbs "4.1|x|🔄 進行中" "4.2|x|⏳ 待處理"; ph_o
 expect_eq "沒有「負責」欄的 WBS → humans 為空陣列、tasks 照讀" "[] 4.1,4.2" \
     "$(tgq '"\(.humans | tojson) \([.tasks[].id] | join(","))"')"
 
+expect_eq "畫面範本沒有 ★（改成「目前任務」小標籤）" 0 "$(grep -c '★' "$OV_TPL")"
+
+PH_CHROME=$(ls "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null | head -1)
+[ -n "$PH_CHROME" ] || PH_CHROME=$(command -v chromium chromium-browser google-chrome 2>/dev/null | head -1)
+if [ -n "$PH_CHROME" ]; then
+    # 標題列的「目前任務」標籤：拿真的 data.js 把 curGroups 換成 N 條，用 headless chrome 轉出 DOM 數標籤
+    tg_reset; tg_plan 1.2-x.md 🔄 ⏳; echo 1.2 > "$TGD/.current-task"; ph_ov
+    ph_dom() {
+        local n="$1" d="$SANDBOX/phdom$1"
+        rm -rf "$d"; mkdir -p "$d"; cp "$TGO/index.html" "$d/"
+        { printf 'window.OVERVIEW = '; sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$TGO/data.js" | jq -c --argjson n "$n" \
+            '.curGroups = ([range(0; 3) as $i | {key: "k\($i)", task: "\($i + 1).1", title: "名稱\($i)", plan: "plans/p\($i).md", sources: ["main"], where: (if $i == 0 then "main" else "worktree:w\($i)" end), guessed: false}] | .[:$n])'
+          printf ';\n'; } > "$d/data.js"
+        "$PH_CHROME" --headless --no-sandbox --disable-gpu --dump-dom --virtual-time-budget=4000 "file://$d/index.html" 2>/dev/null \
+            | tr '\n' ' ' | sed 's/.*id="curbar"//; s/<nav class="tabs".*//'
+        rm -rf "$d"
+    }
+    for n in 1 2 3; do ph_html[$n]=$(ph_dom $n); done
+    expect_eq "標題列：1 條 → 1 個「目前任務」標籤" 1 "$(printf '%s' "${ph_html[1]}" | grep -o 'class="tag cur"' | wc -l | tr -d ' ')"
+    expect_eq "標題列：2 條 → 2 個標籤、沒有收合" "2 0" "$(printf '%s' "${ph_html[2]}" | grep -o 'class="tag cur"' | wc -l | tr -d ' ') $(printf '%s' "${ph_html[2]}" | grep -c 'curmore')"
+    expect_eq "標題列：3 條 → 收成 1 個「目前任務 3 條 ▾」，展開列 3 條" "1 3" \
+        "$(printf '%s' "${ph_html[3]}" | grep -o '<summary class="tag cur">目前任務 3 條 ▾' | wc -l | tr -d ' ') $(printf '%s' "${ph_html[3]}" | grep -o '<span class="tag cur">' | wc -l | tr -d ' ')"
+    expect_contains "標籤寫「目前任務 <編號> <名稱>（主 checkout／worktree xxx）」" "目前任務 1.1 名稱0（主 checkout）" "${ph_html[1]}"
+    expect_contains "worktree 的標籤寫 worktree 名" "目前任務 2.1 名稱1（worktree w1）" "${ph_html[2]}"
+fi
+
 # =========================================================================
 section "overview-scan.sh — 前後端 HTTP 連線、Maven／Gradle 慣例路徑"
 # =========================================================================
