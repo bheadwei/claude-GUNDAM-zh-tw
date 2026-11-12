@@ -4,7 +4,7 @@ slug: "overview-live"
 created: "2026-11-12"
 updated: "2026-11-12"
 status: "🔄 進行中"
-current_phase: 1
+current_phase: 2
 mode: "standard"
 files:
   - ".claude/scripts/overview.sh"
@@ -115,12 +115,12 @@ flowchart LR
 | p12 | 現況分頁 | 7 | `.claude/templates/overview/index.html` | 開頁沒有 hash → 預設現況分頁，頂端 4 格；`doneToday` 為 `{agents:7,tasks:1}` → 「今天完成」格寫「7 個 agent · 1 個任務」（截圖） |
 | p14 | 部件卡誰在做與等你 | 8 | `.claude/templates/overview/index.html` | 某 agent 寫了部件 p9a 的檔 → p9a 卡顯示「implementer · 12 分」 |
 
-### 階段 1: 內容沒變不重寫 data.js、重畫保留畫面狀態 ⏳
+### 階段 1: 內容沒變不重寫 data.js、重畫保留畫面狀態 ✅
 - **依賴**：無
-- [ ] `overview.sh` 的 `run_once`：寫 data.js 前，把新舊兩份去掉易變欄位後比對，相同就不寫（不 `mv`、不動 mtime）。比對用 bash 內建（`read -r -d ''` 讀舊檔、參數展開去欄位），不多開行程 — 驗證：`bash .claude/hooks/tests/run-tests.sh overview`
-- [ ] 易變欄位：`generatedAt`、`scan.ms`、`scan.cached`。實作前先在沙箱連跑三次 diff 兩份 data.js，找出其他每次都會變的欄位一併排除（結果記進「發現與決策」）
-- [ ] `index.html` 的 `render()`：重畫時保留地圖縮放平移（`S`）、選取的模組、內部圖（`INNER`）、任務圖 `scrollTop`、各 `<details>` 的展開狀態（依 plan 檔名＋區塊種類當 key，重畫後還原） — 驗證：Playwright 截圖
-- [ ] 頁面上限提到 128KB（決策 Q1，依據 `.claude/context/decisions/ADR-2026-11-12-001-overview-page-size-128kb.md`，取代 ADR-2026-11-09-001）：`check-counts.sh` 約 507 行 `81920` → `131072`、約 509 行訊息「80KB」→「128KB」、約 497 行守門註解；`index.html` 約 10 行頁首註解「整份 ≤ 80KB」→「≤ 128KB」；`ADR-2026-11-12-001` 已落檔。兩處註解都補 ADR-001 的觸發條件：「超過 112KB（上限的 7/8）→ 下一個加功能的計畫在規劃時就要評估拆檔或瘦身；再超過 128KB → 預設拆檔，不再調上限（ADR-2026-11-12-001）」。112KB 只寫在註解，不加第二道檢查（ADR 的確認方式只要求 128KB 失敗訊息） — 驗證：`bash .claude/scripts/check-counts.sh`
+- [x] `overview.sh` 的 `run_once`：寫 data.js 前，把新舊兩份去掉易變欄位後比對，相同就不寫（不 `mv`、不動 mtime）。比對用 bash 內建（`read -r -d ''` 讀舊檔、參數展開去欄位），不多開行程 — 驗證：`bash .claude/hooks/tests/run-tests.sh overview`
+- [x] 易變欄位：`generatedAt`、`scan.ms`、`scan.cached`。實作前先在沙箱連跑三次 diff 兩份 data.js，找出其他每次都會變的欄位一併排除（結果記進「發現與決策」）
+- [x] `index.html` 的 `render()`：重畫時保留地圖縮放平移（`S`）、選取的模組、內部圖（`INNER`）、任務圖 `scrollTop`、各 `<details>` 的展開狀態（依 plan 檔名＋區塊種類當 key，重畫後還原） — 驗證：Playwright 截圖
+- [x] 頁面上限提到 128KB（決策 Q1，依據 `.claude/context/decisions/ADR-2026-11-12-001-overview-page-size-128kb.md`，取代 ADR-2026-11-09-001）：`check-counts.sh` 約 507 行 `81920` → `131072`、約 509 行訊息「80KB」→「128KB」、約 497 行守門註解；`index.html` 約 10 行頁首註解「整份 ≤ 80KB」→「≤ 128KB」；`ADR-2026-11-12-001` 已落檔。兩處註解都補 ADR-001 的觸發條件：「超過 112KB（上限的 7/8）→ 下一個加功能的計畫在規劃時就要評估拆檔或瘦身；再超過 128KB → 預設拆檔，不再調上限（ADR-2026-11-12-001）」。112KB 只寫在註解，不加第二道檢查（ADR 的確認方式只要求 128KB 失敗訊息） — 驗證：`bash .claude/scripts/check-counts.sh`
 - **預估**：1.5h
 - **驗收**：
   - 同一組輸入連跑兩次 → 第二次後 data.js 的 mtime（`stat -c %Y`）與內容都不變
@@ -349,3 +349,6 @@ flowchart LR
   - plan 與 ADR 衝突時以 ADR 為準
 - 2026-11-12 同步 architect 報告「需要 planner 同步」九項：①事件行加 `ms`、`nt`，need 依 `(t, ms)` 排序（階段 3 格式與驗收、階段 6 規則與驗收）②主 session 工具事件也記、`aid` 為空（階段 3）③Bash 第一個詞跳過 `NAME=value`（階段 3 驗收）④Notification 開啟者拿掉 `agent_needs_input`、改官方類型（階段 3、6）⑤網址帶 token、`.serve-id`／`.shutdown` 走 token 路徑（階段 4、p7、p8、task-status）⑥Python 自己 bind、`.serve.lock`（階段 4）⑦開瀏覽器：上一輪已改成依平台開，本輪把順序對齊 ADR-003（Linux 有桌面時即使有 SSH 也用 `xdg-open`）⑧頁面處理伺服器已閒置結束（階段 7 新增一項與 3 條驗收，階段 7 因此多依賴階段 4）⑨now.js 殘留——上一輪已拿掉，本輪核對 plan 只剩「確認沒有 now.js」的驗收與歷史紀錄，已處理
 - 2026-11-12 規劃：其他未完成的 plan 只有 `adhoc-2026-10-16-frontend-style-library`（⏳ 0/11）。本 plan 沒有情境編號；`files:` 與它共有 `.claude/hooks/tests/run-tests.sh`、`.claude/hooks/session-start.sh`、`.claude/hooks/README.md`、`README.md`，兩份不可平行開發
+- 2026-11-12 階段 1 實測：沙箱連跑三次，data.js 每次都變的只有 `generatedAt` 與快取命中後的 `scan.cached`（沙箱 `scan.ms` 恆為 0，真實專案會變，照規格一併排除），沒有其他易變欄位。未測 worktree 並行與大 repo，若之後頁面仍無故重畫先查這裡
+- 2026-11-12 階段 1：重畫保留縮放、選取、內部圖、scrollTop 原本就成立，實際只補了 `<details>` 展開狀態（key：`plan|<source>|<file>|extra`、`loose|<模組>|<label>`）；頁面 68345 bytes
+- 2026-11-12 階段 1 審查 MEDIUM（未修）：`run-tests.sh` 找不到 chrome 時那 6 條「重畫保留狀態」印 ok 計入通過，沒 chrome 的機器上等於沒跑卻是綠的。之後動到同一節時改成獨立的「略過」計數
