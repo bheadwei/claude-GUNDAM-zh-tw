@@ -454,7 +454,14 @@ gather() {
     local f wt
     for f in bundle.txt mtimes.tsv changes.tsv bases.tsv currents.tsv planbase.tsv archive.txt branches.txt gituser.txt; do : > "$TMP/$f"; done
     SEEN_BASE=()
-    git -C "$MAIN_ROOT" for-each-ref --sort=-committerdate --format='%(refname:short)' refs/heads refs/remotes > "$TMP/branches.txt" 2>/dev/null
+    # 沒有任何任務填負責人就不需要分支清單（大 repo 的 refs 很多）
+    if awk -F'|' '
+        !/^[ \t]*\|/ { inrow = 0; next }
+        !inrow { inrow = 1; col = 0; for (i = 1; i <= NF; i++) { c = $i; gsub(/^[ \t]+|[ \t]+$/, "", c); if (c == "負責") col = i } next }
+        col && /[^ \t|:-]/ { c = $col; gsub(/[`[:space:]]/, "", c); if (c != "" && c != "—" && c != "-") { found = 1; exit } }
+        END { exit !found }' "$TMP/wbs.md" 2>/dev/null; then
+        git -C "$MAIN_ROOT" for-each-ref --sort=-committerdate --format='%(refname:short)' refs/heads refs/remotes > "$TMP/branches.txt" 2>/dev/null
+    fi
     printf '%s\n%s\n' "$(git -C "$MAIN_ROOT" config user.name 2>/dev/null)" "$(git -C "$MAIN_ROOT" config user.email 2>/dev/null)" > "$TMP/gituser.txt"
     gather_source main "$MAIN_ROOT"
     while IFS= read -r wt; do
@@ -1234,7 +1241,9 @@ def parse_ledger:
              and (($me | index($t.owner | ascii_downcase)) == null))
     | ("(^|[/_-])" + ($t.id | gsub("[^0-9A-Za-z]"; "[.-]")) + "($|[/_-])") as $re
     | {who: .owner, task: .id, title, status: .state,
-       branch: ([$brs[] | select(test($re))] | first)}]) as $humans
+       branch: (([$brs[] | select(test($re))]) as $hit
+                | ($hit | first) as $h
+                | if $h != null and ($h | startswith("origin/")) and ($hit | index($h[7:])) != null then $h[7:] else $h end)}]) as $humans
 
 # ---- 一頁現況（ADR-007 第 2 點）：overview.md 開頭「## 現況」與 data.js 的 status 是同一份，只看主 checkout。
 # WBS 的完成日多半只寫 MM-DD：當作今年，比今天晚就算去年

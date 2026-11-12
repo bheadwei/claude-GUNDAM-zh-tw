@@ -4611,6 +4611,19 @@ expect_eq "分支名用 1-5 寫法也算" "feat/1-5-dash" "$(tgq '.humans[0].bra
 tg_git branch -D feat/1-5-dash; ph_ov
 expect_eq "只剩 feat/11.5-x → branch 為 null" "null" "$(tgq '.humans[0].branch')"
 
+tg_reset; ph_wbs "1.5|alice|🔄 進行中"
+tg_git branch feat/1.5-old; sleep 1.1; tg_git branch feat/1.5-new
+tg_git branch feat/1.50-x; tg_git branch feat/21.5-x; tg_git branch feat/1x5-x; ph_ov
+expect_eq "兩條分支都含 1.5 → 取 committerdate 最近的一條（同秒時取較晚建立的那條）" "feat/1.5-new" "$(tgq '.humans[0].branch')"
+tg_git branch -D feat/1.5-old; tg_git branch -D feat/1.5-new; ph_ov
+expect_eq "feat/1.50-x、feat/21.5-x、feat/1x5-x 都不算 1.5" "null" "$(tgq '.humans[0].branch')"
+tg_git update-ref refs/remotes/origin/feat/1.5-remote HEAD; ph_ov
+expect_eq "只在遠端有的分支 → 帶 origin/ 前綴" "origin/feat/1.5-remote" "$(tgq '.humans[0].branch')"
+tg_git branch feat/1.5-remote; ph_ov
+expect_eq "本地與 origin/ 同名 → 取本地名稱（不帶 origin/）" "feat/1.5-remote" "$(tgq '.humans[0].branch')"
+ph_wbs "1.5|—|🔄 進行中"; ph_ov
+expect_eq "沒有任何任務填負責人 → humans 空、不產生分支清單也不出錯" "[]" "$(tgq '.humans | tojson')"
+
 tg_reset; ph_wbs "2.1|alice|🔄 進行中" "2.2|bob@x.io|⏳ 待處理" "2.3|carol|⏳ 待處理"
 git -C "$TG" config user.name Alice; git -C "$TG" config user.email bob@x.io; ph_ov
 expect_eq "user.name 為 Alice、負責 alice → 不列；user.email 為 bob@x.io、負責 bob@x.io → 不列；carol 兩者都不符 → 列" "carol" \
@@ -4652,6 +4665,8 @@ if [ -n "$PH_CHROME" ]; then
         "$(printf '%s' "${ph_html[3]}" | grep -o '<summary class="tag cur">目前任務 3 條 ▾' | wc -l | tr -d ' ') $(printf '%s' "${ph_html[3]}" | grep -o '<span class="tag cur">' | wc -l | tr -d ' ')"
     expect_contains "標籤寫「目前任務 <編號> <名稱>（主 checkout／worktree xxx）」" "目前任務 1.1 名稱0（主 checkout）" "${ph_html[1]}"
     expect_contains "worktree 的標籤寫 worktree 名" "目前任務 2.1 名稱1（worktree w1）" "${ph_html[2]}"
+else
+    printf '  \033[90mℹ\033[0m 沒有 chrome，略過目前任務標籤的畫面測試（不計入通過數）\n'
 fi
 
 # =========================================================================
