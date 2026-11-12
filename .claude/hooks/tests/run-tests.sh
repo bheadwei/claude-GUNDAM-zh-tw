@@ -5298,6 +5298,14 @@ ae_run "$(ae_with "$(ae_ev PermissionRequest)" ". + {tool_name:\"Write\", tool_i
 expect_eq "PermissionRequest（Write）：text 為「Write：<檔名>」" "Write：k.ts" "$(ae_f '.text')"
 ae_run "$(ae_with "$(ae_ev PermissionRequest)" '. + {tool_name:"WebFetch", tool_input:{url:"https://secret.test/?k=1"}}')" >/dev/null
 expect_eq "PermissionRequest（其他工具）：text 只寫工具名" "WebFetch" "$(ae_f '.text')"
+for ae_tool in WebFetch mcp__x__y; do
+    ae_n=$(ae_lines)
+    ae_run "$(ae_with "$(ae_ev PostToolUse)" ". + {agent_id:\"o1\", agent_type:\"implementer\", tool_name:\"$ae_tool\", tool_input:{url:\"https://secret.test/?k=SECRET-IN\", file_path:\"$AE_BOX/src/r.ts\"}, tool_response:{body:\"SECRET-OUT\"}}")" >/dev/null
+    expect_eq "白名單外的工具（$ae_tool）PostToolUse → 寫一行、act 為「用 <工具名>」、file 為空" "$((ae_n + 1))|用 $ae_tool||o1|implementer" \
+        "$(ae_lines)|$(ae_f '.act')|$(ae_f '.file')|$(ae_f '.aid')|$(ae_f '.at')"
+    case "$(ae_last)" in *SECRET-*|*secret.test*) ng "白名單外的工具（$ae_tool）：不含 tool_input／tool_response 內容" "不含" "含" ;;
+        *) ok "白名單外的工具（$ae_tool）：不含 tool_input／tool_response 內容" ;; esac
+done
 ae_notif() { ae_run "$(ae_ev Notification | jq -c --arg t "$1" '. + {notification_type:$t, message:"Claude needs your permission to use Bash"}')" >/dev/null; }
 ae_notif permission_prompt
 expect_eq "Notification permission_prompt：need approve、nt 照記" "approve|permission_prompt" "$(ae_f '[.need,.nt]|join("|")')"
@@ -5393,6 +5401,8 @@ expect_eq "overview.sh 還不認 --live：不呼叫、仍留 .live-dirty" "0|tru
 # --- settings.json 接線
 expect_eq "settings.json：agent-events.sh 的接線全部 async: true" true \
     "$(jq '[.hooks[][].hooks[] | select(.command | contains("agent-events.sh"))] | all(.async == true)' "$HOOK_DIR/../settings.json")"
+expect_eq "settings.json：PostToolUse 的 agent-events.sh 接全部工具（matcher *），只有一條" '["*"]' \
+    "$(jq -c '[.hooks.PostToolUse[] | select(any(.hooks[]; .command | contains("agent-events.sh"))) | .matcher]' "$HOOK_DIR/../settings.json")"
 expect_eq "settings.json：agent-events.sh 至少 8 條接線" true \
     "$(jq '[.hooks[][].hooks[] | select(.command | contains("agent-events.sh"))] | length >= 8' "$HOOK_DIR/../settings.json")"
 
@@ -5520,6 +5530,10 @@ lv_ev -200 Stop s9 "" "" main; lv_run
 expect_eq "最後一筆是 Stop → 不列" 0 "$(lvq '.lanes | length')"
 lv_reset; lv_ev -1200 UserPromptSubmit s9 "" "" main; lv_run
 expect_eq "最近一筆事件在 20 分鐘前 → 不列" 0 "$(lvq '.lanes | length')"
+lv_reset; lv_ev -300 PostToolUse s9 "" "" main '{"tool":"Bash","act":"跑 測試"}'; lv_ev -200 Stop s9 "" "" main
+lv_ev -60 Notification s9 "" "" main '{"need":"reply","nt":"idle_prompt","text":"等你"}'; lv_run
+expect_eq "session：跑 測試 → Stop → idle_prompt → lane 的 doing 只看 Stop 之後（不是「跑 測試」）、since 為 idle_prompt 的 t" "null $((LV_NOW - 60))" \
+    "$(lvq '"\(.lanes[0].doing) \(.lanes[0].since)"')"
 lv_reset; lv_ev -60 UserPromptSubmit s8 "" "" worktree:wt-b; lv_run
 expect_eq "worktree 的 session → who 為 worktree session、group 照 src 歸組" "worktree session plans/3.1-y.md" "$(lvq '.lanes[0] | "\(.who) \(.group)"')"
 
@@ -5536,6 +5550,11 @@ lv_reset; lv_ev -60 PermissionRequest s1 a1 implementer main "$LV_PR"; lv_ev -40
 expect_eq "別的 aid（a2）的事件不關 a1 的 need" 1 "$(lvq '.needs | length')"
 lv_ev -20 SubagentStop s1 a1 implementer main; lv_run
 expect_eq "該 agent SubagentStop → need 關閉" 0 "$(lvq '.needs | length')"
+lv_reset; lv_ev -60 PermissionRequest s1 a1 implementer main "$LV_PR"; lv_ev -20 SubagentStop s2 a1 implementer main; lv_run
+expect_eq "同一個 aid 的 SubagentStop 換了 sid → need 也關閉，feed 有 need_done" "0 need_done" "$(lvq '"\(.needs | length) \([.feed[] | select(.kind | startswith("need")) | .kind] | first)"')"
+lv_reset; lv_ev -60 PermissionRequest s1 a1 implementer main '{"need":"approve","tool":"WebFetch","text":"WebFetch"}'
+lv_ev -40 PostToolUse s1 a1 implementer main '{"tool":"WebFetch","act":"用 WebFetch"}'; lv_run
+expect_eq "PermissionRequest 後一筆同 sid／aid 的 WebFetch PostToolUse → need 關閉" 0 "$(lvq '.needs | length')"
 
 lv_reset; lv_ev -60 Notification s1 "" "" main '{"need":"reply","nt":"idle_prompt","text":"Claude 在等你的輸入"}'; lv_run
 expect_eq "Notification idle_prompt（s1、無 aid）→ 1 筆 reply、who 為主 session" "1 reply 主 session" "$(lvq '"\(.needs | length) \(.needs[0].kind) \(.needs[0].who)"')"
@@ -5554,6 +5573,7 @@ expect_eq "PermissionRequest 後 3 秒同 s1／a1 的 Notification permission_pr
 lv_reset; lv_ev -60 PreToolUse s1 "" "" main '{"need":"reply","tool":"AskUserQuestion","text":"第一題"}'
 lv_ev -30 PreToolUse s1 "" "" main '{"need":"reply","tool":"AskUserQuestion","text":"第二題"}'; lv_run
 expect_eq "同 sid／aid 兩個開啟者 → 只留最新一筆" "1 第二題" "$(lvq '"\(.needs | length) \(.needs[0].text)"')"
+expect_eq "被取代的那筆在 feed 記 need_done（新的在前）" "need_open need_done need_open" "$(lvq '[.feed[].kind] | join(" ")')"
 
 lv_reset
 lv_ev -60 PermissionRequest s1 a1 implementer main "$(printf '%s' "$LV_PR" | jq -c '. + {ms: 300}')"
@@ -5582,6 +5602,10 @@ printf '{"v":2,"t":%d,"ms":0,"ev":"SubagentStart","sid":"s1","aid":"a9","at":"im
 printf '{"v":1,"t":%d,"ms":0,"ev":"SubagentSta\n' $((LV_NOW - 400)) >> "$LV_LOG"
 lv_ev -300 SubagentStart s1 a2 implementer main; lv_run
 expect_eq "事件行 v 為 2 → 整行略過；被截斷的行 → 略過；其餘照算" "a1,a2" "$(lvq '[.lanes[].id] | sort | join(",")')"
+lv_reset; mkdir -p "$LV/.claude/worktrees/wt-c/.claude/logs"
+printf '{"v":1,"t":%d,"ms":0,"ev":"SubagentSta' $((LV_NOW - 400)) >> "$LV_LOG"
+LV_FILE="$LV/.claude/worktrees/wt-c/.claude/logs/live-events.jsonl" lv_ev -300 SubagentStart s7 a7 implementer main; lv_run
+expect_eq "主 checkout 事件檔最後一行寫到一半（沒有換行）→ 不會吃掉下一個檔（worktree）的第一行" a7 "$(lvq '[.lanes[].id] | join(",")')"
 
 # --- clashes
 lv_reset
@@ -5631,6 +5655,28 @@ echo $(( $(date +%s) - 600 )) > "$LVO/.live.lock/at"; lv_run
 expect_eq ".live.lock 已過期 → 接手、寫完、清掉鎖與 .live-dirty" "true false false" \
     "$([ -f "$LVO/live.js" ] && echo true || echo false) $([ -d "$LVO/.live.lock" ] && echo true || echo false) $([ -f "$LVO/.live-dirty" ] && echo true || echo false)"
 
+# 視窗尾端補跑：agent-events 在視窗內只留 .live-dirty。--live 第一輪算完、還在視窗內時才來的事件，
+# 要在視窗結束後補跑一輪反映出來（視窗 4 秒，給第一輪留足時間）
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main
+printf '%s 4\n' "$(date +%s)" > "$LVO/.live-at"
+lv_run & lv_pid=$!
+for _ in $(seq 1 60); do [ -f "$LVO/live.js" ] && break; sleep 0.1; done
+lv_first=$(lvq '.needs | length')
+lv_ev -5 PermissionRequest s1 a1 implementer main "$LV_PR"; : > "$LVO/.live-dirty"
+wait "$lv_pid"
+expect_eq "第一輪算完後、放鎖前（視窗內）才留下 .live-dirty → 視窗結束補跑一輪，needs 出現那筆 PermissionRequest" "0 1 false false" \
+    "$lv_first $(lvq '.needs | length') $([ -f "$LVO/.live-dirty" ] && echo true || echo false) $([ -d "$LVO/.live.lock" ] && echo true || echo false)"
+rm -f "$LVO/.live-at"
+
+# .live-error：jq 失敗時寫錯誤、保留上一份 live.js；下次成功就清掉
+mkdir -p "$SANDBOX/lvbin"; printf '#!/bin/bash\necho "假的 jq 壞了" >&2\nexit 3\n' > "$SANDBOX/lvbin/jq"; chmod +x "$SANDBOX/lvbin/jq"
+lv_before=$(cat "$LVO/live.js")
+env PATH="$SANDBOX/lvbin:$PATH" TZ=UTC OVERVIEW_NOW="$LV_NOW" bash "$LV/.claude/scripts/overview.sh" --live "$LV" >/dev/null 2>&1
+expect_eq "jq 失敗 → .live-error 寫進錯誤、live.js 保留上一份" "假的 jq 壞了 true" \
+    "$(cat "$LVO/.live-error" 2>/dev/null) $([ "$(cat "$LVO/live.js")" = "$lv_before" ] && echo true || echo false)"
+lv_run
+expect_eq "下一次成功 → .live-error 清掉" false "$([ -f "$LVO/.live-error" ] && echo true || echo false)"
+
 # --- 完整重產結束時也跑一次 live 聚合（沿用 tg_* 的任務圖沙箱）
 tg_reset "1.2|api|🔄 進行中"; tg_plan 1.2-x.md 🔄 ⏳; echo 1.2 > "$TGD/.current-task"
 mkdir -p "$TG/.claude/hooks/lib" "$TG/.claude/logs"; cp "$HOOK_DIR/lib/agent-inflight.sh" "$TG/.claude/hooks/lib/"
@@ -5653,7 +5699,11 @@ jq -nc --argjson now "$LV_NOW" '
      need: (if $k == 3 then "approve" else null end), nt: "", text: (if $k == 3 then "Bash：跑 部署" else "" end)}' > "$LV_LOG"
 lv_ms0=$(date +%s%N); lv_run; lv_ms1=$(date +%s%N); lv_ms=$(( (lv_ms1 - lv_ms0) / 1000000 ))
 printf '  \033[90mℹ\033[0m 3000 行事件 --live 耗時 %d ms\n' "$lv_ms"
-expect_eq "3000 行事件 --live 跑完 < 1 秒（且有產出）" "true true" "$([ "$lv_ms" -lt 1000 ] && echo true || echo false) $(lvq '.lanes | length > 0')"
+expect_eq "3000 行事件 --live 有產出" true "$(lvq '.lanes | length > 0')"
+case "$(uname -s)" in
+    Linux*) expect_eq "3000 行事件在 Linux 上 --live 跑完 < 1 秒" true "$([ "$lv_ms" -lt 1000 ] && echo true || echo false)" ;;
+    *) printf '  \033[90mℹ\033[0m 非 Linux：只印耗時，不斷言（不計入通過數）\n' ;;
+esac
 
 # =========================================================================
 section "overview-serve.sh — 專案圖解本機伺服器（起停、身分確認、開瀏覽器、退路）"

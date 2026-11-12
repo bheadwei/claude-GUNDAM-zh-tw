@@ -48,7 +48,8 @@
 #
 # 即時聚合（--live，欄位與規則的唯一來源；ADR-2026-11-12-002 只定事件行格式與 need 規則）
 #   不掃描、不跑 git、不搶 .lock：用自己的 .live.lock（超過 30 秒視為過期），拿不到就留 .live-dirty 走人，
-#   持鎖者做完看到 .live-dirty 再跑一輪（最多 3 輪）。失敗時上一份 live.js 照留，錯誤寫 .live-error。
+#   持鎖者每輪做完先等到 agent-events 的節流視窗結束（.live-at 記「觸發時間 視窗秒數」），看到 .live-dirty
+#   再跑一輪（最多 3 輪，之後仍有就留給下一次觸發）。失敗時上一份 live.js 照留，錯誤寫 .live-error（成功時清掉）。
 #   輸入：主 checkout 的 .claude/logs/live-events.jsonl 最後 3000 行，加上
 #   .claude/worktrees/*/.claude/logs/live-events.jsonl 各最後 3000 行（claude -w 的 session 寫在那裡，
 #   resolve-roots 會誤記成 main：這些檔裡 src 為 main 的改標 worktree:<資料夾名>）；
@@ -69,18 +70,19 @@
 #             files: {done, total}｜null}
 #            group（curGroups 的 key）：① src 在某組的 sources → 該組；② 否則同 sid 的事件所在 src 找組
 #            （先看 aid 為空的 session 事件，再看其他 agent；isolation: worktree 派出的 subagent 走這條）；③ null
-#            files：所屬組進行中階段（activePhases）的部件檔（不含 extra）＝total；該線 PostToolUse 寫過的檔
+#            session 的 doing／files 只看最後一個 Stop 之後的事件（與 since 一致）
+#            files：所屬組進行中階段（activePhases）的部件檔（不含 extra）＝total；該線 PostToolUse Write／Edit／MultiEdit 寫過的檔
 #            以 glob 命中的部件檔數＝done。沒有組、或那些階段沒有部件檔 → null
 #   needs    同 sid＋aid 的事件依序走一遍。開啟者＝事件行的 need 為 approve／reply（PermissionRequest、
 #            Notification permission_prompt／idle_prompt／elicitation_dialog、PreToolUse AskUserQuestion）。
 #            開啟者之後出現任何非開啟者事件（含其他 nt 的 Notification、主 session 的 UserPromptSubmit、
 #            該 agent 的 SubagentStop）→ 已處理；同一個 aid 的 SubagentStop 換了 sid 也算。仍開著的又來一個開啟者
-#            → 只留最新那個，例外：PermissionRequest 與 Notification permission_prompt 前後 10 秒內合併成一筆
+#            → 只留最新那個（被取代的那筆在 feed 記 need_done），例外：PermissionRequest 與 Notification permission_prompt 前後 10 秒內合併成一筆
 #            （text 取 PermissionRequest、since 取較早的）。開啟超過 4 小時不列。subagent 內的事件都帶 aid
 #            （階段 3 探針實測），ADR 第 5 節「aid 為空」的退路規則不用。
 #            {id: "<sid>|<aid>|<since>", kind: approve|reply, who（同 lanes）, where: src, text, since}
 #            「卡住」不在這裡算，由頁面用 lanes 的 lastAt 判斷
-#   clashes  線＝checkout（src）。寫入集＝該線 12 小時內 PostToolUse 寫過的檔 ∪ 該線所屬組 plan 的 files:
+#   clashes  線＝checkout（src）。寫入集＝該線 12 小時內 PostToolUse Write／Edit／MultiEdit 寫過的檔 ∪ 該線所屬組 plan 的 files:
 #            （組的找法同 lanes 的 group ①②）。某個實際寫入的檔出現在另一條線的寫入集 → 一筆；
 #            只拿對方 plan 的 glob 命中時，兩條線屬同一組不算（同一任務拆去 worktree 跑某階段是預期的）；
 #            兩邊都只是 glob 重疊不算。同一條線內兩個都還在跑的 agent（lanes ①）寫同一個檔也算。
@@ -313,7 +315,7 @@ JQ
 IFS= read -r -d '' JQ_LIVE <<'JQ'
 def str: if type == "string" then . else "" end;
 def tomap: reduce .[] as $x ({}; .[$x.key] = $x.value);
-def iswrite: .ev == "PostToolUse" and .file != "";
+def iswrite: .ev == "PostToolUse" and .file != "" and (.tool == "Write" or .tool == "Edit" or .tool == "MultiEdit");
 def awho: if .at != "" then .at else "agent" end;
 def nwho: if .aid != "" then awho elif .src == "main" then "主 session" else "worktree session" end;
 
@@ -355,7 +357,7 @@ def nwho: if .aid != "" then awho elif .src == "main" then "主 session" else "w
   def doing($evs): [$evs[] | select(.act != "") | .act] | last;
 
   ($E | map(select(.aid != "")) | group_by(.aid) | map({key: .[0].aid, value: .}) | tomap) as $byAid
-| ([$E[] | select(.ev == "SubagentStop" and .aid != "") | {key: .aid, value: .p}] | tomap) as $stopP
+| ([$E[] | select(.ev == "SubagentStop" and .aid != "") | {key: .aid, value: .}] | tomap) as $stopP
 | ([$E[] | select(.ev == "SubagentStart" and .aid != "" and .t >= ($now - 43200) and $stopP[.aid] == null)] | unique_by(.aid)
    | map(. as $s | $byAid[$s.aid] as $evs | ($evs | last) as $z | grpof($z.src; $s.sid) as $g
          | {id: $s.aid, who: ($s | awho), desc: ($desc[$s.aid] // null), where: $z.src,
@@ -365,28 +367,28 @@ def nwho: if .aid != "" then awho elif .src == "main" then "主 session" else "w
    | map(select((last | .t >= ($now - 900) and .ev != "Stop")))
    | map(. as $evs | ($evs | last) as $z
          | ([range($evs | length) | select($evs[.].ev == "Stop")] | last) as $ls
+         | $evs[(if $ls == null then 0 else $ls + 1 end):] as $cur
          | grpof($z.src; $z.sid) as $g
          | {id: $z.sid, who: ($z | nwho), desc: null, where: $z.src, readonly: false, group: $g,
-            since: $evs[(if $ls == null then 0 else $ls + 1 end)].t, lastAt: $z.t,
-            doing: doing($evs), files: lfiles($g; $evs)})) as $sessLanes
+            since: $cur[0].t, lastAt: $z.t, doing: doing($cur), files: lfiles($g; $cur)})) as $sessLanes
 
 # 需要你：同 sid＋aid 依 (t, ms, 行序) 走一遍，開啟者之後出現任何非開啟者事件就關
-| ($E | group_by([.sid, .aid])
+| def ndone($e): .feed += [{t: $e.t, ms: $e.ms, i: $e.i, kind: "need_done", id: (.open | "\(.sid)|\(.aid)|\(.since)"),
+                            who: (.open | nwho), where: .open.src, text: .open.text}] | .open = null;
+  ($E | group_by([.sid, .aid])
    | map(reduce .[] as $e ({open: null, feed: []};
          if $e.need != null then
            if .open != null and .open.kind == "approve" and $e.need == "approve" and ($e.t - .open.t) <= 10
               and ((.open.ev == "PermissionRequest") != ($e.ev == "PermissionRequest")) then
              (if $e.ev == "PermissionRequest" then .open += {text: $e.text, ev: $e.ev, t: $e.t} else . end)
            else
-             .open = ($e | {kind: .need, text, ev, t, p, since: .t, sid, aid, at, src})
+             (if .open != null then ndone($e) else . end)
+             | .open = ($e | {kind: .need, text, ev, t, p, since: .t, sid, aid, at, src})
              | .feed += [$e | {t, ms, i, kind: "need_open", id: "\(.sid)|\(.aid)|\(.t)", who: nwho, where: .src, text}]
            end
-         elif .open != null then
-           .feed += [{t: $e.t, ms: $e.ms, i: $e.i, kind: "need_done", id: (.open | "\(.sid)|\(.aid)|\(.since)"),
-                      who: (.open | nwho), where: .open.src, text: .open.text}]
-           | .open = null
+         elif .open != null then ndone($e)
          else . end)
-       | if .open != null and .open.aid != "" and ($stopP[.open.aid] // -1) > .open.p then .open = null else . end)) as $needRuns
+       | if .open != null and .open.aid != "" and (($stopP[.open.aid].p // -1) > .open.p) then ndone($stopP[.open.aid]) else . end)) as $needRuns
 
 | ([$E[] | select(.t >= ($now - 43200))]) as $E12
 | ([$E12[] | select(iswrite) | {src, file, aid}]) as $W
@@ -438,11 +440,12 @@ live_once() {
     local -a evs=(ev0.jsonl)
     rm -rf "$d"; mkdir -p "$d" || return 1
     : > "$d/ev0.jsonl"; : > "$d/wts.tsv"; : > "$d/act.jsonl"; : > "$d/data.json"
-    [ -f "$MAIN_ROOT/.claude/logs/live-events.jsonl" ] && tail -n 3000 "$MAIN_ROOT/.claude/logs/live-events.jsonl" > "$d/ev0.jsonl"
+    [ -f "$MAIN_ROOT/.claude/logs/live-events.jsonl" ] && { tail -n 3000 "$MAIN_ROOT/.claude/logs/live-events.jsonl"; printf '\n'; } > "$d/ev0.jsonl"
     for f in "$MAIN_ROOT"/.claude/worktrees/*/.claude/logs/live-events.jsonl; do
         [ -f "$f" ] || continue
         n=$((n + 1)); evs+=("ev$n.jsonl")
-        tail -n 3000 "$f" > "$d/ev$n.jsonl"
+        # 補換行：最後一行寫到一半時，jq -R 會把它和下一個檔的第一行接成一行，兩筆一起丟掉
+        { tail -n 3000 "$f"; printf '\n'; } > "$d/ev$n.jsonl"
         f=${f%/.claude/logs/live-events.jsonl}
         printf 'ev%d.jsonl\tworktree:%s\n' "$n" "${f##*/}" >> "$d/wts.tsv"
     done
@@ -467,7 +470,19 @@ live_once() {
     printf '%s\n' "$new" > "$d/live.js" && mv -f "$d/live.js" "$OUT/live.js"
 }
 
-# live_rounds <暫存目錄>：拿得到 .live.lock 才算；拿不到留 .live-dirty 給持鎖者，持鎖者看到再跑一輪（最多 3 輪）
+# agent-events 在節流視窗內只留 .live-dirty、不觸發；持鎖者要等到視窗結束再看一次，視窗內最後一筆才不會被吞。
+# 視窗秒數用 agent-events 寫在 .live-at 的（「觸發時間 視窗秒數」），不另訂；最多等 10 秒，免得持鎖過久被當成過期
+live_wait_window() {
+    local at="" win="" now
+    [ -f "$OUT/.live-at" ] && read -r at win < "$OUT/.live-at"
+    [[ $at =~ ^[0-9]+$ && $win =~ ^[0-9]+$ ]] || return 0
+    now=$(date +%s)
+    (( at + win > now )) || return 0
+    sleep $(( at + win - now > 10 ? 10 : at + win - now ))
+}
+
+# live_rounds <暫存目錄>：拿得到 .live.lock 才算；拿不到留 .live-dirty 給持鎖者。持鎖者每輪算完等到視窗結束，
+# 看到 .live-dirty 再跑一輪（最多 3 輪；第 3 輪後仍有就留著，給下一次觸發）
 live_rounds() {
     local d=$1 i
     take_live_lock || { : > "$OUT/.live-dirty" 2>/dev/null; return 0; }
@@ -478,6 +493,7 @@ live_rounds() {
             break
         fi
         rm -f "$OUT/.live-error" 2>/dev/null
+        live_wait_window
         [ -f "$OUT/.live-dirty" ] || break
     done
     rm -rf "$LIVE_LOCK" "$d" 2>/dev/null
