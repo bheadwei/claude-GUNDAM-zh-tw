@@ -2432,6 +2432,9 @@ gbg_untag
 # `-c init.defaultBranch=main`（「全體 hooks」那節有檢查擋新增的），不看跑測試那台機器的設定；
 # 前面的區塊會真的 `checkout main`（例如 backup 閘門那組）。下面兩行是保險：萬一 HEAD 停在別的分支，
 # 改名成 main 再切過去。
+# 單獨跑這一節時 backup 閘門那組的 git init 不會執行：沙箱不是 repo，閘門走「不在 git repo 裡放行」，
+# 每個期望 deny 的案例都變 allow。閘門要有 commit 才讀得到當前分支，所以補一個空 commit
+[ -d "$SANDBOX/.git" ] || { git -c init.defaultBranch=main init -q "$SANDBOX" >/dev/null 2>&1; gitq commit -q --allow-empty -m seed; }
 gitq branch -M main
 gitq checkout main
 reset
