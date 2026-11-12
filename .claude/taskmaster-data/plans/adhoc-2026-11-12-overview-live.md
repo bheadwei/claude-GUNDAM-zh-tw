@@ -4,7 +4,7 @@ slug: "overview-live"
 created: "2026-11-12"
 updated: "2026-11-12"
 status: "🔄 進行中"
-current_phase: 4
+current_phase: 5
 mode: "standard"
 files:
   - ".claude/scripts/overview.sh"
@@ -181,13 +181,13 @@ flowchart LR
   - session 啟動時 live-events.jsonl 有 3500 行 → 截尾成最後 3000 行
 - **注意**：`settings.json` 在 `_changed_rule` 是 ALL——本階段只跑 `run-tests.sh agent-events.sh session-start`（關鍵字模式），**不要用 `--changed`**，整套留到最後。`agent-monitor.sh` 與 `agent-activity.jsonl` 不動（閘門在讀它）；agent 的任務描述在階段 6 用 `agent_id` 去 join，不重記一份。這支 hook 只寫不讀，跟 2026-09-09「讀到自己這一次」的坑無關；lane 結束只認 SubagentStop（2026-09-11 的坑）
 
-### 階段 4: 本機伺服器與 /task-status 開頁 ⏳
+### 階段 4: 本機伺服器與 /task-status 開頁 ✅
 - **依賴**：無
-- [ ] 新增 `.claude/scripts/overview-serve.py`（規格以 `.claude/context/decisions/ADR-2026-11-12-003-overview-local-server-lifecycle.md` 第 1 節為準）：`ThreadingHTTPServer`＋`SimpleHTTPRequestHandler(directory=<overview 資料夾>)`，最低 Python 3.7；只綁 `127.0.0.1`；**只服務 `/<token>/` 底下**，其他一律 404（token 用 `secrets.token_urlsafe(16)`，`.serve` 已有就沿用）；回應帶 `Cache-Control: no-store`；不印存取 log；`GET /<token>/.serve-id` 回 200；`POST /<token>/.shutdown` 回 200 後結束；閒置 `OVERVIEW_SERVE_IDLE_MIN`（預設 30）分鐘沒有請求就結束並刪 `.serve`（決策 Q3）；**選 port 由 Python 自己 bind**（8765 起最多 20 個），bind 成功才把 `{port, token, pid, started}` 以暫存檔＋rename 寫進 `overview/.serve` — 驗證：`bash .claude/hooks/tests/run-tests.sh overview-serve`
-- [ ] 新增 `.claude/scripts/overview-serve.sh [--stop] [<工作目錄>]`（ADR-003 第 2 節）：主 checkout 用 git common dir 算（同 overview.sh）；讀 `.serve` → 用 bash `/dev/tcp` 打 `GET /<token>/.serve-id`，200 就是已在跑；否則 `mkdir overview/.serve.lock` 拿鎖、拿到後再讀一次 `.serve` 確認；找 Python（`python3` → `python` → `py -3`，跑 `-c 'import sys;print(sys.version_info>=(3,7))'` 要印 `True`，擋掉 Windows Microsoft Store 假 `python3`）；`umask 077` 下 `nohup … &` 起在背景，最多等 3 秒讓 `.serve` 出現再確認一次；`--stop` 走 `POST /<token>/.shutdown`，不用 `kill <pid>`。bash 不先探測空 port — 驗證：同上
-- [ ] 開瀏覽器只在**新啟動**時做，伺服器已在跑只印網址（決策 Q4，順序照 ADR-003 第 3 節，先符合者為準）：① 有 `$BROWSER`（VS Code 終端機會設）→ `"$BROWSER" <網址>`；② 平台（`uname -s`，測試用 `OVERVIEW_SERVE_PLATFORM` 覆寫）`Linux` 且有 `DISPLAY`／`WAYLAND_DISPLAY` 且有 `xdg-open` → `xdg-open`；③ `Darwin` → `open`；④ `MINGW*`／`MSYS*`／`CYGWIN*` → `cmd //c start "" <網址>`；⑤ 其他 → 只印網址，有 `SSH_CONNECTION` 時多印一行 `ssh -L <port>:127.0.0.1:<port> <你的主機>`。開瀏覽器失敗不影響 exit code；不論哪種情況 stdout 最後一行都是網址 — 驗證：同上
-- [ ] `_changed_rule` 加 `.claude/scripts/overview-serve.*) echo "=overview-serve" ;;`（排在 `.claude/scripts/*` 的 NONE 之前） — 驗證：`bash .claude/hooks/tests/run-tests.sh --changed - --dry-run <<< .claude/scripts/overview-serve.sh`
-- [ ] `commands/task-status.md` 步驟 7：`--print-path` 之後跑 `bash .claude/scripts/overview-serve.sh`，最後一行改印它給的網址（格式 `http://127.0.0.1:<port>/<token>/index.html`，說明 token 是防同機其他使用者與惡意網頁讀取、要整段複製）；補一段「VS Code 的 Simple Browser（Ctrl+Shift+P → Simple Browser: Show）貼網址也能看」與「不要用 Live Server：資料每幾秒更新一次，它會整頁重載」；README「專案圖解」段、WORKFLOW「想看整體長什麼樣」的 SSH 說明改成 port 轉發 — 驗證：人讀
+- [x] 新增 `.claude/scripts/overview-serve.py`（規格以 `.claude/context/decisions/ADR-2026-11-12-003-overview-local-server-lifecycle.md` 第 1 節為準）：`ThreadingHTTPServer`＋`SimpleHTTPRequestHandler(directory=<overview 資料夾>)`，最低 Python 3.7；只綁 `127.0.0.1`；**只服務 `/<token>/` 底下**，其他一律 404（token 用 `secrets.token_urlsafe(16)`，`.serve` 已有就沿用）；回應帶 `Cache-Control: no-store`；不印存取 log；`GET /<token>/.serve-id` 回 200；`POST /<token>/.shutdown` 回 200 後結束；閒置 `OVERVIEW_SERVE_IDLE_MIN`（預設 30）分鐘沒有請求就結束並刪 `.serve`（決策 Q3）；**選 port 由 Python 自己 bind**（8765 起最多 20 個），bind 成功才把 `{port, token, pid, started}` 以暫存檔＋rename 寫進 `overview/.serve` — 驗證：`bash .claude/hooks/tests/run-tests.sh overview-serve`
+- [x] 新增 `.claude/scripts/overview-serve.sh [--stop] [<工作目錄>]`（ADR-003 第 2 節）：主 checkout 用 git common dir 算（同 overview.sh）；讀 `.serve` → 用 bash `/dev/tcp` 打 `GET /<token>/.serve-id`，200 就是已在跑；否則 `mkdir overview/.serve.lock` 拿鎖、拿到後再讀一次 `.serve` 確認；找 Python（`python3` → `python` → `py -3`，跑 `-c 'import sys;print(sys.version_info>=(3,7))'` 要印 `True`，擋掉 Windows Microsoft Store 假 `python3`）；`umask 077` 下 `nohup … &` 起在背景，最多等 3 秒讓 `.serve` 出現再確認一次；`--stop` 走 `POST /<token>/.shutdown`，不用 `kill <pid>`。bash 不先探測空 port — 驗證：同上
+- [x] 開瀏覽器只在**新啟動**時做，伺服器已在跑只印網址（決策 Q4，順序照 ADR-003 第 3 節，先符合者為準）：① 有 `$BROWSER`（VS Code 終端機會設）→ `"$BROWSER" <網址>`；② 平台（`uname -s`，測試用 `OVERVIEW_SERVE_PLATFORM` 覆寫）`Linux` 且有 `DISPLAY`／`WAYLAND_DISPLAY` 且有 `xdg-open` → `xdg-open`；③ `Darwin` → `open`；④ `MINGW*`／`MSYS*`／`CYGWIN*` → `cmd //c start "" <網址>`；⑤ 其他 → 只印網址，有 `SSH_CONNECTION` 時多印一行 `ssh -L <port>:127.0.0.1:<port> <你的主機>`。開瀏覽器失敗不影響 exit code；不論哪種情況 stdout 最後一行都是網址 — 驗證：同上
+- [x] `_changed_rule` 加 `.claude/scripts/overview-serve.*) echo "=overview-serve" ;;`（排在 `.claude/scripts/*` 的 NONE 之前） — 驗證：`bash .claude/hooks/tests/run-tests.sh --changed - --dry-run <<< .claude/scripts/overview-serve.sh`
+- [x] `commands/task-status.md` 步驟 7：`--print-path` 之後跑 `bash .claude/scripts/overview-serve.sh`，最後一行改印它給的網址（格式 `http://127.0.0.1:<port>/<token>/index.html`，說明 token 是防同機其他使用者與惡意網頁讀取、要整段複製）；補一段「VS Code 的 Simple Browser（Ctrl+Shift+P → Simple Browser: Show）貼網址也能看」與「不要用 Live Server：資料每幾秒更新一次，它會整頁重載」；README「專案圖解」段、WORKFLOW「想看整體長什麼樣」的 SSH 說明改成 port 轉發 — 驗證：人讀
 - **預估**：2h
 - **驗收**：
   - 沒在跑 → 起一個伺服器，stdout 最後一行符合 `^http://127\.0\.0\.1:[0-9]+/[A-Za-z0-9_-]+/index\.html$`，GET 該網址回 200；GET `http://127.0.0.1:<port>/index.html`（不帶 token）回 404；GET 錯的 token 回 404
@@ -357,3 +357,6 @@ flowchart LR
 - 2026-11-12 階段 3 與 ADR-002 的差異（審查判定可接受）：`$EPOCHREALTIME` 需 bash 5，退路 `date +%s%3N`，再退整秒 `ms=0`——bash 4／macOS 上同秒事件排序只能靠行序，**階段 6 遇相同 `(t, ms)` 要以檔案行序為準**；`resolve_roots` 另開一次 jq（實際 2 次）；超過 1000 bytes 多一步縮短，`ev` 上限 40、`src` 上限 60；Bash 第一個詞不符 `^[A-Za-z0-9_.+-]+$` 記「跑指令」
 - 2026-11-12 階段 3 介面（給階段 6）：`.live-at`／`.live-dirty` 在 `$MAIN_CLAUDE/taskmaster-data/overview/`；觸發形狀 `overview.sh --live "$WORK_ROOT"`；過渡守衛 `grep -q -- '--live' "$OV_SH"`，overview.sh 支援 `--live` 後自動放行，不用移除
 - 2026-11-12 階段 2、3 合併驗證：階段 2 合併後快檢 11 節 553/0；階段 3 合併後（settings.json → 整套）1392/0、check-counts 720 一致。`.claude/sessions/` 未追蹤使 `clean=no`，`.merge-round-open` 留著，由最後的 `/verify` 涵蓋
+- 2026-11-12 階段 4：使用者的 VM（RHEL 8）預設 `python3` 是 3.6.8，搜尋順序改為 `python3` → `python3.13`…`python3.7` → `python` → `py -3`，另加 `OVERVIEW_SERVE_PYTHON`（路徑不可含空格）；本機自動選到 python3.12。自加 `OVERVIEW_SERVE_PORT_BASE`（測試避開真伺服器）
+- 2026-11-12 階段 4 審查（品質＋安全，安全為主模型加派）後的決定：每次新起都換新 token、舊網址失效（ADR-003 第 1 節已改）；鎖內記持有者 pid，持有者已死立即清、活著不偷鎖、等滿約 10 秒退回 file://；閒置計時只在 token 正確的請求重設；關目錄列出、加 `Referrer-Policy: no-referrer`；開瀏覽器背景執行；共用主機可設 `BROWSER=true` 不自動開
+- 2026-11-12 階段 4 未驗：Windows 背景行程存活、Windows 60 秒與 VS Code Remote-SSH 兩條手動驗收；macOS bash 3.2 的 `/dev/tcp`。README／WORKFLOW 寫「每 3 秒重讀」與實際輪詢不一致，留給階段 7 核對

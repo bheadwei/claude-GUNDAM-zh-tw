@@ -60,3 +60,17 @@
 - 2026-11-12 15:21 Ruling: .last-verify 照實寫 clean=no（.claude/sessions/ 未追蹤，使用者尚未決定是否 commit）— 不替使用者處理 sessions/ — 代價是 .merge-round-open 留到最後 /verify 再清
 - 2026-11-12 15:21 階段 2 完成 → plan 標 ✅｜摘要=大包 plan 只聚焦進行中與下一階段｜測試=400/400
 - 2026-11-12 15:21 階段 3 完成 → plan 標 ✅，current_phase=4｜摘要=新增 agent 事件記錄 hook（async）｜測試=95/95
+
+## 階段 4: 本機伺服器與 /task-status 開頁
+- 2026-11-12 15:21 派工 implementer（sonnet，主 checkout，循序）｜BASE=3342b90
+- 2026-11-12 15:37 回報 DONE_WITH_CONCERNS｜commit=89628ae, ba49195｜產出 overview-serve.py, overview-serve.sh, run-tests.sh overview-serve 節＋_changed_rule, task-status.md, README.md, WORKFLOW.md｜overview-serve 節約 50 案例全過、check-counts 720 一致、無殘留行程
+- 2026-11-12 15:37 Ruling: 送審前先補 Python 搜尋帶版號名稱（python3.13…3.7）與 OVERVIEW_SERVE_PYTHON — 使用者的 VM 預設 python3 是 3.6.8，照原寫法會退回 file://，本階段目標落空 — 若錯，只多一段搜尋
+- 2026-11-12 15:37 觀察：單跑一節時有基線雜訊「eval: line 413／431: syntax error near }」（_hoist_defs），HEAD 版就有，與本階段無關，未處理
+- 2026-11-12 15:37 觀察：自加環境變數 OVERVIEW_SERVE_PORT_BASE（測試避開真伺服器）；20 個 port 都不能用時原因取 Python stderr 末行；純 SSH 多印說明一行＋ssh -L 一行
+- 2026-11-12 15:39 修復（送審前）完成｜commit=c4404e5｜Python 搜尋 python3 → python3.13…3.7 → python → py -3、新增 OVERVIEW_SERVE_PYTHON｜overview-serve 節 +6 斷言全過、check-counts 一致、無殘留行程；本機自動選到 python3.12
+- 2026-11-12 15:39 派審查：code-quality-specialist ＋ security-infrastructure-auditor（開本機網路服務，加派安全審查）｜範圍=3342b90..c4404e5
+- 2026-11-12 15:54 審查 R1：品質 PASS（0/0/3 MEDIUM/5 LOW，context/quality/code-quality-specialist-2026-11-12-1600-p4.md）；安全 PASS（0/0/0/4 LOW＋2 INFO，context/security/security-infrastructure-auditor-2026-11-12-1500.md）
+- 2026-11-12 15:54 Ruling: 合成一輪交回同一 implementer：3 個 MEDIUM 全修；LOW 修 token 比對 encode、閒置計時移到 token 驗證後、關目錄列出、開瀏覽器改背景、加 Referrer-Policy、移除 token 沿用死碼並改 ADR-003 那句（保持「每次新 token」，比延續 token 單純，安全審查判定安全）；文件註明共用主機自己貼網址、OVERVIEW_SERVE_PYTHON 不可含空格；輪詢秒數不一致留到階段 7 — 若錯，最多多一輪修復
+- 2026-11-12 15:57 修復 R1 完成｜commit=d96a2ef｜3 MEDIUM＋7 LOW 全修並補測試｜overview-serve 節失敗 0、check-counts 720 一致、無殘留行程
+- 2026-11-12 15:57 審查通過（規格 ✅ 品質 ✅ 安全 ✅，R1 發現以 diff 逐項核對）｜範圍=3342b90..d96a2ef
+- 2026-11-12 15:57 階段完成 → plan 標 ✅，current_phase=5｜摘要=本機伺服器與 /task-status 自動開頁｜測試=82/82
