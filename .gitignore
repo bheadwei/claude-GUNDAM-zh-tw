@@ -99,3 +99,5 @@ tmp/
 *.tmp
 *.bak
 .claude-backups/
+
+pic/
