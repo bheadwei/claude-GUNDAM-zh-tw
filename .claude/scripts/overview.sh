@@ -1768,6 +1768,15 @@ shrink_data() {
     IFS= read -r DATA_LINE < "$TMP/view.json"
 }
 
+# 比對新舊 data.js 時略過每次重產都會變的欄位：generatedAt、scan.ms、scan.cached。
+# 內容沒變就不寫檔：畫面的輪詢靠 generatedAt 判斷要不要重畫，每次都改寫會讓它一直重畫。
+strip_volatile() {
+    local s=$1 re_t='^(.*"generatedAt":")[^"]*(".*)$' re_s='^(.*"ms":)[0-9]+(,"cached":)(true|false)(.*)$'
+    [[ $s =~ $re_t ]] && s="${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
+    [[ $s =~ $re_s ]] && s="${BASH_REMATCH[1]}${BASH_REMATCH[2]}${BASH_REMATCH[4]}"
+    printf '%s' "$s"
+}
+
 run_once() {
     # 全部在 TMP 產好才搬：任一步失敗都保留上一份 data.js／overview.md（畫面照常顯示舊資料），
     # 錯誤留在 .last-error 供除錯。先搬 data.js 再算 md 的話，md 失敗時兩份會不同步。
@@ -1789,12 +1798,14 @@ run_once() {
         return 1
     fi
     rm -f "$OUT/.last-error" 2>/dev/null
-    {
-        printf '// 給瀏覽器讀的資料，模型不要讀——要狀態請讀 wbs.md\n'
-        # 必須是單一一句賦值：畫面在載入前把 window.OVERVIEW 設成 null、載入後仍是 null 就當作
-        # 讀到寫一半的檔。拆成多句的話，半份檔案可能已執行前幾句，畫面會半新半舊。
-        printf 'window.OVERVIEW = %s;\n' "$DATA_LINE"
-    } > "$TMP/data.js" && mv -f "$TMP/data.js" "$OUT/data.js"
+    # 必須是單一一句賦值：畫面在載入前把 window.OVERVIEW 設成 null、載入後仍是 null 就當作
+    # 讀到寫一半的檔。拆成多句的話，半份檔案可能已執行前幾句，畫面會半新半舊。
+    local new_js old_js=""
+    printf -v new_js '// 給瀏覽器讀的資料，模型不要讀——要狀態請讀 wbs.md\nwindow.OVERVIEW = %s;\n' "$DATA_LINE"
+    [ -f "$OUT/data.js" ] && IFS= read -r -d '' old_js < "$OUT/data.js"
+    if [ -z "$old_js" ] || [ "$(strip_volatile "$new_js")" != "$(strip_volatile "$old_js")" ]; then
+        printf '%s' "$new_js" > "$TMP/data.js" && mv -f "$TMP/data.js" "$OUT/data.js"
+    fi
 
     cmp -s "$TMP/overview.md" "$OUT/overview.md" || mv -f "$TMP/overview.md" "$OUT/overview.md"
 

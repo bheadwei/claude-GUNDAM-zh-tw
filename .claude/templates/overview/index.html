@@ -7,8 +7,10 @@
 <!--
   原檔：.claude/templates/overview/index.html（唯一來源）。overview.sh 會複製到
   taskmaster-data/overview/，那份被覆蓋是正常的——要改畫面改這份。
-  限制（check-counts 會擋）：整份 ≤ 80KB；不載任何外部網址（file:// 要能離線開）；
+  限制（check-counts 會擋）：整份 ≤ 128KB；不載任何外部網址（file:// 要能離線開）；
   不用 module script（file:// 下會被 CORS 擋）；顏色只寫在 :root token 區塊。
+  超過 112KB（上限的 7/8）→ 下一個加功能的計畫在規劃時就要評估拆檔或瘦身；
+  再超過 128KB → 預設拆檔，不再調上限（ADR-2026-11-12-001）。
   檢查腳本：.claude/hooks/tests/fixtures/overview/qa-check.js（給 Playwright browser_evaluate）。
 -->
 <script>try{var t=localStorage.getItem('overview-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
@@ -270,7 +272,7 @@ var world = $('world'), stage = $('stage'), root = document.documentElement, min
 var PSEL = null, PM = {};
 var D = null, MODS = [], BY = {}, GB = [], ALL = {x: 0, y: 0, w: 1, h: 1}, CHG = {}, TASK = {}, FILTER = {};
 var S = {tx: 0, ty: 0, k: 1}, selected = null, vp = null, fitted = false, pending = false;
-var INNER = null, SAVED = null, IN = {}, nsel = null;
+var INNER = null, SAVED = null, IN = {}, nsel = null, OPEN = {};
 
 // ---------------------------------------------------------------- 文字量測
 function tw(s, cls) { probe.setAttribute('class', cls); probe.textContent = s; return probe.getComputedTextLength(); }
@@ -817,8 +819,13 @@ function fileItems(list, withMod) {
   }).join('');
 }
 var DOC_RE = /^docs?\/|\.(md|mdx|rst|adoc|txt)$/i;
+function dk(k) { return ' data-k="' + esc(k) + '"' + (OPEN[k] ? ' open' : ''); }
+document.addEventListener('toggle', function (e) {
+  var k = e.target.dataset && e.target.dataset.k;
+  if (k) OPEN[k] = e.target.open;
+}, true);
 function looseFiles(label, list) {
-  return list.length ? '<details class="xtra"><summary>' + label + ' ' + list.length + ' 個檔</summary><ul class="flist">' + fileItems(list, false) + '</ul></details>' : '';
+  return list.length ? '<details class="xtra"' + dk('loose|' + selected + '|' + label) + '><summary>' + label + ' ' + list.length + ' 個檔</summary><ul class="flist">' + fileItems(list, false) + '</ul></details>' : '';
 }
 function rollItems(list) {
   return (list || []).map(function (r) {
@@ -947,7 +954,7 @@ function planCard(pl, i) {
     (cols.length ? '<div class="phs">' + cols.map(function (c) {
       return '<div class="ph"><h3>' + esc(c.t) + '</h3>' + (c.ps.map(function (p) { return partCard(p, pl); }).join('') || '<div class="fdesc">沒有部件</div>') + '</div>';
     }).join('') + '</div>' : '<div class="note">' + (pl.stub ? '資料太多，這份 plan 只留狀態（本次的 plan 不受影響）' : '這份 plan 沒有「一眼看懂」部件表，只列得出改了哪些檔') + '</div>') +
-    (xn ? '<details class="xtra"><summary>計畫外 ' + xn + ' 個檔</summary>' + ex.map(function (p) { return '<code>' + esc(p.name) + '</code>'; }).join('') +
+    (xn ? '<details class="xtra"' + dk('plan|' + pl.source + '|' + pl.file + '|extra') + '><summary>計畫外 ' + xn + ' 個檔</summary>' + ex.map(function (p) { return '<code>' + esc(p.name) + '</code>'; }).join('') +
       (xn > ex.length ? '<span class="fdesc">另 ' + (xn - ex.length) + ' 個檔沒列出</span>' : '') + '</details>' : '') +
     '<table class="pt"><thead><tr><th>檔案</th><th>部件</th><th>+/−</th><th>AI 做了什麼</th></tr></thead><tbody>' +
     (pl.changes.filter(function (c) { return c.planned; }).map(function (c) {

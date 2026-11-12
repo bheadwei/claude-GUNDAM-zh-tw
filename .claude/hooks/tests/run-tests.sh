@@ -3507,6 +3507,51 @@ touch -d '2000-01-01' "$OVO/index.html"; touch -d '2010-01-01' "$SANDBOX/.claude
 expect_contains "--print-path 印出 file:// 路徑" "taskmaster-data/overview/index.html" \
     "$(bash "$SANDBOX/.claude/scripts/overview.sh" --print-path "$SANDBOX" 2>/dev/null)"
 
+# data.js 內容沒變就不重寫（畫面輪詢靠它判斷要不要重畫）；易變欄位 generatedAt、scan.ms、scan.cached 不算內容
+ov_wbs "1.1|api|✅ 11-01"; ov
+touch -d '2000-01-01' "$OVO/data.js"; cp "$OVO/data.js" "$OVO/ov-js1.keep"
+sleep 1; ov
+expect_eq "同一組輸入連跑兩次 → data.js 的 mtime 不變" "$(date -d 2000-01-01 +%s)" "$(stat -c %Y "$OVO/data.js" 2>/dev/null)"
+cmp -s "$OVO/ov-js1.keep" "$OVO/data.js" && ok "同一組輸入連跑兩次 → data.js 內容不變" || ng "同一組輸入連跑兩次 → data.js 內容不變" "cmp 相同" "$(diff <(tr ',' '\n' < "$OVO/ov-js1.keep") <(tr ',' '\n' < "$OVO/data.js") | grep -v generatedAt | head -8)"
+ov_wbs "1.1|api|⏳ 待處理"; sleep 1; ov
+[ "$(stat -c %Y "$OVO/data.js")" != "$(date -d 2000-01-01 +%s)" ] && ok "改 wbs 一個任務的狀態 → data.js 改寫" || ng "改 wbs 一個任務的狀態 → data.js 改寫" "mtime 變新" "mtime 沒變"
+expect_eq "改 wbs 後 generatedAt 比上一份新" "true" "$(jq -n --arg a "$(jq -r .generatedAt <(sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$OVO/ov-js1.keep"))" --arg b "$(ovq .generatedAt)" '$b > $a')"
+ov_wbs "1.1|api|✅ 11-01"; ov
+touch -d '2000-01-01' "$OVO/data.js"
+sed -i 's/"ms":[0-9]*,"cached":\(true\|false\)/"ms":99999,"cached":false/' "$OVO/data.js"; touch -d '2000-01-01' "$OVO/data.js"
+ov
+expect_eq "只有 scan.ms、scan.cached 不同 → 不改寫（mtime 不變）" "$(date -d 2000-01-01 +%s)" "$(stat -c %Y "$OVO/data.js" 2>/dev/null)"
+expect_contains "只有 scan.ms、scan.cached 不同 → data.js 仍是舊那份" '"ms":99999' "$(cat "$OVO/data.js")"
+
+# 畫面重畫保留狀態（headless chrome；沒有 chrome 就略過）。data.js 沒變的輪詢不呼叫 render()
+OV_CHROME="${OV_CHROME:-$(ls -d "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null | tail -1)}"
+[ -z "$OV_CHROME" ] && OV_CHROME=$(command -v chromium chromium-browser google-chrome 2>/dev/null | head -1)
+if [ -n "$OV_CHROME" ] && [ -x "$OV_CHROME" ]; then
+    ov_reset; ov_proj; ov_arch; ov_wbs "1.1|api|✅ 11-01"
+    mkdir -p "$OVD/plans"; printf '# 測試計畫\n\n## 階段 1\n- [ ] x\n' > "$OVD/plans/1.1-x.md"; ov
+    OVK="$SANDBOX/keep"; rm -rf "$OVK"; mkdir -p "$OVK"
+    ov_data > "$OVK/base.json"
+    for n in "data.js 2026-11-12T10:00:00.000+08:00 a" "data2.js 2026-11-12T11:00:00.000+08:00 b"; do
+        set -- $n
+        jq -c --arg t "$2" --arg n "$3" '.generatedAt = $t | .project.name = $n | .plans |= ([range(0;12) as $i | .[0]]) | .plans[0].extraCount = 3 | .plans[0].extraMore = 0' "$OVK/base.json" \
+            | sed 's/^/window.OVERVIEW = /; s/$/;/' > "$OVK/$1"
+    done
+    cp "$OV_TPL" "$OVK/index.html"
+    awk -v inj="$HOOK_DIR/tests/fixtures/overview/keep-state.js" '/<\/body>/ { print "<script>"; while ((getline l < inj) > 0) print l; print "</script>" } { print }' "$OVK/index.html" > "$OVK/page.html"
+    OV_RES=$("$OV_CHROME" --headless=new --no-sandbox --disable-gpu --window-size=1440,1000 --virtual-time-budget=9000 \
+        --dump-dom "file://$OVK/page.html" 2>/dev/null | sed -n 's/.*<pre id="result">\(.*\)<\/pre>.*/\1/p' | sed 's/&quot;/"/g; s/&amp;/\&/g')
+    rq() { printf '%s' "$OV_RES" | jq -r "$1" 2>/dev/null; }
+    expect_eq "換一份內容不同的 data.js → 縮放不變" "true" "$(rq '(.A.zl != null) and (.A.zl == .B.zl)')"
+    expect_eq "換一份內容不同的 data.js → 選取的模組不變" "true" "$(rq '(.A.sel != null) and (.A.sel == .B.sel)')"
+    expect_eq "換一份內容不同的 data.js → 任務圖展開的「計畫外」明細仍展開" "true true" "$(rq '"\(.A.open) \(.B.open)"')"
+    expect_eq "換一份內容不同的 data.js → 任務圖捲動位置不變（且確實捲動過）" "true" "$(rq '(.A.scroll > 0) and (.A.scroll == .B.scroll)')"
+    expect_eq "換的那份真的重畫了（畫面上的專案名稱換成 b）" "true" "$(rq '(.A.title | endswith("a")) and (.B.title | endswith("b"))')"
+    expect_eq "data.js 沒變的輪詢 → 不呼叫 render()（#world 第一個子節點是同一個物件）" "true" "$(rq '.same')"
+    rm -rf "$OVK" "$OVD/plans"
+else
+    ok "（沒有 chrome，略過畫面重畫保留狀態的測試）"
+fi
+
 # 鎖：兩支同時跑 → 結果合法、鎖不殘留；過期的鎖要接手；新鮮的鎖讓位並留下 .dirty
 rm -f "$OVO/data.js"
 ov & ov & wait
@@ -4123,7 +4168,8 @@ expect_eq "程式多一個 src/search/（2 個檔）、5.5 沒寫 → search 模
 
 # ---- 快取
 SCK="$SC/shop/.claude/taskmaster-data/overview/skeleton.json"
-touch -d '2001-01-01 00:00:00' "$SCK"; sck0=$(stat -c %Y "$SCK"); sc_ov shop
+# scan.cached 不算 data.js 的內容（內容沒變就不重寫），所以先刪掉 data.js，才讀得到這一輪的 cached
+touch -d '2001-01-01 00:00:00' "$SCK"; sck0=$(stat -c %Y "$SCK"); rm -f "$SC/shop/.claude/taskmaster-data/overview/data.js"; sc_ov shop
 expect_eq "第二次執行、HEAD 與工作區都沒變 → skeleton.json 的 mtime 不變、scan.cached 為 true" "$sck0 true" \
     "$(stat -c %Y "$SCK") $(sc_q shop '.scan.cached')"
 scf0=$(sc_q shop '.scan.files'); [[ $scf0 =~ ^[0-9]+$ ]] || scf0=-1; sc_put shop src/search/c.py 'from src.db.session import connect\n'; sc_ov shop
@@ -4976,6 +5022,26 @@ if [ -f "$CC_SRC" ] && [ -f "$CC_DS" ] && [ -d "$HOOK_DIR/../skills/project-docs
     cc_case "05 範本的「## 5. 資料流」改成「## 5. 跨服務流程」" "$CC_T05" 's/^## 5\. 資料流/## 5. 跨服務流程/' OVERVIEW_FLOW_SECTION
     cc_case "overview.sh 的 OVERVIEW_FLOW_SECTION 改成 \"流程\"" .claude/scripts/overview.sh \
         's/^OVERVIEW_FLOW_SECTION="資料流"/OVERVIEW_FLOW_SECTION="流程"/' OVERVIEW_FLOW_SECTION
+    # 畫面大小上限 128KB（ADR-2026-11-12-001）：補空白到指定 bytes（在假模板的複本上，不碰真範本）
+    cc_pad() { cp "$CC/.claude/templates/overview/index.html" "$CC_BAK/idx"; printf '\n<!--' >> "$CC/.claude/templates/overview/index.html"
+        head -c $(( $1 - $(wc -c < "$CC/.claude/templates/overview/index.html") - 3 )) /dev/zero | tr '\0' ' ' >> "$CC/.claude/templates/overview/index.html"
+        printf -- '-->' >> "$CC/.claude/templates/overview/index.html"; }
+    cc_pad 100000; cc_run
+    expect_eq "範本補到 100000 bytes → check-counts 的畫面大小守門通過" "exit 0" "exit $CC_RC"
+    cp "$CC_BAK/idx" "$CC/.claude/templates/overview/index.html"
+    cc_pad 131072; cc_run
+    expect_eq "範本剛好 131072 bytes → 通過" "exit 0" "exit $CC_RC"
+    cp "$CC_BAK/idx" "$CC/.claude/templates/overview/index.html"
+    cc_pad 131073; cc_run
+    [ "$CC_RC" = 1 ] && printf '%s\n' "$CC_OUT" | grep '✗' | grep -qF '超過 128KB 上限' \
+        && ok "範本補到 131073 bytes → 失敗並印「超過 128KB 上限」" \
+        || ng "範本補到 131073 bytes → 失敗並印「超過 128KB 上限」" "exit 1、✗ 行含超過 128KB 上限" "exit $CC_RC：$(printf '%s\n' "$CC_OUT" | grep '✗' | head -3 | tr '\n' ' ')"
+    cp "$CC_BAK/idx" "$CC/.claude/templates/overview/index.html"
+    expect_eq "check-counts.sh 與 index.html 都不再寫 80KB" "0 0" \
+        "$(grep -c '80KB' "$CC_SRC") $(grep -c '80KB' "$HOOK_DIR/../templates/overview/index.html")"
+    [ "$(grep -c '112KB' "$CC_SRC")" -ge 1 ] && [ "$(grep -c '112KB' "$HOOK_DIR/../templates/overview/index.html")" -ge 1 ] \
+        && ok "check-counts.sh 與 index.html 的註解都寫了 112KB 觸發條件" \
+        || ng "check-counts.sh 與 index.html 的註解都寫了 112KB 觸發條件" "兩檔都 ≥ 1" "不足"
     rm -rf "$CC" "$CC_BAK"
     out=$(printf '%s\n' .claude/scripts/check-counts.sh | bash "$HOOK_DIR/tests/run-tests.sh" --changed - --dry-run 2>&1)
     expect_contains "改 check-counts.sh → --changed 挑到本節" "專案圖解常數對範本" "$out"
