@@ -42,6 +42,54 @@
 #   bash .claude/scripts/overview.sh --notes-todo [<工作目錄>]
 #        沒有說明或可能過期的模組，一行一筆：id<TAB>路徑<TAB>代表檔（最多 3 個）<TAB>missing|stale。
 #        給 documentation-specialist 決定要讀哪些檔（模型不讀 data.js）
+#   bash .claude/scripts/overview.sh --live [<工作目錄>]
+#        即時聚合（ADR-2026-11-12-002）：只寫 overview/live.js，規則見下方「即時聚合」。
+#        由 hooks/agent-events.sh 在背景觸發；完整重產每次結束時也跑一次
+#
+# 即時聚合（--live，欄位與規則的唯一來源；ADR-2026-11-12-002 只定事件行格式與 need 規則）
+#   不掃描、不跑 git、不搶 .lock：用自己的 .live.lock（超過 30 秒視為過期），拿不到就留 .live-dirty 走人，
+#   持鎖者做完看到 .live-dirty 再跑一輪（最多 3 輪）。失敗時上一份 live.js 照留，錯誤寫 .live-error。
+#   輸入：主 checkout 的 .claude/logs/live-events.jsonl 最後 3000 行，加上
+#   .claude/worktrees/*/.claude/logs/live-events.jsonl 各最後 3000 行（claude -w 的 session 寫在那裡，
+#   resolve-roots 會誤記成 main：這些檔裡 src 為 main 的改標 worktree:<資料夾名>）；
+#   .claude/logs/agent-activity.jsonl 的 agent_start（只取 description，用 agent_id join）；
+#   現有 data.js 的 curGroups、plans（parts、files:）、tasks（doneOn）；hooks/lib/agent-inflight.sh 的
+#   AGENT_INFLIGHT_READONLY。「現在」可用 OVERVIEW_NOW（epoch 秒）覆寫，「今天」以本機時區算。
+#   事件：v 不是 1、t 不是數字、整行壞掉（fromjson?）→ 整行略過。一律先依 (t, ms) 排序再判斷；排序是穩定的，
+#   (t, ms) 相同時保留檔案行序（主 checkout 的檔在前、再依 worktree 檔名，各檔內依行號）——bash 4／macOS
+#   沒有毫秒時 ms 為 0，同一秒的事件只能靠行序。
+#   輸出 live.js 只有一句 `window.OVERVIEW_LIVE = {...};`（理由同 data.js），去掉 at 後沒變就不重寫：
+#   lanes    還在跑的線，依 since 排序。兩種：
+#            ① agent：12 小時內 SubagentStart、之後沒有該 aid 的 SubagentStop（lane 結束只認 SubagentStop）
+#            ② session：aid 為空的事件依 sid 分，最後一筆在 15 分鐘內、而且不是 Stop
+#            {id: aid／sid, who: agent 類型（沒有寫 "agent"）／"主 session"／"worktree session",
+#             desc: agent-activity 的 description（session 為 null）, where: 最後一筆事件的 src,
+#             readonly: agent 類型在 AGENT_INFLIGHT_READONLY 裡, group, since: agent 為 SubagentStart 的 t、
+#             session 為最後一個 Stop 之後第一筆的 t, lastAt: 最後一筆的 t, doing: 最後一筆有 act 的事件的 act（沒有 null）,
+#             files: {done, total}｜null}
+#            group（curGroups 的 key）：① src 在某組的 sources → 該組；② 否則同 sid 的事件所在 src 找組
+#            （先看 aid 為空的 session 事件，再看其他 agent；isolation: worktree 派出的 subagent 走這條）；③ null
+#            files：所屬組進行中階段（activePhases）的部件檔（不含 extra）＝total；該線 PostToolUse 寫過的檔
+#            以 glob 命中的部件檔數＝done。沒有組、或那些階段沒有部件檔 → null
+#   needs    同 sid＋aid 的事件依序走一遍。開啟者＝事件行的 need 為 approve／reply（PermissionRequest、
+#            Notification permission_prompt／idle_prompt／elicitation_dialog、PreToolUse AskUserQuestion）。
+#            開啟者之後出現任何非開啟者事件（含其他 nt 的 Notification、主 session 的 UserPromptSubmit、
+#            該 agent 的 SubagentStop）→ 已處理；同一個 aid 的 SubagentStop 換了 sid 也算。仍開著的又來一個開啟者
+#            → 只留最新那個，例外：PermissionRequest 與 Notification permission_prompt 前後 10 秒內合併成一筆
+#            （text 取 PermissionRequest、since 取較早的）。開啟超過 4 小時不列。subagent 內的事件都帶 aid
+#            （階段 3 探針實測），ADR 第 5 節「aid 為空」的退路規則不用。
+#            {id: "<sid>|<aid>|<since>", kind: approve|reply, who（同 lanes）, where: src, text, since}
+#            「卡住」不在這裡算，由頁面用 lanes 的 lastAt 判斷
+#   clashes  線＝checkout（src）。寫入集＝該線 12 小時內 PostToolUse 寫過的檔 ∪ 該線所屬組 plan 的 files:
+#            （組的找法同 lanes 的 group ①②）。某個實際寫入的檔出現在另一條線的寫入集 → 一筆；
+#            只拿對方 plan 的 glob 命中時，兩條線屬同一組不算（同一任務拆去 worktree 跑某階段是預期的）；
+#            兩邊都只是 glob 重疊不算。同一條線內兩個都還在跑的 agent（lanes ①）寫同一個檔也算。
+#            {file, lines: [src…]（排序）, agents: [寫過這個檔、還在跑的 agent id…]}
+#   doneToday {agents: 今天（本機時區）SubagentStop 的不重複 aid 數, tasks: data.js tasks 裡 doneOn 等於今天的數}
+#            （tasks 只來自 wbs.md，已歸檔的不算）
+#   feed     agent 開始／完成（agent_start／agent_done，text 為 description）、need 出現／處理（need_open／need_done，
+#            text 為 need 的 text），新的在前、最多 30 筆：{t, kind, id, who, where, text}
+#   at       產生時間（格式同 data.js 的 generatedAt），放最後
 #
 # 說明層：.claude/taskmaster-data/module-notes.md（格式與寫作標準的唯一來源是
 # .claude/skills/project-docs/module-notes.md）。通過驗證的列填進模組的 description、名稱與分組
@@ -81,8 +129,9 @@ OVERVIEW_INNER_MAX_OUT=${OVERVIEW_INNER_MAX_OUT:-15}
 [[ $OVERVIEW_INNER_MAX_EDGES =~ ^[0-9]+$ ]] || OVERVIEW_INNER_MAX_EDGES=200
 [[ $OVERVIEW_INNER_MAX_OUT =~ ^[0-9]+$ ]] || OVERVIEW_INNER_MAX_OUT=15
 
-ACTUAL_PLAN="" ACTUAL_RESULT="" ACTUAL_REASON="" PRINT_PATH=0 PRINT_INFERRED=0 PRINT_STATUS=0 SYNC_ARCH=0 NOTES_MODE=""
+ACTUAL_PLAN="" ACTUAL_RESULT="" ACTUAL_REASON="" PRINT_PATH=0 PRINT_INFERRED=0 PRINT_STATUS=0 SYNC_ARCH=0 NOTES_MODE="" LIVE=0
 case "${1:-}" in
+    --live) LIVE=1; shift ;;
     --print-path) PRINT_PATH=1; shift ;;
     --check-notes) NOTES_MODE=check; shift ;;
     --notes-todo) NOTES_MODE=todo; shift ;;
@@ -242,6 +291,204 @@ fi
 if [ "$PRINT_STATUS" -eq 1 ]; then
     [ -f "$OUT/overview.md" ] || bash "${BASH_SOURCE[0]}" "$WORK_ROOT" >/dev/null 2>&1
     [ -f "$OUT/overview.md" ] && awk '/^## 現況/ { p = 1; print; next } p && /^## / { exit } p' "$OUT/overview.md"
+    exit 0
+fi
+
+# ---------------------------------------------------------------- 即時聚合（--live）
+#
+# 欄位與規則在檔頭「即時聚合」段。glob2re 放這裡，是因為 --live 在「沒有 jq」的提示分支之前就要走掉，
+# 完整重產的 overview.jq 也引用同一份。
+
+IFS= read -r -d '' JQ_GLOB <<'JQ'
+# ---- glob → regex：`**/` 可為零層、`**` 跨目錄、`*` 不跨 `/`；結尾 `/` 視同 `/**`；沒有萬用字元視同目錄前綴
+def glob2re:
+  sub("^\\./"; "") | sub("^/"; "") | (if endswith("/") then . + "**" else . end) as $g
+  | ($g | gsub("(?<c>[.+^$(){}\\[\\]|\\\\])"; "\\\(.c)")
+        | gsub("\\*\\*/"; "\u0002") | gsub("\\*\\*"; "\u0001")
+        | gsub("\\*"; "[^/]*") | gsub("\\?"; "[^/]")
+        | gsub("\u0002"; "(.*/)?") | gsub("\u0001"; ".*")) as $r
+  | if ($g | test("[*?]")) then "^" + $r + "$" else "^" + $r + "(/.*)?$" end;
+JQ
+
+IFS= read -r -d '' JQ_LIVE <<'JQ'
+def str: if type == "string" then . else "" end;
+def tomap: reduce .[] as $x ({}; .[$x.key] = $x.value);
+def iswrite: .ev == "PostToolUse" and .file != "";
+def awho: if .at != "" then .at else "agent" end;
+def nwho: if .aid != "" then awho elif .src == "main" then "主 session" else "worktree session" end;
+
+($wts | split("\n") | map(select(. != "") | split("\t") | {key: .[0], value: .[1]}) | tomap) as $wtsrc
+| (($dj | fromjson?) // {} | if type == "object" then . else {} end) as $D
+| ([$D.curGroups[]? | select(type == "object")]) as $groups
+| ([$D.plans[]? | select(type == "object")]) as $plans
+| ($ro | split(" ") | map(select(. != ""))) as $ros
+| ([$act | split("\n")[] | fromjson? | select(type == "object" and .event == "agent_start" and (.agent_id | type) == "string" and .agent_id != "")
+    | {key: .agent_id, value: (.description | str | .[:120])}] | tomap) as $desc
+
+# 事件：v 不認得、t 不是數字、整行壞掉（fromjson? 吃掉）一律略過；worktree 自己那份檔裡的 main 改標 worktree:<名>
+| ([inputs as $l | ($l | fromjson?) | select(type == "object" and .v == 1 and (.t | type) == "number")
+    | (input_filename // "") as $fn
+    | {t, ms: (if (.ms | type) == "number" then .ms else 0 end),
+       ev: (.ev | str), sid: (.sid | str), aid: (.aid | str), at: (.at | str),
+       src: ((.src | str) as $s | if ($s == "main" or $s == "") and $wtsrc[$fn] != null then $wtsrc[$fn]
+                                  elif $s == "" then "main" else $s end),
+       tool: (.tool | str), file: (.file | str), act: (.act | str), text: (.text | str),
+       need: (if .need == "approve" or .need == "reply" then .need else null end)}]
+   | [range(length) as $k | .[$k] + {i: $k}] | sort_by([.t, .ms, .i])
+   | [range(length) as $k | .[$k] + {p: $k}]) as $E
+
+| def grp_src($s): [$groups[] | select(any(.sources[]?; . == $s)) | .key] | first;
+  ($E | group_by(.sid)
+   | map({key: .[0].sid,
+          value: ((([.[] | select(.aid == "") | .src] | unique) + ([.[] | select(.aid != "") | .src] | unique))
+                  | map(grp_src(.)) | map(select(. != null)) | first)}) | tomap) as $sidGrp
+| def grpof($src; $sid): grp_src($src) // $sidGrp[$sid];
+  def lfiles($gk; $evs):
+    if $gk == null then null
+    else ([$groups[] | select(.key == $gk)] | first) as $g
+      | ([$plans[] | select(.file == $g.plan)] | first) as $pl
+      | ($g.activePhases // []) as $aps
+      | ([($pl.parts // [])[] | select(.planned != false) | select(.phase as $ph | any($aps[]; . == $ph)) | .files[]?] | unique) as $pf
+      | if ($pf | length) == 0 then null
+        else ([$evs[] | select(iswrite) | .file] | unique) as $w
+          | {done: ([$pf[] | glob2re as $r | select(any($w[]; test($r)))] | length), total: ($pf | length)} end end;
+  def doing($evs): [$evs[] | select(.act != "") | .act] | last;
+
+  ($E | map(select(.aid != "")) | group_by(.aid) | map({key: .[0].aid, value: .}) | tomap) as $byAid
+| ([$E[] | select(.ev == "SubagentStop" and .aid != "") | {key: .aid, value: .p}] | tomap) as $stopP
+| ([$E[] | select(.ev == "SubagentStart" and .aid != "" and .t >= ($now - 43200) and $stopP[.aid] == null)] | unique_by(.aid)
+   | map(. as $s | $byAid[$s.aid] as $evs | ($evs | last) as $z | grpof($z.src; $s.sid) as $g
+         | {id: $s.aid, who: ($s | awho), desc: ($desc[$s.aid] // null), where: $z.src,
+            readonly: ($s.at as $a | any($ros[]; . == $a)), group: $g, since: $s.t, lastAt: $z.t,
+            doing: doing($evs), files: lfiles($g; $evs)})) as $agentLanes
+| ([$E[] | select(.aid == "")] | group_by(.sid)
+   | map(select((last | .t >= ($now - 900) and .ev != "Stop")))
+   | map(. as $evs | ($evs | last) as $z
+         | ([range($evs | length) | select($evs[.].ev == "Stop")] | last) as $ls
+         | grpof($z.src; $z.sid) as $g
+         | {id: $z.sid, who: ($z | nwho), desc: null, where: $z.src, readonly: false, group: $g,
+            since: $evs[(if $ls == null then 0 else $ls + 1 end)].t, lastAt: $z.t,
+            doing: doing($evs), files: lfiles($g; $evs)})) as $sessLanes
+
+# 需要你：同 sid＋aid 依 (t, ms, 行序) 走一遍，開啟者之後出現任何非開啟者事件就關
+| ($E | group_by([.sid, .aid])
+   | map(reduce .[] as $e ({open: null, feed: []};
+         if $e.need != null then
+           if .open != null and .open.kind == "approve" and $e.need == "approve" and ($e.t - .open.t) <= 10
+              and ((.open.ev == "PermissionRequest") != ($e.ev == "PermissionRequest")) then
+             (if $e.ev == "PermissionRequest" then .open += {text: $e.text, ev: $e.ev, t: $e.t} else . end)
+           else
+             .open = ($e | {kind: .need, text, ev, t, p, since: .t, sid, aid, at, src})
+             | .feed += [$e | {t, ms, i, kind: "need_open", id: "\(.sid)|\(.aid)|\(.t)", who: nwho, where: .src, text}]
+           end
+         elif .open != null then
+           .feed += [{t: $e.t, ms: $e.ms, i: $e.i, kind: "need_done", id: (.open | "\(.sid)|\(.aid)|\(.since)"),
+                      who: (.open | nwho), where: .open.src, text: .open.text}]
+           | .open = null
+         else . end)
+       | if .open != null and .open.aid != "" and ($stopP[.open.aid] // -1) > .open.p then .open = null else . end)) as $needRuns
+
+| ([$E[] | select(.t >= ($now - 43200))]) as $E12
+| ([$E12[] | select(iswrite) | {src, file, aid}]) as $W
+| def lgrp($s): grp_src($s) // ([$E12[] | select(.src == $s) | .sid] | unique | map($sidGrp[.]) | map(select(. != null)) | first);
+  ([(([$E12[].src] + [$groups[].sources[]?]) | unique)[] as $s | lgrp($s) as $g
+    | {src: $s, grp: $g, w: ([$W[] | select(.src == $s) | .file] | unique),
+       res: (([$groups[] | select(.key == $g) | .plan] | first) as $pf | [$plans[] | select(.file == $pf) | .files[]? | glob2re])}]) as $lines
+| ([$lines[] as $a | $a.w[] as $f | $lines[] as $b
+    | select($b.src != $a.src)
+    | select(any($b.w[]; . == $f) or ($a.grp != $b.grp and any($b.res[]; . as $r | $f | test($r))))
+    | {file: $f, lines: [$a.src, $b.src]}]) as $cross
+| ([$agentLanes[].id]) as $run
+| ([$W[] | select(.aid as $x | any($run[]; . == $x))]) as $runW
+| ($runW | group_by([.src, .file]) | map(select(([.[].aid] | unique | length) >= 2) | {file: .[0].file, lines: [.[0].src]})) as $intra
+
+| {lanes: (($agentLanes + $sessLanes) | sort_by([.since, .id])),
+   needs: ([$needRuns[].open | select(. != null and .since >= ($now - 14400)) | {id: "\(.sid)|\(.aid)|\(.since)", kind, who: nwho, where: .src, text, since}]
+           | sort_by(.since)),
+   clashes: (($cross + $intra) | group_by(.file)
+             | map(.[0].file as $f | {file: $f, lines: ([.[].lines[]] | unique), agents: ([$runW[] | select(.file == $f) | .aid] | unique)})),
+   doneToday: {agents: ([$E[] | select(.ev == "SubagentStop" and .aid != "" and .t >= $day0) | .aid] | unique | length),
+                tasks: ([$D.tasks[]? | select(type == "object") | .doneOn | select(type == "string")
+                         | split("-") | map(tonumber? // -1) | select(. == $md)] | length)},
+   feed: (([$E[] | select((.ev == "SubagentStart" or .ev == "SubagentStop") and .aid != "")
+            | {t, ms, i, kind: (if .ev == "SubagentStart" then "agent_start" else "agent_done" end),
+               id: .aid, who: awho, where: .src, text: ($desc[.aid] // "")}]
+           + [$needRuns[].feed[]])
+          | sort_by([.t, .ms, .i]) | reverse | .[:30] | map(del(.ms, .i)))}
+JQ
+
+LIVE_LOCK="$OUT/.live.lock"
+LIVE_LOCK_STALE_SEC=30
+take_live_lock() {
+    local at=""
+    mkdir "$LIVE_LOCK" 2>/dev/null || {
+        [ -f "$LIVE_LOCK/at" ] && IFS= read -r at < "$LIVE_LOCK/at"
+        [[ $at =~ ^[0-9]+$ ]] || at=$(date -r "$LIVE_LOCK" +%s 2>/dev/null)
+        [[ $at =~ ^[0-9]+$ ]] && (( $(date +%s) - at > LIVE_LOCK_STALE_SEC )) || return 1
+        rm -rf "$LIVE_LOCK"
+        mkdir "$LIVE_LOCK" 2>/dev/null || return 1
+    }
+    date +%s > "$LIVE_LOCK/at" 2>/dev/null
+    return 0
+}
+
+# live_once <暫存目錄>：讀事件檔、agent-activity、data.js，算出 live.js；去掉 at 後沒變就不寫
+live_once() {
+    local d=$1 f n=0 now mm dd hh mi ss body old="" new AGENT_INFLIGHT_READONLY=""
+    local -a evs=(ev0.jsonl)
+    rm -rf "$d"; mkdir -p "$d" || return 1
+    : > "$d/ev0.jsonl"; : > "$d/wts.tsv"; : > "$d/act.jsonl"; : > "$d/data.json"
+    [ -f "$MAIN_ROOT/.claude/logs/live-events.jsonl" ] && tail -n 3000 "$MAIN_ROOT/.claude/logs/live-events.jsonl" > "$d/ev0.jsonl"
+    for f in "$MAIN_ROOT"/.claude/worktrees/*/.claude/logs/live-events.jsonl; do
+        [ -f "$f" ] || continue
+        n=$((n + 1)); evs+=("ev$n.jsonl")
+        tail -n 3000 "$f" > "$d/ev$n.jsonl"
+        f=${f%/.claude/logs/live-events.jsonl}
+        printf 'ev%d.jsonl\tworktree:%s\n' "$n" "${f##*/}" >> "$d/wts.tsv"
+    done
+    [ -f "$MAIN_ROOT/.claude/logs/agent-activity.jsonl" ] && grep -F '"agent_start"' "$MAIN_ROOT/.claude/logs/agent-activity.jsonl" > "$d/act.jsonl"
+    [ -f "$OUT/data.js" ] && sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$OUT/data.js" > "$d/data.json"
+    source "$SCRIPT_DIR/../hooks/lib/agent-inflight.sh" 2>/dev/null
+    now=${OVERVIEW_NOW:-}
+    [[ $now =~ ^[0-9]+$ ]] || now=$(date +%s)
+    read -r mm dd hh mi ss <<< "$(date -d "@$now" '+%m %d %H %M %S' 2>/dev/null || date -r "$now" '+%m %d %H %M %S' 2>/dev/null)"
+    [[ "$mm$dd$hh$mi$ss" =~ ^[0-9]{10}$ ]] || { echo "算不出今天的日期（date 不支援 -d 也不支援 -r）" > "$d/err"; return 1; }
+    printf '%s\n%s\n' "$JQ_GLOB" "$JQ_LIVE" > "$d/live.jq"
+    ( cd "$d" && LC_ALL=C.UTF-8 jq -n -R -c \
+        --rawfile dj data.json --rawfile act act.jsonl --rawfile wts wts.tsv --arg ro "$AGENT_INFLIGHT_READONLY" \
+        --argjson now "$now" --argjson day0 $((now - 10#$hh * 3600 - 10#$mi * 60 - 10#$ss)) \
+        --argjson md "[$((10#$mm)),$((10#$dd))]" -f live.jq "${evs[@]}" > out.json 2> err ) || return 1
+    IFS= read -r body < "$d/out.json"
+    [[ $body == '{'*'}' ]] || { echo "live.jq 沒有輸出物件" >> "$d/err"; return 1; }
+    # 單一一句賦值，理由同 data.js（畫面把半份檔當作沒讀到）。at 放最後，比對時切掉
+    new="window.OVERVIEW_LIVE = ${body%\}},\"at\":\"$(date '+%Y-%m-%dT%H:%M:%S.%3N%:z')\"};"
+    [ -f "$OUT/live.js" ] && IFS= read -r old < "$OUT/live.js"
+    [ -n "$old" ] && [ "${old%,\"at\":*}" = "${new%,\"at\":*}" ] && return 0
+    printf '%s\n' "$new" > "$d/live.js" && mv -f "$d/live.js" "$OUT/live.js"
+}
+
+# live_rounds <暫存目錄>：拿得到 .live.lock 才算；拿不到留 .live-dirty 給持鎖者，持鎖者看到再跑一輪（最多 3 輪）
+live_rounds() {
+    local d=$1 i
+    take_live_lock || { : > "$OUT/.live-dirty" 2>/dev/null; return 0; }
+    for i in 1 2 3; do
+        rm -f "$OUT/.live-dirty" 2>/dev/null
+        if ! live_once "$d"; then
+            cp -f "$d/err" "$OUT/.live-error" 2>/dev/null
+            break
+        fi
+        rm -f "$OUT/.live-error" 2>/dev/null
+        [ -f "$OUT/.live-dirty" ] || break
+    done
+    rm -rf "$LIVE_LOCK" "$d" 2>/dev/null
+}
+
+if [ "$LIVE" -eq 1 ]; then
+    command -v jq >/dev/null 2>&1 || exit 0
+    mkdir -p "$OUT" 2>/dev/null || exit 0
+    [ -f "$OUT/.gitignore" ] || printf '*\n' > "$OUT/.gitignore"
+    trap 'rm -rf "$OUT/.live-tmp-$$" 2>/dev/null' EXIT
+    live_rounds "$OUT/.live-tmp-$$"
     exit 0
 fi
 
@@ -793,15 +1040,6 @@ def parse_block:
        else (([$l | node_ref] | first) // null) as $n | if $n then addnode($n; $g) else . end
        end);
 
-# ---- glob → regex：`**/` 可為零層、`**` 跨目錄、`*` 不跨 `/`；結尾 `/` 視同 `/**`；沒有萬用字元視同目錄前綴
-def glob2re:
-  sub("^\\./"; "") | sub("^/"; "") | (if endswith("/") then . + "**" else . end) as $g
-  | ($g | gsub("(?<c>[.+^$(){}\\[\\]|\\\\])"; "\\\(.c)")
-        | gsub("\\*\\*/"; "\u0002") | gsub("\\*\\*"; "\u0001")
-        | gsub("\\*"; "[^/]*") | gsub("\\?"; "[^/]")
-        | gsub("\u0002"; "(.*/)?") | gsub("\u0001"; ".*")) as $r
-  | if ($g | test("[*?]")) then "^" + $r + "$" else "^" + $r + "(/.*)?$" end;
-
 def tstate: if test("✅") then "done" elif test("🔄") then "wip" elif test("🚫") then "blocked"
             elif test("⏭") then "skip" else "todo" end;
 def temoji: {done: "✅", wip: "🔄", blocked: "🚫", skip: "⏭️", todo: "⏳"}[.];
@@ -1119,7 +1357,7 @@ def parse_ledger:
        + [$pp.files[] | {module: globmod, file: .} | select(.module != null)]) as $touch
     | {file: "plans/\($rec.name)",
        task: (($pp.fm.wbs_task // "") | if . == "" or . == "none" then null else . end),
-       title: ($pp.title // $rec.name), mode: ($pp.fm.mode // null), status: ($pp.fm.status // ""),
+       title: ($pp.title // $rec.name), mode: ($pp.fm.mode // null), status: ($pp.fm.status // ""), files: $pp.files,
        currentPhase: (($pp.fm.current_phase // "") | tonumber? // null),
        source: $rec.src, base: $cf.base, completed: $completed, changesFrom: $cf.from,
        phases: [$pp.phases[] | .n as $n
@@ -1849,10 +2087,12 @@ run_once() {
     cmp -s "$TMP/overview.md" "$OUT/overview.md" || mv -f "$TMP/overview.md" "$OUT/overview.md"
 
     copy_page
+    # curGroups 可能變了，lanes 的歸屬要跟著變
+    live_rounds "$TMP/live"
     return 0
 }
 
-printf '%s\n%s\n' "$JQ_ROLLUP" "$JQ_MAIN" > "$TMP/overview.jq"
+printf '%s\n%s\n%s\n' "$JQ_ROLLUP" "$JQ_GLOB" "$JQ_MAIN" > "$TMP/overview.jq"
 printf '%s\n%s\n' "$JQ_ROLLUP" "$JQ_SHRINK" > "$TMP/shrink.jq"
 printf '%s\n%s\n' "$JQ_MDDEFS" "$JQ_MD" > "$TMP/md.jq"
 printf '%s\n%s\n' "$JQ_MDDEFS" "$JQ_ACTUAL" > "$TMP/actual.jq"
