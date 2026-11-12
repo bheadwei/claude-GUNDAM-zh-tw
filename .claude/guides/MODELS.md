@@ -66,5 +66,5 @@ documentation-specialist，以及 2026-11 退場的流程模板 agent）先改�
 
 ## 建置疑難排解
 
-建置失敗時委派 `build-error-resolver` agent（見 `rules/agent-orchestration.md` 的標準鏈），
+建置失敗時委派 `build-error-resolver` agent（路由見 `using-taskmaster` skill），
 分析錯誤 → 增量修復 → 每次修復後驗證。

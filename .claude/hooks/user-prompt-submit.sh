@@ -159,7 +159,7 @@ if [ "$SUGGEST_MODE" != "low" ]; then
     # 執行期 bug —— 與上面的建置錯誤分流：這裡是「跑起來行為不對」
     if has '壞了|不動了|沒反應|不work|不 work|怪怪的|為什麼會|怎麼會|異常|出錯|報錯|失敗了' \
        || has '(^|[^a-z])bugs?([^a-z]|$)|broken|not working|unexpected|crash|當掉|閃退|卡住|重現'; then
-        add "偵測到執行期 bug → **委派 debug-investigator**（\`subagent_type: \"debug-investigator\"\`）。它強制先穩定重現 → 二分縮小 → 可證偽假設 → 寫重現測試才動手修，並且會先讀 \`context/learned/\` 確認這個坑踩過沒有。建置/型別錯誤請改用 build-error-resolver。"
+        add "偵測到執行期 bug → **委派 debug-investigator**（\`subagent_type: \"debug-investigator\"\`），它先重現再修；建置/型別錯誤改 build-error-resolver。"
     fi
     # 專案文件與文件維護 —— 文件維護這條以前不存在，是 documentation-specialist 從未被啟動過的
     # 直接原因（agent-activity.jsonl 可查）。
@@ -181,7 +181,7 @@ if [ "$SUGGEST_MODE" != "low" ]; then
     if [ "$DOC_ROUTED" -eq 0 ] \
        && { has '文件|文檔|docs|documentation|readme|codemap|api 文件|api 文檔|註解文件|技術文件' \
             || has '整理.{0,10}(文件|文檔|docs)|更新.{0,10}(文件|文檔|docs|readme)|同步.{0,10}(文件|文檔|docs)'; }; then
-        add "偵測到文件維護 → **委派 documentation-specialist**（\`subagent_type: \"documentation-specialist\"\`），它會從程式碼同步 README、架構文件 architect 撰寫的部分、runbook 裡對不上的事實。不要自己一個一個檔案改。"
+        add "偵測到文件維護 → **委派 documentation-specialist**（\`subagent_type: \"documentation-specialist\"\`），從程式碼同步 README／架構文件／runbook。不要自己一個一個檔案改。"
     fi
     # `ui`／`css` 前後不能是英文字母：裸子字串會命中 quick、build、guide、suite、access，
     # 把一堆跟前端無關的提問也導去載入 ui-style-compliance。
@@ -200,7 +200,7 @@ if [ "$SUGGEST_MODE" != "low" ]; then
         add "偵測到 Python 環境操作 → **先載入 \`python-uv\` skill**（一律 uv，禁 pip/poetry）。"
     fi
     if has '(^|[^a-z])test|測試|coverage|覆蓋率|pytest|jest|vitest'; then
-        add "偵測到測試相關 → **先載入 \`testing-standards\` skill** 當前任務模式的覆蓋率門檻（quick 免檢）、只跑相關的測試檔、輸出只回摘要。"
+        add "偵測到測試相關 → **先載入 \`testing-standards\` skill**（覆蓋率門檻依任務模式、只跑相關測試檔）。"
     fi
     # 新增功能 → 提醒先補 WBS 那一行，否則 plan 會被迫兼差當 backlog
     #
@@ -211,16 +211,16 @@ if [ "$SUGGEST_MODE" != "low" ]; then
     if [ -f "$CLAUDE_DIR/taskmaster-data/wbs.md" ] \
        && has '(新增|實作|實現|開發|加一個|加個|加上|做一個|做個|追加|建一個|建個)|(支援|要有|想要|需要).{0,45}(功能|頁面|模組|元件|API|端點|介面|服務|系統|報表|流程|機制)|新功能|擴充功能|下一階段|第二階段|還想做' \
        && ! has '壞了|不動|沒反應|報錯|出錯|失敗了|為什麼|怎麼|如何|是什麼|(^|[^a-z])bugs?([^a-z]|$)|broken|crash'; then
-        add "偵測到新功能需求／CR → ①先用 **/task-add** 追加進 WBS（自動拆解、接編號、算依賴、重算現況）②達 /plan 門檻（唯一來源：plan-format skill「何時不該用 /plan」）就**委派 planner**（\`subagent_type: \"planner\"\`）產分階段藍圖。跳過 WBS 會讓進度與時間統計失真。**若這筆會動到 API／路由／schema／對外介面，任務結束前必須同步文件**——/verify 會擋。"
+        add "偵測到新功能需求／CR → ①先 **/task-add** 進 WBS（跳過會讓進度統計失真）②達 /plan 門檻（plan-format skill）就**委派 planner**（\`subagent_type: \"planner\"\`）③動到 API／路由／schema 時**任務結束前必須同步文件**（/verify 會擋）。"
     fi
     if has 'pull request|開 pr|發 pr|送審|merge request|合併請求'; then
-        add "偵測到要開 PR → 用 **/pr**（分析完整 commit 歷史與 \`diff base...HEAD\`、可選先跑把關鏈、產出含測試計畫的內容）。"
+        add "偵測到要開 PR → 用 **/pr**。"
     fi
     if has '升級套件|更新依賴|依賴升級|過期套件|outdated|npm audit|漏洞修復|dependabot|套件更新'; then
-        add "偵測到依賴維護 → 用 **/deps**（依風險分批：安全 → patch → minor → major，每批測試後才 commit；major 一次一個並先讀遷移指南）。"
+        add "偵測到依賴維護 → 用 **/deps**（依風險分批，每批測試後才 commit）。"
     fi
     if has '要用哪個|選哪個|該用|哪個比較好|A 還是 B|決定用|技術選型|取捨|trade-?off'; then
-        add "偵測到技術選型 → 影響跨模組或難以回頭的決策，**委派 architect**（\`subagent_type: \"architect\"\`）做評估並產 ADR；單點選型則直接用 **/adr** 記錄「為什麼選 A 不選 B」，含被否決的方案。否則下個 session 會重新爭論已經決定過的事。"
+        add "偵測到技術選型 → 跨模組或難回頭的**委派 architect**（\`subagent_type: \"architect\"\`）產 ADR；單點選型用 **/adr** 記下為什麼選 A 不選 B。"
     fi
 fi
 

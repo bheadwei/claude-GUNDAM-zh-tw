@@ -4,6 +4,7 @@ title: 平行 agent 的風險是「併行讀寫」，不是「寫入範圍重疊
 files:
   - ".claude/hooks/pre-agent-gate.sh"
   - ".claude/rules/agent-orchestration.md"
+  - ".claude/skills/worktree-orchestration/SKILL.md"
   - ".claude/agents/*.md"
 symptom: 平行派工時 ①`security-infrastructure-auditor` 跑測試回報 2 個 failed，實際上那兩個測試沒問題——它讀到 `code-quality-specialist` 改到一半的產品碼 ②一個審查類 agent 把 `debug-investigator` 刻意留紅的測試檔刪掉了。兩次 `pre-agent-gate.sh` 都有攔下來，但都在看完訊息後被放行
 root-cause: 判準錯了。「檔案範圍不重疊」只涵蓋**寫入集**，而掃描／驗證類 agent 的寫入集是空的或很小——所以那個條件對它**永遠成立**。真正的衝突發生在它**讀**的那一邊：它讀或執行整個 repo，必然撞上任何併行寫入者留在工作區的半成品。更糟的是閘門訊息的選項 3 明寫「確認檔案範圍不重疊後重試即可通過」，等於閘門親手把模型引導到那個永遠成立的結論，再加上 deny-once 就放行了
@@ -64,6 +65,7 @@ severity: high
 
 文字版判準同步到 `rules/agent-orchestration.md`「安全平行」與
 `worktree-orchestration` skill 的判準表（各一句，指回閘門，不重述訊息內容）。
+（2026-11-12：rules 那份已搬進 `worktree-orchestration` skill 的「平行的判準」節，現在只剩那一處。）
 
 ## 可以帶走的通則
 
@@ -74,7 +76,6 @@ severity: high
 ## 相關
 
 - `.claude/hooks/pre-agent-gate.sh` — 強制者（訊息是判準的唯一來源）
-- `.claude/rules/agent-orchestration.md` — 「安全平行」節
-- `.claude/skills/worktree-orchestration/SKILL.md` — 何時值得開 worktree
+- `.claude/skills/worktree-orchestration/SKILL.md` — 「何時值得開 worktree」與「平行的判準」節（後者 2026-11-12 從 `rules/agent-orchestration.md`「安全平行」搬來）
 - `2026-09-11-async-dispatch-breaks-posttooluse-gates.md` — 同一支閘門的另一次
   靜默失效（那次是帳算錯，這次是判準錯）

@@ -88,4 +88,4 @@ bash "$CLAUDE_PROJECT_DIR/.claude/hooks/watch-agents.sh" --clear
 - `.claude/hooks/agent-monitor.sh` — 自動記錄來源
 - `.claude/hooks/watch-agents.sh` — 底層查詢腳本
 - `.claude/context/` / `.claude/coordination/handoffs/` — 報告與交接
-- `.claude/rules/agent-orchestration.md` — 編排劇本
+- `using-taskmaster` skill — 路由與接力；`.claude/coordination/README.md` — 誰會建 handoff

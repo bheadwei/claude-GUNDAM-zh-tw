@@ -108,8 +108,9 @@ skill 的代價是「要被喚起才載入」，而喚起的唯一依據是 `des
 
 第三道判準在 rule 上特別容易破功，而且有前例：`rules/git-workflow.md` 第一版
 **整檔被刪掉**（commit `7596b1d`），因為兩節內容分別重述了 `commands/pr.md` 與
-`coding-style.md`。2026-09-09 重寫時只留三條真正的鐵律，並在檔頭寫下這段歷史，
-讓下一個想把 PR 內容補回去的人先看到警告——**新版本身就是這三道判準的範例**。
+`coding-style.md`。2026-09-09 重寫時只留三條真正的鐵律——**新版本身就是這三道判準的範例**。
+這段歷史原本整段寫在該檔檔頭，2026-11-12 為了減少常駐量改成一行指向本節（**本節是唯一來源**）；
+檔頭仍留收錄判準與「PR／commit 格式不在此重述」，擋住想把 PR 內容補回去的人。
 
 ---
 
@@ -163,7 +164,7 @@ hook 可以用 `run-tests.sh` 釘住。rule／skill／command 不行——它們
 
 - `.claude/hooks/README.md` — 各 hook 事件支援什麼（哪些能 `additionalContext`）
 - `.claude/skills/INDEX.md` — 現有 skill 與「不需要 Skill 的場景」
-- `.claude/rules/agent-orchestration.md` — 五層的協作方式
+- `.claude/rules/agent-orchestration.md` — 本身就是「搬走常駐內容、只留指標」的例子（2026-11-12 從 6.9 KB 縮到約 1.3 KB）
 - `.claude/tests/skill-compliance/README.md` — 壓力測試怎麼跑
 - `.claude/scripts/check-counts.sh` — 新增後跑一次，它會列出所有沒同步的計數
 - `CLAUDE.md` 的「改動時的連帶檢查」 — 每種新增各要同步哪些檔案

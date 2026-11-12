@@ -32,18 +32,18 @@ description: Use when starting any conversation in a TaskMaster project — esta
 
 | 使用者在講什麼 | 派誰 |
 |---|---|
-| 新功能、要做一個 X | planner → 實作（`/tdd`：主模型照 `tdd-workflow`，多階段派 `general-purpose` implementer）→ code-quality-specialist →（它回報**某條有風險的路徑完全沒測試**時）test-automation-engineer →（critical）security-infrastructure-auditor |
+| 新功能、要做一個 X | planner → 實作（`/tdd`；多階段派 `general-purpose` implementer）→ code-quality-specialist →（它回報**有風險的路徑完全沒測試**時）test-automation-engineer →（critical）security-infrastructure-auditor |
 | 跑起來行為不對、壞了、沒反應、資料錯 | **debug-investigator** →（critical）主模型照 `tdd-workflow` 修 → code-quality-specialist |
 | 根因**已確認**（已重現＋已定位），只差實作與驗證 | `general-purpose` 當實作者（見 `subagent-execution`）→ standard/critical 再接 code-quality-specialist |
 | 根因**未確認**（不知道為什麼壞、只有推測） | **debug-investigator**，不可跳過 |
 | 建置失敗、`tsc`／型別／import 錯誤 | **build-error-resolver**（終端節點，修完即止） |
-| 合併出現衝突（merge／cherry-pick／rebase 停在衝突） | **conflict-resolver**（讀兩邊 plan 與報告判意圖；設計決策會 abort 並回報） |
-| 重構、清死碼、整併 | refactor-cleaner → code-quality-specialist →（它回報**某條有風險的路徑完全沒測試**時）test-automation-engineer |
+| 合併出現衝突（merge／cherry-pick／rebase 停在衝突） | **conflict-resolver** |
+| 重構、清死碼、整併 | refactor-cleaner → code-quality-specialist →（同上，沒測試時）test-automation-engineer |
 | 前端頁面／元件 | 先載入 `ui-style-compliance` skill → **ui-builder** →（關鍵流程）e2e-validation-specialist |
 | Pencil 設計稿（`.pen`） | 不派 agent：主模型載入 `ui-style-compliance` 自己做 |
-| **整理／更新／同步文件**，描述的對象是**程式碼**：README、架構文件 architect 撰寫的部分、runbook 跟程式碼對不上 | **documentation-specialist** |
-| **整理／更新／同步文件**，描述的對象是 **`.claude/` 本身**：skill／rule／agent 定義／hook／模板自己的 README 與計數 | **skill-curator** |
-| 寫 PRD、brief、架構文件初稿 | 不派 agent：跑 `/docs-init`（6 份文件的分工與範本見 `project-docs` skill） |
+| **整理／更新／同步文件**，對象是**程式碼**（README、架構文件 architect 寫的部分、runbook 跟程式碼對不上） | **documentation-specialist** |
+| **整理／更新／同步文件**，對象是 **`.claude/` 本身**（skill／rule／agent／hook／模板 README 與計數） | **skill-curator** |
+| 寫 PRD、brief、架構文件初稿 | 不派 agent：跑 `/docs-init`（見 `project-docs` skill） |
 | 寫 ADR | 單點選型用 `/adr`；跨模組、難回頭的設計決策派 **architect** |
 | 開 PR 前把關 | code-quality-specialist → security-infrastructure-auditor → e2e-validation-specialist |
 | 部署、CI/CD、容器、IaC | security-infrastructure-auditor → deployment-expert |
@@ -52,7 +52,7 @@ description: Use when starting any conversation in a TaskMaster project — esta
 | E2E、關鍵使用者流程驗證 | e2e-validation-specialist |
 | 安全稽核、秘密洩漏、OWASP | security-infrastructure-auditor |
 
-> **「明確根因」＝ 你能說出「在 X 檔案 Y 行，當 Z 條件成立時會發生 W」。** 說不出這句話就是未確認，派 `debug-investigator`——判準不夠硬就會被「我覺得根因很明確」這種恆為真的句子通過（見 `context/learned/2026-09-16-concurrent-read-write-not-file-overlap.md`）。`quick` 下不做這個根因判準，直接依上方那列派 debug-investigator。
+> **「明確根因」＝ 你能說出「在 X 檔案 Y 行，當 Z 條件成立時會發生 W」。** 說不出這句話就是未確認，派 `debug-investigator`——判準不夠硬，「我覺得根因很明確」這種恆為真的句子就會通過。`quick` 下不做這個根因判準，直接依上方那列派 debug-investigator。
 
 都不適配才退回 Claude Code 內建的 `general-purpose`。**「我自己做比較快」不是退回的理由。**
 
@@ -101,16 +101,10 @@ agent 完成後會寫報告並對需要後續處理者建立 handoff。`post-age
 pending handoff 注入對話——**看到注入提示就啟動那個「to」agent**，不要停在原地問
 使用者要不要繼續。
 
-hook 只能注入提示，**啟動 agent 的執行者是你**。
+被派的 agent 會讀 `to:` 是自己的 pending handoff 當工作清單，完成後把 `status:` 改 `completed`；
+重複到沒有 pending 為止。hook 只能注入提示，**啟動 agent 的執行者是你**。
 
 ## 使用者指示優先
 
 使用者的明確指示（CLAUDE.md、當下的話）優先於本檔。使用者說「不要開 agent，你直接做」就直接做。
 只有在使用者明確這樣說過時才略過本檔。
-
-## 相關
-
-- `.claude/rules/agent-orchestration.md` — 完整編排劇本、反模式、安全平行
-- `.claude/rules/task-mode.md` — quick / standard / critical 判級
-- `.claude/context/learned/` — 踩過的坑
-- `.claude/coordination/README.md` — handoff 格式

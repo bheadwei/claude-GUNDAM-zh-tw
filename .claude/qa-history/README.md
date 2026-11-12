@@ -31,7 +31,7 @@ YYYY-MM-DD-HHMMSS-<command-name>.md
 
 ## 檔案格式
 
-參見 `.claude/rules/interactive-qa.md` 的「記錄檔格式」章節。
+參見 `.claude/rules/interactive-qa.md` 規則第 5 條（格式與敏感資料檢查）。
 
 ## 注意事項
 

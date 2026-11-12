@@ -118,7 +118,7 @@ GREEN 過不了修實作不改測試，都在那裡（唯一來源，本檔不�
   - **plan 與帳本只由主模型在主 checkout 改**：開 worktree 前 plan 已 commit（`plans/` 被排除時用 `git add -f`）；
     合併一條、`/verify` 一條；該階段合併且驗過才標 ✅
   - 同時進行的階段都標 🔄，frontmatter `current_phase` 寫最小的未完成階段
-  - 可同時開工的階段超過 4 個時，一次只開 2–4 條（見 `rules/agent-orchestration.md`）
+  - 可同時開工的階段超過 4 個時，一次只開 2–4 條（見 `worktree-orchestration` skill）
 
 把選擇記進帳本第一段，避免下次重複問。
 

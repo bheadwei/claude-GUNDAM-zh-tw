@@ -9,7 +9,7 @@
 | **using-taskmaster** | 強制委派專業 agent 的命令 + Red Flags 反合理化表 + 路由表 + 動工前先讀坑 | **每個 session 由 `session-start.sh` 全文注入**，不需被想起來 |
 
 這個 skill 反其道而行——它是**唯一**常駐的，因為它要解決的問題正好是「軟規則會被
-忽略」：`rules/agent-orchestration.md` 寫「有專業 agent 就優先委派」，對撞 Claude Code
+忽略」：`rules/agent-orchestration.md` 曾寫「有專業 agent 就優先委派」，對撞 Claude Code
 內建的「非必要不開 Agent」預設會輸。SessionStart 的 `additionalContext` 注入不會。
 
 > 實證：`/tdd` 這類 slash command 能成功派 agent（command 本身算 skill，等於取得授權；當時測的是 `/tdd` 派 `tdd-guide`，該 agent 已於 2026-10-15 退役），
@@ -81,7 +81,7 @@ UI 與 Node 兩類另有 `user-prompt-submit.sh` 的關鍵字提示當第二層�
 |---|---|
 | Python 語法、PEP 8、pytest 用法 | 模型內建知識 |
 | React/Vue/Angular 的框架模式 | 用 **context7 MCP** 查當前版本的官方文檔，比寫死在 skill 裡不會過期 |
-| REST／GraphQL 的通則 | 專案約定在 `rules/coding-style.md` |
+| REST／GraphQL 的通則 | 模型內建；本模板的回應信封約定在 `api-design` 的「本模板的專案約定」 |
 | Docker、通用安全概念 | 見 `rules/security.md` |
 | Claude API／SDK | 已是 **Claude Code 內建 skill** |
 
