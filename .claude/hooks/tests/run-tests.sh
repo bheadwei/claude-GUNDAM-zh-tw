@@ -3552,6 +3552,20 @@ else
     ok "（沒有 chrome，略過畫面重畫保留狀態的測試）"
 fi
 
+# 任務圖的純函式（共同路徑、任務編號壓縮）；沒有 node 就整段略過、不計入通過
+if command -v node >/dev/null 2>&1; then
+    PF=$(node "$HOOK_DIR/tests/fixtures/overview/plan-fns.js" "$OV_TPL" 2>&1)
+    pfq() { printf '%s' "$PF" | jq -r "$1" 2>/dev/null; }
+    expect_eq "任務編號 21.2,21.3,21.4 → 21.2–21.4" "21.2–21.4" "$(pfq .ids3)"
+    expect_eq "任務編號 21.2…21.10（9 個）→ 21.2–21.10" "21.2–21.10" "$(pfq .ids9)"
+    expect_eq "任務編號 1.2,1.3 → 1.2, 1.3" "1.2, 1.3" "$(pfq .ids2)"
+    expect_eq "30 個檔中 20 個在 app/ → 共同路徑為 app/ 那層" "src/services/checkout/app/" "$(pfq .big)"
+    expect_eq "有共同路徑 → 列表寫 cart/store.py" "cart/store.py" "$(pfq .bigShort)"
+    expect_eq "不到 3 個檔 → 沒有共同路徑" "" "$(pfq .two)"
+    expect_eq "沒有目錄被 6 成檔案共有 → 沒有共同路徑" "" "$(pfq .scattered)"
+    expect_eq "沒有共同路徑 → 寫完整路徑" "docs/x.md" "$(pfq .none)"
+fi
+
 # 鎖：兩支同時跑 → 結果合法、鎖不殘留；過期的鎖要接手；新鮮的鎖讓位並留下 .dirty
 rm -f "$OVO/data.js"
 ov & ov & wait

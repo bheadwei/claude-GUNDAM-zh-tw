@@ -169,6 +169,16 @@ button.chip{cursor:pointer;min-height:28px}
 .pc code,.pt code{font:var(--fs-xs) var(--f-mono);word-break:break-all}
 .st{font-size:var(--fs-xs);font-weight:700}
 .st.done{color:var(--done-fg)}.st.wip{color:var(--wip-fg)}.st.failed{color:var(--issue-fg)}.st.planned,.st.skipped{color:var(--muted)}.st.extra{color:var(--chg)}
+.pc.waiting{border-color:var(--wip);background:var(--warn-bg)}.st.waiting{color:var(--wip-fg)}
+.steps{list-style:none;display:flex;gap:4px;margin:12px 0 4px;padding:0}
+.steps li{flex:1;min-width:0;height:8px;border-radius:4px;background:var(--todo);opacity:.45}
+.steps li.done{background:var(--done);opacity:1}.steps li.wip{background:var(--wip);opacity:1;outline:2px solid var(--wip);outline-offset:2px}
+.stepl{display:flex;justify-content:space-between;gap:8px;font-size:var(--fs-s);color:var(--muted)}
+.donegrp,.fdet{margin-top:12px;font-size:var(--fs-s)}.donegrp summary{cursor:pointer;color:var(--done-fg);font-weight:500}.fdet summary{cursor:pointer;color:var(--muted)}
+.donegrp ol{margin:8px 0 0;padding-left:28px;display:grid;gap:2px;color:var(--muted)}
+.later{margin-top:8px;font-size:var(--fs-s);color:var(--muted)}
+.prefix{font:var(--fs-xs) var(--f-mono);color:var(--muted);margin:8px 0 0;overflow-wrap:anywhere}
+.toc a span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-width:0}
 .pt{width:100%;border-collapse:collapse;font-size:var(--fs-s);margin-top:12px}
 .pt th,.pt td{border-bottom:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top}
 .pt th{color:var(--muted);font-weight:500}
@@ -921,57 +931,101 @@ panel.addEventListener('click', function (e) {
 
 // ---------------------------------------------------------------- 任務圖
 // 每份 plan 一張卡：階段排成欄、部件是卡片（虛線＝還在計畫、實線＝做了），計畫外的改動收成一行、點開才列檔名
-var PST = {planned: '計畫中', wip: '進行中', done: '完成', skipped: '計畫內沒做', failed: '失敗', extra: '計畫外'};
+var PST = {planned: '計畫中', wip: '進行中', done: '完成', skipped: '計畫內沒做', failed: '失敗', extra: '計畫外', waiting: '等你'};
 function nums(a) { return (a.added || a.removed) ? '+' + (a.added || 0) + ' / −' + (a.removed || 0) : '—'; }
 function partFiles(p, pl) {
   var f = pl.changes.filter(function (c) { return c.part === p.id; }).map(function (c) { return c.file; });
   return f.length ? f : p.files;
 }
+function taskIds(t) {
+  var a = String(t || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+  return a.length > 2 ? a[0] + '–' + a[a.length - 1] : a.join(', ');
+}
+function commonDir(fs) {
+  if (fs.length < 3) return '';
+  var cnt = {}, best = '';
+  fs.forEach(function (f) {
+    var p = f.split('/');
+    for (var i = 2; i < p.length; i++) { var k = p.slice(0, i).join('/') + '/'; cnt[k] = (cnt[k] || 0) + 1; }
+  });
+  Object.keys(cnt).forEach(function (k) { if (cnt[k] * 10 >= fs.length * 6 && k.length > best.length) best = k; });
+  return best;
+}
+function shortf(f, pre) { return pre && f.indexOf(pre) === 0 ? f.slice(pre.length) : f; }
+function ptitle(pl) { return (pl.task ? taskIds(pl.task) + ' ' : '') + pl.title; }
 function partCard(p, pl) {
-  var ai = p.ai || {};
+  var ai = p.ai || {}, fs = p.planned ? partFiles(p, pl) : [];
   return '<div class="pc ' + esc(p.state) + '"><span class="st ' + esc(p.state) + '">' + esc(PST[p.state] || p.state) +
     (p.planned ? ' · ' + esc(p.id) : '') + '</span><b>' + esc(p.name) + '</b>' +
-    (p.planned ? partFiles(p, pl).slice(0, 4).map(function (f) { return '<code>' + esc(f) + '</code>'; }).join('') : '') +
+    fs.slice(0, 2).map(function (f) { return '<code>' + esc(shortf(f, pl.pre)) + '</code>'; }).join('') +
+    (fs.length > 2 ? '<span class="fdesc">另 ' + (fs.length - 2) + ' 個檔</span>' : '') +
     (ai.summary ? '<span>' + esc(ai.summary) + (ai.source === 'phase' ? '（階段摘要）' : '') + '</span>' : '') +
     '<span class="fdesc">' + esc(nums(ai)) + (ai.tests ? ' · 測試 ' + esc(ai.tests) : '') + '</span></div>';
 }
+function phaseStat(pl, n) {
+  var a = 0, r = 0, t = '';
+  pl.parts.forEach(function (p) {
+    if (p.phase !== n) return;
+    var x = p.ai || {};
+    a += x.added || 0; r += x.removed || 0; if (x.tests) t = x.tests;
+  });
+  return '+' + a + ' / −' + r + (t ? ' · 測試 ' + t : '');
+}
 function planCard(pl, i) {
-  var cols = (pl.phases || []).map(function (ph) {
+  var phs = pl.phases || [], key = 'plan|' + pl.source + '|' + pl.file;
+  var isOpen = function (ph) { return ph.state !== 'done' && ph.state !== 'skipped'; };
+  var open = phs.filter(isOpen), done = phs.filter(function (ph) { return ph.state === 'done'; });
+  var many = phs.length > 1, focus = many ? open.slice(0, 2) : phs, later = many ? open.slice(2) : [];
+  var seen = {}, all = pl.changes.map(function (c) { return c.file; }).concat(pl.parts.reduce(function (a, p) { return a.concat(p.planned ? partFiles(p, pl) : []); }, []));
+  all = all.filter(function (f) { return seen[f] ? false : (seen[f] = true); });
+  pl = Object.assign({}, pl, {pre: commonDir(all)});
+  var cols = focus.map(function (ph) {
     return {t: '階段 ' + ph.n + ' ' + ph.name + ' · ' + (PST[ph.state] || ph.state),
       ps: pl.parts.filter(function (p) { return p.planned && p.phase === ph.n; })};
   });
-  var ns = (pl.phases || []).map(function (ph) { return ph.n; });
+  var ns = phs.map(function (ph) { return ph.n; });
   var lone = pl.parts.filter(function (p) { return p.planned && ns.indexOf(p.phase) < 0; });
   var ex = pl.parts.filter(function (p) { return !p.planned; });
   if (lone.length) cols.push({t: '沒標階段', ps: lone});
   var xn = pl.extraCount || ex.length, v = pl.verify;
   var from = {completed: '已完成：只顯示階段狀態', none: '沒有執行帳本、也不是本次任務：工作區改動見地圖的「本次改動」', guessed: '推測的本次任務（沒有 .current-task）：工作區改動不分給它，見地圖的「本次改動」'}[pl.changesFrom];
-  return '<section id="p' + i + '" class="plan' + (pl.current ? ' cur' : '') + '"><h2>' + (pl.current ? '★ ' : '') + esc((pl.task ? pl.task + ' ' : '') + pl.title) +
+  var planned = pl.changes.filter(function (c) { return c.planned; }), nfile = planned.length + (pl.changesRollup || []).length;
+  return '<section id="p' + i + '" class="plan' + (pl.current ? ' cur' : '') + '"><h2>' + (pl.current ? '★ ' : '') + esc(ptitle(pl)) +
     '<span class="tag">' + esc(pl.status || '—') + '</span>' + (pl.source !== 'main' ? '<span class="tag">' + esc(pl.source) + '</span>' : '') + '</h2>' +
     '<div class="meta"><code>' + esc(pl.file) + '</code>' + (pl.mode ? ' · ' + esc(pl.mode) : '') +
     ' · ' + (from ? esc(from) : pl.base ? '比較基準 <code>' + esc(pl.base) + '</code>' : '找不到比較基準') + '</div>' +
     (v ? '<div class="vr ' + esc(v.result) + '">驗證 ' + esc(v.result) + (v.at ? '（' + esc(v.at) + '）' : '') + (v.reason ? ' — ' + esc(v.reason) : '') + '</div>' : '') +
+    (many ? '<ol class="steps" aria-label="階段進度">' + phs.map(function (ph) {
+      return '<li class="' + esc(ph.state) + '" title="階段 ' + ph.n + ' ' + esc(ph.name) + ' · ' + esc(PST[ph.state] || ph.state) + '"></li>';
+    }).join('') + '</ol><div class="stepl"><span>完成 ' + done.length + '／' + phs.length + ' 個階段</span><span>' +
+      (open.length ? '現在：階段 ' + open[0].n + ' ' + esc(open[0].name) : '全部完成') + '</span></div>' : '') +
     (cols.length ? '<div class="phs">' + cols.map(function (c) {
       return '<div class="ph"><h3>' + esc(c.t) + '</h3>' + (c.ps.map(function (p) { return partCard(p, pl); }).join('') || '<div class="fdesc">沒有部件</div>') + '</div>';
-    }).join('') + '</div>' : '<div class="note">' + (pl.stub ? '資料太多，這份 plan 只留狀態（本次的 plan 不受影響）' : '這份 plan 沒有「一眼看懂」部件表，只列得出改了哪些檔') + '</div>') +
-    (xn ? '<details class="xtra"' + dk('plan|' + pl.source + '|' + pl.file + '|extra') + '><summary>計畫外 ' + xn + ' 個檔</summary>' + ex.map(function (p) { return '<code>' + esc(p.name) + '</code>'; }).join('') +
+    }).join('') + '</div>' : many ? '' : '<div class="note">' + (pl.stub ? '資料太多，這份 plan 只留狀態（本次的 plan 不受影響）' : '這份 plan 沒有「一眼看懂」部件表，只列得出改了哪些檔') + '</div>') +
+    (later.length ? '<div class="later">之後：' + later.map(function (ph) { return '階段 ' + ph.n + ' ' + esc(ph.name); }).join('、') + '</div>' : '') +
+    (many && done.length ? '<details class="donegrp"' + dk(key + '|done') + '><summary>已完成 ' + done.length + ' 個階段</summary><ol>' + done.map(function (ph) {
+      return '<li value="' + ph.n + '">' + esc(ph.name) + ' · ' + esc(phaseStat(pl, ph.n)) + '</li>';
+    }).join('') + '</ol></details>' : '') +
+    (xn ? '<details class="xtra"' + dk(key + '|extra') + '><summary>計畫外 ' + xn + ' 個檔</summary>' + ex.map(function (p) { return '<code>' + esc(p.name) + '</code>'; }).join('') +
       (xn > ex.length ? '<span class="fdesc">另 ' + (xn - ex.length) + ' 個檔沒列出</span>' : '') + '</details>' : '') +
+    '<details class="fdet"' + dk(key + '|files') + '><summary>檔案明細 ' + nfile + ' 個</summary>' +
+    (pl.pre ? '<div class="prefix">共同路徑：' + esc(pl.pre) + '</div>' : '') +
     '<table class="pt"><thead><tr><th>檔案</th><th>部件</th><th>+/−</th><th>AI 做了什麼</th></tr></thead><tbody>' +
-    (pl.changes.filter(function (c) { return c.planned; }).map(function (c) {
+    (planned.map(function (c) {
       var p = pl.parts.filter(function (x) { return x.id === c.part; })[0];
-      return '<tr><td><code>' + esc(c.file) + '</code></td><td>' + esc(p ? (p.planned ? p.id + ' ' + p.name : '計畫外') : (c.planned ? '計畫內' : '—')) +
+      return '<tr><td><code>' + esc(shortf(c.file, pl.pre)) + '</code></td><td>' + esc(p ? (p.planned ? p.id + ' ' + p.name : '計畫外') : (c.planned ? '計畫內' : '—')) +
         '</td><td>' + esc(delta(c)) + '</td><td>' + esc(p && p.ai && p.ai.summary || '—') + '</td></tr>';
     }).join('') || ((pl.changesRollup || []).length ? '' : '<tr><td colspan="4" class="fdesc">' + (xn ? '沒有計畫內的改動' : '沒有改動') + '</td></tr>')) +
     (pl.changesRollup || []).map(function (r) {
       return '<tr><td><code>' + esc(r.dir) + '</code> ' + esc(r.files) + ' 個檔</td><td>未逐一列出</td><td>' + esc(nums(r)) + '</td><td>—</td></tr>';
-    }).join('') + '</tbody></table></section>';
+    }).join('') + '</tbody></table></details></section>';
 }
 function lamp(pl) {
   var s = pl.status || '';
   return pl.verify && pl.verify.result === 'FAIL' || s.indexOf('🚫') >= 0 ? 'issue' : pl.completed ? 'done' : s.indexOf('🔄') >= 0 ? 'wip' : 'todo';
 }
 function tocItem(pl, i) {
-  return '<a href="#p' + i + '" data-p="p' + i + '"><i class="dot s-' + lamp(pl) + '"></i>' + (pl.current ? '★ ' : '') + esc((pl.task ? pl.task + ' ' : '') + pl.title) + '</a>';
+  return '<a href="#p' + i + '" data-p="p' + i + '"><i class="dot s-' + lamp(pl) + '"></i><span>' + (pl.current ? '★ ' : '') + esc(ptitle(pl)) + '</span></a>';
 }
 $('tv').addEventListener('click', function (e) {
   var a = e.target.closest('a[data-p]'), t = a && $(a.dataset.p);
