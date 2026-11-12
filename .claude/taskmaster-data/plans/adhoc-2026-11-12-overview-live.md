@@ -4,7 +4,7 @@ slug: "overview-live"
 created: "2026-11-12"
 updated: "2026-11-12"
 status: "🔄 進行中"
-current_phase: 2
+current_phase: 4
 mode: "standard"
 files:
   - ".claude/scripts/overview.sh"
@@ -134,13 +134,13 @@ flowchart LR
   - 其餘專案圖解守門（外部網址、module script、token 區外 hex 色碼）照綠
 - **注意**：資料沒改寫時頁首「資料時間」會停在上次內容變動的時間，這是對的；不要為了讓它跳而寫回 `generatedAt`。上限放在階段 1 改，是因為現行約 67KB、階段 2／5／7／8 都往 index.html 加東西，越早放寬越不會在中途被 check-counts 擋
 
-### 階段 2: 大包 plan 聚焦（任務圖） 🔄
+### 階段 2: 大包 plan 聚焦（任務圖） ✅
 - **依賴**：階段 1
-- [ ] `planCard`：每份 plan 上方一條階段進度帶（每階段一格，完成／進行中／未開始三色，滑過顯示階段名），下方一行「完成 N／M 個階段 · 現在：階段 X 名稱」 — 驗證：截圖
-- [ ] 只展開「進行中＋下一個」階段的部件；再後面的寫成一行「之後：階段 11 退款、階段 12 對帳報表…」；已完成階段收成一行 `<details>`「已完成 N 個階段」，展開列每階段 `+/−` 與測試數 — 驗證：截圖
-- [ ] 檔案明細表預設收起（`<details>「檔案明細 N 個」`）；共同路徑前綴＝≥6 成檔案共有的最長目錄，只在明細頂端寫一次，表格與部件卡用短路徑 — 驗證：截圖
-- [ ] 部件卡最多列 2 個檔＋「另 N 個檔」；目錄（`tocItem`）的長任務編號串 `21.2,21.3,…,21.10` 壓成 `21.2–21.10`，標題最多兩行（`-webkit-line-clamp:2`） — 驗證：截圖
-- [ ] `PST` 加 `waiting: '等你'` 與 `.pc.waiting` 樣式（顏色只用 `:root` token；資料在階段 8 才接） — 驗證：`bash .claude/scripts/check-counts.sh`
+- [x] `planCard`：每份 plan 上方一條階段進度帶（每階段一格，完成／進行中／未開始三色，滑過顯示階段名），下方一行「完成 N／M 個階段 · 現在：階段 X 名稱」 — 驗證：截圖
+- [x] 只展開「進行中＋下一個」階段的部件；再後面的寫成一行「之後：階段 11 退款、階段 12 對帳報表…」；已完成階段收成一行 `<details>`「已完成 N 個階段」，展開列每階段 `+/−` 與測試數 — 驗證：截圖
+- [x] 檔案明細表預設收起（`<details>「檔案明細 N 個」`）；共同路徑前綴＝≥6 成檔案共有的最長目錄，只在明細頂端寫一次，表格與部件卡用短路徑 — 驗證：截圖
+- [x] 部件卡最多列 2 個檔＋「另 N 個檔」；目錄（`tocItem`）的長任務編號串 `21.2,21.3,…,21.10` 壓成 `21.2–21.10`，標題最多兩行（`-webkit-line-clamp:2`） — 驗證：截圖
+- [x] `PST` 加 `waiting: '等你'` 與 `.pc.waiting` 樣式（顏色只用 `:root` token；資料在階段 8 才接） — 驗證：`bash .claude/scripts/check-counts.sh`
 - **預估**：2h
 - **驗收**：
   - 12 階段、1–8 完成、9 進行中的 plan → 只展開階段 9、10 的部件，下方一行「之後：階段 11 …、階段 12 …」，上方「已完成 8 個階段」收合（截圖）
@@ -153,16 +153,16 @@ flowchart LR
   - 390px 與 1440px、淺／深色四張截圖，沒有文字溢出卡片
 - **注意**：截圖用的大 plan 示範資料在 scratchpad 產（可參考預覽腳本的 `phase_defs`），不進 repo。預覽腳本踩過 class 撞名：`.bar`、`.dash`、`.mini` 已被頁面使用，新 class 先 grep 一次
 
-### 階段 3: agent 事件記錄（hook） 🔄
+### 階段 3: agent 事件記錄（hook） ✅
 - **依賴**：無
-- [ ] **先錄真實 payload**：裝臨時探針（把 stdin 存到 scratchpad）錄 SubagentStart、SubagentStop、Notification、PermissionRequest、subagent 內的 Pre/PostToolUse、AskUserQuestion 各一筆，確認：subagent 內的 PermissionRequest／Notification 有沒有 `agent_id`、SubagentStart 的 `cwd` 是不是 worktree 根、`async: true` 在目前版本是否正常（官方文件已查，見 ADR-002 第 1 節；這裡只做實測）、Notification 實際出現哪些 `notification_type`（`agent_needs_input` 不在官方清單，探針沒錄到就不列進開啟者）。結果寫進「發現與決策」，探針用完移除 — 驗證：scratchpad 有各事件的 payload 檔
-- [ ] 新增 `.claude/hooks/agent-events.sh`：一次 `jq` 把 payload 壓成一行事件（格式見下）附加到 `$MAIN_CLAUDE/logs/live-events.jsonl`；永遠無輸出、exit 0 — 驗證：`bash .claude/hooks/tests/run-tests.sh agent-events.sh`
-- [ ] 事件行（v1，欄位、來源、上限、白名單以 `.claude/context/decisions/ADR-2026-11-12-002-live-events-log-and-live-js.md` 第 2、3 節為準）：`{"v":1,"t":<epoch 秒>,"ms":<0–999>,"ev":"<事件名>","sid":"…","aid":"…","at":"<agent_type>","src":"main|worktree:<資料夾名>","tool":"…","file":"<相對該 checkout 根的路徑>","act":"<正在做，≤80 字>","need":"approve|reply|null","nt":"<notification_type，≤30 字>","text":"<≤120 字>"}`。`t`／`ms` 在腳本**第一行**讀 bash 內建 `$EPOCHREALTIME` 拆出（不開 `date`）；`src` 用 `resolve_roots` 的 `IN_WORKTREE`／`WORK_ROOT`，命名與 overview.sh 的 overlay 相同（`worktree:${WORK_ROOT##*/}`）；整行 `utf8bytelength` 超過 1000 時依序把 `text`、`act` 縮到 40 字、`file` 只留檔名
-- [ ] 主 session（沒有 `agent_id`）的工具事件**也記**，`aid` 為 `""`（ADR-002 第 1 節：主 session 自己的等批准、AskUserQuestion、寫檔要算進「需要你」與撞檔，主 session 的 need 也要有事件能關）
-- [ ] `act`／`text` 規則照 ADR-002 第 3 節：Bash／PowerShell 有 `description` → `跑 <description>`；沒有 → 跳過開頭所有 `NAME=value` 賦值，取第一個不含 `=` 的詞再取 basename，取不到寫 `跑指令`；Notification 的 `text` 為 `message`、`nt` 為 `notification_type`；UserPromptSubmit 的 `act`／`text` 都為 `""`
-- [ ] 寫完事件後，在背景觸發 `overview.sh --live`（階段 6 才有；這階段先寫好觸發段）：2 秒內只觸發一次，視窗內只留 `.live-dirty`，視窗判斷只用 bash 內建（照抄 post-write.sh 的 `.scan-at` 寫法）
-- [ ] `settings.json` 接線，全部 `async: true`（若查證不支援 → 同步，但腳本裡只准 1 次 jq）：SubagentStart、SubagentStop、Notification、PermissionRequest、UserPromptSubmit、Stop、PreToolUse `AskUserQuestion|Bash|PowerShell`、PostToolUse `Write|Edit|MultiEdit|Bash|PowerShell|AskUserQuestion` — 驗證：`jq . .claude/settings.json`
-- [ ] `session-start.sh` 加 `rotate_log …/live-events.jsonl 3000`；`hooks/README.md` 檔案樹＋功能表＋輪替段；`worktree-orchestration` 邊界表 `MAIN_CLAUDE` 欄加 `logs/live-events.jsonl` 一句 — 驗證：`bash .claude/scripts/check-counts.sh`
+- [x] **先錄真實 payload**：裝臨時探針（把 stdin 存到 scratchpad）錄 SubagentStart、SubagentStop、Notification、PermissionRequest、subagent 內的 Pre/PostToolUse、AskUserQuestion 各一筆，確認：subagent 內的 PermissionRequest／Notification 有沒有 `agent_id`、SubagentStart 的 `cwd` 是不是 worktree 根、`async: true` 在目前版本是否正常（官方文件已查，見 ADR-002 第 1 節；這裡只做實測）、Notification 實際出現哪些 `notification_type`（`agent_needs_input` 不在官方清單，探針沒錄到就不列進開啟者）。結果寫進「發現與決策」，探針用完移除 — 驗證：scratchpad 有各事件的 payload 檔
+- [x] 新增 `.claude/hooks/agent-events.sh`：一次 `jq` 把 payload 壓成一行事件（格式見下）附加到 `$MAIN_CLAUDE/logs/live-events.jsonl`；永遠無輸出、exit 0 — 驗證：`bash .claude/hooks/tests/run-tests.sh agent-events.sh`
+- [x] 事件行（v1，欄位、來源、上限、白名單以 `.claude/context/decisions/ADR-2026-11-12-002-live-events-log-and-live-js.md` 第 2、3 節為準）：`{"v":1,"t":<epoch 秒>,"ms":<0–999>,"ev":"<事件名>","sid":"…","aid":"…","at":"<agent_type>","src":"main|worktree:<資料夾名>","tool":"…","file":"<相對該 checkout 根的路徑>","act":"<正在做，≤80 字>","need":"approve|reply|null","nt":"<notification_type，≤30 字>","text":"<≤120 字>"}`。`t`／`ms` 在腳本**第一行**讀 bash 內建 `$EPOCHREALTIME` 拆出（不開 `date`）；`src` 用 `resolve_roots` 的 `IN_WORKTREE`／`WORK_ROOT`，命名與 overview.sh 的 overlay 相同（`worktree:${WORK_ROOT##*/}`）；整行 `utf8bytelength` 超過 1000 時依序把 `text`、`act` 縮到 40 字、`file` 只留檔名
+- [x] 主 session（沒有 `agent_id`）的工具事件**也記**，`aid` 為 `""`（ADR-002 第 1 節：主 session 自己的等批准、AskUserQuestion、寫檔要算進「需要你」與撞檔，主 session 的 need 也要有事件能關）
+- [x] `act`／`text` 規則照 ADR-002 第 3 節：Bash／PowerShell 有 `description` → `跑 <description>`；沒有 → 跳過開頭所有 `NAME=value` 賦值，取第一個不含 `=` 的詞再取 basename，取不到寫 `跑指令`；Notification 的 `text` 為 `message`、`nt` 為 `notification_type`；UserPromptSubmit 的 `act`／`text` 都為 `""`
+- [x] 寫完事件後，在背景觸發 `overview.sh --live`（階段 6 才有；這階段先寫好觸發段）：2 秒內只觸發一次，視窗內只留 `.live-dirty`，視窗判斷只用 bash 內建（照抄 post-write.sh 的 `.scan-at` 寫法）
+- [x] `settings.json` 接線，全部 `async: true`（若查證不支援 → 同步，但腳本裡只准 1 次 jq）：SubagentStart、SubagentStop、Notification、PermissionRequest、UserPromptSubmit、Stop、PreToolUse `AskUserQuestion|Bash|PowerShell`、PostToolUse `Write|Edit|MultiEdit|Bash|PowerShell|AskUserQuestion` — 驗證：`jq . .claude/settings.json`
+- [x] `session-start.sh` 加 `rotate_log …/live-events.jsonl 3000`；`hooks/README.md` 檔案樹＋功能表＋輪替段；`worktree-orchestration` 邊界表 `MAIN_CLAUDE` 欄加 `logs/live-events.jsonl` 一句 — 驗證：`bash .claude/scripts/check-counts.sh`
 - **預估**：2.5h
 - **驗收**：
   - SubagentStart payload（實測形狀）→ live-events.jsonl 多一行，`v` 為 1、`ev` 為 `SubagentStart`、`aid`／`at` 與 payload 相同、`src` 為 `main`、`t` 與 `ms` 都是整數、`ms` 在 0–999
@@ -352,3 +352,8 @@ flowchart LR
 - 2026-11-12 階段 1 實測：沙箱連跑三次，data.js 每次都變的只有 `generatedAt` 與快取命中後的 `scan.cached`（沙箱 `scan.ms` 恆為 0，真實專案會變，照規格一併排除），沒有其他易變欄位。未測 worktree 並行與大 repo，若之後頁面仍無故重畫先查這裡
 - 2026-11-12 階段 1：重畫保留縮放、選取、內部圖、scrollTop 原本就成立，實際只補了 `<details>` 展開狀態（key：`plan|<source>|<file>|extra`、`loose|<模組>|<label>`）；頁面 68345 bytes
 - 2026-11-12 階段 1 審查 MEDIUM（未修）：`run-tests.sh` 找不到 chrome 時那 6 條「重畫保留狀態」印 ok 計入通過，沒 chrome 的機器上等於沒跑卻是綠的。之後動到同一節時改成獨立的「略過」計數
+- 2026-11-12 階段 2：聚焦改成「先取第一個 wip（沒有就第一個未完成）＋它之後的下一個未完成」；任務編號只在同主編號且連續 ≥3 個時壓成區間。wip 不是第一個未完成時，「之後」會列出前面還沒開始的階段（字面略不精確，未處理）；聚焦只有 dom dump 手動驗，沒進自動測試。頁面 72709 bytes
+- 2026-11-12 階段 3 探針（`claude -p --settings` headless 實測）：錄到 UserPromptSubmit、SubagentStart/Stop、Stop、PreToolUse（Bash／Write）、PostToolUse（Bash）、PermissionRequest（Write）。subagent 內的 Pre/PostToolUse 與 PermissionRequest 都帶 `agent_id`、`agent_type`（ADR-002 第 5 節退路不需要）；主 session 事件沒有這兩欄。`async: true` 正常。**未錄到**：Notification、AskUserQuestion（headless 不出現），`notification_type` 只依官方清單、未實測；SubagentStart 的 `cwd` 在 worktree 的情形沒有真實 payload，只用測試沙箱模擬
+- 2026-11-12 階段 3 與 ADR-002 的差異（審查判定可接受）：`$EPOCHREALTIME` 需 bash 5，退路 `date +%s%3N`，再退整秒 `ms=0`——bash 4／macOS 上同秒事件排序只能靠行序，**階段 6 遇相同 `(t, ms)` 要以檔案行序為準**；`resolve_roots` 另開一次 jq（實際 2 次）；超過 1000 bytes 多一步縮短，`ev` 上限 40、`src` 上限 60；Bash 第一個詞不符 `^[A-Za-z0-9_.+-]+$` 記「跑指令」
+- 2026-11-12 階段 3 介面（給階段 6）：`.live-at`／`.live-dirty` 在 `$MAIN_CLAUDE/taskmaster-data/overview/`；觸發形狀 `overview.sh --live "$WORK_ROOT"`；過渡守衛 `grep -q -- '--live' "$OV_SH"`，overview.sh 支援 `--live` 後自動放行，不用移除
+- 2026-11-12 階段 2、3 合併驗證：階段 2 合併後快檢 11 節 553/0；階段 3 合併後（settings.json → 整套）1392/0、check-counts 720 一致。`.claude/sessions/` 未追蹤使 `clean=no`，`.merge-round-open` 留著，由最後的 `/verify` 涵蓋

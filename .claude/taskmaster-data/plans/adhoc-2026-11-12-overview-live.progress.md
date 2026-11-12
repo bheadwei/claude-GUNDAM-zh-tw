@@ -53,3 +53,10 @@
 - 2026-11-12 15:13 Ruling: M1 加過渡守衛（overview.sh 沒有 --live 就不觸發）、M2 補 async 接線斷言、順手改 WORKFLOW.md hook 數 9→10，交回同一 implementer — 階段 3 先於階段 6 合併，分支期間若有人從本分支 copy-template 到真實專案會每 2 秒跑一次錯誤參數的 overview.sh — 若錯，只多一行守衛，階段 6 時移除
 - 2026-11-12 15:14 修復 R1 完成｜commit=a7e0b26｜--live 過渡守衛（只在要觸發時 grep）、async 接線斷言 ≥8 條、WORKFLOW.md hook 數 9→10｜agent-events.sh 95/0、check-counts 720 一致
 - 2026-11-12 15:14 審查通過（規格 ✅ 品質 ✅，R1 發現皆已修，以 diff 核對）｜範圍=9858cea..a7e0b26
+
+## 合併（階段 2、3）
+- 2026-11-12 15:21 合併階段 2（27ef98c）→ 快檢 --changed ORIG_HEAD 11 節 553/0、check-counts 一致
+- 2026-11-12 15:21 合併階段 3（e26a06e）→ 本輪最後一個；settings.json → 整套 1392/0、check-counts 720 一致
+- 2026-11-12 15:21 Ruling: .last-verify 照實寫 clean=no（.claude/sessions/ 未追蹤，使用者尚未決定是否 commit）— 不替使用者處理 sessions/ — 代價是 .merge-round-open 留到最後 /verify 再清
+- 2026-11-12 15:21 階段 2 完成 → plan 標 ✅｜摘要=大包 plan 只聚焦進行中與下一階段｜測試=400/400
+- 2026-11-12 15:21 階段 3 完成 → plan 標 ✅，current_phase=4｜摘要=新增 agent 事件記錄 hook（async）｜測試=95/95
