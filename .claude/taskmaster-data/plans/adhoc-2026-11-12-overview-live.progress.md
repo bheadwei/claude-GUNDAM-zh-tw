@@ -51,3 +51,5 @@
 - 2026-11-12 15:10 觀察：.live-at／.live-dirty 在 MAIN_CLAUDE/taskmaster-data/overview/；觸發形狀 overview.sh --live "$WORK_ROOT"，階段 6 要照這個介面
 - 2026-11-12 15:13 審查 R1：PASS（0 CRITICAL／0 HIGH／2 MEDIUM／3 LOW，報告 context/quality/code-quality-specialist-2026-11-12-1530.md）
 - 2026-11-12 15:13 Ruling: M1 加過渡守衛（overview.sh 沒有 --live 就不觸發）、M2 補 async 接線斷言、順手改 WORKFLOW.md hook 數 9→10，交回同一 implementer — 階段 3 先於階段 6 合併，分支期間若有人從本分支 copy-template 到真實專案會每 2 秒跑一次錯誤參數的 overview.sh — 若錯，只多一行守衛，階段 6 時移除
+- 2026-11-12 15:14 修復 R1 完成｜commit=a7e0b26｜--live 過渡守衛（只在要觸發時 grep）、async 接線斷言 ≥8 條、WORKFLOW.md hook 數 9→10｜agent-events.sh 95/0、check-counts 720 一致
+- 2026-11-12 15:14 審查通過（規格 ✅ 品質 ✅，R1 發現皆已修，以 diff 核對）｜範圍=9858cea..a7e0b26
