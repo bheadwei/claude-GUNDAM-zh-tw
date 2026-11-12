@@ -3,7 +3,7 @@ wbs_task: "none"
 slug: "overview-live"
 created: "2026-11-12"
 updated: "2026-11-12"
-status: "⏳ 未開始"
+status: "🔄 進行中"
 current_phase: 1
 mode: "standard"
 files:
