@@ -115,3 +115,13 @@
 - 2026-11-13 09:19 修復 R1 完成｜commit=d26ea93｜新節 48/0、check-counts 720 一致｜92187 bytes
 - 2026-11-13 09:19 審查通過（規格 ✅ 品質 ✅；R1 只修 MEDIUM 與裁決，依 reviewer-prompt 不加審）｜範圍=47f210f..d26ea93
 - 2026-11-13 09:19 階段完成 → plan 標 ✅，current_phase=8｜摘要=現況分頁：需要你、在跑的線、動態、撞檔即時更新｜測試=48/48
+
+## 階段 8: 部件卡「誰在做／等你」與標籤連動
+- 2026-11-13 09:19 派工 ui-builder（opus；部件卡與標籤連動屬前端頁面）｜BASE=efe5396
+- 2026-11-13 09:21 回報 BLOCKED｜live.js 的 lanes 沒有寫過哪些檔／碰到哪些部件，頁面無法把 lane 對到部件卡
+- 2026-11-13 09:21 Ruling: 擴大本階段範圍到 overview.sh（已在 plan files:），lanes 加 `parts: [部件 id]`（該 lane 所屬組 plan 中 planned!=false 的部件、以寫過的檔 glob 比對），檔頭「即時聚合」同步 — plan 漏列這個資料依賴，放在 jq 算比頁面再寫一份 glob 比對單一來源 — 若判錯只多一個欄位，live.js 略增｜續派同一 ui-builder，overview.sh 與頁面分兩個 commit
+- 2026-11-13 09:51 回報 DONE_WITH_CONCERNS｜commit=6b85544, fc2fb02｜即時聚合 95/95（jq 1.8.1）、現況分頁 54/54、目前任務分組 43/43、專案地圖 187/187、check-counts 720｜94144 bytes｜疑慮：jq 1.6 下「完整重產結束也寫 live.js」3 條失敗（efe5396 即有）；390 任務圖窄（階段 2 既有）
+- 2026-11-13 09:51 派工審查 code-quality-specialist（opus）｜範圍=efe5396..fc2fb02
+- 2026-11-13 11:20 審查通過（規格 ✅ 品質 ✅，無 CRITICAL/HIGH；MEDIUM 2：parts 比對 40×60×30 要 1.21 秒且效能測試沒涵蓋、頁面 aid 為空改用 sid 的路徑沒測；LOW 2：負分鐘、按鍵後焦點遺失）｜範圍=efe5396..fc2fb02
+- 2026-11-13 11:20 Ruling: jq 1.6 的 3 條失敗不在本 plan 修 — 原因是 overview.sh:1380/1392 的 `{module}` 簡寫在 jq 1.6 是保留字、11-04 起就有，且 1.6 低於 README 寫的最低 1.7.1 — 若有使用者實際用 1.6，完整重產不寫 data.js；收尾時交使用者決定修兩行或記 KNOWN-GAPS
+- 2026-11-13 11:20 階段完成 → plan 標 ✅，status=完成｜摘要=部件卡顯示誰在做／等你，標籤點了捲到該組｜測試=54/54

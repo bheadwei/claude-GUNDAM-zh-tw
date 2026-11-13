@@ -3,7 +3,7 @@ wbs_task: "none"
 slug: "overview-live"
 created: "2026-11-12"
 updated: "2026-11-13"
-status: "🔄 進行中"
+status: "✅ 完成"
 current_phase: 8
 mode: "standard"
 files:
@@ -307,7 +307,7 @@ flowchart LR
   - 390／1440 × 淺／深四張截圖
 - **注意**：不拆檔，所以 `copy_page`、`session-start.sh`、`check-counts.sh` 本階段都不動。估計做完約 84–86KB，離 128KB 還有約 40KB；萬一超過 128KB 先回報，不自行瘦身或再調上限
 
-### 階段 8: 部件卡「誰在做／等你」與標籤連動 🔄
+### 階段 8: 部件卡「誰在做／等你」與標籤連動 ✅
 - **依賴**：階段 2, 7
 - [ ] lane 寫過的檔落在某部件的檔案裡 → 該部件卡顯示「<誰> · <經過分鐘> 分」（`.who`）；該 lane 有未處理 need → 部件狀態改「等你」（`.pc.waiting`） — 驗證：截圖
 - [ ] live.js 更新時只 patch 部件卡（`data-part` 對應），不重建任務圖
@@ -365,3 +365,5 @@ flowchart LR
 - 2026-11-12 階段 6 審查後：**PostToolUse 改接全部工具**（matcher `"*"`，官方 hooks reference「`"*"`, `""`, or omitted | Match all」，含 MCP 工具），白名單外的工具只記工具名、`act` 為「用 <tool>」，不讀 tool_input——否則批准 WebFetch／MCP 後 need 永遠不關。代價：每次工具呼叫多一支 async hook；事件量變多，3000 行涵蓋的時間變短。`.live-at` 格式改為「觸發時間 視窗秒數」，`--live` 每輪後持鎖等到視窗結束再看 `.live-dirty`（最多 3 輪、單次等待 ≤10 秒）。殘留極小競態：視窗最後一刻或放鎖前幾毫秒寫的 dirty 要等下一次觸發
 - 2026-11-12 階段 7：頁面 91702 bytes（plan 估 84–86KB；低於 112KB 預警與 128KB 上限）。沒有 hash 時預設開現況分頁，原「重畫保留狀態」測試改開 `#map`。現況分頁藏 `#lede` 與正常狀態的 `#status`；頁首加「即時 · 最後變動 HH:MM」；動態最多 12 筆；目前任務組沒有線時顯示「沒有在跑的線」。重啟伺服器會換 token（ADR-003），所以「同 port 同 token 恢復」只能用替身伺服器驗；實際情況是舊網址回 404——裁決見帳本。Esc 在現況分頁對隱藏畫布 fitAll（任務圖分頁原本就有），未修
 - 2026-11-12 階段 7 修復後：連上過再拿到 .serve-id 404 →「網址已失效，重跑 /task-status」並停輪詢與 tick；伺服器結束時 tick 停。頁面 92187 bytes
+- 2026-11-13 階段 8：plan 漏列資料依賴——live.js 的 lanes 沒有部件資訊。裁決在 overview.sh 的 lanes 加 `parts`（jq 端用 glob2re 比對該 lane 寫過的檔），檔頭「即時聚合」為欄位唯一來源
+- 2026-11-13 階段 8 審查：jq 1.6 跑完整重產會因 `{module}` 簡寫（overview.sh:1380/1392，11-04 起就有）編譯失敗、不寫 data.js／live.js；`--live` 不受影響。1.6 低於支援的 1.7.1，本 plan 不修。ADR-2026-11-05-001 第 60 行「jq 1.6 相容」與 README 矛盾，待決定。技術債：parts 比對在 40 線×60 部件時 1.21 秒、頁面 aid 為空的對應路徑沒測、負分鐘、鍵盤按標籤後焦點遺失
