@@ -1377,7 +1377,7 @@ def parse_ledger:
                     added: ([$mine[].added // 0] | add // 0), removed: ([$mine[].removed // 0] | add // 0)}}]) as $parts
     | ($ex[:30] | map({id: .xid, name: .file, phase: null, files: [.file], acceptance: [], state: "extra", planned: false,
                        ai: {summary: null, tests: null, source: null, added: .added, removed: .removed}})) as $xparts
-    | ([$ch[] | select(.module != null) | {module, file}]
+    | ([$ch[] | select(.module != null) | {module: .module, file}]
        + [$pp.files[] | {module: globmod, file: .} | select(.module != null)]) as $touch
     | {file: "plans/\($rec.name)",
        task: (($pp.fm.wbs_task // "") | if . == "" or . == "none" then null else . end),
@@ -1389,7 +1389,7 @@ def parse_ledger:
        hasParts: ($pp.partsTable != null),
        parts: ($parts + $xparts), extraMore: ([($ex | length) - 30, 0] | max), extraCount: ($ex | length),
        verify: $verify,
-       changes: [$ch[] | {file, added, removed, new, part, planned, module}],
+       changes: [$ch[] | {file, added, removed, new, part, planned, module: .module}],
        changesRollup: ($cf.list[$maxChanges:] | rollup),
        modules: ($touch | map(.module) | unique),
        # 任務推斷的兩個來源（提案 3.3）：files: 對到的模組；帳本 BASE 之後的 diff 對到的模組。
