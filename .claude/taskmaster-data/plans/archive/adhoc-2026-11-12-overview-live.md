@@ -3,6 +3,7 @@ wbs_task: "none"
 slug: "overview-live"
 created: "2026-11-12"
 updated: "2026-11-13"
+archived: "2026-11-13"
 status: "✅ 完成"
 current_phase: 8
 mode: "standard"
@@ -309,9 +310,9 @@ flowchart LR
 
 ### 階段 8: 部件卡「誰在做／等你」與標籤連動 ✅
 - **依賴**：階段 2, 7
-- [ ] lane 寫過的檔落在某部件的檔案裡 → 該部件卡顯示「<誰> · <經過分鐘> 分」（`.who`）；該 lane 有未處理 need → 部件狀態改「等你」（`.pc.waiting`） — 驗證：截圖
-- [ ] live.js 更新時只 patch 部件卡（`data-part` 對應），不重建任務圖
-- [ ] 標題列的目前任務標籤點了 → 切到現況分頁並捲到該組
+- [x] lane 寫過的檔落在某部件的檔案裡 → 該部件卡顯示「<誰> · <經過分鐘> 分」（`.who`）；該 lane 有未處理 need → 部件狀態改「等你」（`.pc.waiting`） — 驗證：截圖
+- [x] live.js 更新時只 patch 部件卡（`data-part` 對應），不重建任務圖
+- [x] 標題列的目前任務標籤點了 → 切到現況分頁並捲到該組
 - **預估**：1.5h
 - **驗收**：
   - implementer a1 寫了部件 p9a 的檔、已跑 12 分鐘 → p9a 卡顯示「implementer · 12 分」（截圖）
