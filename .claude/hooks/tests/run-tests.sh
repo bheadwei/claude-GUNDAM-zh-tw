@@ -5498,6 +5498,18 @@ expect_eq "lastAt 為該 lane 最後一筆事件的 t" "$((LV_NOW - 100))" "$(lv
 lv_data "[$(printf '%s' "$LV_G12" | jq -c '.activePhases = [3]')]" '[]' "[$LV_P12]"; lv_run
 expect_eq "所屬組的進行中階段沒有部件檔 → files 為 null" null "$(lvq '.lanes[0].files')"
 
+# --- parts（部件卡的「誰在做／等你」）
+LV_P9='{"file":"plans/1.2-x.md","files":[],"parts":[{"id":"p1","phase":1,"files":["src/old.ts"],"planned":true},{"id":"p9a","phase":9,"files":["src/pay/**"],"planned":true},{"id":"p9b","phase":9,"files":["src/ship.ts"],"planned":true},{"id":"x9","phase":null,"files":["src/pay/**"],"planned":false}]}'
+lv_reset; lv_data "[$(printf '%s' "$LV_G12" | jq -c '.activePhases = [9]')]" '[]' "[$LV_P9]"
+lv_ev -720 SubagentStart s1 a1 implementer main; lv_w -300 s1 a1 main implementer src/pay/card.ts; lv_run
+expect_eq "a1 寫了部件 p9a 的檔 → lanes[0].parts 為 [\"p9a\"]（同階段沒被寫的 p9b、計畫外的 x9 不出現）" '["p9a"]' "$(lvq '.lanes[0].parts | tojson')"
+lv_w -200 s1 a1 main implementer src/old.ts; lv_run
+expect_eq "寫到別的階段的部件檔 → 也列（不限階段，照部件順序）" '["p1","p9a"]' "$(lvq '.lanes[0].parts | tojson')"
+lv_ev -100 PostToolUse s9 "" "" main '{"tool":"Edit","file":"src/ship.ts","act":"編輯 ship.ts"}'; lv_run
+expect_eq "主 session 的 lane 也帶 parts" '["p9b"]' "$(lvq '.lanes[] | select(.id == "s9") | .parts | tojson')"
+lv_reset; lv_ev -600 SubagentStart s4 a4 implementer worktree:zzz; lv_w -300 s4 a4 worktree:zzz implementer src/a.ts; lv_run
+expect_eq "group 為 null → parts 為 []" 'null []' "$(lvq '.lanes[0] | "\(.group) \(.parts | tojson)"')"
+
 # --- group 歸屬
 lv_reset
 lv_ev -600 SubagentStart s1 a1 implementer main

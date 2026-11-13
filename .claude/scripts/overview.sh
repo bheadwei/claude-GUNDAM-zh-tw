@@ -67,12 +67,14 @@
 #             desc: agent-activity 的 description（session 為 null）, where: 最後一筆事件的 src,
 #             readonly: agent 類型在 AGENT_INFLIGHT_READONLY 裡, group, since: agent 為 SubagentStart 的 t、
 #             session 為最後一個 Stop 之後第一筆的 t, lastAt: 最後一筆的 t, doing: 最後一筆有 act 的事件的 act（沒有 null）,
-#             files: {done, total}｜null}
+#             files: {done, total}｜null, parts: [部件 id…]}
 #            group（curGroups 的 key）：① src 在某組的 sources → 該組；② 否則同 sid 的事件所在 src 找組
 #            （先看 aid 為空的 session 事件，再看其他 agent；isolation: worktree 派出的 subagent 走這條）；③ null
 #            session 的 doing／files 只看最後一個 Stop 之後的事件（與 since 一致）
 #            files：所屬組進行中階段（activePhases）的部件檔（不含 extra）＝total；該線 PostToolUse Write／Edit／MultiEdit 寫過的檔
 #            以 glob 命中的部件檔數＝done。沒有組、或那些階段沒有部件檔 → null
+#            parts：所屬組 plan 的部件（planned 不為 false，不限階段）裡，有任一檔案 glob 命中該線寫過的檔的部件 id
+#            （寫過的檔同 files 的 done；session 一樣只看最後一個 Stop 之後）。沒有組 → []。給頁面的部件卡標「誰在做／等你」
 #   needs    同 sid＋aid 的事件依序走一遍。開啟者＝事件行的 need 為 approve／reply（PermissionRequest、
 #            Notification permission_prompt／idle_prompt／elicitation_dialog、PreToolUse AskUserQuestion）。
 #            開啟者之後出現任何非開啟者事件（含其他 nt 的 Notification、主 session 的 UserPromptSubmit、
@@ -354,6 +356,12 @@ def nwho: if .aid != "" then awho elif .src == "main" then "主 session" else "w
       | if ($pf | length) == 0 then null
         else ([$evs[] | select(iswrite) | .file] | unique) as $w
           | {done: ([$pf[] | glob2re as $r | select(any($w[]; test($r)))] | length), total: ($pf | length)} end end;
+  def lparts($gk; $evs):
+    if $gk == null then []
+    else ([$groups[] | select(.key == $gk)] | first) as $g
+      | ([$plans[] | select(.file == $g.plan)] | first) as $pl
+      | ([$evs[] | select(iswrite) | .file] | unique) as $w
+      | [($pl.parts // [])[] | select(.planned != false) | select(any(.files[]?; glob2re as $r | any($w[]; test($r)))) | .id] end;
   def doing($evs): [$evs[] | select(.act != "") | .act] | last;
 
   ($E | map(select(.aid != "")) | group_by(.aid) | map({key: .[0].aid, value: .}) | tomap) as $byAid
@@ -362,7 +370,7 @@ def nwho: if .aid != "" then awho elif .src == "main" then "主 session" else "w
    | map(. as $s | $byAid[$s.aid] as $evs | ($evs | last) as $z | grpof($z.src; $s.sid) as $g
          | {id: $s.aid, who: ($s | awho), desc: ($desc[$s.aid] // null), where: $z.src,
             readonly: ($s.at as $a | any($ros[]; . == $a)), group: $g, since: $s.t, lastAt: $z.t,
-            doing: doing($evs), files: lfiles($g; $evs)})) as $agentLanes
+            doing: doing($evs), files: lfiles($g; $evs), parts: lparts($g; $evs)})) as $agentLanes
 | ([$E[] | select(.aid == "")] | group_by(.sid)
    | map(select((last | .t >= ($now - 900) and .ev != "Stop")))
    | map(. as $evs | ($evs | last) as $z
@@ -370,7 +378,7 @@ def nwho: if .aid != "" then awho elif .src == "main" then "主 session" else "w
          | $evs[(if $ls == null then 0 else $ls + 1 end):] as $cur
          | grpof($z.src; $z.sid) as $g
          | {id: $z.sid, who: ($z | nwho), desc: null, where: $z.src, readonly: false, group: $g,
-            since: $cur[0].t, lastAt: $z.t, doing: doing($cur), files: lfiles($g; $cur)})) as $sessLanes
+            since: $cur[0].t, lastAt: $z.t, doing: doing($cur), files: lfiles($g; $cur), parts: lparts($g; $cur)})) as $sessLanes
 
 # 需要你：同 sid＋aid 依 (t, ms, 行序) 走一遍，開啟者之後出現任何非開啟者事件就關
 | def ndone($e): .feed += [{t: $e.t, ms: $e.ms, i: $e.i, kind: "need_done", id: (.open | "\(.sid)|\(.aid)|\(.since)"),
