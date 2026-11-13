@@ -6027,12 +6027,23 @@ if [ -n "$NW_CHROME" ] && [ -x "$NW_CHROME" ]; then
     expect_eq "live.js 多一筆 lane → 新卡淡入，原有卡仍是同一個 DOM 物件" "true true" "$(nq '"\(.B.enter) \(.B.same)"')"
     expect_eq "按「暫停動畫」→ 文字變「繼續動畫」、存進 localStorage、動畫停住" "繼續動畫 1 paused" "$(nq '"\(.still.text) \(.still.ls) \(.still.play)"')"
     NW_RES=$(nw_run --force-prefers-reduced-motion)
-    expect_eq "prefers-reduced-motion: reduce → 所有元素（含 ::after）的 animation-name 為 none" 0 "$(nq '.reduceBad')"
+    expect_eq "prefers-reduced-motion: reduce、畫面上有 4 條 lane、3 條滑動進度條 → 所有元素（含 ::after）的 animation-name 為 none" "4 3 0" \
+        "$(nq '"\(.reduceSeen.lanes) \(.reduceSeen.ind) \(.reduceBad)"')"
     expect_eq "重開頁面仍是暫停（按鈕寫「繼續動畫」）" "繼續動畫" "$(nq '.hashless.still')"
     if sv_pick_py >/dev/null; then
         sv_reset; rm -f "$SV_OV/index.html"; nw_data "$SV_OV"; nw_page "$SV_OV/index.html"
         SV_X=(BROWSER=true); NW_URL=$(sv_last "$(sv_run)"); SV_X=()
         nw_pid=$(sed -n 's/.*"pid": *\([0-9]*\).*/\1/p' "$SV_OV/.serve" 2>/dev/null)
+        NW_MAIN=$NW_URL
+        NW_URL="${NW_MAIN%index.html}index.html?mock"; NW_RES=$(NW_BUDGET=36000 nw_run)
+        expect_eq "連不上伺服器 → 出現提示、tick 停住（之後過了卡住門檻，「需要你」仍 0、經過時間不再跳）" \
+            "0 伺服器已結束（閒置 30 分鐘），重跑 /task-status 0 true" "$(nq '"\(.m0.need) \(.m1.gone) \(.m2.need) \(.m1.clock == .m2.clock)"')"
+        expect_eq "提示中回到可見、.serve-id 回 200 → 收掉提示、live.js 恢復輪詢" "null true" "$(nq '"\(.m3.gone) \(.m3.nl > .m2.nl)"')"
+        expect_eq "連上過之後 .serve-id 回 404 →「網址已失效，重跑 /task-status」、停止輪詢，回到可見也不再重試" \
+            "網址已失效，重跑 /task-status true" "$(nq '"\(.m5.gone) \(.m5.nl == .m4.nl)"')"
+        NW_URL="${NW_MAIN%index.html}index.html?never"; NW_RES=$(nw_run)
+        expect_eq "從沒連上過、第一次就拿到 .serve-id 404 → 不顯示提示、照常輪詢" "null null true" "$(nq '"\(.n0.gone) \(.n1.gone) \(.n1.nl > .n0.nl)"')"
+        NW_URL=$NW_MAIN
         NW_RES=$(NW_BUDGET=9000 nw_run)
         expect_eq "伺服器活著、還沒有 live.js → 不顯示伺服器結束提示，顯示「還沒有即時資料」" "null 還沒有即時資料：agent 開始工作後這裡會出現" \
             "$(nq '"\(.alive.gone) \(.alive.nnone)"')"

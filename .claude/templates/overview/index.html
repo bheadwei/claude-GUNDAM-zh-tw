@@ -1293,12 +1293,12 @@ function renderNow() {
   kpi('run', L ? L.lanes.length : 0, String(L ? L.lanes.length : 0));
   kpi('fin', dt.agents + dt.tasks, '<span>' + dt.agents + '<span class="ku"> 個 agent · </span></span><span>' + dt.tasks + '<span class="ku"> 個任務</span></span>');
   kpi('clash', cs.length, String(cs.length));
-  $('live').hidden = !L || GONE;
+  $('live').hidden = !L || GONE || DEAD;
   if (L) $('livetx').textContent = '即時 · 最後變動 ' + String(L.at || '').slice(11, 16);
   tick();
 }
 function tick() {
-  if (!$('needs')) return;
+  if (!$('needs') || GONE || DEAD) return;
   var ns = needItems();
   $('needbox').hidden = !ns.length;
   sync($('needs'), ns, function () { return mk('li', '', '<span class="nk"></span><span class="ntx"></span><span class="ago"></span>'); }, needSet);
@@ -1380,7 +1380,7 @@ function okText(d) { return '資料時間 ' + when(d) + (d.scan && d.scan.files 
 // 輪詢：每次插一個新的 classic script（帶 ?t= 避開快取）。載入前把 window.OVERVIEW 設成 null，
 // 載入後仍是 null ＝ 檔案寫到一半（語法錯誤）或暫時不存在 → 保留上一份、顯示「更新中」。
 // 這招成立的前提是 data.js 只有一句賦值（overview.sh 保證）。live.js 同理（每 2 秒）。
-var timer = null, ltimer = null, inflight = false, linflight = false, last = null, GONE = false;
+var timer = null, ltimer = null, inflight = false, linflight = false, last = null, GONE = false, DEAD = false, SEEN = false;
 function check() {
   if (inflight) return;
   inflight = true;
@@ -1421,14 +1421,27 @@ function checkLive() {
   s.onload = done; s.onerror = function () { done(); serverCheck(); };
   document.head.appendChild(s);
 }
-// 伺服器閒置結束（ADR-2026-11-12-003）：載入失敗時問 .serve-id，連不上才算結束；200／404 是伺服器還在（只是檔案還沒產生）
+// 伺服器閒置結束（ADR-2026-11-12-003）：載入失敗時問 .serve-id，連不上才算結束；200／404 是伺服器還在（只是檔案還沒產生）。
+// 例外：連上過之後才拿到 404 ＝ 伺服器重起換了 token，這個網址永遠拿不到新資料
 function serverCheck() {
-  if (!/^http/.test(location.protocol)) return;
-  fetch('.serve-id', {cache: 'no-store'}).then(function () { setGone(false); }, function () { setGone(true); });
+  if (DEAD || !/^http/.test(location.protocol)) return;
+  fetch('.serve-id', {cache: 'no-store'}).then(function (r) {
+    if (r.status === 404 && SEEN) return expire();
+    if (r.ok) SEEN = true;
+    setGone(false);
+  }, function () { setGone(true); });
+}
+function expire() {
+  DEAD = true;
+  stop();
+  $('gone').textContent = '網址已失效，重跑 /task-status';
+  $('gone').hidden = false;
+  $('live').hidden = true;
 }
 function setGone(on) {
-  if (GONE === on) return;
+  if (DEAD || GONE === on) return;
   GONE = on;
+  if (on) SEEN = true;
   $('gone').hidden = !on;
   $('live').hidden = on || !LIVE;
   if (on) stop(); else if (document.visibilityState === 'visible') { check(); checkLive(); start(); }
@@ -1437,6 +1450,7 @@ function start() { if (!timer) { timer = setInterval(check, POLL_MS); ltimer = s
 function stop() { clearInterval(timer); clearInterval(ltimer); timer = ltimer = null; }
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState !== 'visible') stop();
+  else if (DEAD) return;
   else if (GONE) serverCheck();
   else { check(); checkLive(); start(); }
 });
