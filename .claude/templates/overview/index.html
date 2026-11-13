@@ -159,7 +159,7 @@ button.chip{cursor:pointer;min-height:28px}
 .tag{font:var(--fs-xs) var(--f-mono);border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-left:8px;color:var(--muted)}
 .tag.cur{color:var(--chg);border-color:var(--chg);background:var(--chg-bg);font-weight:500}
 .curbar{display:flex;flex-wrap:wrap;align-items:flex-start;gap:4px 8px;margin-top:4px}
-.curbar .tag{margin-left:0;overflow-wrap:anywhere}
+.curbar .tag{margin-left:0;overflow-wrap:anywhere}.curbar button.tag{cursor:pointer;text-align:left}
 .curmore summary{list-style:none;cursor:pointer;display:inline-block}.curmore summary::-webkit-details-marker{display:none}
 .curlist{display:grid;gap:4px;margin-top:4px;justify-items:start}
 .mtag rect{fill:var(--chg-bg);stroke:var(--chg)}.mtag text{fill:var(--chg);font:500 var(--fs-xs) var(--f-mono)}
@@ -175,7 +175,8 @@ button.chip{cursor:pointer;min-height:28px}
 .pc code,.pt code{font:var(--fs-xs) var(--f-mono);word-break:break-all}
 .st{font-size:var(--fs-xs);font-weight:700}
 .st.done{color:var(--done-fg)}.st.wip{color:var(--wip-fg)}.st.failed{color:var(--issue-fg)}.st.planned,.st.skipped{color:var(--muted)}.st.extra{color:var(--chg)}
-.pc.waiting{border-color:var(--wip);background:var(--warn-bg)}.st.waiting{color:var(--wip-fg)}
+.pc.waiting{border-color:var(--wip);background:var(--warn-bg);box-shadow:0 0 0 1px var(--wip)}.st.waiting{color:var(--wip-fg)}
+.pc .who{font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .steps{list-style:none;display:flex;gap:4px;margin:12px 0 4px;padding:0}
 .steps li{flex:1;min-width:0;height:8px;border-radius:4px;background:var(--todo);opacity:.45}
 .steps li.done{background:var(--done);opacity:1}.steps li.wip{background:var(--wip);opacity:1;outline:2px solid var(--wip);outline-offset:2px}
@@ -245,7 +246,7 @@ button.chip{cursor:pointer;min-height:28px}
 @keyframes bump{50%{transform:scale(1.15)}}
 @keyframes enter{0%{opacity:0}}
 @keyframes leave{to{opacity:0}}
-@media (pointer:coarse){.pill,.tabs button,button.chip{min-height:44px}}
+@media (pointer:coarse){.pill,.tabs button,button.chip,.curbar button.tag{min-height:44px}}
 @media (max-width:760px){.main{flex-direction:column}.tw{flex-direction:column;gap:8px}.toc{position:static;display:flex;width:100%;max-height:none;overflow-x:auto;gap:4px}.toc a{flex:none;white-space:nowrap;border:1px solid var(--line)}.panel{width:auto;max-height:38%;border-left:0;border-top:1px solid var(--line)}#mini,.hint{display:none}
   .bar{position:relative;gap:8px}.ttl{flex-basis:100%}.bar h1{padding-right:72px}
   #theme{position:absolute;top:8px;right:max(16px,env(safe-area-inset-right))}
@@ -1031,8 +1032,16 @@ function curTag(file) {
 }
 function whereText(w) { return w === 'main' ? '主 checkout' : String(w).replace(/^worktree:/, 'worktree '); }
 function curRow(g) {
-  return '<span class="tag cur">' + curWord(g.guessed) + ' ' + (g.task ? esc(taskIds(g.task)) + ' ' : '') + esc(g.title || '') + '（' + esc(whereText(g.where)) + '）</span>';
+  return '<button class="tag cur" data-g="' + esc(g.key) + '">' + curWord(g.guessed) + ' ' + (g.task ? esc(taskIds(g.task)) + ' ' : '') + esc(g.title || '') + '（' + esc(whereText(g.where)) + '）</button>';
 }
+$('curbar').addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-g]'), m = b && b.closest('details');
+  if (!b) return;
+  if (m) m.open = false;
+  view('now');
+  var n = [].filter.call($('groups').children, function (x) { return x.dataset.id === b.dataset.g; })[0];
+  if (n) n.scrollIntoView({block: 'start', behavior: reduce ? 'auto' : 'smooth'});
+});
 function curBar(d) {
   var gs = d.curGroups || [];
   $('curbar').hidden = !gs.length;
@@ -1048,8 +1057,9 @@ function stepsBar(phs) {
 function ptitle(pl) { return (pl.task ? taskIds(pl.task) + ' ' : '') + pl.title; }
 function partCard(p, pl) {
   var ai = p.ai || {}, fs = p.planned ? partFiles(p, pl) : [];
-  return '<div class="pc ' + esc(p.state) + '"><span class="st ' + esc(p.state) + '">' + esc(PST[p.state] || p.state) +
-    (p.planned ? ' · ' + esc(p.id) : '') + '</span><b>' + esc(p.name) + '</b>' +
+  return '<div class="pc ' + esc(p.state) + '"' + (p.planned ? ' data-part="' + esc(pl.file + '|' + p.id) + '" data-st="' + esc(p.state) + '"' : '') +
+    '><span class="st ' + esc(p.state) + '">' + esc(PST[p.state] || p.state) + (p.planned ? ' · ' + esc(p.id) : '') + '</span>' +
+    (p.planned ? '<span class="who" hidden></span>' : '') + '<b>' + esc(p.name) + '</b>' +
     fs.slice(0, 2).map(function (f) { return '<code>' + esc(shortf(f, pl.pre)) + '</code>'; }).join('') +
     (fs.length > 2 ? '<span class="fdesc">另 ' + (fs.length - 2) + ' 個檔</span>' : '') +
     (ai.summary ? '<span>' + esc(ai.summary) + (ai.source === 'phase' ? '（階段摘要）' : '') + '</span>' : '') +
@@ -1297,6 +1307,22 @@ function renderNow() {
   if (L) $('livetx').textContent = '即時 · 最後變動 ' + String(L.at || '').slice(11, 16);
   tick();
 }
+// 部件卡的「誰在做／等你」：lane.parts 對 data-part（<plan>|<部件 id>），need 的 id 是 <sid>|<aid>|<since>，aid 空時對 session lane 的 sid
+function partsTick(t) {
+  var gp = {}, on = {}, wait = {};
+  (D && D.curGroups || []).forEach(function (g) { gp[g.key] = g.plan; });
+  (LIVE ? LIVE.needs : []).forEach(function (x) { var a = String(x.id).split('|'); wait[a[1] || a[0]] = 1; });
+  (LIVE ? LIVE.lanes : []).forEach(function (l) {
+    (l.parts || []).forEach(function (id) { var k = gp[l.group] + '|' + id; (on[k] = on[k] || []).push(l); });
+  });
+  $('tv').querySelectorAll('.pc[data-part]').forEach(function (n) {
+    var ls = on[n.dataset.part] || [], st = ls.some(function (l) { return wait[l.id]; }) ? 'waiting' : n.dataset.st, s = n.querySelector('.st');
+    var tx = (PST[st] || st) + ' · ' + n.dataset.part.slice(n.dataset.part.lastIndexOf('|') + 1);
+    n.classList.toggle('waiting', st === 'waiting');
+    if (s.textContent !== tx) { s.className = 'st ' + st; s.textContent = tx; }
+    txt(n, '.who', ls.map(function (l) { return l.who + ' · ' + Math.floor((t - l.since) / 60) + ' 分'; }).join('、'));
+  });
+}
 function tick() {
   if (!$('needs') || GONE || DEAD) return;
   var ns = needItems();
@@ -1310,6 +1336,7 @@ function tick() {
     n.querySelector('.lclock').textContent = clock(t - n.dataset.since);
     if (l) n.classList.toggle('stuck', stuckFor(l));
   });
+  partsTick(t);
 }
 function setStill(on) {
   root.classList.toggle('still', on);

@@ -3,7 +3,7 @@
 // LV 為 null 時改載一個不存在的檔，模擬還沒有 live.js。結果以 JSON 寫進 <pre id="result">。
 // 用 http 開時改測伺服器結束提示，依網址的 ?<模式>：
 //   （沒有）真的 POST .shutdown 關掉伺服器，等下一輪輪詢；
-//   ?mock   .serve-id 的回應由 FX 假造：連不上 → 提示、tick 停住 → 回到可見時 200 → 恢復輪詢 → 再 404 → 網址已失效、不再重試；
+//   ?mock   .serve-id 的回應由 FX 假造：連不上 → 提示、tick 停住（部件卡的經過分鐘數也停）→ 回到可見時 200 → 恢復輪詢 → 再 404 → 網址已失效、不再重試；
 //   ?never  從沒連上過、第一次就拿到 404 → 不顯示提示、照常輪詢。
 (function(){
 var R = {}, LV = null, ap = document.head.appendChild.bind(document.head), T = 0, MODE = location.search.slice(1), NL = 0, FX = null;
@@ -53,11 +53,11 @@ if (MODE === 'never') {
   return;
 }
 if (MODE === 'mock') {
-  LV = function () { return {lanes: [ln('m1', 'g1', 30, 590, null)], needs: [], clashes: [], doneToday: {agents: 0, tasks: 0}, feed: [], at: 'M' + T}; };
+  LV = function () { return {lanes: [Object.assign(ln('m1', 'g1', 50, 590, null), {parts: ['p2a']})], needs: [], clashes: [], doneToday: {agents: 0, tasks: 0}, feed: [], at: 'M' + T}; };
   at(3000, function () { R.m0 = {need: kpis()['k-need'].t, lanes: qa('.lane').length}; LV = null; FX = function () { return Promise.reject(new TypeError('down')); }; });
-  at(6000, function () { R.m1 = {gone: snap().gone, clock: lane('m1').querySelector('.lclock').textContent}; });
+  at(6000, function () { R.m1 = {gone: snap().gone, clock: lane('m1').querySelector('.lclock').textContent, part: q('.pc[data-part] .who').textContent}; });
   at(21000, function () {
-    R.m2 = {need: kpis()['k-need'].t, clock: lane('m1').querySelector('.lclock').textContent, nl: NL};
+    R.m2 = {need: kpis()['k-need'].t, clock: lane('m1').querySelector('.lclock').textContent, nl: NL, part: q('.pc[data-part] .who').textContent};
     FX = res(200); LV = function () { return {lanes: [ln('m1', 'g1', 30, 5, null)], needs: [], clashes: [], doneToday: {agents: 0, tasks: 0}, feed: [], at: 'R' + T}; };
     seeVis();
   });

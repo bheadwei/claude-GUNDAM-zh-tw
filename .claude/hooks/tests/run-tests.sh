@@ -4662,7 +4662,7 @@ if [ -n "$PH_CHROME" ]; then
     expect_eq "標題列：1 條 → 1 個「目前任務」標籤" 1 "$(printf '%s' "${ph_html[1]}" | grep -o 'class="tag cur"' | wc -l | tr -d ' ')"
     expect_eq "標題列：2 條 → 2 個標籤、沒有收合" "2 0" "$(printf '%s' "${ph_html[2]}" | grep -o 'class="tag cur"' | wc -l | tr -d ' ') $(printf '%s' "${ph_html[2]}" | grep -c 'curmore')"
     expect_eq "標題列：3 條 → 收成 1 個「目前任務 3 條 ▾」，展開列 3 條" "1 3" \
-        "$(printf '%s' "${ph_html[3]}" | grep -o '<summary class="tag cur">目前任務 3 條 ▾' | wc -l | tr -d ' ') $(printf '%s' "${ph_html[3]}" | grep -o '<span class="tag cur">' | wc -l | tr -d ' ')"
+        "$(printf '%s' "${ph_html[3]}" | grep -o '<summary class="tag cur">目前任務 3 條 ▾' | wc -l | tr -d ' ') $(printf '%s' "${ph_html[3]}" | grep -o '<button class="tag cur" data-g=' | wc -l | tr -d ' ')"
     expect_contains "標籤寫「目前任務 <編號> <名稱>（主 checkout／worktree xxx）」" "目前任務 1.1 名稱0（主 checkout）" "${ph_html[1]}"
     expect_contains "worktree 的標籤寫 worktree 名" "目前任務 2.1 名稱1（worktree w1）" "${ph_html[2]}"
 else
@@ -5999,15 +5999,31 @@ section "overview 現況分頁 — index.html 的 #now（headless chrome）"
 NW="$SANDBOX/現況 分頁"; NW_TPL="$HOOK_DIR/../templates/overview/index.html"; NW_JS="$HOOK_DIR/tests/fixtures/overview/now-check.js"
 NW_CHROME="${OV_CHROME:-$(ls -d "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null | tail -1)}"
 [ -z "$NW_CHROME" ] && NW_CHROME=$(command -v chromium chromium-browser google-chrome 2>/dev/null | head -1)
-nw_page() { awk -v inj="$NW_JS" '/<\/body>/ { print "<script>"; while ((getline l < inj) > 0) print l; print "</script>" } { print }' "$NW_TPL" > "$1"; }
+nw_page() { awk -v inj="${2:-$NW_JS}" '/<\/body>/ { print "<script>"; while ((getline l < inj) > 0) print l; print "</script>" } { print }' "$NW_TPL" > "$1"; }
 nw_data() {
     jq -nc '{schema: 2, generatedAt: "2026-11-12T10:00:00.000+08:00", project: {name: "現況"}, modules: [], groups: [], edges: [], tasks: [],
       changes: [], changesRollup: [], notices: [], unmappedTasks: [],
       curGroups: [{key: "g1", task: "1.2", title: "結帳", plan: "plans/1.2-x.md", sources: ["main"], where: "main", guessed: false, phase: 2, phases: 3, activePhases: [2]},
                   {key: "g2", task: "3.1", title: "CI", plan: null, sources: ["worktree:wt-b"], where: "worktree:wt-b", guessed: false, phase: null, phases: null, activePhases: []}],
-      plans: [{file: "plans/1.2-x.md", source: "main", task: "1.2", title: "結帳", parts: [], changes: [], changesRollup: [],
+      plans: [{file: "plans/1.2-x.md", source: "main", task: "1.2", title: "結帳", changes: [], changesRollup: [],
+               parts: [{id: "p2a", name: "結帳表單", phase: 2, state: "wip", planned: true, files: ["src/pay.ts"]}],
                phases: [{n: 1, name: "購物車", state: "done"}, {n: 2, name: "結帳頁", state: "wip"}, {n: 3, name: "退款", state: "planned"}]}],
       humans: [{who: "alice", task: "2.1", title: "點數", status: "blocked", branch: null}]}' | sed 's/^/window.OVERVIEW = /; s/$/;/' > "$1/data.js"
+}
+# 階段 8 用：3 個目前任務（1.2 排最後，才捲得到）、1.2 的 plan 有階段 9 的 p9a／p9b，另加幾份 plan 讓任務圖捲得動
+nw_pdata() {
+    jq -nc '{schema: 2, generatedAt: "2026-11-12T10:00:00.000+08:00", project: {name: "部件"}, modules: [], groups: [], edges: [], tasks: [],
+      changes: [], changesRollup: [], notices: [], unmappedTasks: [], humans: [],
+      curGroups: [{key: "g5", task: "5.1", title: "報表", plan: null, sources: ["worktree:wt-c"], where: "worktree:wt-c", guessed: false, phase: null, phases: null, activePhases: []},
+                  {key: "g3", task: "3.1", title: "CI", plan: null, sources: ["worktree:wt-b"], where: "worktree:wt-b", guessed: false, phase: null, phases: null, activePhases: []},
+                  {key: "g1", task: "1.2", title: "結帳", plan: "plans/1.2-x.md", sources: ["main"], where: "main", guessed: false, phase: 9, phases: 9, activePhases: [9]}],
+      plans: ([{file: "plans/1.2-x.md", source: "main", task: "1.2", title: "結帳", current: true, status: "🔄", changes: [], changesRollup: [],
+                phases: [{n: 8, name: "購物車", state: "done"}, {n: 9, name: "付款", state: "wip"}],
+                parts: [{id: "p9a", name: "付款表單", phase: 9, state: "wip", planned: true, files: ["src/pay/**"]},
+                        {id: "p9b", name: "運費", phase: 9, state: "wip", planned: true, files: ["src/ship.ts"]}]}]
+             + [range(6) as $i | {file: "plans/9.\($i)-z.md", source: "main", task: "9.\($i)", title: "其他 \($i)", status: "⏳", changes: [], changesRollup: [],
+                phases: [{n: 1, name: "一", state: "planned"}], parts: [range(4) as $k | {id: "q\($k)", name: "部件 \($k)", phase: 1, state: "planned", planned: true, files: ["src/q\($k).ts"]}]}])}' \
+        | sed 's/^/window.OVERVIEW = /; s/$/;/' > "$1/data.js"
 }
 nw_run() {
     "$NW_CHROME" --headless=new --no-sandbox --disable-gpu --user-data-dir="$NW/prof" --window-size=1440,1000 --virtual-time-budget="${NW_BUDGET:-12000}" "$@" \
@@ -6042,6 +6058,19 @@ if [ -n "$NW_CHROME" ] && [ -x "$NW_CHROME" ]; then
     expect_eq "prefers-reduced-motion: reduce、畫面上有 4 條 lane、3 條滑動進度條 → 所有元素（含 ::after）的 animation-name 為 none" "4 3 0" \
         "$(nq '"\(.reduceSeen.lanes) \(.reduceSeen.ind) \(.reduceBad)"')"
     expect_eq "重開頁面仍是暫停（按鈕寫「繼續動畫」）" "繼續動畫" "$(nq '.hashless.still')"
+    # 階段 8：任務圖部件卡「誰在做／等你」、標題列目前任務標籤（parts-check.js，以 #tasks 開頁）
+    nw_pdata "$NW"; nw_page "$NW/parts.html" "$HOOK_DIR/tests/fixtures/overview/parts-check.js"
+    # 開 reduce：smooth 捲動在 --virtual-time-budget 下不會前進（2026-11-13 實測 scrollTop 停在 0），reduce 時頁面改用立即捲動
+    NW_URL="file://$NW/parts.html#tasks"; NW_RES=$(rm -rf "$NW/prof"; nw_run --window-size=1440,700 --force-prefers-reduced-motion)
+    expect_eq "implementer a1 寫了部件 p9a 的檔、已跑 12 分鐘 → p9a 卡顯示「implementer · 12 分」，同階段的 p9b 不顯示" "implementer · 12 分 null 進行中 · p9a" \
+        "$(nq '"\(.A.p9a) \(.A.p9b) \(.A.st)"')"
+    expect_eq "a1 有一筆未處理的 approve need → p9a 狀態「等你」、黃框；p9b 不受影響" "等你 · p9a true true false" \
+        "$(nq '"\(.B.st) \(.B.waiting) \(.B.yellow) \(.B.p9b)"')"
+    expect_eq "need 被處理（live.js 換掉）→ p9a 回到「進行中」，任務圖 scrollTop 不變、.tcards 與部件卡仍是同一個 DOM 物件" "進行中 · p9a false true true true" \
+        "$(nq '"\(.C.st) \(.C.waiting) \(.C.top) \(.C.tc) \(.C.card)"')"
+    expect_eq "3 條目前任務收成下拉，每條都是可點的標籤" "g5,g3,g1" "$(nq '.btns | join(",")')"
+    expect_eq "點標題列「目前任務 1.2 …」→ 切到現況分頁、1.2 組框捲到視窗頂端、下拉收起" "true #now true 0 false" \
+        "$(nq '"\(.D.now) \(.D.hash) \(.D.scrolled) \(.D.dy) \(.D.open)"')"
     if sv_pick_py >/dev/null; then
         sv_reset; rm -f "$SV_OV/index.html"; nw_data "$SV_OV"; nw_page "$SV_OV/index.html"
         SV_X=(BROWSER=true); NW_URL=$(sv_last "$(sv_run)"); SV_X=()
@@ -6050,6 +6079,7 @@ if [ -n "$NW_CHROME" ] && [ -x "$NW_CHROME" ]; then
         NW_URL="${NW_MAIN%index.html}index.html?mock"; NW_RES=$(NW_BUDGET=36000 nw_run)
         expect_eq "連不上伺服器 → 出現提示、tick 停住（之後過了卡住門檻，「需要你」仍 0、經過時間不再跳）" \
             "0 伺服器已結束（閒置 30 分鐘），重跑 /task-status 0 true" "$(nq '"\(.m0.need) \(.m1.gone) \(.m2.need) \(.m1.clock == .m2.clock)"')"
+        expect_eq "伺服器已結束 → 部件卡的經過分鐘數也不再用舊資料更新（過了整分仍是 0 分）" "implementer · 0 分 implementer · 0 分" "$(nq '"\(.m1.part) \(.m2.part)"')"
         expect_eq "提示中回到可見、.serve-id 回 200 → 收掉提示、live.js 恢復輪詢" "null true" "$(nq '"\(.m3.gone) \(.m3.nl > .m2.nl)"')"
         expect_eq "連上過之後 .serve-id 回 404 →「網址已失效，重跑 /task-status」、停止輪詢，回到可見也不再重試" \
             "網址已失效，重跑 /task-status true" "$(nq '"\(.m5.gone) \(.m5.nl == .m4.nl)"')"
