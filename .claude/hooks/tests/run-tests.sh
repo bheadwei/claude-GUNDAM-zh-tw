@@ -65,6 +65,7 @@ _changed_rule() {
         .claude/hooks/tests/fixtures/overview/*)             echo "=overview" ;;
         # hook 與被測的腳本：跑提到它的節
         .claude/hooks/*.sh|.claude/scripts/overview.sh|.claude/scripts/overview-scan.sh)      echo "=${1##*/}" ;;
+        .claude/scripts/overview-serve.*)                    echo "=overview-serve" ;;
         # 只挑常數檢查那節：寫 =check-counts.sh 會連帶挑到只是提到檔名的 copy-template 節
         .claude/scripts/check-counts.sh)                     echo "=專案圖解常數對範本" ;;
         # 不被 hook 測試執行的東西
@@ -3507,6 +3508,72 @@ touch -d '2000-01-01' "$OVO/index.html"; touch -d '2010-01-01' "$SANDBOX/.claude
 expect_contains "--print-path 印出 file:// 路徑" "taskmaster-data/overview/index.html" \
     "$(bash "$SANDBOX/.claude/scripts/overview.sh" --print-path "$SANDBOX" 2>/dev/null)"
 
+# data.js 內容沒變就不重寫（畫面輪詢靠它判斷要不要重畫）；易變欄位 generatedAt、scan.ms、scan.cached 不算內容
+ov_wbs "1.1|api|✅ 11-01"; ov
+touch -d '2000-01-01' "$OVO/data.js"; cp "$OVO/data.js" "$OVO/ov-js1.keep"
+sleep 1; ov
+expect_eq "同一組輸入連跑兩次 → data.js 的 mtime 不變" "$(date -d 2000-01-01 +%s)" "$(stat -c %Y "$OVO/data.js" 2>/dev/null)"
+cmp -s "$OVO/ov-js1.keep" "$OVO/data.js" && ok "同一組輸入連跑兩次 → data.js 內容不變" || ng "同一組輸入連跑兩次 → data.js 內容不變" "cmp 相同" "$(diff <(tr ',' '\n' < "$OVO/ov-js1.keep") <(tr ',' '\n' < "$OVO/data.js") | grep -v generatedAt | head -8)"
+ov_wbs "1.1|api|⏳ 待處理"; sleep 1; ov
+[ "$(stat -c %Y "$OVO/data.js")" != "$(date -d 2000-01-01 +%s)" ] && ok "改 wbs 一個任務的狀態 → data.js 改寫" || ng "改 wbs 一個任務的狀態 → data.js 改寫" "mtime 變新" "mtime 沒變"
+expect_eq "改 wbs 後 generatedAt 比上一份新" "true" "$(jq -n --arg a "$(jq -r .generatedAt <(sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$OVO/ov-js1.keep"))" --arg b "$(ovq .generatedAt)" '$b > $a')"
+ov_wbs "1.1|api|✅ 11-01"; ov
+touch -d '2000-01-01' "$OVO/data.js"
+sed -i 's/"ms":[0-9]*,"cached":\(true\|false\)/"ms":99999,"cached":false/' "$OVO/data.js"; touch -d '2000-01-01' "$OVO/data.js"
+ov
+expect_eq "只有 scan.ms、scan.cached 不同 → 不改寫（mtime 不變）" "$(date -d 2000-01-01 +%s)" "$(stat -c %Y "$OVO/data.js" 2>/dev/null)"
+expect_contains "只有 scan.ms、scan.cached 不同 → data.js 仍是舊那份" '"ms":99999' "$(cat "$OVO/data.js")"
+
+# 畫面重畫保留狀態（headless chrome；沒有 chrome 就略過）。data.js 沒變的輪詢不呼叫 render()
+OV_CHROME="${OV_CHROME:-$(ls -d "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null | tail -1)}"
+[ -z "$OV_CHROME" ] && OV_CHROME=$(command -v chromium chromium-browser google-chrome 2>/dev/null | head -1)
+if [ -n "$OV_CHROME" ] && [ -x "$OV_CHROME" ]; then
+    ov_reset; ov_proj; ov_arch; ov_wbs "1.1|api|✅ 11-01"
+    mkdir -p "$OVD/plans"; printf '# 測試計畫\n\n## 階段 1\n- [ ] x\n' > "$OVD/plans/1.1-x.md"; ov
+    OVK="$SANDBOX/keep"; rm -rf "$OVK"; mkdir -p "$OVK"
+    ov_data > "$OVK/base.json"
+    for n in "data.js 2026-11-12T10:00:00.000+08:00 a" "data2.js 2026-11-12T11:00:00.000+08:00 b"; do
+        set -- $n
+        jq -c --arg t "$2" --arg n "$3" '.generatedAt = $t | .project.name = $n | .plans |= ([range(0;12) as $i | .[0]]) | .plans[0].extraCount = 3 | .plans[0].extraMore = 0' "$OVK/base.json" \
+            | sed 's/^/window.OVERVIEW = /; s/$/;/' > "$OVK/$1"
+    done
+    cp "$OV_TPL" "$OVK/index.html"
+    awk -v inj="$HOOK_DIR/tests/fixtures/overview/keep-state.js" '/<\/body>/ { print "<script>"; while ((getline l < inj) > 0) print l; print "</script>" } { print }' "$OVK/index.html" > "$OVK/page.html"
+    OV_RES=$("$OV_CHROME" --headless=new --no-sandbox --disable-gpu --window-size=1440,1000 --virtual-time-budget=9000 \
+        --dump-dom "file://$OVK/page.html#map" 2>/dev/null | sed -n 's/.*<pre id="result">\(.*\)<\/pre>.*/\1/p' | sed 's/&quot;/"/g; s/&amp;/\&/g')
+    rq() { printf '%s' "$OV_RES" | jq -r "$1" 2>/dev/null; }
+    expect_eq "換一份內容不同的 data.js → 縮放不變" "true" "$(rq '(.A.zl != null) and (.A.zl == .B.zl)')"
+    expect_eq "換一份內容不同的 data.js → 選取的模組不變" "true" "$(rq '(.A.sel != null) and (.A.sel == .B.sel)')"
+    expect_eq "換一份內容不同的 data.js → 任務圖展開的「計畫外」明細仍展開" "true true" "$(rq '"\(.A.open) \(.B.open)"')"
+    expect_eq "換一份內容不同的 data.js → 任務圖捲動位置不變（且確實捲動過）" "true" "$(rq '(.A.scroll > 0) and (.A.scroll == .B.scroll)')"
+    expect_eq "換的那份真的重畫了（畫面上的專案名稱換成 b）" "true" "$(rq '(.A.title | endswith("a")) and (.B.title | endswith("b"))')"
+    expect_eq "data.js 沒變的輪詢 → 不呼叫 render()（#world 第一個子節點是同一個物件）" "true" "$(rq '.same')"
+    rm -rf "$OVK" "$OVD/plans"
+else
+    ok "（沒有 chrome，略過畫面重畫保留狀態的測試）"
+fi
+
+# 任務圖的純函式（共同路徑、任務編號壓縮）；沒有 node 就整段略過、不計入通過
+if command -v node >/dev/null 2>&1; then
+    PF=$(node "$HOOK_DIR/tests/fixtures/overview/plan-fns.js" "$OV_TPL" 2>&1)
+    pfq() { printf '%s' "$PF" | jq -r "$1" 2>/dev/null; }
+    expect_eq "任務編號 21.2,21.3,21.4 → 21.2–21.4" "21.2–21.4" "$(pfq .ids3)"
+    expect_eq "任務編號 21.2…21.10（9 個）→ 21.2–21.10" "21.2–21.10" "$(pfq .ids9)"
+    expect_eq "任務編號 1.2,1.3 → 1.2, 1.3" "1.2, 1.3" "$(pfq .ids2)"
+    expect_eq "30 個檔中 20 個在 app/ → 共同路徑為 app/ 那層" "src/services/checkout/app/" "$(pfq .big)"
+    expect_eq "有共同路徑 → 列表寫 cart/store.py" "cart/store.py" "$(pfq .bigShort)"
+    expect_eq "不到 3 個檔 → 沒有共同路徑" "" "$(pfq .two)"
+    expect_eq "沒有目錄被 6 成檔案共有 → 沒有共同路徑" "" "$(pfq .scattered)"
+    expect_eq "沒有共同路徑 → 寫完整路徑" "docs/x.md" "$(pfq .none)"
+    expect_eq "任務編號次編號不連續 21.2,21.5,21.9 → 原樣列出" "21.2, 21.5, 21.9" "$(pfq .idsGap)"
+    expect_eq "任務編號跨主編號 21.9,21.10,22.1 → 原樣列出" "21.9, 21.10, 22.1" "$(pfq .idsCross)"
+    expect_eq "恰好 60% 的檔案共有一個目錄 → 算共同路徑" "a/b/c/" "$(pfq .sixty)"
+    expect_eq "不到 60%（2／7）→ 沒有共同路徑" "" "$(pfq .fiftyNine)"
+    expect_eq "全是根目錄的檔 → 沒有共同路徑" "" "$(pfq .rootFiles)"
+else
+    printf '  \033[90mℹ\033[0m 沒有 node，略過任務圖純函式測試（不計入通過數）\n'
+fi
+
 # 鎖：兩支同時跑 → 結果合法、鎖不殘留；過期的鎖要接手；新鮮的鎖讓位並留下 .dirty
 rm -f "$OVO/data.js"
 ov & ov & wait
@@ -4123,7 +4190,8 @@ expect_eq "程式多一個 src/search/（2 個檔）、5.5 沒寫 → search 模
 
 # ---- 快取
 SCK="$SC/shop/.claude/taskmaster-data/overview/skeleton.json"
-touch -d '2001-01-01 00:00:00' "$SCK"; sck0=$(stat -c %Y "$SCK"); sc_ov shop
+# scan.cached 不算 data.js 的內容（內容沒變就不重寫），所以先刪掉 data.js，才讀得到這一輪的 cached
+touch -d '2001-01-01 00:00:00' "$SCK"; sck0=$(stat -c %Y "$SCK"); rm -f "$SC/shop/.claude/taskmaster-data/overview/data.js"; sc_ov shop
 expect_eq "第二次執行、HEAD 與工作區都沒變 → skeleton.json 的 mtime 不變、scan.cached 為 true" "$sck0 true" \
     "$(stat -c %Y "$SCK") $(sc_q shop '.scan.cached')"
 scf0=$(sc_q shop '.scan.files'); [[ $scf0 =~ ^[0-9]+$ ]] || scf0=-1; sc_put shop src/search/c.py 'from src.db.session import connect\n'; sc_ov shop
@@ -4484,6 +4552,122 @@ expect_eq "跑完後 data.js 的 status.line 是非空字串（畫面頁首用�
     "$(ds_q shop '"\((.status.line | type) == "string" and (.status.line | length) > 0) \(.status.line | sub("・落差.*$"; ""))"')"
 expect_eq "task-status.md 含 overview.sh --sync-arch 與 overview.sh --status" "1 1" \
     "$(grep -q 'overview.sh --sync-arch' "$HOOK_DIR/../commands/task-status.md" && echo 1 || echo 0) $(grep -q 'overview.sh --status' "$HOOK_DIR/../commands/task-status.md" && echo 1 || echo 0)"
+
+# =========================================================================
+section "overview.sh — 目前任務分組、人在做、完成日"
+# =========================================================================
+# 沿用 tg_* 輔助函式（單獨跑時前面節只取定義，所以每個案例自己 tg_reset、自己建 worktree）。
+# git 的使用者設定與全域設定隔離：不碰主機的 ~/.gitconfig，「沒設」的案例才確定。
+ph_ov() { env HOME="$SANDBOX/nohome" XDG_CONFIG_HOME="$SANDBOX/nohome" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+              bash "$TG/.claude/scripts/overview.sh" "$TG" >/dev/null 2>&1; }
+# 每個參數一列「編號|負責|狀態」；PH_NOOWNER=1 時用沒有負責欄的舊表頭
+ph_wbs() {
+    {
+        echo "# WBS — 測試"; echo; echo "## M1 基礎"; echo
+        if [ -n "${PH_NOOWNER:-}" ]; then echo "| # | 任務 | 模組 | 狀態 | 優先 |"; echo "|---|---|---|---|---|"
+        else echo "| # | 任務 | 模組 | 狀態 | 優先 | 依賴 | 預估 | 負責 | 連結 |"; echo "|---|---|---|---|---|---|---|---|---|"; fi
+        local r id ow st
+        for r in "$@"; do
+            IFS='|' read -r id ow st <<< "$r"
+            if [ -n "${PH_NOOWNER:-}" ]; then echo "| $id | 任務 $id | api | $st | 高 |"
+            else echo "| $id | 任務 $id | api | $st | 高 | — | 1h | $ow | — |"; fi
+        done
+    } > "$TGD/wbs.md"
+}
+ph_wt() {   # $1 = worktree 名；$2 = .current-task 內容
+    tg_git add -A; tg_git commit -qm plan
+    tg_git worktree add -q -b "$1" "$TG/.claude/worktrees/$1"
+    mkdir -p "$TG/.claude/worktrees/$1/.claude/taskmaster-data"
+    echo "$2" > "$TG/.claude/worktrees/$1/.claude/taskmaster-data/.current-task"
+}
+
+tg_reset "1.2|api|🔄 進行中"; tg_plan 1.2-x.md 🔄 ⏳; echo 1.2 > "$TGD/.current-task"; ph_wt wt-a 1.2; ph_ov
+expect_eq "主 checkout 與 worktree wt-a 的 .current-task 都是 1.2 → curGroups 1 筆、sources 兩個來源、where 為主 checkout" "1 [\"main\",\"worktree:wt-a\"] main 1.2" \
+    "$(tgq '"\(.curGroups | length) \(.curGroups[0].sources | tojson) \(.curGroups[0].where) \(.curGroups[0].task)"')"
+expect_eq "curGroups 有 plan、title、guessed、phase 欄位；currents 照舊 2 筆" "plans/1.2-x.md 任務 1.2 false 1 2" \
+    "$(tgq '.curGroups[0] | "\(.plan) \(.title) \(.guessed) \(.phase)"') $(tgq '.currents | length')"
+tg_git worktree remove --force "$TG/.claude/worktrees/wt-a"
+
+tg_reset "1.2|api|🔄 進行中" "3.1|api|🔄 進行中"; tg_plan 1.2-x.md 🔄 ⏳; TP_TASK=3.1 tg_plan 3.1-y.md 🔄 ⏳
+echo 1.2 > "$TGD/.current-task"; ph_wt wt-b 3.1; ph_ov
+expect_eq "主 checkout 1.2、worktree wt-b 3.1 → curGroups 2 筆，3.1 的 where 為 worktree:wt-b" "2 main worktree:wt-b" \
+    "$(tgq '"\(.curGroups | length) \(.curGroups[] | select(.task == "1.2") | .where) \(.curGroups[] | select(.task == "3.1") | .where)"')"
+tg_git worktree remove --force "$TG/.claude/worktrees/wt-b"
+
+tg_reset "1.2|api|🔄 進行中"; tg_plan 1.2-x.md 🔄 ⏳; ph_ov
+expect_eq "都沒有 .current-task、猜出最近改過的 plan → curGroups 1 筆、guessed true" "1 true main" \
+    "$(tgq '"\(.curGroups | length) \(.curGroups[0].guessed) \(.curGroups[0].where)"')"
+
+tg_reset "1.2|api|🔄 進行中"; ph_ov
+expect_eq "沒有 plan、沒有 .current-task → curGroups 為空陣列" "[]" "$(tgq '.curGroups | tojson')"
+
+tg_reset; ph_wbs "1.5|alice|🚫 阻塞" "1.6|—|⏳ 待處理" "1.7|bob|✅ 11-10"; ph_ov
+expect_eq "負責 alice、狀態 🚫、沒有分支 → humans 有 blocked 且 branch 為 null；— 與 ✅ 的不列" '[{"who":"alice","task":"1.5","title":"任務 1.5","status":"blocked","branch":null}]' \
+    "$(tgq '.humans | tojson')"
+tg_git branch feat/1.5-points; tg_git branch feat/11.5-x; ph_ov
+expect_eq "建立分支 feat/1.5-points → branch 填上；feat/11.5-x 不算 1.5" "feat/1.5-points" "$(tgq '.humans[0].branch')"
+tg_git branch -D feat/1.5-points; tg_git branch feat/1-5-dash; ph_ov
+expect_eq "分支名用 1-5 寫法也算" "feat/1-5-dash" "$(tgq '.humans[0].branch')"
+tg_git branch -D feat/1-5-dash; ph_ov
+expect_eq "只剩 feat/11.5-x → branch 為 null" "null" "$(tgq '.humans[0].branch')"
+
+tg_reset; ph_wbs "1.5|alice|🔄 進行中"
+tg_git branch feat/1.5-old; sleep 1.1; tg_git branch feat/1.5-new
+tg_git branch feat/1.50-x; tg_git branch feat/21.5-x; tg_git branch feat/1x5-x; ph_ov
+expect_eq "兩條分支都含 1.5 → 取 committerdate 最近的一條（同秒時取較晚建立的那條）" "feat/1.5-new" "$(tgq '.humans[0].branch')"
+tg_git branch -D feat/1.5-old; tg_git branch -D feat/1.5-new; ph_ov
+expect_eq "feat/1.50-x、feat/21.5-x、feat/1x5-x 都不算 1.5" "null" "$(tgq '.humans[0].branch')"
+tg_git update-ref refs/remotes/origin/feat/1.5-remote HEAD; ph_ov
+expect_eq "只在遠端有的分支 → 帶 origin/ 前綴" "origin/feat/1.5-remote" "$(tgq '.humans[0].branch')"
+tg_git branch feat/1.5-remote; ph_ov
+expect_eq "本地與 origin/ 同名 → 取本地名稱（不帶 origin/）" "feat/1.5-remote" "$(tgq '.humans[0].branch')"
+ph_wbs "1.5|—|🔄 進行中"; ph_ov
+expect_eq "沒有任何任務填負責人 → humans 空、不產生分支清單也不出錯" "[]" "$(tgq '.humans | tojson')"
+
+tg_reset; ph_wbs "2.1|alice|🔄 進行中" "2.2|bob@x.io|⏳ 待處理" "2.3|carol|⏳ 待處理"
+git -C "$TG" config user.name Alice; git -C "$TG" config user.email bob@x.io; ph_ov
+expect_eq "user.name 為 Alice、負責 alice → 不列；user.email 為 bob@x.io、負責 bob@x.io → 不列；carol 兩者都不符 → 列" "carol" \
+    "$(tgq '[.humans[].who] | join(",")')"
+ph_wbs "2.1|alice|🔄 進行中" "2.2|BOB@X.io|⏳ 待處理" "2.3|carol|⏳ 待處理"; ph_ov
+expect_eq "負責欄 BOB@X.io 與 user.email 大小寫不同也算我；alice 與 user.name 相同仍不列" "carol" "$(tgq '[.humans[].who] | join(" ")')"
+git -C "$TG" config --unset user.name; git -C "$TG" config --unset user.email; ph_ov
+expect_eq "沒設 git user.name／email → 所有有負責人的未完成任務都列" "alice BOB@X.io carol" "$(tgq '[.humans[].who] | join(" ")')"
+
+tg_reset; ph_wbs "3.1|alice|✅ 11-12" "3.2|alice|✅" "3.3|alice|🔄 進行中" "3.4|—|⏳ 待處理"; ph_ov
+expect_eq "✅ 11-12 → doneOn 為 11-12；✅（沒日期）、🔄、⏳ → null" "11-12 null null null" \
+    "$(tgq '[.tasks[] | .doneOn // "null"] | join(" ")')"
+
+tg_reset; PH_NOOWNER=1 ph_wbs "4.1|x|🔄 進行中" "4.2|x|⏳ 待處理"; ph_ov
+expect_eq "沒有「負責」欄的 WBS → humans 為空陣列、tasks 照讀" "[] 4.1,4.2" \
+    "$(tgq '"\(.humans | tojson) \([.tasks[].id] | join(","))"')"
+
+expect_eq "畫面範本沒有 ★（改成「目前任務」小標籤）" 0 "$(grep -c '★' "$OV_TPL")"
+
+PH_CHROME=$(ls "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null | head -1)
+[ -n "$PH_CHROME" ] || PH_CHROME=$(command -v chromium chromium-browser google-chrome 2>/dev/null | head -1)
+if [ -n "$PH_CHROME" ]; then
+    # 標題列的「目前任務」標籤：拿真的 data.js 把 curGroups 換成 N 條，用 headless chrome 轉出 DOM 數標籤
+    tg_reset; tg_plan 1.2-x.md 🔄 ⏳; echo 1.2 > "$TGD/.current-task"; ph_ov
+    ph_dom() {
+        local n="$1" d="$SANDBOX/phdom$1"
+        rm -rf "$d"; mkdir -p "$d"; cp "$TGO/index.html" "$d/"
+        { printf 'window.OVERVIEW = '; sed -n 's/^window\.OVERVIEW = //; s/;$//p' "$TGO/data.js" | jq -c --argjson n "$n" \
+            '.curGroups = ([range(0; 3) as $i | {key: "k\($i)", task: "\($i + 1).1", title: "名稱\($i)", plan: "plans/p\($i).md", sources: ["main"], where: (if $i == 0 then "main" else "worktree:w\($i)" end), guessed: false}] | .[:$n])'
+          printf ';\n'; } > "$d/data.js"
+        "$PH_CHROME" --headless --no-sandbox --disable-gpu --dump-dom --virtual-time-budget=4000 "file://$d/index.html" 2>/dev/null \
+            | tr '\n' ' ' | sed 's/.*id="curbar"//; s/<nav class="tabs".*//'
+        rm -rf "$d"
+    }
+    for n in 1 2 3; do ph_html[$n]=$(ph_dom $n); done
+    expect_eq "標題列：1 條 → 1 個「目前任務」標籤" 1 "$(printf '%s' "${ph_html[1]}" | grep -o 'class="tag cur"' | wc -l | tr -d ' ')"
+    expect_eq "標題列：2 條 → 2 個標籤、沒有收合" "2 0" "$(printf '%s' "${ph_html[2]}" | grep -o 'class="tag cur"' | wc -l | tr -d ' ') $(printf '%s' "${ph_html[2]}" | grep -c 'curmore')"
+    expect_eq "標題列：3 條 → 收成 1 個「目前任務 3 條 ▾」，展開列 3 條" "1 3" \
+        "$(printf '%s' "${ph_html[3]}" | grep -o '<summary class="tag cur">目前任務 3 條 ▾' | wc -l | tr -d ' ') $(printf '%s' "${ph_html[3]}" | grep -o '<button class="tag cur" data-g=' | wc -l | tr -d ' ')"
+    expect_contains "標籤寫「目前任務 <編號> <名稱>（主 checkout／worktree xxx）」" "目前任務 1.1 名稱0（主 checkout）" "${ph_html[1]}"
+    expect_contains "worktree 的標籤寫 worktree 名" "目前任務 2.1 名稱1（worktree w1）" "${ph_html[2]}"
+else
+    printf '  \033[90mℹ\033[0m 沒有 chrome，略過目前任務標籤的畫面測試（不計入通過數）\n'
+fi
 
 # =========================================================================
 section "overview-scan.sh — 前後端 HTTP 連線、Maven／Gradle 慣例路徑"
@@ -4976,6 +5160,26 @@ if [ -f "$CC_SRC" ] && [ -f "$CC_DS" ] && [ -d "$HOOK_DIR/../skills/project-docs
     cc_case "05 範本的「## 5. 資料流」改成「## 5. 跨服務流程」" "$CC_T05" 's/^## 5\. 資料流/## 5. 跨服務流程/' OVERVIEW_FLOW_SECTION
     cc_case "overview.sh 的 OVERVIEW_FLOW_SECTION 改成 \"流程\"" .claude/scripts/overview.sh \
         's/^OVERVIEW_FLOW_SECTION="資料流"/OVERVIEW_FLOW_SECTION="流程"/' OVERVIEW_FLOW_SECTION
+    # 畫面大小上限 128KB（ADR-2026-11-12-001）：補空白到指定 bytes（在假模板的複本上，不碰真範本）
+    cc_pad() { cp "$CC/.claude/templates/overview/index.html" "$CC_BAK/idx"; printf '\n<!--' >> "$CC/.claude/templates/overview/index.html"
+        head -c $(( $1 - $(wc -c < "$CC/.claude/templates/overview/index.html") - 3 )) /dev/zero | tr '\0' ' ' >> "$CC/.claude/templates/overview/index.html"
+        printf -- '-->' >> "$CC/.claude/templates/overview/index.html"; }
+    cc_pad 100000; cc_run
+    expect_eq "範本補到 100000 bytes → check-counts 的畫面大小守門通過" "exit 0" "exit $CC_RC"
+    cp "$CC_BAK/idx" "$CC/.claude/templates/overview/index.html"
+    cc_pad 131072; cc_run
+    expect_eq "範本剛好 131072 bytes → 通過" "exit 0" "exit $CC_RC"
+    cp "$CC_BAK/idx" "$CC/.claude/templates/overview/index.html"
+    cc_pad 131073; cc_run
+    [ "$CC_RC" = 1 ] && printf '%s\n' "$CC_OUT" | grep '✗' | grep -qF '超過 128KB 上限' \
+        && ok "範本補到 131073 bytes → 失敗並印「超過 128KB 上限」" \
+        || ng "範本補到 131073 bytes → 失敗並印「超過 128KB 上限」" "exit 1、✗ 行含超過 128KB 上限" "exit $CC_RC：$(printf '%s\n' "$CC_OUT" | grep '✗' | head -3 | tr '\n' ' ')"
+    cp "$CC_BAK/idx" "$CC/.claude/templates/overview/index.html"
+    expect_eq "check-counts.sh 與 index.html 都不再寫 80KB" "0 0" \
+        "$(grep -c '80KB' "$CC_SRC") $(grep -c '80KB' "$HOOK_DIR/../templates/overview/index.html")"
+    [ "$(grep -c '112KB' "$CC_SRC")" -ge 1 ] && [ "$(grep -c '112KB' "$HOOK_DIR/../templates/overview/index.html")" -ge 1 ] \
+        && ok "check-counts.sh 與 index.html 的註解都寫了 112KB 觸發條件" \
+        || ng "check-counts.sh 與 index.html 的註解都寫了 112KB 觸發條件" "兩檔都 ≥ 1" "不足"
     rm -rf "$CC" "$CC_BAK"
     out=$(printf '%s\n' .claude/scripts/check-counts.sh | bash "$HOOK_DIR/tests/run-tests.sh" --changed - --dry-run 2>&1)
     expect_contains "改 check-counts.sh → --changed 挑到本節" "專案圖解常數對範本" "$out"
@@ -4983,6 +5187,923 @@ if [ -f "$CC_SRC" ] && [ -f "$CC_DS" ] && [ -d "$HOOK_DIR/../skills/project-docs
 else
     ok "（不是模板 repo，沒有 check-counts.sh 或 documentation-specialist.md，略過）"
 fi
+# =========================================================================
+section "agent-events.sh — 即時事件記錄（live-events.jsonl）"
+# =========================================================================
+# ADR-2026-11-12-002。這支 hook 只寫不讀、永遠無輸出；測試驗的是寫出去的那一行。
+AE_BOX="$SANDBOX/ae"
+AE_LOG="$AE_BOX/.claude/logs/live-events.jsonl"
+AE_CALLS="$AE_BOX/.overview-calls"
+AE_PAYLOAD_SID="ae-sid-1"
+
+ae_reset() {
+    rm -rf "$AE_BOX"
+    mkdir -p "$AE_BOX/.claude/taskmaster-data" "$AE_BOX/.claude/scripts" "$AE_BOX/.claude/logs"
+    printf '{}' > "$AE_BOX/.claude/taskmaster-data/project.json"
+    printf '#!/bin/bash\n# supports --live\necho "$*" >> "%s"\n' "$AE_CALLS" > "$AE_BOX/.claude/scripts/overview.sh"
+}
+ae_wt() {
+    AE_WT="$AE_BOX/.claude/worktrees/wt-a"
+    mkdir -p "$AE_WT/src"
+    printf 'gitdir: %s/.git/worktrees/wt-a\n' "$AE_BOX" > "$AE_WT/.git"
+}
+# ae_run <payload> [ENV=VAL ...]：執行 hook，stdout 原樣回傳
+ae_run() {
+    local payload="$1"; shift
+    printf '%s' "$payload" | env CLAUDE_PROJECT_DIR="$AE_BOX" OVERVIEW_SYNC=1 OVERVIEW_LIVE_WINDOW_SEC=60 "$@" \
+        bash "$HOOK_DIR/agent-events.sh" 2>/dev/null
+}
+ae_last() { tail -n 1 "$AE_LOG" 2>/dev/null; }
+ae_f()    { ae_last | jq -r "$1" 2>/dev/null; }
+ae_lines() { [ -f "$AE_LOG" ] && wc -l < "$AE_LOG" | tr -d ' ' || echo 0; }
+ae_calls() { [ -f "$AE_CALLS" ] && wc -l < "$AE_CALLS" | tr -d ' ' || echo 0; }
+# ae_ev <事件名> [jq 物件片段]：基本 payload（cwd 在沙箱主 checkout）
+ae_ev() { jq -nc --arg e "$1" --arg c "${AE_CWD:-$AE_BOX}" --arg s "$AE_PAYLOAD_SID" \
+    '{session_id:$s, cwd:$c, hook_event_name:$e}'; }
+ae_with() { printf '%s' "$1" | jq -c "$2"; }
+
+ae_reset
+
+# --- SubagentStart（實測形狀：aid／at 在頂層）
+out=$(ae_run "$(ae_with "$(ae_ev SubagentStart)" '. + {agent_id:"a1b2c3", agent_type:"implementer"}')")
+expect_empty "SubagentStart：stdout 為空" "$out"
+expect_eq "SubagentStart：多一行" 1 "$(ae_lines)"
+expect_eq "SubagentStart：v 為 1" 1 "$(ae_f '.v')"
+expect_eq "SubagentStart：ev" SubagentStart "$(ae_f '.ev')"
+expect_eq "SubagentStart：aid 與 payload 相同" a1b2c3 "$(ae_f '.aid')"
+expect_eq "SubagentStart：at 與 payload 相同" implementer "$(ae_f '.at')"
+expect_eq "SubagentStart：sid" "$AE_PAYLOAD_SID" "$(ae_f '.sid')"
+expect_eq "SubagentStart：src 為 main" main "$(ae_f '.src')"
+expect_eq "SubagentStart：t 與 ms 都是整數、ms 在 0–999" true \
+    "$(ae_last | jq '(.t|type=="number" and .==floor) and (.ms|type=="number" and .==floor and .>=0 and .<=999)')"
+expect_eq "SubagentStart：沒有 tool／file／act／need／nt／text 以外的欄位" \
+    "act,aid,at,ev,file,ms,need,nt,sid,src,t,text,tool,v" "$(ae_last | jq -r 'keys|join(",")')"
+
+# --- 主 session 的 PostToolUse Write（沒有 agent_id）
+ae_run "$(ae_with "$(ae_ev PostToolUse)" ". + {tool_name:\"Write\", tool_input:{file_path:\"$AE_BOX/src/a.ts\", content:\"FILECONTENT-XYZ\"}}")" >/dev/null
+expect_eq "主 session Write：照寫一行" 2 "$(ae_lines)"
+expect_eq "主 session Write：aid 為空字串" "" "$(ae_f '.aid')"
+expect_eq "主 session Write：file 為相對路徑" src/a.ts "$(ae_f '.file')"
+expect_eq "主 session Write：act" "編輯 a.ts" "$(ae_f '.act')"
+case "$(ae_last)" in *FILECONTENT-XYZ*) ng "Write：事件行不含檔案內容" "不含" "含" ;; *) ok "Write：事件行不含檔案內容" ;; esac
+
+# --- worktree：cwd 在 worktree 子目錄
+ae_wt
+ae_run "$(ae_with "$(AE_CWD="$AE_WT/src" ae_ev PostToolUse)" ". + {agent_id:\"w1\", tool_name:\"Write\", tool_input:{file_path:\"$AE_WT/src/x.ts\"}}")" >/dev/null
+expect_eq "worktree：src 為 worktree:wt-a" worktree:wt-a "$(ae_f '.src')"
+expect_eq "worktree：絕對路徑轉成相對 worktree 根" src/x.ts "$(ae_f '.file')"
+expect_eq "worktree：事件仍寫進主 checkout 的 logs" 3 "$(ae_lines)"
+ae_run "$(ae_with "$(AE_CWD="$AE_WT/src" ae_ev PostToolUse)" ". + {tool_name:\"Write\", tool_input:{file_path:\"$AE_BOX/elsewhere.ts\"}}")" >/dev/null
+expect_eq "檔案不在該 checkout 內：file 為空" "" "$(ae_f '.file')"
+
+# --- Bash／PowerShell 的 act
+ae_bash() { ae_run "$(ae_ev "${3:-PostToolUse}" | jq -c --arg c "$1" --arg d "$2" '. + {tool_name:"Bash", tool_input:({command:$c} + (if $d == "" then {} else {description:$d} end))}')" >/dev/null; }
+ae_bash "npm test -- --watch" "Run the unit tests"
+expect_eq "Bash 有 description：act 為「跑 <description>」" "跑 Run the unit tests" "$(ae_f '.act')"
+ae_bash "npm test -- --token abc" ""
+expect_eq "Bash 沒有 description：只記第一個詞" "跑 npm" "$(ae_f '.act')"
+ae_bash "API_KEY=xyz-secret-1 curl -H 'Authorization: Bearer abc-secret-2' https://x.test" ""
+expect_eq "Bash 開頭賦值：act 為「跑 curl」" "跑 curl" "$(ae_f '.act')"
+case "$(ae_last)" in *xyz-secret-1*|*abc-secret-2*) ng "Bash：事件行不含賦值值與 header" "不含" "含" ;; *) ok "Bash：事件行不含賦值值與 header" ;; esac
+ae_bash "FOO=1 BAR=2 /usr/bin/make all" ""
+expect_eq "Bash 多個賦值＋絕對路徑：act 為「跑 make」" "跑 make" "$(ae_f '.act')"
+ae_bash "A=1 B=2" ""
+expect_eq "Bash 整串都是賦值：act 為「跑指令」" "跑指令" "$(ae_f '.act')"
+ae_bash 'TOKEN="pa ss word" deploy.sh' ""
+expect_eq "Bash 賦值值含空白（有引號）：act 為「跑 deploy.sh」" "跑 deploy.sh" "$(ae_f '.act')"
+case "$(ae_last)" in *"pa ss"*|*word*) ng "Bash 帶引號的賦值：事件行不含值" "不含" "含" ;; *) ok "Bash 帶引號的賦值：事件行不含值" ;; esac
+ae_bash "echo hi" "Say hi" PreToolUse
+expect_eq "PreToolUse Bash：也記 act" "跑 Say hi" "$(ae_f '.act')"
+ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"PowerShell", tool_input:{command:"Get-ChildItem -Recurse"}}')" >/dev/null
+expect_eq "PowerShell：同 Bash 規則" "跑 Get-ChildItem" "$(ae_f '.act')"
+
+# --- Edit：不含 old_string／new_string
+ae_run "$(ae_with "$(ae_ev PostToolUse)" ". + {tool_name:\"Edit\", tool_input:{file_path:\"$AE_BOX/lib/m.py\", old_string:\"OLDSECRET-AAA\", new_string:\"NEWSECRET-BBB\"}}")" >/dev/null
+case "$(ae_last)" in *OLDSECRET-AAA*|*NEWSECRET-BBB*) ng "Edit：事件行不含 old_string／new_string" "不含" "含" ;; *) ok "Edit：事件行不含 old_string／new_string" ;; esac
+expect_eq "Edit：act 與 file" "編輯 m.py|lib/m.py" "$(ae_f '[.act,.file]|join("|")')"
+
+# --- UserPromptSubmit：不記 prompt
+ae_run "$(ae_with "$(ae_ev UserPromptSubmit)" '. + {prompt:"密碼是 hunter2"}')" >/dev/null
+case "$(ae_last)" in *hunter2*|*密碼*) ng "UserPromptSubmit：事件行不含 prompt" "不含" "含" ;; *) ok "UserPromptSubmit：事件行不含 prompt" ;; esac
+expect_eq "UserPromptSubmit：act 與 text 都是空字串" "|" "$(ae_f '[.act,.text]|join("|")')"
+expect_eq "UserPromptSubmit：ev" UserPromptSubmit "$(ae_f '.ev')"
+
+# --- need
+ae_run "$(ae_with "$(ae_ev PermissionRequest)" '. + {agent_id:"p1", tool_name:"Bash", tool_input:{command:"rm -rf /tmp/x", description:"Delete temp dir"}}')" >/dev/null
+expect_eq "PermissionRequest：need 為 approve" approve "$(ae_f '.need')"
+expect_eq "PermissionRequest（Bash）：text 為「Bash：<description>」" "Bash：Delete temp dir" "$(ae_f '.text')"
+ae_run "$(ae_with "$(ae_ev PermissionRequest)" '. + {tool_name:"Bash", tool_input:{command:"SECRET=s3 curl x"}}')" >/dev/null
+expect_eq "PermissionRequest（Bash 無 description）：text 只記第一個詞" "Bash：curl" "$(ae_f '.text')"
+ae_run "$(ae_with "$(ae_ev PermissionRequest)" ". + {tool_name:\"Write\", tool_input:{file_path:\"$AE_BOX/src/k.ts\", content:\"zzz\"}}")" >/dev/null
+expect_eq "PermissionRequest（Write）：text 為「Write：<檔名>」" "Write：k.ts" "$(ae_f '.text')"
+ae_run "$(ae_with "$(ae_ev PermissionRequest)" '. + {tool_name:"WebFetch", tool_input:{url:"https://secret.test/?k=1"}}')" >/dev/null
+expect_eq "PermissionRequest（其他工具）：text 只寫工具名" "WebFetch" "$(ae_f '.text')"
+for ae_tool in WebFetch mcp__x__y; do
+    ae_n=$(ae_lines)
+    ae_run "$(ae_with "$(ae_ev PostToolUse)" ". + {agent_id:\"o1\", agent_type:\"implementer\", tool_name:\"$ae_tool\", tool_input:{url:\"https://secret.test/?k=SECRET-IN\", file_path:\"$AE_BOX/src/r.ts\"}, tool_response:{body:\"SECRET-OUT\"}}")" >/dev/null
+    expect_eq "白名單外的工具（$ae_tool）PostToolUse → 寫一行、act 為「用 <工具名>」、file 為空" "$((ae_n + 1))|用 $ae_tool||o1|implementer" \
+        "$(ae_lines)|$(ae_f '.act')|$(ae_f '.file')|$(ae_f '.aid')|$(ae_f '.at')"
+    case "$(ae_last)" in *SECRET-*|*secret.test*) ng "白名單外的工具（$ae_tool）：不含 tool_input／tool_response 內容" "不含" "含" ;;
+        *) ok "白名單外的工具（$ae_tool）：不含 tool_input／tool_response 內容" ;; esac
+done
+ae_notif() { ae_run "$(ae_ev Notification | jq -c --arg t "$1" '. + {notification_type:$t, message:"Claude needs your permission to use Bash"}')" >/dev/null; }
+ae_notif permission_prompt
+expect_eq "Notification permission_prompt：need approve、nt 照記" "approve|permission_prompt" "$(ae_f '[.need,.nt]|join("|")')"
+expect_eq "Notification：text 為 message" "Claude needs your permission to use Bash" "$(ae_f '.text')"
+for nt in idle_prompt elicitation_dialog; do
+    ae_notif "$nt"; expect_eq "Notification $nt：need 為 reply" "reply|$nt" "$(ae_f '[.need,.nt]|join("|")')"
+done
+for nt in auth_success elicitation_complete elicitation_response; do
+    n0=$(ae_lines); ae_notif "$nt"
+    expect_eq "Notification $nt：need 為 null 但仍寫一行" "null|$((n0 + 1))" "$(ae_f '.need|tostring')|$(ae_lines)"
+done
+ae_run "$(ae_with "$(ae_ev PreToolUse)" '. + {tool_name:"AskUserQuestion", tool_input:{questions:[{question:"要用 PostgreSQL 還是 SQLite？", options:[]},{question:"第二題"}]}}')" >/dev/null
+expect_eq "PreToolUse AskUserQuestion：need reply、text 為第一題" "reply|要用 PostgreSQL 還是 SQLite？" "$(ae_f '[.need,.text]|join("|")')"
+ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"AskUserQuestion", tool_input:{questions:[{question:"Q"}]}}')" >/dev/null
+expect_eq "PostToolUse AskUserQuestion：不開 need" null "$(ae_f '.need|tostring')"
+ae_run "$(ae_with "$(ae_ev SubagentStop)" '. + {agent_id:"a1b2c3", last_assistant_message:"LASTMSG-SECRET"}')" >/dev/null
+case "$(ae_last)" in *LASTMSG-SECRET*) ng "SubagentStop：事件行不含 last_assistant_message" "不含" "含" ;; *) ok "SubagentStop：事件行不含 last_assistant_message" ;; esac
+expect_eq "SubagentStop：ev 與 aid" "SubagentStop|a1b2c3" "$(ae_f '[.ev,.aid]|join("|")')"
+
+# --- 上限
+long80=$(printf 'あ%.0s' $(seq 1 200))
+ae_bash "x" "$long80"
+expect_eq "act 超過 80 字（全形）：截到 80 字" 80 "$(ae_f '.act|length')"
+ae_run "$(ae_ev Notification | jq -c --arg m "$long80" '. + {notification_type:"idle_prompt", message:$m}')" >/dev/null
+expect_eq "text 超過 120 字：截到 120 字" 120 "$(ae_f '.text|length')"
+ae_run "$(ae_ev Notification | jq -c --arg m "$long80" '. + {notification_type:("ｎ" + $m), message:"m"}')" >/dev/null
+expect_eq "nt 超過 30 字：截到 30 字" 30 "$(ae_f '.nt|length')"
+deep=$(printf 'ｄ%.0s' $(seq 1 150))
+ae_run "$(ae_ev PostToolUse | jq -c --arg d "$deep" --arg b "$AE_BOX" '. + {agent_id:$d, tool_name:"Write", tool_input:{file_path:($b + "/" + $d + "/" + $d + ".ts")}}')" >/dev/null
+expect_eq "aid 超過 40 字：截到 40 字" 40 "$(ae_f '.aid|length')"
+expect_eq "file 超過 120 字：留尾段、前面補 …（整行 <1024 時最多 120 字）" true \
+    "$(ae_last | jq '(.file|length) <= 120 and (.file|length) > 0')"
+big=$(printf 'あ%.0s' $(seq 1 300))
+ae_run "$(jq -nc --arg v "$big" --arg b "$AE_BOX" '{session_id:$v, cwd:$b, hook_event_name:"PermissionRequest", agent_id:$v, agent_type:$v, tool_name:$v, tool_input:{file_path:($b + "/" + $v + ".ts"), description:$v, command:$v}, notification_type:$v, message:$v}')" >/dev/null
+expect_eq "全部欄位都塞滿全形字：整行 < 1024 bytes（含換行）" true \
+    "$([ "$(ae_last | wc -c | tr -d ' ')" -lt 1024 ] && echo true || echo false)"
+expect_eq "全部欄位都塞滿：仍是合法 JSON" ev "$(ae_last | jq -r 'keys|map(select(.=="ev"))|.[0]')"
+ae_run "$(jq -nc --arg v "$big" --arg b "$AE_BOX" '{session_id:"s", cwd:$b, hook_event_name:"PostToolUse", tool_name:"Bash", tool_input:{command:"x", description:$v}}')" >/dev/null
+expect_eq "act 與 text 擠在一起超過 1000 bytes：整行仍 < 1024" true \
+    "$([ "$(ae_last | wc -c | tr -d ' ')" -lt 1024 ] && echo true || echo false)"
+ae_run "$(jq -nc --arg v "$big" --arg b "$AE_BOX" '{session_id:"s", cwd:$b, hook_event_name:"Notification", notification_type:"idle_prompt", message:$v, agent_id:$v, agent_type:$v}')" >/dev/null
+expect_eq "text 縮到 40 字後 act 也縮：整行仍 < 1024" true \
+    "$([ "$(ae_last | wc -c | tr -d ' ')" -lt 1024 ] && echo true || echo false)"
+ae_run "$(jq -nc --arg b "$AE_BOX" '{session_id:"s", cwd:$b, hook_event_name:"PostToolUse", tool_name:"Bash", tool_input:{command:"x", description:"line1\nline2\ttab"}}')" >/dev/null
+expect_eq "description 含換行：仍然只有一行" 1 "$(ae_last | wc -l | tr -d ' ')"
+
+# --- 閘門不得讀這份檔
+expect_eq "pre-agent-gate.sh、lib/agent-inflight.sh 不讀 live-events" "" \
+    "$(grep -l 'live-events' "$HOOK_DIR/pre-agent-gate.sh" "$HOOK_DIR/lib/agent-inflight.sh" 2>/dev/null)"
+
+# --- 逃生門與降級
+ae_reset
+out=$(ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" OVERVIEW=off); rc=$?
+expect_eq "OVERVIEW=off：不寫檔、不觸發、exit 0、無輸出" "0|0|0|" "$rc|$(ae_lines)|$(ae_calls)|$out"
+out=$(ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" OVERVIEW_LIVE=off); rc=$?
+expect_eq "OVERVIEW_LIVE=off：不寫檔、不觸發、exit 0、無輸出" "0|0|0|" "$rc|$(ae_lines)|$(ae_calls)|$out"
+out=$(env CLAUDE_PROJECT_DIR="$AE_BOX" PATH=/nonexistent /bin/bash "$HOOK_DIR/agent-events.sh" 2>/dev/null \
+    <<< "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')"); rc=$?
+expect_eq "沒有 jq：exit 0、stdout 空、不寫檔" "0|0|" "$rc|$(ae_lines)|$out"
+out=$(ae_run 'this is {not json'); rc=$?
+expect_eq "輸入不是 JSON：exit 0、stdout 空、不寫檔" "0|0|" "$rc|$(ae_lines)|$out"
+out=$(ae_run ''); rc=$?
+expect_eq "空輸入：exit 0、不寫檔" "0|0" "$rc|$(ae_lines)"
+out=$(ae_run '[1,2]'); rc=$?
+expect_eq "輸入是 JSON 但不是物件：exit 0、不寫檔" "0|0" "$rc|$(ae_lines)"
+
+# --- 觸發 overview.sh --live
+ae_reset
+rm -f "$AE_BOX/.claude/taskmaster-data/project.json"
+ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" >/dev/null
+expect_eq "沒有 project.json（模板 repo 本身）：照寫事件但不觸發 --live" "1|0" "$(ae_lines)|$(ae_calls)"
+ae_reset
+for i in 1 2 3 4 5; do
+    ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" >/dev/null
+done
+expect_eq "視窗內連續 5 個事件：overview.sh 只被呼叫 1 次" 1 "$(ae_calls)"
+expect_contains "觸發的是 --live" "--live" "$(cat "$AE_CALLS" 2>/dev/null)"
+expect_eq "視窗內其餘事件留 .live-dirty" true \
+    "$([ -f "$AE_BOX/.claude/taskmaster-data/overview/.live-dirty" ] && echo true || echo false)"
+expect_eq "5 個事件都有寫" 5 "$(ae_lines)"
+ae_reset
+rm -f "$AE_CALLS"
+ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" OVERVIEW_LIVE_WINDOW_SEC=0 >/dev/null
+ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" OVERVIEW_LIVE_WINDOW_SEC=0 >/dev/null
+expect_eq "視窗為 0 秒：每個事件都觸發" 2 "$(ae_calls)"
+
+ae_reset
+printf '#!/bin/bash\necho "$*" >> "%s"\n' "$AE_CALLS" > "$AE_BOX/.claude/scripts/overview.sh"
+ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Bash", tool_input:{command:"ls"}}')" >/dev/null
+expect_eq "overview.sh 還不認 --live：不呼叫、仍留 .live-dirty" "0|true" \
+    "$(ae_calls)|$([ -f "$AE_BOX/.claude/taskmaster-data/overview/.live-dirty" ] && echo true || echo false)"
+
+# --- settings.json 接線
+expect_eq "settings.json：agent-events.sh 的接線全部 async: true" true \
+    "$(jq '[.hooks[][].hooks[] | select(.command | contains("agent-events.sh"))] | all(.async == true)' "$HOOK_DIR/../settings.json")"
+expect_eq "settings.json：PostToolUse 的 agent-events.sh 接全部工具（matcher *），只有一條" '["*"]' \
+    "$(jq -c '[.hooks.PostToolUse[] | select(any(.hooks[]; .command | contains("agent-events.sh"))) | .matcher]' "$HOOK_DIR/../settings.json")"
+expect_eq "settings.json：agent-events.sh 至少 8 條接線" true \
+    "$(jq '[.hooks[][].hooks[] | select(.command | contains("agent-events.sh"))] | length >= 8' "$HOOK_DIR/../settings.json")"
+
+# --- session-start 輪替
+ae_reset
+for i in $(seq 1 3500); do printf '{"v":1,"n":%d}\n' "$i"; done > "$AE_LOG"
+printf '' | env CLAUDE_PROJECT_DIR="$AE_BOX" bash "$HOOK_DIR/session-start.sh" >/dev/null 2>&1
+expect_eq "session 啟動時 live-events.jsonl 3500 行：截成最後 3000 行" "3000|501" \
+    "$(ae_lines)|$(head -n 1 "$AE_LOG" | jq -r '.n')"
+
+# =========================================================================
+section "overview.sh --live — 即時聚合（live.js）"
+# =========================================================================
+# ADR-2026-11-12-002 第 5、8 節；欄位規則的唯一來源是 overview.sh 檔頭。
+# fixture 是手寫的事件行與 data.js，不靠真的 hook。「現在」用 OVERVIEW_NOW 固定、時區固定 UTC，
+# 所以「今天」不會在午夜前後變；路徑含中文與空格（Windows jq 讀中文絕對路徑會失敗）。
+LV="$SANDBOX/即時 聚合/專 案"; LVO="$LV/.claude/taskmaster-data/overview"; LV_LOG="$LV/.claude/logs/live-events.jsonl"
+LV_OV="$HOOK_DIR/../scripts/overview.sh"
+LV_NOW=1794484800
+LV_DAY0=$((LV_NOW - 43200))
+LV_MD=$(TZ=UTC date -d "@$LV_NOW" +%m-%d)
+LV_MD_Y=$(TZ=UTC date -d "@$((LV_NOW - 86400))" +%m-%d)
+LV_G12='{"key":"plans/1.2-x.md","task":"1.2","title":"任務 1.2","plan":"plans/1.2-x.md","sources":["main"],"where":"main","guessed":false,"phase":1,"phases":2,"activePhases":[1]}'
+LV_G31='{"key":"plans/3.1-y.md","task":"3.1","title":"任務 3.1","plan":"plans/3.1-y.md","sources":["worktree:wt-b"],"where":"worktree:wt-b","guessed":false,"phase":1,"phases":1,"activePhases":[1]}'
+LV_P12='{"file":"plans/1.2-x.md","files":["src/api/**"],"parts":[{"id":"p1","phase":1,"files":["src/a.ts","src/b.ts","src/c.ts"],"planned":true},{"id":"p2","phase":2,"files":["src/d.ts"],"planned":true},{"id":"x1","phase":null,"files":["src/e.ts"],"planned":false}]}'
+LV_P31='{"file":"plans/3.1-y.md","files":["src/**"],"parts":[]}'
+
+lv_reset() {
+    rm -rf "$SANDBOX/即時 聚合"
+    mkdir -p "$LV/.claude/scripts" "$LV/.claude/hooks/lib" "$LV/.claude/logs" "$LVO"
+    cp "$LV_OV" "$LV/.claude/scripts/overview.sh"
+    cp "$HOOK_DIR/lib/agent-inflight.sh" "$LV/.claude/hooks/lib/"
+    printf '{"name":"即時","mode":"mvp"}\n' > "$LV/.claude/taskmaster-data/project.json"
+    # 自己一個 repo：整套跑時沙箱根目錄已被別節 git init，不然主 checkout 會被算成沙箱根
+    git -c init.defaultBranch=main init -q "$LV" >/dev/null 2>&1
+    lv_data "[$LV_G12,$LV_G31]" '[]' "[$LV_P12,$LV_P31]"
+}
+# lv_data <curGroups> [tasks] [plans]：手寫一份 data.js（只放 --live 會讀的欄位）
+lv_data() {
+    printf '// 測試\nwindow.OVERVIEW = %s;\n' \
+        "$(jq -nc --argjson g "$1" --argjson t "${2:-[]}" --argjson p "${3:-[]}" '{schema: 2, curGroups: $g, tasks: $t, plans: $p}')" > "$LVO/data.js"
+}
+# lv_ev <距現在秒數（負＝過去）> <ev> <sid> <aid> <at> <src> [其他欄位 JSON]：附加一行事件
+lv_ev() {
+    local x="${7:-}"; [ -n "$x" ] || x='{}'
+    jq -nc --argjson t $((LV_NOW + $1)) --arg ev "$2" --arg s "$3" --arg a "$4" --arg at "$5" --arg src "$6" --argjson x "$x" \
+        '{v: 1, t: $t, ms: 0, ev: $ev, sid: $s, aid: $a, at: $at, src: $src, tool: "", file: "", act: "", need: null, nt: "", text: ""} + $x' \
+        >> "${LV_FILE:-$LV_LOG}"
+}
+lv_act() { jq -nc --arg a "$1" --arg d "$2" '{timestamp: "2026-11-12 10:00:00", event: "agent_start", agent_id: $a, description: $d, prompt: "很長的派工單"}' >> "$LV/.claude/logs/agent-activity.jsonl"; }
+lv_run() { env TZ=UTC OVERVIEW_NOW="$LV_NOW" bash "$LV/.claude/scripts/overview.sh" --live "$LV" >/dev/null 2>&1; }
+lvq() { sed -n 's/^window\.OVERVIEW_LIVE = //; s/;$//p' "$LVO/live.js" 2>/dev/null | jq -r "$1" 2>/dev/null; }
+lv_w() { lv_ev "$1" PostToolUse "$2" "$3" "${5:-implementer}" "$4" "{\"tool\":\"Write\",\"file\":\"$6\",\"act\":\"編輯 ${6##*/}\"}"; }
+
+expect_eq "overview.sh 檔內有 --live（agent-events.sh 的過渡守衛據此放行）" 0 "$(grep -q -- '--live' "$LV_OV"; echo $?)"
+
+# --- 形狀
+lv_reset; lv_ev -60 SubagentStart s1 a1 implementer main; lv_run
+expect_eq "live.js 只有一行" 1 "$(wc -l < "$LVO/live.js" | tr -d ' ')"
+expect_eq "live.js 以 window.OVERVIEW_LIVE = 開頭" "window.OVERVIEW_LIVE = " "$(head -c 23 "$LVO/live.js")"
+expect_eq "live.js 以 ; 結尾（只有一句賦值）" ";" "$(tr -d '\n' < "$LVO/live.js" | tail -c 1)"
+expect_eq "live.js 的物件有 lanes、needs、clashes、doneToday、feed、at" "at,clashes,doneToday,feed,lanes,needs" "$(lvq 'keys | join(",")')"
+
+# --- lanes：SubagentStart 沒有 Stop
+lv_reset; lv_act a1 "實作階段 2：購物車"; lv_ev -600 SubagentStart s1 a1 implementer main; lv_run
+expect_eq "SubagentStart a1 沒有 Stop → lanes 1 筆、since 為該事件的 t、desc 為 agent-activity 同 agent_id 的 description" \
+    "1 $((LV_NOW - 600)) 實作階段 2：購物車 implementer main" "$(lvq '"\(.lanes | length) \(.lanes[0].since) \(.lanes[0].desc) \(.lanes[0].who) \(.lanes[0].where)"')"
+expect_eq "doneToday.agents 起初為 0" 0 "$(lvq '.doneToday.agents')"
+lv_ev -30 SubagentStop s1 a1 implementer main; lv_run
+expect_eq "補一筆 SubagentStop a1 → lanes 0 筆、feed 第一筆是 a1 完成、doneToday.agents 為 1" "0 agent_done a1 1" \
+    "$(lvq '"\(.lanes | length) \(.feed[0].kind) \(.feed[0].id) \(.doneToday.agents)"')"
+expect_eq "feed 第二筆是 a1 開始（新的在前），帶 desc" "agent_start a1 實作階段 2：購物車" "$(lvq '.feed[1] | "\(.kind) \(.id) \(.text)"')"
+lv_ev -20 SubagentStop s1 a1 implementer main; lv_ev $((LV_DAY0 - LV_NOW - 60)) SubagentStop s0 a0 implementer main; lv_run
+expect_eq "同一個 a1 兩筆 SubagentStop 只算 1；昨天 23:59 的 SubagentStop 不算" 1 "$(lvq '.doneToday.agents')"
+lv_reset; lv_ev $((-13 * 3600)) SubagentStart s1 a1 implementer main; lv_run
+expect_eq "13 小時前的 SubagentStart、沒有 Stop → 不列（超過 12 小時）" 0 "$(lvq '.lanes | length')"
+
+# --- doneToday.tasks
+lv_reset
+lv_data "[$LV_G12]" "[{\"id\":\"1.1\",\"doneOn\":\"$LV_MD\"},{\"id\":\"1.2\",\"doneOn\":\"$LV_MD\"},{\"id\":\"1.3\",\"doneOn\":\"$LV_MD_Y\"},{\"id\":\"1.4\",\"doneOn\":null}]" "[$LV_P12]"
+lv_run
+expect_eq "data.js 2 個任務 doneOn 為今天、1 個昨天 → doneToday.tasks 為 2" 2 "$(lvq '.doneToday.tasks')"
+expect_eq "沒有事件檔 → live.js 照寫，lanes／needs／clashes／feed 為空陣列、agents 0（tasks 照 data.js 算）" "[] [] [] [] 0 2" \
+    "$(lvq '"\(.lanes | tojson) \(.needs | tojson) \(.clashes | tojson) \(.feed | tojson) \(.doneToday.agents) \(.doneToday.tasks)"')"
+
+# --- doing 與 files
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_w -300 s1 a1 main implementer src/a.ts; lv_run
+expect_eq "a1 PostToolUse Write src/a.ts → doing 為「編輯 a.ts」" "編輯 a.ts" "$(lvq '.lanes[0].doing')"
+expect_eq "所屬組進行中階段的部件檔 3 個、a1 寫了 1 個 → files {done:1,total:3}" '{"done":1,"total":3}' "$(lvq '.lanes[0].files | tojson')"
+lv_ev -200 PreToolUse s1 a1 implementer main '{"tool":"Bash","act":"跑 測試"}'; lv_ev -100 PostToolUse s1 a1 implementer main '{"tool":"Bash"}'; lv_run
+expect_eq "doing 取最後一筆有 act 的事件（之後沒有 act 的事件不覆蓋）" "跑 測試" "$(lvq '.lanes[0].doing')"
+expect_eq "lastAt 為該 lane 最後一筆事件的 t" "$((LV_NOW - 100))" "$(lvq '.lanes[0].lastAt')"
+lv_data "[$(printf '%s' "$LV_G12" | jq -c '.activePhases = [3]')]" '[]' "[$LV_P12]"; lv_run
+expect_eq "所屬組的進行中階段沒有部件檔 → files 為 null" null "$(lvq '.lanes[0].files')"
+
+# --- parts（部件卡的「誰在做／等你」）
+LV_P9='{"file":"plans/1.2-x.md","files":[],"parts":[{"id":"p1","phase":1,"files":["src/old.ts"],"planned":true},{"id":"p9a","phase":9,"files":["src/pay/**"],"planned":true},{"id":"p9b","phase":9,"files":["src/ship.ts"],"planned":true},{"id":"x9","phase":null,"files":["src/pay/**"],"planned":false}]}'
+lv_reset; lv_data "[$(printf '%s' "$LV_G12" | jq -c '.activePhases = [9]')]" '[]' "[$LV_P9]"
+lv_ev -720 SubagentStart s1 a1 implementer main; lv_w -300 s1 a1 main implementer src/pay/card.ts; lv_run
+expect_eq "a1 寫了部件 p9a 的檔 → lanes[0].parts 為 [\"p9a\"]（同階段沒被寫的 p9b、計畫外的 x9 不出現）" '["p9a"]' "$(lvq '.lanes[0].parts | tojson')"
+lv_w -200 s1 a1 main implementer src/old.ts; lv_run
+expect_eq "寫到別的階段的部件檔 → 也列（不限階段，照部件順序）" '["p1","p9a"]' "$(lvq '.lanes[0].parts | tojson')"
+lv_ev -100 PostToolUse s9 "" "" main '{"tool":"Edit","file":"src/ship.ts","act":"編輯 ship.ts"}'; lv_run
+expect_eq "主 session 的 lane 也帶 parts" '["p9b"]' "$(lvq '.lanes[] | select(.id == "s9") | .parts | tojson')"
+lv_reset; lv_ev -600 SubagentStart s4 a4 implementer worktree:zzz; lv_w -300 s4 a4 worktree:zzz implementer src/a.ts; lv_run
+expect_eq "group 為 null → parts 為 []" 'null []' "$(lvq '.lanes[0] | "\(.group) \(.parts | tojson)"')"
+
+# --- group 歸屬
+lv_reset
+lv_ev -600 SubagentStart s1 a1 implementer main
+lv_ev -500 SubagentStart s1 a2 implementer worktree:agent-x
+lv_ev -400 SubagentStart s3 a3 implementer worktree:wt-b
+lv_ev -300 SubagentStart s4 a4 implementer worktree:zzz
+lv_run
+expect_eq "a1（src main）→ 主 checkout 目前任務 1.2 的組" plans/1.2-x.md "$(lvq '.lanes[] | select(.id == "a1") | .group')"
+expect_eq "a2（src worktree:agent-x，不在任何組的 sources、與 a1 同 sid）→ 歸 1.2" plans/1.2-x.md "$(lvq '.lanes[] | select(.id == "a2") | .group')"
+expect_eq "a3（src worktree:wt-b，wt-b 目前任務 3.1）→ 歸 3.1" plans/3.1-y.md "$(lvq '.lanes[] | select(.id == "a3") | .group')"
+expect_eq "a4 對不到 → group 為 null" null "$(lvq '.lanes[] | select(.id == "a4") | .group')"
+
+# --- readonly（名單從 hooks/lib/agent-inflight.sh 讀，不抄一份）
+lv_reset
+lv_ev -600 SubagentStart s1 r1 planner main; lv_ev -500 SubagentStart s1 r2 code-quality-specialist main; lv_ev -400 SubagentStart s1 r3 implementer main
+lv_run
+expect_eq "planner 的 lane（在 AGENT_INFLIGHT_READONLY）→ readonly true；implementer → false" "true false" \
+    "$(lvq '"\(.lanes[] | select(.id == "r1") | .readonly) \(.lanes[] | select(.id == "r3") | .readonly)"')"
+expect_eq "code-quality-specialist 的 readonly 與 AGENT_INFLIGHT_READONLY 名單一致" \
+    "$( (source "$HOOK_DIR/lib/agent-inflight.sh"; case " $AGENT_INFLIGHT_READONLY " in *" code-quality-specialist "*) echo true ;; *) echo false ;; esac) )" \
+    "$(lvq '.lanes[] | select(.id == "r2") | .readonly')"
+sed -i 's/^AGENT_INFLIGHT_READONLY="/AGENT_INFLIGHT_READONLY="implementer /' "$LV/.claude/hooks/lib/agent-inflight.sh"; lv_run
+expect_eq "改 lib 的名單（加 implementer）→ implementer 的 lane 跟著變 readonly true" true "$(lvq '.lanes[] | select(.id == "r3") | .readonly')"
+
+# --- session lanes
+lv_reset; lv_ev -300 PostToolUse s9 "" "" main '{"tool":"Bash","act":"跑 ls"}'; lv_run
+expect_eq "主 session 5 分鐘前有事件、最後一筆不是 Stop → lane 1 筆、who 為主 session、doing 為 act" "1 主 session 跑 ls s9" \
+    "$(lvq '"\(.lanes | length) \(.lanes[0].who) \(.lanes[0].doing) \(.lanes[0].id)"')"
+lv_ev -200 Stop s9 "" "" main; lv_run
+expect_eq "最後一筆是 Stop → 不列" 0 "$(lvq '.lanes | length')"
+lv_reset; lv_ev -1200 UserPromptSubmit s9 "" "" main; lv_run
+expect_eq "最近一筆事件在 20 分鐘前 → 不列" 0 "$(lvq '.lanes | length')"
+lv_reset; lv_ev -300 PostToolUse s9 "" "" main '{"tool":"Bash","act":"跑 測試"}'; lv_ev -200 Stop s9 "" "" main
+lv_ev -60 Notification s9 "" "" main '{"need":"reply","nt":"idle_prompt","text":"等你"}'; lv_run
+expect_eq "session：跑 測試 → Stop → idle_prompt → lane 的 doing 只看 Stop 之後（不是「跑 測試」）、since 為 idle_prompt 的 t" "null $((LV_NOW - 60))" \
+    "$(lvq '"\(.lanes[0].doing) \(.lanes[0].since)"')"
+lv_reset; lv_ev -60 UserPromptSubmit s8 "" "" worktree:wt-b; lv_run
+expect_eq "worktree 的 session → who 為 worktree session、group 照 src 歸組" "worktree session plans/3.1-y.md" "$(lvq '.lanes[0] | "\(.who) \(.group)"')"
+
+# --- needs
+LV_PR='{"need":"approve","tool":"Bash","text":"Bash：跑 部署"}'
+lv_reset; lv_ev -60 PermissionRequest s1 a1 implementer main "$LV_PR"; lv_run
+expect_eq "PermissionRequest（s1、a1）→ needs 1 筆 approve，who 為 agent 類型、text 為批准什麼" "1 approve implementer Bash：跑 部署 $((LV_NOW - 60))" \
+    "$(lvq '"\(.needs | length) \(.needs[0].kind) \(.needs[0].who) \(.needs[0].text) \(.needs[0].since)"')"
+lv_ev -50 PostToolUse s1 a1 implementer main '{"tool":"Bash"}'; lv_run
+expect_eq "之後一筆 s1／a1 的 PostToolUse → needs 0 筆" 0 "$(lvq '.needs | length')"
+expect_eq "feed：need 出現與處理都有，新的在前" "need_done need_open" "$(lvq '[.feed[].kind] | join(" ")')"
+
+lv_reset; lv_ev -60 PermissionRequest s1 a1 implementer main "$LV_PR"; lv_ev -40 PostToolUse s1 a2 implementer main '{"tool":"Bash"}'; lv_ev -30 PostToolUse s2 a1 implementer main '{"tool":"Bash"}'; lv_run
+expect_eq "別的 aid（a2）的事件不關 a1 的 need" 1 "$(lvq '.needs | length')"
+lv_ev -20 SubagentStop s1 a1 implementer main; lv_run
+expect_eq "該 agent SubagentStop → need 關閉" 0 "$(lvq '.needs | length')"
+lv_reset; lv_ev -60 PermissionRequest s1 a1 implementer main "$LV_PR"; lv_ev -20 SubagentStop s2 a1 implementer main; lv_run
+expect_eq "同一個 aid 的 SubagentStop 換了 sid → need 也關閉，feed 有 need_done" "0 need_done" "$(lvq '"\(.needs | length) \([.feed[] | select(.kind | startswith("need")) | .kind] | first)"')"
+lv_reset; lv_ev -60 PermissionRequest s1 a1 implementer main '{"need":"approve","tool":"WebFetch","text":"WebFetch"}'
+lv_ev -40 PostToolUse s1 a1 implementer main '{"tool":"WebFetch","act":"用 WebFetch"}'; lv_run
+expect_eq "PermissionRequest 後一筆同 sid／aid 的 WebFetch PostToolUse → need 關閉" 0 "$(lvq '.needs | length')"
+
+lv_reset; lv_ev -60 Notification s1 "" "" main '{"need":"reply","nt":"idle_prompt","text":"Claude 在等你的輸入"}'; lv_run
+expect_eq "Notification idle_prompt（s1、無 aid）→ 1 筆 reply、who 為主 session" "1 reply 主 session" "$(lvq '"\(.needs | length) \(.needs[0].kind) \(.needs[0].who)"')"
+lv_ev -10 UserPromptSubmit s1 "" "" main; lv_run
+expect_eq "之後 UserPromptSubmit s1 → 0 筆" 0 "$(lvq '.needs | length')"
+
+lv_reset; lv_ev -60 PreToolUse s1 "" "" main '{"need":"reply","tool":"AskUserQuestion","text":"要用哪個資料庫？"}'; lv_run
+expect_eq "PreToolUse AskUserQuestion → 1 筆 reply、text 為題目" "1 reply 要用哪個資料庫？" "$(lvq '"\(.needs | length) \(.needs[0].kind) \(.needs[0].text)"')"
+lv_ev -10 PostToolUse s1 "" "" main '{"tool":"AskUserQuestion"}'; lv_run
+expect_eq "PostToolUse AskUserQuestion → 0 筆" 0 "$(lvq '.needs | length')"
+
+lv_reset; lv_ev -60 PermissionRequest s1 a1 implementer main "$LV_PR"
+lv_ev -57 Notification s1 a1 implementer main '{"need":"approve","nt":"permission_prompt","text":"Claude needs your permission to use Bash"}'; lv_run
+expect_eq "PermissionRequest 後 3 秒同 s1／a1 的 Notification permission_prompt → 仍只 1 筆（text 取 PermissionRequest、since 取較早的）" \
+    "1 Bash：跑 部署 $((LV_NOW - 60))" "$(lvq '"\(.needs | length) \(.needs[0].text) \(.needs[0].since)"')"
+lv_reset; lv_ev -60 PreToolUse s1 "" "" main '{"need":"reply","tool":"AskUserQuestion","text":"第一題"}'
+lv_ev -30 PreToolUse s1 "" "" main '{"need":"reply","tool":"AskUserQuestion","text":"第二題"}'; lv_run
+expect_eq "同 sid／aid 兩個開啟者 → 只留最新一筆" "1 第二題" "$(lvq '"\(.needs | length) \(.needs[0].text)"')"
+expect_eq "被取代的那筆在 feed 記 need_done（新的在前）" "need_open need_done need_open" "$(lvq '[.feed[].kind] | join(" ")')"
+
+lv_reset
+lv_ev -60 PermissionRequest s1 a1 implementer main "$(printf '%s' "$LV_PR" | jq -c '. + {ms: 300}')"
+lv_ev -60 PreToolUse s1 a1 implementer main '{"tool":"Bash","act":"跑 部署","ms":100}'
+lv_run
+expect_eq "PreToolUse Bash（ms 100）與 PermissionRequest（同一秒、ms 300）以相反順序寫進檔案 → needs 1 筆" 1 "$(lvq '.needs | length')"
+lv_reset
+lv_ev -60 PermissionRequest s1 a1 implementer main "$LV_PR"; lv_ev -60 PostToolUse s1 a1 implementer main '{"tool":"Bash"}'; lv_run
+expect_eq "(t, ms) 相同時依檔案行序：PermissionRequest 在前、PostToolUse 在後 → 已處理" 0 "$(lvq '.needs | length')"
+lv_reset
+lv_ev -60 PostToolUse s1 a1 implementer main '{"tool":"Bash"}'; lv_ev -60 PermissionRequest s1 a1 implementer main "$LV_PR"; lv_run
+expect_eq "(t, ms) 相同時依檔案行序：PostToolUse 在前、PermissionRequest 在後 → 仍開著" 1 "$(lvq '.needs | length')"
+
+lv_reset; lv_ev -60 Notification s1 "" "" main '{"nt":"auth_success","text":"登入成功"}'; lv_run
+expect_eq "Notification auth_success（s1）→ 不開 need" 0 "$(lvq '.needs | length')"
+lv_reset; lv_ev -60 Notification s1 "" "" main '{"need":"reply","nt":"idle_prompt","text":"等你"}'
+lv_ev -50 Notification s1 "" "" main '{"nt":"auth_success","text":"登入成功"}'; lv_run
+expect_eq "auth_success 出現在 s1 的 idle_prompt 之後 → 該 need 關閉" 0 "$(lvq '.needs | length')"
+
+lv_reset; lv_ev $((-5 * 3600)) PermissionRequest s1 a1 implementer main "$LV_PR"; lv_run
+expect_eq "5 小時前開啟、之後沒事件的 need → 不列" 0 "$(lvq '.needs | length')"
+
+# --- 壞行與版本
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main
+printf '{"v":2,"t":%d,"ms":0,"ev":"SubagentStart","sid":"s1","aid":"a9","at":"implementer","src":"main"}\n' $((LV_NOW - 500)) >> "$LV_LOG"
+printf '{"v":1,"t":%d,"ms":0,"ev":"SubagentSta\n' $((LV_NOW - 400)) >> "$LV_LOG"
+lv_ev -300 SubagentStart s1 a2 implementer main; lv_run
+expect_eq "事件行 v 為 2 → 整行略過；被截斷的行 → 略過；其餘照算" "a1,a2" "$(lvq '[.lanes[].id] | sort | join(",")')"
+lv_reset; mkdir -p "$LV/.claude/worktrees/wt-c/.claude/logs"
+printf '{"v":1,"t":%d,"ms":0,"ev":"SubagentSta' $((LV_NOW - 400)) >> "$LV_LOG"
+LV_FILE="$LV/.claude/worktrees/wt-c/.claude/logs/live-events.jsonl" lv_ev -300 SubagentStart s7 a7 implementer main; lv_run
+expect_eq "主 checkout 事件檔最後一行寫到一半（沒有換行）→ 不會吃掉下一個檔（worktree）的第一行" a7 "$(lvq '[.lanes[].id] | join(",")')"
+
+# --- clashes
+lv_reset
+lv_ev -600 SubagentStart s1 a1 implementer main; lv_ev -600 SubagentStart s3 a3 implementer worktree:wt-b
+lv_w -300 s1 a1 main implementer src/x.ts; lv_w -200 s3 a3 worktree:wt-b implementer src/x.ts; lv_run
+expect_eq "主 checkout 的 a1 寫 src/x.ts、wt-b 的 a3 也寫 → clashes 1 筆 {file, lines}" '[{"file":"src/x.ts","lines":["main","worktree:wt-b"]}]' \
+    "$(lvq '[.clashes[] | {file, lines}] | tojson')"
+lv_reset; lv_w -300 s1 a1 main implementer src/y.ts; lv_run
+expect_eq "wt-b 的 plan files: 含 src/**、主 checkout 寫了 src/y.ts → clashes 含 src/y.ts" '[{"file":"src/y.ts","lines":["main","worktree:wt-b"]}]' \
+    "$(lvq '[.clashes[] | {file, lines}] | tojson')"
+lv_reset; lv_ev -60 PostToolUse s1 "" "" main '{"tool":"Bash"}'; lv_run
+expect_eq "兩邊只有 plan glob 重疊（src/api/** 與 src/**）、沒有實際寫入 → 0 筆" 0 "$(lvq '.clashes | length')"
+lv_reset; lv_data "[$LV_G12]" '[]' "[$LV_P12]"; lv_w -300 s1 a2 worktree:agent-x implementer src/api/q.ts; lv_ev -400 SubagentStart s1 a1 implementer main; lv_run
+expect_eq "同一組（同 sid 派出的 worktree）寫到自己組 plan 的 glob → 不算撞" 0 "$(lvq '[.clashes[] | select(.file == "src/api/q.ts")] | length')"
+lv_reset; lv_w $((-13 * 3600)) s1 a1 main implementer src/y.ts; lv_run
+expect_eq "13 小時前的寫入 → 不算進寫入集" 0 "$(lvq '.clashes | length')"
+
+lv_reset; lv_data "[$LV_G12]" '[]' "[$LV_P12]"
+lv_ev -600 SubagentStart s1 a1 implementer main; lv_ev -600 SubagentStart s1 a5 implementer main
+lv_w -300 s1 a1 main implementer src/z.ts; lv_w -200 s1 a5 main implementer src/z.ts; lv_run
+expect_eq "同 checkout 的 a1、a5 都在跑且都寫 src/z.ts → 1 筆，agents 列出兩者" '[{"file":"src/z.ts","lines":["main"],"agents":["a1","a5"]}]' "$(lvq '.clashes | tojson')"
+lv_ev -100 SubagentStop s1 a5 implementer main; lv_run
+expect_eq "a5 已 Stop → 0 筆" 0 "$(lvq '.clashes | length')"
+
+# --- worktree 自己的事件檔（claude -w 的 session）
+lv_reset; mkdir -p "$LV/.claude/worktrees/wt-c/.claude/logs"
+LV_FILE="$LV/.claude/worktrees/wt-c/.claude/logs/live-events.jsonl" lv_ev -300 SubagentStart s7 a7 implementer main
+lv_run
+expect_eq ".claude/worktrees/wt-c/.claude/logs/live-events.jsonl 裡 src 為 main 的事件 → 當成 worktree:wt-c" worktree:wt-c \
+    "$(lvq '.lanes[] | select(.id == "a7") | .where')"
+
+# --- 不重寫、鎖
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_run
+touch -d @1000000000 "$LVO/live.js"; lv_run
+expect_eq "兩次 --live 之間沒有新事件 → live.js 的 mtime 不變" 1000000000 "$(stat -c %Y "$LVO/live.js")"
+lv_ev -10 SubagentStop s1 a1 implementer main; lv_run
+expect_eq "有新事件 → 重寫" 0 "$(lvq '.lanes | length')"
+mkdir -p "$LVO/.lock"; date +%s > "$LVO/.lock/at"; rm -f "$LVO/live.js"
+lv_t0=$(date +%s); timeout 20 env TZ=UTC OVERVIEW_NOW="$LV_NOW" bash "$LV/.claude/scripts/overview.sh" --live "$LV" >/dev/null 2>&1; lv_t1=$(date +%s)
+expect_eq "完整重產進行中（.lock 存在）→ --live 照跑完、不等、不動 .lock" "true true true" \
+    "$([ -f "$LVO/live.js" ] && echo true || echo false) $([ $((lv_t1 - lv_t0)) -le 3 ] && echo true || echo false) $([ -d "$LVO/.lock" ] && echo true || echo false)"
+rm -rf "$LVO/.lock"
+mkdir -p "$LVO/.live.lock"; date +%s > "$LVO/.live.lock/at"; rm -f "$LVO/live.js" "$LVO/.live-dirty"; lv_run
+expect_eq "別支 --live 持有 .live.lock → 不寫、留 .live-dirty 走人" "false true" \
+    "$([ -f "$LVO/live.js" ] && echo true || echo false) $([ -f "$LVO/.live-dirty" ] && echo true || echo false)"
+echo $(( $(date +%s) - 600 )) > "$LVO/.live.lock/at"; lv_run
+expect_eq ".live.lock 已過期 → 接手、寫完、清掉鎖與 .live-dirty" "true false false" \
+    "$([ -f "$LVO/live.js" ] && echo true || echo false) $([ -d "$LVO/.live.lock" ] && echo true || echo false) $([ -f "$LVO/.live-dirty" ] && echo true || echo false)"
+
+# 視窗尾端補跑：agent-events 在視窗內只留 .live-dirty。--live 第一輪算完、還在視窗內時才來的事件，
+# 要在視窗結束後補跑一輪反映出來（視窗 4 秒，給第一輪留足時間）
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main
+printf '%s 4\n' "$(date +%s)" > "$LVO/.live-at"
+lv_run & lv_pid=$!
+for _ in $(seq 1 60); do [ -f "$LVO/live.js" ] && break; sleep 0.1; done
+lv_first=$(lvq '.needs | length')
+lv_ev -5 PermissionRequest s1 a1 implementer main "$LV_PR"; : > "$LVO/.live-dirty"
+wait "$lv_pid"
+expect_eq "第一輪算完後、放鎖前（視窗內）才留下 .live-dirty → 視窗結束補跑一輪，needs 出現那筆 PermissionRequest" "0 1 false false" \
+    "$lv_first $(lvq '.needs | length') $([ -f "$LVO/.live-dirty" ] && echo true || echo false) $([ -d "$LVO/.live.lock" ] && echo true || echo false)"
+rm -f "$LVO/.live-at"
+
+# .live-error：jq 失敗時寫錯誤、保留上一份 live.js；下次成功就清掉
+mkdir -p "$SANDBOX/lvbin"; printf '#!/bin/bash\necho "假的 jq 壞了" >&2\nexit 3\n' > "$SANDBOX/lvbin/jq"; chmod +x "$SANDBOX/lvbin/jq"
+lv_before=$(cat "$LVO/live.js")
+env PATH="$SANDBOX/lvbin:$PATH" TZ=UTC OVERVIEW_NOW="$LV_NOW" bash "$LV/.claude/scripts/overview.sh" --live "$LV" >/dev/null 2>&1
+expect_eq "jq 失敗 → .live-error 寫進錯誤、live.js 保留上一份" "假的 jq 壞了 true" \
+    "$(cat "$LVO/.live-error" 2>/dev/null) $([ "$(cat "$LVO/live.js")" = "$lv_before" ] && echo true || echo false)"
+lv_run
+expect_eq "下一次成功 → .live-error 清掉" false "$([ -f "$LVO/.live-error" ] && echo true || echo false)"
+
+# --- 完整重產結束時也跑一次 live 聚合（沿用 tg_* 的任務圖沙箱）
+tg_reset "1.2|api|🔄 進行中"; tg_plan 1.2-x.md 🔄 ⏳; echo 1.2 > "$TGD/.current-task"
+mkdir -p "$TG/.claude/hooks/lib" "$TG/.claude/logs"; cp "$HOOK_DIR/lib/agent-inflight.sh" "$TG/.claude/hooks/lib/"
+jq -nc --argjson t "$(date +%s)" '{v: 1, t: ($t - 60), ms: 0, ev: "SubagentStart", sid: "s1", aid: "a1", at: "implementer", src: "main", tool: "", file: "", act: "", need: null, nt: "", text: ""}' > "$TG/.claude/logs/live-events.jsonl"
+tg_ov
+expect_eq "完整重產結束 → 也寫 live.js，lane 歸目前任務的組" plans/1.2-x.md \
+    "$(sed -n 's/^window\.OVERVIEW_LIVE = //; s/;$//p' "$TGO/live.js" 2>/dev/null | jq -r '.lanes[0].group' 2>/dev/null)"
+expect_eq "data.js 的 plans 帶 files:（給撞檔比對）" '["src/api/a.ts","src/api/b.ts"]' "$(tgp '.files | tojson')"
+rm -f "$TGD/.current-task" "$TGD/plans/1.2-x.md"; tg_ov
+expect_eq "curGroups 變了（沒有目前任務）→ 重產後 lane 的 group 跟著變成 null" null \
+    "$(sed -n 's/^window\.OVERVIEW_LIVE = //; s/;$//p' "$TGO/live.js" 2>/dev/null | jq -r '.lanes[0].group' 2>/dev/null)"
+
+# --- 效能：3000 行事件（40 個 agent 輪流跑指令、寫檔、要批准）
+lv_reset
+jq -nc --argjson now "$LV_NOW" '
+  range(0; 3000) as $i | ($i % 40) as $a | ($i % 4) as $k
+  | {v: 1, t: ($now - 3000 + $i), ms: ($i % 1000), sid: "s\($a % 5)", aid: "a\($a)", at: "implementer", src: (if $a % 3 == 0 then "worktree:wt-b" else "main" end),
+     ev: (["SubagentStart", "PreToolUse", "PostToolUse", "PermissionRequest"][$k]), tool: (["", "Bash", "Write", "Bash"][$k]),
+     file: (if $k == 2 then "src/f\($i % 97).ts" else "" end), act: (if $k == 2 then "編輯 f.ts" elif $k == 1 then "跑 測試" else "" end),
+     need: (if $k == 3 then "approve" else null end), nt: "", text: (if $k == 3 then "Bash：跑 部署" else "" end)}' > "$LV_LOG"
+lv_ms0=$(date +%s%N); lv_run; lv_ms1=$(date +%s%N); lv_ms=$(( (lv_ms1 - lv_ms0) / 1000000 ))
+printf '  \033[90mℹ\033[0m 3000 行事件 --live 耗時 %d ms\n' "$lv_ms"
+expect_eq "3000 行事件 --live 有產出" true "$(lvq '.lanes | length > 0')"
+case "$(uname -s)" in
+    Linux*) expect_eq "3000 行事件在 Linux 上 --live 跑完 < 1 秒" true "$([ "$lv_ms" -lt 1000 ] && echo true || echo false)" ;;
+    *) printf '  \033[90mℹ\033[0m 非 Linux：只印耗時，不斷言（不計入通過數）\n' ;;
+esac
+
+# =========================================================================
+section "overview-serve.sh — 專案圖解本機伺服器（起停、身分確認、開瀏覽器、退路）"
+# =========================================================================
+# ADR-2026-11-12-003。起的是真的 overview-serve.py，port 用 OVERVIEW_SERVE_PORT_BASE 避開真的伺服器；
+# 開瀏覽器的分支一律是記錄參數的假腳本。每個案例結束都 --stop，本節最後確認沒有殘留的行程。
+SVS="$HOOK_DIR/../scripts/overview-serve.sh"
+SV="$SANDBOX/sv"
+SV_OV="$SV/.claude/taskmaster-data/overview"
+SV_BIN="$SANDBOX/sv-bin"
+SV_FP="$SANDBOX/sv-fp"
+SV_CALLS="$SANDBOX/sv-calls"
+SV_PIDS=""
+SV_X=()
+
+sv_pick_py() {
+    local c
+    for c in python3 python python3.13 python3.12 python3.11 python3.10 python3.9 python3.8 python3.7; do
+        if [ "$("$c" -c 'import sys;print(sys.version_info>=(3,7))' 2>/dev/null)" = True ]; then
+            command -v "$c"; return 0
+        fi
+    done
+    return 1
+}
+sv_free_base() {
+    "$SV_BIN/python3" -c '
+import random, socket
+while True:
+    b = random.randint(20000, 40000)
+    socks = []
+    try:
+        for p in range(b, b + 24):
+            s = socket.socket(); s.bind(("127.0.0.1", p)); socks.append(s)
+    except OSError:
+        continue
+    finally:
+        for s in socks: s.close()
+    print(b); break'
+}
+sv_reset() {
+    rm -rf "$SV" "$SV_BIN" "$SV_FP" "$SV_CALLS"
+    mkdir -p "$SV_BIN" "$SV_FP" "$SV_OV"
+    local py t; py=$(sv_pick_py)
+    printf '#!/bin/sh\nexec "%s" "$@"\n' "$py" > "$SV_BIN/python3"
+    for t in open xdg-open cmd fake-browser; do
+        printf '#!/bin/sh\necho "%s $*" >> "%s"\nexit ${FAKE_OPEN_RC:-0}\n' "$t" "$SV_CALLS" > "$SV_BIN/$t"
+    done
+    chmod +x "$SV_BIN"/*
+    for t in git sed uname mkdir rm rmdir sleep; do ln -sf "$(command -v $t)" "$SV_FP/$t"; done
+    printf '#!/bin/sh\necho False\n' > "$SV_FP/python3"; chmod +x "$SV_FP/python3"
+    ( cd "$SV" && git -c init.defaultBranch=main init -q . ) >/dev/null 2>&1
+    echo '{"name":"t"}' > "$SV/.claude/taskmaster-data/project.json"
+    echo hi > "$SV_OV/index.html"
+    SV_BASE=$(sv_free_base); SV_X=(); FAKE_OPEN_RC=0; export FAKE_OPEN_RC
+}
+sv_run() {
+    env -u BROWSER -u DISPLAY -u WAYLAND_DISPLAY -u SSH_CONNECTION -u OVERVIEW_SERVE_PLATFORM \
+        PATH="$SV_BIN:$PATH" OVERVIEW_SERVE_PORT_BASE="$SV_BASE" ${SV_X[@]+"${SV_X[@]}"} \
+        bash "$SVS" "$@" "$SV" 2>/dev/null
+}
+sv_stop() {
+    local pid; pid=$(sed -n 's/.*"pid": *\([0-9]*\).*/\1/p' "$SV_OV/.serve" 2>/dev/null)
+    [ -n "$pid" ] && SV_PIDS="$SV_PIDS $pid"
+    SV_X=(); sv_run --stop >/dev/null
+}
+sv_http() {
+    ( exec 3<>"/dev/tcp/127.0.0.1/$1" && printf '%s %s HTTP/1.0\r\nHost: x\r\nContent-Length: 0\r\n\r\n' "$2" "$3" >&3 \
+        && { while IFS= read -r -t 3 l <&3; do printf '%s\n' "$l"; done; } ) 2>/dev/null
+}
+sv_code() { sv_http "$@" | sed -n '1{s/\r//;s/^[^ ]* //;s/ .*//;p;}'; }
+sv_url_port() { local r=${1#http://127.0.0.1:}; echo "${r%%/*}"; }
+sv_url_path() { echo "/${1#http://127.0.0.1:*/}"; }
+sv_last() { printf '%s\n' "$1" | sed -n '$p'; }
+sv_wait_for() { local i; for ((i = 0; i < 60; i++)); do ( exec 3<>"/dev/tcp/127.0.0.1/$1" ) 2>/dev/null && return 0; sleep 0.1; done; return 1; }
+SV_OCC=""
+sv_occupy() {
+    "$SV_BIN/python3" -c '
+import socket, sys, time
+b, n = int(sys.argv[1]), int(sys.argv[2]); keep = []
+for p in range(b, b + n):
+    s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(("127.0.0.1", p)); s.listen(1); keep.append(s)
+time.sleep(60)' "$1" "$2" >/dev/null 2>&1 &
+    SV_OCC="$SV_OCC $!"
+    sv_wait_for "$1"
+}
+sv_unoccupy() { local p; for p in $SV_OCC; do kill "$p" 2>/dev/null; wait "$p" 2>/dev/null; done; SV_OCC=""; }
+sv_calls() { sleep 0.3; cat "$SV_CALLS" 2>/dev/null; }
+SV_URL_RE='^http://127\.0\.0\.1:[0-9]+/[A-Za-z0-9_-]+/index\.html$'
+
+# --- 沒在跑 → 起一個；有 $BROWSER 且是新啟動 → 呼叫 1 次；再呼叫一次 → 不起第二個、不再開瀏覽器
+sv_reset; SV_X=(BROWSER="$SV_BIN/fake-browser")
+out=$(sv_run); rc=$?; url=$(sv_last "$out"); port=$(sv_url_port "$url"); upath=$(sv_url_path "$url")
+pid1=$(sed -n 's/.*"pid": *\([0-9]*\).*/\1/p' "$SV_OV/.serve")
+expect_eq "沒在跑 → exit 0" 0 "$rc"
+[[ $url =~ $SV_URL_RE ]] && ok "沒在跑 → stdout 最後一行是 http://127.0.0.1:<port>/<token>/index.html" \
+    || ng "stdout 最後一行是帶 token 的網址" "$SV_URL_RE" "$out"
+expect_eq "GET 該網址 → 200" 200 "$(sv_code "$port" GET "$upath")"
+expect_eq "GET 不帶 token 的 /index.html → 404" 404 "$(sv_code "$port" GET /index.html)"
+expect_eq "GET 錯的 token → 404" 404 "$(sv_code "$port" GET /AAAAAAAAAAAAAAAAAAAAAA/index.html)"
+expect_eq "GET /<token>/.serve → 404（不外洩狀態檔）" 404 "$(sv_code "$port" GET "${upath%index.html}.serve")"
+expect_contains "回應標頭含 Cache-Control: no-store" "Cache-Control: no-store" "$(sv_http "$port" GET "$upath")"
+expect_eq "新啟動 → \$BROWSER 呼叫 1 次、參數是網址" "fake-browser $url" "$(sv_calls)"
+SV_X=(BROWSER="$SV_BIN/fake-browser"); out2=$(sv_run)
+pid2=$(sed -n 's/.*"pid": *\([0-9]*\).*/\1/p' "$SV_OV/.serve")
+expect_eq "已在跑再呼叫 → 印同一個網址" "$url" "$(sv_last "$out2")"
+expect_eq "已在跑再呼叫 → 不起第二個（.serve 的 pid 不變）" "$pid1" "$pid2"
+expect_eq "已在跑再呼叫 → \$BROWSER 沒再被呼叫" 1 "$(sv_calls | wc -l | tr -d ' ')"
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) perm=$([ -f "$SV_OV/.serve" ] && echo -rw-------) ;;
+    *) perm=$(ls -l "$SV_OV/.serve" | cut -c1-10) ;;
+esac
+expect_eq ".serve 權限為 600（Windows 只確認檔案存在）" "-rw-------" "$perm"
+cmdline=$(tr '\0' ' ' < "/proc/$pid1/cmdline" 2>/dev/null)
+case "$cmdline$(cat "$SV_OV/.serve")" in *0.0.0.0*) bind_ok="含 0.0.0.0" ;; *) bind_ok=no-wildcard ;; esac
+expect_eq "行程命令列與 .serve 不含 0.0.0.0" no-wildcard "$bind_ok"
+l_src="ss／netstat"
+if command -v ss >/dev/null 2>&1; then listen=$(ss -ltn 2>/dev/null | grep -E "[.:]$port ")
+elif command -v netstat >/dev/null 2>&1; then listen=$(netstat -an 2>/dev/null | grep -E "[.:]$port .*LISTEN")
+else listen="127.0.0.1:$port"; l_src="無 ss/netstat，只驗 .serve"; fi
+case "$listen" in
+    *"127.0.0.1:$port"*|*"127.0.0.1.$port"*) l_ok=127
+        case "$listen" in *"0.0.0.0:$port"*|*"0.0.0.0.$port"*|*"*:$port"*|*"*.$port"*|*"[::]:$port"*|*"::.$port"*) l_ok=wildcard ;; esac ;;
+    *) l_ok="none: $listen" ;;
+esac
+expect_eq "只聽 127.0.0.1（依據：$l_src）" 127 "$l_ok"
+mkdir -p "$SV_OV/sub"
+expect_eq "GET 沒有 index.html 的目錄 → 404，不列檔名" 404 "$(sv_code "$port" GET "${upath%index.html}sub/")"
+expect_contains "回應標頭含 Referrer-Policy: no-referrer" "Referrer-Policy: no-referrer" "$(sv_http "$port" GET "$upath")"
+expect_eq "非 ASCII 的路徑 → 404、不丟例外" 404 "$(sv_code "$port" GET "/é/index.html")"
+expect_eq "…之後伺服器仍正常回應" 200 "$(sv_code "$port" GET "$upath")"
+sv_stop
+expect_eq "--stop → .serve 刪除" no "$([ -f "$SV_OV/.serve" ] && echo yes || echo no)"
+expect_eq "--stop → 伺服器不再回應" "" "$(sv_code "$port" GET "$upath")"
+sv_run --stop >/dev/null; expect_eq "沒在跑時 --stop → exit 0" 0 $?
+
+# --- 8765（起始 port）被佔 → 用下一個
+sv_reset; sv_occupy "$SV_BASE" 1
+out=$(sv_run); url=$(sv_last "$out")
+expect_eq "起始 port 被別的程式佔住 → 用下一個 port、印它的網址" "$((SV_BASE + 1))" "$(sv_url_port "$url")"
+expect_eq "…該網址 GET → 200" 200 "$(sv_code "$(sv_url_port "$url")" GET "$(sv_url_path "$url")")"
+sv_stop; sv_unoccupy
+
+# --- 狀態檔記的 port 上是別人的伺服器 → 不沿用、另起
+sv_reset
+foreign=$((SV_BASE + 5))
+"$SV_BIN/python3" -m http.server "$foreign" --bind 127.0.0.1 >/dev/null 2>&1 &
+SV_OCC="$!"; sv_wait_for "$foreign"
+printf '{"port": %s, "token": "abcdefghijklmnopqrstuv", "pid": 1, "started": "x"}' "$foreign" > "$SV_OV/.serve"
+out=$(sv_run); url=$(sv_last "$out")
+expect_eq "狀態檔的 port 上是別人的伺服器 → 另起一個（port 不是別人的）" "$SV_BASE" "$(sv_url_port "$url")"
+expect_eq "….serve 更新成新的 port" "$SV_BASE" "$(sed -n 's/.*"port": *\([0-9]*\).*/\1/p' "$SV_OV/.serve")"
+sv_stop; sv_unoccupy
+
+# --- 兩個同時跑 → 只有一個伺服器
+sv_reset; o1="$SANDBOX/sv-o1"; o2="$SANDBOX/sv-o2"
+sv_run > "$o1" & p1=$!
+sv_run > "$o2" & p2=$!
+wait "$p1" "$p2"
+u1=$(sv_last "$(cat "$o1")"); u2=$(sv_last "$(cat "$o2")")
+[[ $u1 =~ $SV_URL_RE ]] && expect_eq "兩個同時跑 → 印同一個網址（只有一個伺服器）" "$u1" "$u2" \
+    || ng "兩個同時跑 → 兩者都印網址" "$SV_URL_RE" "$u1 | $u2"
+expect_eq "…且該網址 GET → 200" 200 "$(sv_code "$(sv_url_port "$u1")" GET "$(sv_url_path "$u1")")"
+sv_stop; rm -f "$o1" "$o2"
+
+# --- 殘留的鎖：持有者已死 → 不用等 10 秒
+sv_reset; mkdir "$SV_OV/.serve.lock"; echo 99999999 > "$SV_OV/.serve.lock/pid"
+SECONDS=0; out=$(sv_run); took=$SECONDS; url=$(sv_last "$out")
+[[ $url =~ $SV_URL_RE ]] && ok "殘留鎖的 pid 已死 → 起得來" || ng "殘留鎖的 pid 已死 → 起得來" "$SV_URL_RE" "$out"
+[ "$took" -lt 5 ] && ok "…不用等鎖逾時（${took} 秒）" || ng "…不用等鎖逾時" "< 5 秒" "${took} 秒"
+sv_stop
+
+# --- 20 個 port 都不能用
+sv_reset; sv_occupy "$SV_BASE" 20
+out=$(sv_run); rc=$?
+expect_eq "20 個 port 都被佔 → exit 0" 0 "$rc"
+expect_eq "20 個 port 都被佔 → 最後一行是 file:// 網址" "file://$SV_OV/index.html" "$(sv_last "$out")"
+expect_eq "20 個 port 都被佔 → 印兩行（原因＋網址）" 2 "$(printf '%s\n' "$out" | wc -l | tr -d ' ')"
+expect_eq "…沒有留下 .serve" no "$([ -f "$SV_OV/.serve" ] && echo yes || echo no)"
+sv_stop; sv_unoccupy
+
+# --- 沒有 3.7 以上的 Python
+sv_reset
+out=$(env -u BROWSER -u DISPLAY -u WAYLAND_DISPLAY -u SSH_CONNECTION PATH="$SV_FP" OVERVIEW_SERVE_PORT_BASE="$SV_BASE" "$BASH" "$SVS" "$SV" 2>/dev/null); rc=$?
+expect_eq "只有印不出 True 的假 python3 → exit 0" 0 "$rc"
+expect_eq "…最後一行是 file:// 網址" "file://$SV_OV/index.html" "$(sv_last "$out")"
+expect_contains "…印出原因" "找不到 Python 3.7 以上，改用檔案開啟；SSH 遠端請改用 Live Preview" "$out"
+
+# --- Python 搜尋順序：python3 太舊時改用帶版號的；OVERVIEW_SERVE_PYTHON 指定時只試它
+sv_reset
+for t in python3 python3.13 python3.11 python3.10 python3.9 python3.8 python3.7; do printf '#!/bin/sh\necho False\n' > "$SV_BIN/$t"; chmod +x "$SV_BIN/$t"; done
+printf '#!/bin/sh\necho py312 >> "%s"\nexec "%s" "$@"\n' "$SV_CALLS" "$(sv_pick_py)" > "$SV_BIN/python3.12"; chmod +x "$SV_BIN/python3.12"
+out=$(sv_run); url=$(sv_last "$out")
+[[ $url =~ $SV_URL_RE ]] && ok "python3 是假的、另有合格的 python3.12 → 起得來" || ng "起得來" "$SV_URL_RE" "$out"
+expect_contains "…用的是 python3.12" py312 "$(sv_calls)"
+sv_stop
+sv_reset; SV_X=(OVERVIEW_SERVE_PYTHON="$(sv_pick_py)")
+printf '#!/bin/sh\necho False\n' > "$SV_BIN/python3"
+out=$(sv_run); url=$(sv_last "$out")
+[[ $url =~ $SV_URL_RE ]] && ok "OVERVIEW_SERVE_PYTHON 指向合格直譯器 → 起得來" || ng "起得來" "$SV_URL_RE" "$out"
+sv_stop
+sv_reset; SV_X=(OVERVIEW_SERVE_PYTHON="$SV_FP/python3")
+out=$(sv_run); rc=$?
+expect_eq "OVERVIEW_SERVE_PYTHON 指向不合格的 → exit 0" 0 "$rc"
+expect_eq "…退回 file://（即使 PATH 上有合格的 python3）" "file://$SV_OV/index.html" "$(sv_last "$out")"
+expect_contains "…印出原因" "找不到 Python 3.7 以上" "$out"
+
+# --- 開瀏覽器的平台分支（假腳本記參數）
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=MINGW64_NT-10.0)
+out=$(sv_run); url=$(sv_last "$out"); calls=$(sv_calls)
+expect_eq "Windows、沒 \$BROWSER、新啟動 → 假 cmd 呼叫 1 次" 1 "$(printf '%s' "$calls" | grep -c '^cmd ')"
+expect_contains "…參數含 start 與網址" "start" "$calls"; expect_contains "…參數含網址" "$url" "$calls"
+SV_X=(OVERVIEW_SERVE_PLATFORM=MINGW64_NT-10.0); sv_run >/dev/null
+expect_eq "Windows、已在跑 → 不再呼叫 cmd" 1 "$(sv_calls | wc -l | tr -d ' ')"
+sv_stop
+
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=Darwin)
+out=$(sv_run); url=$(sv_last "$out")
+expect_eq "macOS、沒 \$BROWSER、新啟動 → 假 open 呼叫 1 次、參數是網址" "open $url" "$(sv_calls)"
+sv_stop
+
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=Linux DISPLAY=:0)
+out=$(sv_run); url=$(sv_last "$out")
+expect_eq "Linux、有 DISPLAY → 假 xdg-open 呼叫 1 次、參數是網址" "xdg-open $url" "$(sv_calls)"
+sv_stop
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=Linux DISPLAY=:0 SSH_CONNECTION="1 2 3 4")
+out=$(sv_run); url=$(sv_last "$out")
+expect_eq "Linux、有 DISPLAY、有 SSH_CONNECTION → 仍呼叫 xdg-open 1 次" "xdg-open $url" "$(sv_calls)"
+sv_stop
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=Linux WAYLAND_DISPLAY=wayland-0)
+out=$(sv_run); url=$(sv_last "$out")
+expect_eq "Linux、有 WAYLAND_DISPLAY → 假 xdg-open 呼叫 1 次" "xdg-open $url" "$(sv_calls)"
+sv_stop
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=Linux)
+out=$(sv_run); url=$(sv_last "$out")
+expect_eq "Linux、沒有 DISPLAY 也沒有 WAYLAND_DISPLAY → 不呼叫任何開瀏覽器指令" "" "$(sv_calls)"
+expect_eq "…只印網址（一行）" "$url" "$out"
+sv_stop
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=Linux SSH_CONNECTION="1 2 3 4")
+out=$(sv_run); url=$(sv_last "$out"); port=$(sv_url_port "$url")
+expect_eq "Linux、沒 DISPLAY、有 SSH_CONNECTION → 不呼叫任何開瀏覽器指令" "" "$(sv_calls)"
+expect_contains "…多印 ssh -L 轉發指令" "ssh -L $port:127.0.0.1:$port" "$out"
+[[ $url =~ $SV_URL_RE ]] && ok "…最後一行仍是網址" || ng "…最後一行仍是網址" "$SV_URL_RE" "$url"
+sv_stop
+sv_reset; SV_X=(OVERVIEW_SERVE_PLATFORM=Darwin FAKE_OPEN_RC=1)
+out=$(sv_run); rc=$?; url=$(sv_last "$out")
+expect_eq "假 open exit 1 → overview-serve.sh 仍 exit 0" 0 "$rc"
+[[ $url =~ $SV_URL_RE ]] && ok "…最後一行仍是網址" || ng "…最後一行仍是網址" "$SV_URL_RE" "$out"
+sv_stop
+
+# --- 閒置自行結束、下次重起
+sv_reset; SV_X=(OVERVIEW_SERVE_IDLE_MIN=0.03)
+out=$(sv_run); port=$(sv_url_port "$(sv_last "$out")")
+for ((i = 0; i < 100; i++)); do [ -f "$SV_OV/.serve" ] || break; sleep 0.1; done
+expect_eq "閒置超過 OVERVIEW_SERVE_IDLE_MIN → .serve 被刪" no "$([ -f "$SV_OV/.serve" ] && echo yes || echo no)"
+expect_eq "…伺服器不再回應" "" "$(sv_code "$port" GET /)"
+SV_X=(); out=$(sv_run); url=$(sv_last "$out")
+expect_eq "…下次呼叫重起、網址可用" 200 "$(sv_code "$(sv_url_port "$url")" GET "$(sv_url_path "$url")")"
+sv_stop
+
+# --- 沒有 project.json
+sv_reset; rm -f "$SV/.claude/taskmaster-data/project.json"
+out=$(sv_run); rc=$?
+expect_eq "沒有 project.json → 什麼都不印" "" "$out"
+expect_eq "沒有 project.json → exit 0" 0 "$rc"
+expect_eq "沒有 project.json → 不建 .serve" no "$([ -f "$SV_OV/.serve" ] && echo yes || echo no)"
+
+# --- 收尾：不能有殘留行程
+sv_stop; sv_unoccupy
+alive=""
+for p in $SV_PIDS; do kill -0 "$p" 2>/dev/null && alive="$alive $p"; done
+expect_eq "本節結束沒有殘留的伺服器行程" "" "$alive"
+for p in $alive; do kill "$p" 2>/dev/null; done
+rm -rf "$SV" "$SV_BIN" "$SV_FP" "$SV_CALLS"
+
+# =========================================================================
+section "overview 現況分頁 — index.html 的 #now（headless chrome）"
+# =========================================================================
+# 計畫 adhoc-2026-11-12-overview-live 階段 7。fixtures/overview/now-check.js 塞進範本複本跑，live.js 由它現算
+# （時間要對得上頁面的時鐘）。沒有 chrome 就整節略過、不計入通過；伺服器那段另外要 Python 3.7 以上。
+NW="$SANDBOX/現況 分頁"; NW_TPL="$HOOK_DIR/../templates/overview/index.html"; NW_JS="$HOOK_DIR/tests/fixtures/overview/now-check.js"
+NW_CHROME="${OV_CHROME:-$(ls -d "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux/chrome 2>/dev/null | tail -1)}"
+[ -z "$NW_CHROME" ] && NW_CHROME=$(command -v chromium chromium-browser google-chrome 2>/dev/null | head -1)
+nw_page() { awk -v inj="${2:-$NW_JS}" '/<\/body>/ { print "<script>"; while ((getline l < inj) > 0) print l; print "</script>" } { print }' "$NW_TPL" > "$1"; }
+nw_data() {
+    jq -nc '{schema: 2, generatedAt: "2026-11-12T10:00:00.000+08:00", project: {name: "現況"}, modules: [], groups: [], edges: [], tasks: [],
+      changes: [], changesRollup: [], notices: [], unmappedTasks: [],
+      curGroups: [{key: "g1", task: "1.2", title: "結帳", plan: "plans/1.2-x.md", sources: ["main"], where: "main", guessed: false, phase: 2, phases: 3, activePhases: [2]},
+                  {key: "g2", task: "3.1", title: "CI", plan: null, sources: ["worktree:wt-b"], where: "worktree:wt-b", guessed: false, phase: null, phases: null, activePhases: []}],
+      plans: [{file: "plans/1.2-x.md", source: "main", task: "1.2", title: "結帳", changes: [], changesRollup: [],
+               parts: [{id: "p2a", name: "結帳表單", phase: 2, state: "wip", planned: true, files: ["src/pay.ts"]}],
+               phases: [{n: 1, name: "購物車", state: "done"}, {n: 2, name: "結帳頁", state: "wip"}, {n: 3, name: "退款", state: "planned"}]}],
+      humans: [{who: "alice", task: "2.1", title: "點數", status: "blocked", branch: null}]}' | sed 's/^/window.OVERVIEW = /; s/$/;/' > "$1/data.js"
+}
+# 階段 8 用：3 個目前任務（1.2 排最後，才捲得到）、1.2 的 plan 有階段 9 的 p9a／p9b，另加幾份 plan 讓任務圖捲得動
+nw_pdata() {
+    jq -nc '{schema: 2, generatedAt: "2026-11-12T10:00:00.000+08:00", project: {name: "部件"}, modules: [], groups: [], edges: [], tasks: [],
+      changes: [], changesRollup: [], notices: [], unmappedTasks: [], humans: [],
+      curGroups: [{key: "g5", task: "5.1", title: "報表", plan: null, sources: ["worktree:wt-c"], where: "worktree:wt-c", guessed: false, phase: null, phases: null, activePhases: []},
+                  {key: "g3", task: "3.1", title: "CI", plan: null, sources: ["worktree:wt-b"], where: "worktree:wt-b", guessed: false, phase: null, phases: null, activePhases: []},
+                  {key: "g1", task: "1.2", title: "結帳", plan: "plans/1.2-x.md", sources: ["main"], where: "main", guessed: false, phase: 9, phases: 9, activePhases: [9]}],
+      plans: ([{file: "plans/1.2-x.md", source: "main", task: "1.2", title: "結帳", current: true, status: "🔄", changes: [], changesRollup: [],
+                phases: [{n: 8, name: "購物車", state: "done"}, {n: 9, name: "付款", state: "wip"}],
+                parts: [{id: "p9a", name: "付款表單", phase: 9, state: "wip", planned: true, files: ["src/pay/**"]},
+                        {id: "p9b", name: "運費", phase: 9, state: "wip", planned: true, files: ["src/ship.ts"]}]}]
+             + [range(6) as $i | {file: "plans/9.\($i)-z.md", source: "main", task: "9.\($i)", title: "其他 \($i)", status: "⏳", changes: [], changesRollup: [],
+                phases: [{n: 1, name: "一", state: "planned"}], parts: [range(4) as $k | {id: "q\($k)", name: "部件 \($k)", phase: 1, state: "planned", planned: true, files: ["src/q\($k).ts"]}]}])}' \
+        | sed 's/^/window.OVERVIEW = /; s/$/;/' > "$1/data.js"
+}
+nw_run() {
+    "$NW_CHROME" --headless=new --no-sandbox --disable-gpu --user-data-dir="$NW/prof" --window-size=1440,1000 --virtual-time-budget="${NW_BUDGET:-12000}" "$@" \
+        --dump-dom "$NW_URL" 2>/dev/null | sed -n 's/.*<pre id="result">\(.*\)<\/pre>.*/\1/p' | sed 's/&quot;/"/g; s/&amp;/\&/g'
+}
+if [ -n "$NW_CHROME" ] && [ -x "$NW_CHROME" ]; then
+    rm -rf "$NW"; mkdir -p "$NW"; nw_data "$NW"; nw_page "$NW/index.html"; NW_URL="file://$NW/index.html"
+    NW_RES=$(nw_run); nq() { printf '%s' "$NW_RES" | jq -r "$1" 2>/dev/null; }
+    expect_eq "開頁沒有 hash → 現況分頁，分頁列順序是現況、專案地圖、任務圖" "true 現況,專案地圖,任務圖" "$(nq '"\(.hashless.v) \(.hashless.tabs | join(","))"')"
+    expect_eq "現況分頁看不到圖例篩選、落差與提示" "false false" "$(nq '"\(.hashless.legend) \(.hashless.chipbar)"')"
+    expect_eq "切到地圖分頁 → 圖例篩選、落差與提示回來、暫停動畫按鈕收起；切回現況又藏起來" "true true false false false" \
+        "$(nq '"\(.map.legend) \(.map.chipbar) \(.map.still) \(.back.legend) \(.back.chipbar)"')"
+    expect_eq "沒有 live.js → 顯示「還沒有即時資料」、數字全 0 且變淡" "還沒有即時資料：agent 開始工作後這裡會出現 0,0,0,0 true" \
+        "$(nq '"\(.none.nnone) \([.none.kpis[].t | .[0:1]] | join(",")) \([.none.kpis[].zero] | all)"')"
+    expect_eq "沒有 live.js →「今天完成」寫「0 個 agent · 0 個任務」" "0 個 agent · 0 個任務" "$(nq '.none.kpis["k-fin"].t')"
+    expect_eq "file:// 開頁、沒有 live.js → 不顯示伺服器結束提示" null "$(nq '.none.gone')"
+    expect_eq "needs 2 筆＋1 條 lane 的 lastAt 是 11 分鐘前 →「需要你」3、清單 3 行" "3 3" "$(nq '"\(.A.kpis["k-need"].t) \(.A.needs | length)"')"
+    expect_contains "卡住那行寫「11 分鐘沒有動靜」" "11 分鐘沒有動靜" "$(nq '.A.needs[2]')"
+    expect_eq "卡住的 lane 卡標成 stuck" true "$(nq '.A.stuck')"
+    expect_eq "數字為 0 的格變淡（撞檔 0）、不為 0 的不變淡（在跑的線 4）" "true false" "$(nq '"\(.A.kpis["k-clash"].zero) \(.A.kpis["k-run"].zero)"')"
+    expect_eq "doneToday {agents:7,tasks:1} →「7 個 agent · 1 個任務」" "7 個 agent · 1 個任務" "$(nq '.A.kpis["k-fin"].t')"
+    expect_eq "doneToday {agents:0,tasks:2} →「0 個 agent · 2 個任務」且不變淡" "0 個 agent · 2 個任務 false" "$(nq '"\(.B.kpis["k-fin"].t) \(.B.kpis["k-fin"].zero)"')"
+    expect_eq "doneToday {agents:0,tasks:0} → 變淡" true "$(nq '.C.kpis["k-fin"].zero')"
+    expect_eq "lane 的 since 是 5 分鐘前 → 經過時間 5:00，下一次跳是 5:01" "5:00 5:01" "$(nq '"\(.clock0) \(.clock1)"')"
+    expect_eq "files {done:1,total:3} → 進度條 33%" "33%" "$(nq '.A.bar')"
+    expect_eq "files 為 null → 來回滑動的進度條" "true slide" "$(nq '"\(.A.ind) \(.A.anim)"')"
+    expect_eq "2 個 curGroups、一組 3 張卡、group 為 null 的 1 張 → 3 個組框，第三個是「未歸屬」" "1.2 結帳|3,3.1 CI|0,未歸屬|1" "$(nq '.A.groups | join(",")')"
+    expect_eq "第一次載入 live.js 的卡不淡入（不整頁一起動）" false "$(nq '.A.firstEnter')"
+    expect_eq "live.js 多一筆 lane → 新卡淡入，原有卡仍是同一個 DOM 物件" "true true" "$(nq '"\(.B.enter) \(.B.same)"')"
+    expect_eq "按「暫停動畫」→ 文字變「繼續動畫」、存進 localStorage、動畫停住" "繼續動畫 1 paused" "$(nq '"\(.still.text) \(.still.ls) \(.still.play)"')"
+    NW_RES=$(nw_run --force-prefers-reduced-motion)
+    expect_eq "prefers-reduced-motion: reduce、畫面上有 4 條 lane、3 條滑動進度條 → 所有元素（含 ::after）的 animation-name 為 none" "4 3 0" \
+        "$(nq '"\(.reduceSeen.lanes) \(.reduceSeen.ind) \(.reduceBad)"')"
+    expect_eq "重開頁面仍是暫停（按鈕寫「繼續動畫」）" "繼續動畫" "$(nq '.hashless.still')"
+    # 階段 8：任務圖部件卡「誰在做／等你」、標題列目前任務標籤（parts-check.js，以 #tasks 開頁）
+    nw_pdata "$NW"; nw_page "$NW/parts.html" "$HOOK_DIR/tests/fixtures/overview/parts-check.js"
+    # 開 reduce：smooth 捲動在 --virtual-time-budget 下不會前進（2026-11-13 實測 scrollTop 停在 0），reduce 時頁面改用立即捲動
+    NW_URL="file://$NW/parts.html#tasks"; NW_RES=$(rm -rf "$NW/prof"; nw_run --window-size=1440,700 --force-prefers-reduced-motion)
+    expect_eq "implementer a1 寫了部件 p9a 的檔、已跑 12 分鐘 → p9a 卡顯示「implementer · 12 分」，同階段的 p9b 不顯示" "implementer · 12 分 null 進行中 · p9a" \
+        "$(nq '"\(.A.p9a) \(.A.p9b) \(.A.st)"')"
+    expect_eq "a1 有一筆未處理的 approve need → p9a 狀態「等你」、黃框；p9b 不受影響" "等你 · p9a true true false" \
+        "$(nq '"\(.B.st) \(.B.waiting) \(.B.yellow) \(.B.p9b)"')"
+    expect_eq "need 被處理（live.js 換掉）→ p9a 回到「進行中」，任務圖 scrollTop 不變、.tcards 與部件卡仍是同一個 DOM 物件" "進行中 · p9a false true true true" \
+        "$(nq '"\(.C.st) \(.C.waiting) \(.C.top) \(.C.tc) \(.C.card)"')"
+    expect_eq "3 條目前任務收成下拉，每條都是可點的標籤" "g5,g3,g1" "$(nq '.btns | join(",")')"
+    expect_eq "點標題列「目前任務 1.2 …」→ 切到現況分頁、1.2 組框捲到視窗頂端、下拉收起" "true #now true 0 false" \
+        "$(nq '"\(.D.now) \(.D.hash) \(.D.scrolled) \(.D.dy) \(.D.open)"')"
+    if sv_pick_py >/dev/null; then
+        sv_reset; rm -f "$SV_OV/index.html"; nw_data "$SV_OV"; nw_page "$SV_OV/index.html"
+        SV_X=(BROWSER=true); NW_URL=$(sv_last "$(sv_run)"); SV_X=()
+        nw_pid=$(sed -n 's/.*"pid": *\([0-9]*\).*/\1/p' "$SV_OV/.serve" 2>/dev/null)
+        NW_MAIN=$NW_URL
+        NW_URL="${NW_MAIN%index.html}index.html?mock"; NW_RES=$(NW_BUDGET=36000 nw_run)
+        expect_eq "連不上伺服器 → 出現提示、tick 停住（之後過了卡住門檻，「需要你」仍 0、經過時間不再跳）" \
+            "0 伺服器已結束（閒置 30 分鐘），重跑 /task-status 0 true" "$(nq '"\(.m0.need) \(.m1.gone) \(.m2.need) \(.m1.clock == .m2.clock)"')"
+        expect_eq "伺服器已結束 → 部件卡的經過分鐘數也不再用舊資料更新（過了整分仍是 0 分）" "implementer · 0 分 implementer · 0 分" "$(nq '"\(.m1.part) \(.m2.part)"')"
+        expect_eq "提示中回到可見、.serve-id 回 200 → 收掉提示、live.js 恢復輪詢" "null true" "$(nq '"\(.m3.gone) \(.m3.nl > .m2.nl)"')"
+        expect_eq "連上過之後 .serve-id 回 404 →「網址已失效，重跑 /task-status」、停止輪詢，回到可見也不再重試" \
+            "網址已失效，重跑 /task-status true" "$(nq '"\(.m5.gone) \(.m5.nl == .m4.nl)"')"
+        NW_URL="${NW_MAIN%index.html}index.html?never"; NW_RES=$(nw_run)
+        expect_eq "從沒連上過、第一次就拿到 .serve-id 404 → 不顯示提示、照常輪詢" "null null true" "$(nq '"\(.n0.gone) \(.n1.gone) \(.n1.nl > .n0.nl)"')"
+        NW_URL=$NW_MAIN
+        NW_RES=$(NW_BUDGET=9000 nw_run)
+        expect_eq "伺服器活著、還沒有 live.js → 不顯示伺服器結束提示，顯示「還沒有即時資料」" "null 還沒有即時資料：agent 開始工作後這裡會出現" \
+            "$(nq '"\(.alive.gone) \(.alive.nnone)"')"
+        expect_eq "伺服器結束後下一輪輪詢 → 頁首出現提示、現況畫面仍在" "伺服器已結束（閒置 30 分鐘），重跑 /task-status true 專案圖解 — 現況" \
+            "$(nq '"\(.dead.gone) \(.deadNv) \(.deadTitle)"')"
+        sv_stop
+        for _ in $(seq 1 30); do kill -0 "$nw_pid" 2>/dev/null || break; sleep 0.1; done
+        expect_eq "現況分頁的伺服器案例結束後沒有殘留行程" no "$([ -n "$nw_pid" ] && kill -0 "$nw_pid" 2>/dev/null && echo yes || echo no)"
+        [ -n "$nw_pid" ] && kill "$nw_pid" 2>/dev/null
+        rm -rf "$SV" "$SV_BIN" "$SV_FP" "$SV_CALLS"
+    else
+        printf '  \033[90mℹ\033[0m 沒有 Python 3.7 以上，略過伺服器結束提示的測試（不計入通過數）\n'
+    fi
+    rm -rf "$NW"
+else
+    printf '  \033[90mℹ\033[0m 沒有 chrome，略過現況分頁的畫面測試（不計入通過數）\n'
+fi
+expect_eq "現況分頁不拆檔：templates/overview/ 沒有 now.js" no "$([ -e "$HOOK_DIR/../templates/overview/now.js" ] && echo yes || echo no)"
 
 # =========================================================================
 section "全體 hooks — 語法與健壯性"

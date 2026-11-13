@@ -494,8 +494,10 @@ if [ -f "$OVSH" ] && [ -f "$TPL05" ]; then
     fi
 fi
 
-# 專案圖解畫面：≤ 80KB、不載外部網址、不用 module script（file:// 下會被 CORS 擋）、
+# 專案圖解畫面：≤ 128KB（ADR-2026-11-12-001）、不載外部網址、不用 module script（file:// 下會被 CORS 擋）、
 # 顏色只寫在 :root token 區塊（深淺雙主題靠它切換，散在別處的 hex 不會跟著換）
+# 超過 112KB（上限的 7/8）→ 下一個加功能的計畫在規劃時就要評估拆檔或瘦身；
+# 再超過 128KB → 預設拆檔，不再調上限（ADR-2026-11-12-001）。112KB 只寫在這裡，不加第二道檢查
 OVTPL=.claude/templates/overview/index.html
 if [ -f "$OVSH" ]; then
     CHECKED=$((CHECKED + 1))
@@ -504,9 +506,9 @@ if [ -f "$OVSH" ]; then
         printf '  %s 缺專案圖解畫面原檔：%s（overview.sh 靠它複製到 taskmaster-data/overview/）\n' "$(red '✗')" "$OVTPL"
     else
         OVSIZE=$(wc -c < "$OVTPL" | tr -d ' ')
-        if [ "$OVSIZE" -gt 81920 ]; then
+        if [ "$OVSIZE" -gt 131072 ]; then
             FAIL=$((FAIL + 1))
-            printf '  %s %s 有 %s bytes，超過 80KB 上限\n' "$(red '✗')" "$OVTPL" "$OVSIZE"
+            printf '  %s %s 有 %s bytes，超過 128KB 上限\n' "$(red '✗')" "$OVTPL" "$OVSIZE"
         fi
         CHECKED=$((CHECKED + 1))
         if grep -qE 'type=["'"'"']module' "$OVTPL"; then

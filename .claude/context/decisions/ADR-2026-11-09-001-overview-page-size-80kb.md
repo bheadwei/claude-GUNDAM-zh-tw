@@ -1,8 +1,11 @@
 ---
-status: 已接受
+status: 已被取代
 date: 2026-11-09
 decision-makers: [使用者]
+superseded-by: ADR-2026-11-12-001
 ---
+
+> 已被 [ADR-2026-11-12-001](ADR-2026-11-12-001-overview-page-size-128kb.md) 取代（上限改 128KB、不拆檔）。
 
 # ADR-2026-11-09-001: 專案圖解畫面 `index.html` 的大小上限從 64KB 調回 80KB
 

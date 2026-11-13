@@ -4,7 +4,7 @@
 
 | 層 | 數量 | 何時生效 | 可否略過 |
 |---|---|---|---|
-| **Hooks** | 9 | 事件觸發，機器執行 | 只有明確逃生門 |
+| **Hooks** | 10 | 事件觸發，機器執行 | 只有明確逃生門 |
 | **Rules** | 6 | 每個 session 全量載入 | 否（但靠模型遵守） |
 | **Skills** | 28 | 情境觸發，按需載入 | 是（需被想起來） |
 | **Commands** | 29 | 使用者主動叫 | — |
@@ -147,18 +147,23 @@ wbs-archive.md  已完成里程碑的完整任務列（含實際耗時，可回�
 - **同一份資料產生其他出口**：架構文件第 4 節的自動段（`/verify`、`/task-status` 時改寫兩個標記之間）與一頁現況，
   都和畫面讀同一份資料，不會三份各說各話
 
-不用手動重產——寫 wbs／plan／架構文件或程式碼檔時 hook 在背景更新（程式碼檔 30 秒內只重掃一次），畫面每 3 秒自己讀一次。
+不用手動重產——寫 wbs／plan／架構文件或程式碼檔時 hook 在背景更新（程式碼檔 30 秒內只重掃一次），畫面每 3 秒自己讀一次（現況分頁的即時資料每 2 秒）。
 地圖可拖曳平移、滾輪或右下角按鈕縮放（放大會顯示更多細節，「全圖」或 Esc 回到全貌）、
 雙擊模組聚焦；左下角的小地圖可點選或拖曳跳轉，上方可勾「只看本次改動」。
 點模組後右側欄有「展開內部」與「參與的資料流」：展開看模組裡的檔案、誰 import 誰、框外碰了哪些模組／資料庫／套件，
 資料流清單的每一條都連到架構文件；`Esc` 或麵包屑的「全圖」回到全圖。
 兩份產物（`data.js`、`overview.md`）都不進 git。
 
-**在 SSH 遠端機器上開發時**：`file://` 網址指的是遠端的檔，本機瀏覽器打不開。兩種開法——
-用 VS Code Remote 連到遠端，以 Live Preview 這類預覽擴充打開遠端的 `.claude/taskmaster-data/overview/index.html`
-（VS Code 會把預覽的 port 轉送到本機，畫面照樣每 3 秒重讀）；
-或把整個 `overview/` 資料夾下載回本機再打開（`index.html` 與 `data.js` 要在同一個資料夾，畫面不連外網）。
-沒有匯出功能，下載回來的是當下那一份，不會自己更新。
+**網址怎麼來**：`/task-status` 會起一個本機伺服器（`.claude/scripts/overview-serve.sh`，只綁 127.0.0.1、
+網址帶 token、閒置 30 分鐘自己結束），最後一行是 `http://127.0.0.1:<port>/<token>/index.html`，要整段複製。
+新起時會自動開瀏覽器；已在跑只印網址。需要 Python 3.7 以上，沒有時退回 `file://` 路徑。
+VS Code 的 Simple Browser（Ctrl+Shift+P → `Simple Browser: Show`）貼網址也能看。
+**不要用 Live Server**：資料每幾秒更新一次，它會整頁重載、畫面一直閃。
+
+**在 SSH 遠端機器上開發時**：伺服器跑在遠端，本機瀏覽器要經 port 轉發才連得到。
+用 VS Code Remote 開的終端機跑 `/task-status`，port 會自動轉發、瀏覽器在本機打開；
+純 SSH 時 `/task-status` 會多印一行 `ssh -L <port>:127.0.0.1:<port> <你的主機>`，在自己電腦另開終端機執行後貼上網址。
+關閉伺服器：`bash .claude/scripts/overview-serve.sh --stop`。
 
 舊專案跑完 `update-template` 後，下一次開 session 就會自動產生第一份。
 產生器與資料格式見 `.claude/scripts/overview.sh` 檔頭（唯一來源）。
