@@ -77,7 +77,8 @@ Read .claude/ui/<codename>/DESIGN.md
      `.claude/skills/ui-style-compliance/motion.md` 第 1 節（唯一來源；網站類型寫「不提供 L3」的，這裡一樣不給 L3）。
      給使用者看的文字不寫任何函式庫名
 4. **特殊效果** — 無 / 毛玻璃 / 視差 / 3D（若 DESIGN.md 支援）。
-   選項依第 3 題的等級過濾：視差要 L2 以上、3D 只有 L3 才列（等級允許什麼見 `motion.md` 第 2 節）
+   選項依第 3 題的等級過濾：視差要 L2 以上、3D 只有 L3 才列（等級允許什麼見 `motion.md` 第 2 節）。
+   要推薦這一頁的主角效果時，從 `.claude/skills/ui-style-compliance/effects.md` 第 2 節的配方索引挑 1～3 個，選項寫效果給人的感覺，不寫配方編號或函式庫名
 
 #### 2.2 模式 B.1（最小 IA） — 短 IA + 實作
 
@@ -136,6 +137,7 @@ Read .claude/ui/<codename>/DESIGN.md
 - 風格確認（DESIGN.md 關鍵規範）
 - **這一頁的動畫等級**（2.1 第 3 題的結果）
 - 響應式需求
+- 使用者在問答中貼了參考網站 → 派工前先照 `.claude/skills/ui-style-compliance/effects.md` 第 5 節萃取「風格 DNA」，一併傳入（有 IA 文件時同時寫進該頁 IA snippet）
 
 agent 會嚴格遵循 `ui-style-compliance` skill 的三階段檢查。
 

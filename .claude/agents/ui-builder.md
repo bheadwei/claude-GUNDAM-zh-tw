@@ -98,6 +98,7 @@ Read docs/17_frontend_information_architecture.md
 
 - `.claude/skills/ui-style-compliance/anti-ai.md` —— 一律讀
 - `.claude/skills/ui-style-compliance/motion.md` —— `ui-style.json` 的 `motion` 是 L2／L3 時
+- `.claude/skills/ui-style-compliance/effects.md` —— 做一整頁或一個區塊時（L1 只用標 L1 的配方）；派工內容附了參考網站或「風格 DNA」時一併讀第 5 節
 - `.claude/skills/ui-style-compliance/fonts-cjk.md` —— 專案語言含繁中時
 
 讀完才寫 1.4 的「風格載入確認」，裡面的「已讀附屬檔」那行照實填。

@@ -72,7 +72,7 @@ WebFetch 對 Google 地圖頁通常拿不到內容（JS 渲染），不要硬試
 
 ## Step 2｜第二輪問答：視覺方向與動態強度
 
-先根據照片主色、店家類型、評論氛圍，**自己發想 3 個設計方向**，每個方向寫成一個 AskUserQuestion 選項，並在 `preview` 欄位放：方向名稱、一句話概念、色票（4–5 個 hex）、版面示意（ASCII）、參考風格（例：日式雜誌、80s 台式懷舊、北歐極簡、夜市霓虹）。
+先根據照片主色、店家類型、評論氛圍，**自己發想 3 個設計方向**，每個方向寫成一個 AskUserQuestion 選項，並在 `preview` 欄位放：方向名稱、一句話概念、色票（4–5 個 hex）、版面示意（ASCII）、參考風格（例：日式雜誌、80s 台式懷舊、北歐極簡、夜市霓虹）、1～3 個主角效果（從 `.claude/skills/ui-style-compliance/effects.md` 第 2 節挑，preview 裡寫效果給人的感覺，材質照這家店的題材換，見同檔第 1 節）。
 
 同一次 AskUserQuestion 再問：
 
@@ -81,7 +81,7 @@ WebFetch 對 Google 地圖頁通常拿不到內容（JS 渲染），不要硬試
   - L2 標準（推薦）：Lenis 平滑捲動 + GSAP ScrollTrigger 進場、Hero 視差、標題逐字進場
   - L3 沉浸：L2 + 釘選橫向相簿、背景動態（Vanta / 漸層 shader）、可選影片拆幀捲動
 - **參考素材**：「有沒有喜歡的網站或圖片？可直接貼網址或上傳」→ 選項：沒有，照方向走（推薦）/ 我要貼參考網址 / 我要上傳圖片
-  - 使用者貼網址 → 用瀏覽器開啟截圖，萃取版面、字級節奏、色彩、動效，寫進 brief 的「風格 DNA」。
+  - 使用者貼網址 → 照 `.claude/skills/ui-style-compliance/effects.md` 第 5 節截圖、萃取，寫進 brief 的「風格 DNA」（只學結構與節奏，不搬對方的程式碼、素材、文案）。
 
 ## Step 3｜第三輪問答：字型
 
@@ -119,15 +119,14 @@ Noto Serif TC、Noto Sans TC、LXGW WenKai TC（霞鶩文楷）、Iansui（芫�
 
 **技術棧（預設）**：單一 `index.html` + 內嵌 CSS/JS，函式庫走 CDN（jsDelivr / unpkg）：
 
-- `lenis`（平滑捲動）＋ `gsap` + `ScrollTrigger`（GSAP 已全面免費，SplitText 等外掛也可用）
-- L3 才加：Vanta.js（需 three.js）、或用 CSS/WebGL 漸層代替 ShaderGradient（ShaderGradient 是 React 元件，純 HTML 不適用）
-- 使用者要求 React 時改用 Vite + React + TS + Tailwind，動畫元件可參考 React Bits / Motion。
+- 用哪些函式庫、各等級允許什麼：`.claude/skills/ui-style-compliance/motion.md` 第 2、6 節（唯一來源）
+- 主角效果的寫法、參數、手機與 reduced-motion 怎麼處理：`.claude/skills/ui-style-compliance/effects.md` 第 3 節；要另外找元素時看同檔第 4 節（含授權）
+- 使用者要求 React 時改用 Vite + React + TS + Tailwind。
 
 **實作規則**：
 
 - Mobile-first RWD（餐廳流量多半來自手機），斷點 390 / 768 / 1440。
-- 所有動畫參數集中在一個 `CONFIG` 物件，不要把數字散在各區塊。
-- 支援 `prefers-reduced-motion`：關閉 Lenis 與視差，只保留淡入。
+- 動畫參數集中、`prefers-reduced-motion` 降級：照 `motion.md` 第 3、4 節。
 - 照片：用 Pillow 轉 WebP（寬 1600 / 800 兩種尺寸，品質 80），`<img srcset loading="lazy">`，Hero 不 lazy。
 - 營業資訊區：嵌入 `https://www.google.com/maps?q=<地址或店名>&output=embed`（不需 API key），電話用 `tel:`，導航用 Google 地圖連結。
 - SEO：`<title>`、meta description、Open Graph、`LocalBusiness`/`Restaurant` JSON-LD（只填已確認的欄位）。
@@ -157,11 +156,4 @@ Noto Serif TC、Noto Sans TC、LXGW WenKai TC（霞鶩文楷）、Iansui（芫�
 
 ## 素材庫速查
 
-| 用途 | 首選 | 備註 |
-|---|---|---|
-| 平滑捲動 | Lenis | 搭 ScrollTrigger 時要 `lenis.on('scroll', ScrollTrigger.update)` |
-| 捲動動畫 | GSAP + ScrollTrigger / SplitText | 視差、釘選、逐字進場 |
-| React 動畫 | Motion（原 Framer Motion）、React Bits | 走 React 技術棧時 |
-| 動態背景 | Vanta.js、ShaderGradient（React）| 只用在 L3，注意手機效能 |
-| 3D | three.js、Spline | 有 3D 模型（GLB）才用 |
-| 影片拆幀 | ffmpeg → WebP 序列 → canvas | 10 秒 30fps ≈ 300 張，抓 10–30MB |
+不在這裡列——函式庫用途見 `.claude/skills/ui-style-compliance/motion.md` 第 6 節，效果配方與去哪挑元素見同目錄 `effects.md` 第 2～4 節（兩份都是唯一來源）。

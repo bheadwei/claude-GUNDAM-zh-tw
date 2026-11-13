@@ -69,6 +69,7 @@ Read .claude/ui/{primary}/DESIGN.md
 |---|---|
 | `anti-ai.md` | **一律讀**。反 AI 感的產出前／產出後清單、文案與「不准編事實」 |
 | `motion.md` | `ui-style.json` 的 `motion` 是 `L2` 或 `L3` 時才讀（沒有 `motion` 欄位＝L1，不讀）。L1 只看本檔 2.6③ |
+| `effects.md` | 要產出一整頁或一個區塊時讀（修單一元件不用）；L1 只能用標 L1 的純 CSS 配方。使用者說「做好看一點」「要有動態」、或貼了參考網站時也讀。效果配方、去哪挑動畫元素、參考網站萃取「風格 DNA」的唯一來源 |
 | `fonts-cjk.md` | 專案語言含繁體中文時讀（頁面 `lang` 是 `zh-Hant`／`zh-TW`／`zh-HK`，或內容是繁中）。jp 風格的日文字型換成繁中的對照表也在這裡 |
 
 ### 1.4 寫碼前必答（無法略過）
@@ -86,7 +87,7 @@ Read .claude/ui/{primary}/DESIGN.md
     - 圓角規範：小元素 Xpx、卡片 Xpx
     - 陰影：[spec]
   - 動畫等級：[L1 / L2 / L3]（沒有 motion 欄位＝L1）
-  - 已讀附屬檔：anti-ai.md［+ motion.md］［+ fonts-cjk.md］
+  - 已讀附屬檔：anti-ai.md［+ motion.md］［+ effects.md（主角效果：3.x、3.y，最多 3 個）］［+ fonts-cjk.md］
   - 風格本身接近的 AI 樣式：[無 / 有：見 anti-ai.md「例外」，照選定風格做]
 ```
 
@@ -201,7 +202,7 @@ inline `<button>`；已有 `Card` 不要再寫自訂卡片。
 - [x] 文案具體性：遮掉公司名後仍看得出在講什麼產品（見 `anti-ai.md`「文案與事實」）
 - [x] 事實沒有編造：價格、營業時間、電話、得獎、年份、評論、客戶名都有來源；
       缺的都標了 `【待提供：<項目>】`，並列進回報的「開放問題」（見 2.6 ②）
-- [x] 動畫有目的：解釋層級或回應互動，非全頁一起飄；已處理 `prefers-reduced-motion`（見 2.6 ③）
+- [x] 動畫有目的：解釋層級或回應互動，非全頁一起飄；主角效果不超過 3 個（`effects.md` 第 1 節）；已處理 `prefers-reduced-motion`（見 2.6 ③）
 - [x] 動畫等級：用到的技術沒有超出 `ui-style.json` 的 `motion` 等級（L1 沒有 import 動畫函式庫；L2／L3 照 `motion.md` 第 2 節）
 - [x] 動畫實作：能用原生 CSS（scroll-driven / View Transitions）就沒加動畫庫，而且有不支援時的退路
 - [x] a11y：文字對比 ≥ 4.5:1、focus 狀態可見、觸控目標 ≥ 44px、圖片有 alt

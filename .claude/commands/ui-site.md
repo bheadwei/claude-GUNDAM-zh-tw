@@ -200,6 +200,10 @@ docs/12_frontend_architecture.md
 
 ### 3. 委派 ui-builder agent 產骨架
 
+骨架階段**不挑主角效果**（stub 頁沒有內容撐得起效果），派工時講明；效果到 `/ui-page` 逐頁挑
+（`.claude/skills/ui-style-compliance/effects.md` 第 1 節）。問答中使用者貼了參考網站 → 照同一份第 5 節萃取「風格 DNA」，
+寫進 IA 文檔並附在派工內容。
+
 呼叫 `ui-builder` agent 產出：
 
 **a. 專案基礎檔**
