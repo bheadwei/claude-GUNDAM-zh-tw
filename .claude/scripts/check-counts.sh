@@ -298,7 +298,7 @@ fi
 # 白名單不是豁免，是宣告：這些由主模型載入，agent 不該讀
 # （`using-taskmaster` 甚至帶 <SUBAGENT-STOP>）。新增 skill 時必須二選一，
 # 否則它會變成沒有任何召喚路徑的孤兒。
-MAIN_MODEL_ONLY="using-taskmaster subagent-execution worktree-orchestration writing-extensions spec-convergence deep-research plan-format mcp-builder cost-aware-llm-pipeline"
+MAIN_MODEL_ONLY="using-taskmaster subagent-execution worktree-orchestration writing-extensions spec-convergence deep-research plan-format mcp-builder cost-aware-llm-pipeline unslop gmap-landing-page"
 for d in .claude/skills/*/; do
     name=$(basename "$d")
     CHECKED=$((CHECKED + 1))

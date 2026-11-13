@@ -96,7 +96,7 @@ claude_v2026/
     ├── rules/        ( 6 個)         # 自動載入規則（每次對話注入）
     ├── agents/       (14 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
-    ├── skills/       (28 個)         # 按需載入（不佔常駐 context）
+    ├── skills/       (30 個)         # 按需載入（不佔常駐 context）
     ├── hooks/                        # Hook 腳本 + lib/ + 1268 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）、check-counts.sh（文件計數一致性）、overview.sh（專案圖解）
     ├── ui/           (104 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
@@ -263,7 +263,7 @@ hook 在背景更新，畫面每 3 秒自己重讀（現況分頁的即時資料
 
 ---
 
-## Skills（28 個，按需載入）
+## Skills（30 個，按需載入）
 
 不佔常駐 context，由 `description` 的觸發條件決定何時載入。**唯一例外是第一個**。
 下面只列常用的幾個，完整清單見 `.claude/skills/INDEX.md`（唯一來源）。

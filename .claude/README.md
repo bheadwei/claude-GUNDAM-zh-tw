@@ -20,7 +20,7 @@
 ├── agents/       (14 個)      # 專業 Agent 定義
 ├── commands/     (29 個)      # Slash Command
 ├── rules/        ( 6 個)      # 自動載入規則
-├── skills/       (28 個)      # 專案特定領域知識
+├── skills/       (30 個)      # 專案特定領域知識
 ├── hooks/                     # Hook 腳本＋lib/（閘門）＋tests/（回歸測試）
 ├── scripts/                   # context-gc.sh、check-counts.sh、overview.sh＋overview-scan.sh（專案圖解：骨架掃程式碼、進度看 WBS／plan）
 ├── templates/                 # CLAUDE.md／WBS 版面範本、overview/index.html（專案圖解畫面原檔）
@@ -63,7 +63,7 @@
 
 模型分派原則見 `guides/MODELS.md`（含派工時覆寫的時機）。
 
-## Skills（28 個，按需載入）
+## Skills（30 個，按需載入）
 
 僅保留模型不知道的專案特定知識。完整清單、觸發時機與接到哪些 agent 見
 `skills/INDEX.md`（唯一來源）。唯一常駐的是 `using-taskmaster`——每個 session 由

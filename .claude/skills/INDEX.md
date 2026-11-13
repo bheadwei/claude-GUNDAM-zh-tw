@@ -1,6 +1,6 @@
 # Skills 索引
 
-28 個 skill，**按需載入**（不佔常駐 context）。分兩類：從 rules 移出的專案約定、以及原有的領域知識包。
+30 個 skill，**按需載入**（不佔常駐 context）。分兩類：從 rules 移出的專案約定、以及原有的領域知識包。
 
 ## 常駐注入（唯一的例外）
 
@@ -61,6 +61,21 @@
 | **docker-patterns** | 多階段建置、容器安全、volume、多服務編排 | 寫或改 Dockerfile／compose |
 | **security-review** | 認證／輸入／秘密／金流 的審查清單與模式 | 碰認證、秘密、金流前 |
 | **security-scan** | 掃 `.claude/` 設定本身的注入風險（**需 AgentShield**） | 稽核 hooks／MCP／settings |
+
+## 使用者主動要求的 UI 工作（第三方收錄）
+
+| Skill | 用途 | 啟動時機 |
+| :--- | :--- | :--- |
+| **unslop** | 把已經做出來、看起來像 AI 產出的畫面改版：照 `signs.md` 稽核 → 決定改多少 → 依間距、色彩、圖示、文案、字型、版面、細節、視覺、動態的順序修；附網站快照與前後對照影片腳本（需 Node、Playwright、ffmpeg）。作者 Damir Sokolovsky，CC BY 4.0，複製時保留署名 | 使用者說「unslop」「去 AI 感」「這頁看起來很 AI，幫我改版」「polish／redesign 這個畫面」 |
+| **gmap-landing-page** | 從 Google 地圖商家連結蒐集資訊、評論與照片，問答確認風格／素材／字型後產一頁式形象 landing page；不准編事實，缺的留 `【待店家提供】` | 使用者貼 `maps.app.goo.gl`／`google.com/maps/place` 連結，要幫店家做官網或形象頁 |
+
+兩個都只給主模型用（列在 `check-counts.sh` 的 `MAIN_MODEL_ONLY`）：`gmap-landing-page` 靠 `AskUserQuestion`，
+subagent 沒有這個工具；`unslop` 是使用者點名才跑的改版流程。
+
+**`unslop` 與 `ui-style-compliance/anti-ai.md` 的分工**：`anti-ai.md` 是**寫任何前端時的常駐檢查**（產出前避開、產出後自檢），
+是本模板反 AI 感規則的唯一來源；`unslop` 是使用者**主動要求**把既有畫面改版時才跑的完整流程。
+兩者有幾處建議不同（字型名單、字重範圍、等寬字用途、示範資料），**尚未裁決**；
+已選定 DESIGN.md 時照 `anti-ai.md` 原則 2：DESIGN.md 與使用者的明確要求優先。
 
 ## 為什麼 rule 要搬成 skill
 
