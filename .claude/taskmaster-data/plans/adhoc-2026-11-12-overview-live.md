@@ -2,9 +2,9 @@
 wbs_task: "none"
 slug: "overview-live"
 created: "2026-11-12"
-updated: "2026-11-12"
+updated: "2026-11-13"
 status: "🔄 進行中"
-current_phase: 7
+current_phase: 8
 mode: "standard"
 files:
   - ".claude/scripts/overview.sh"
@@ -276,15 +276,15 @@ flowchart LR
   - 3000 行事件在 Linux 上 `--live` 跑完 < 1 秒
 - **注意**：若階段 3 探針顯示 subagent 內的 PermissionRequest／Notification **不帶** `agent_id`，`aid` 為空的開啟者改用 ADR-002 第 5 節的退路規則（同 `sid` 之後出現同 `tool` 的 PostToolUse，或任一事件晚於開啟者 10 秒以上且該 session 沒有其他未結束的 subagent → 已處理），採用哪一支寫進 overview.sh 檔頭與「發現與決策」，並補對應驗收。資料放獨立的 live.js 是決策 Q2（已決定），檔案格式與分檔理由見 `.claude/context/decisions/ADR-2026-11-12-002-live-events-log-and-live-js.md`；欄位定義以 overview.sh 檔頭為唯一來源，ADR 與它不一致時回報，不自行擇一
 
-### 階段 7: 現況分頁 ⏳
+### 階段 7: 現況分頁 ✅
 - **依賴**：階段 4（`/<token>/.serve-id` 端點與 `overview-serve.sh --stop`，供「伺服器已結束」提示與其驗收）, 6
-- [ ] 全部寫在 `index.html`（決策 Q1：不拆檔）：`renderNow`、live.js 輪詢（頁面可見時每 2 秒，同 `check()` 的插 script 寫法，`window.OVERVIEW_LIVE` 先設 `null` 判斷半份檔）、每秒時鐘、暫停動畫按鈕；現況的 CSS 寫在既有 `<style>`，顏色只用 `var(--token)` — 驗證：截圖
-- [ ] 分頁順序「現況／專案地圖／任務圖」，沒有 hash 預設 `#now`；`<div id="nv">` 容器；現況分頁隱藏圖例、篩選、落差、提示（`.v-now` 規則） — 驗證：截圖
-- [ ] 版面：頂端 4 格（需要你＝`needs`＋卡住數、在跑的線＝`lanes` 數、今天完成＝一格兩個數字「N 個 agent · M 個任務」取自 `doneToday`、撞檔）；「需要你」清單（等批准／等回覆／卡住：lane 的 `lastAt` 超過 10 分鐘）；「現在在跑」依 `curGroups` 分組（組標題：任務名、在哪、目前階段「階段 9／12 結帳頁」、階段進度帶；`group` 為 null 的放「未歸屬」組），組內每 lane 一張卡（誰、在哪、正在做、經過時間每秒跳、進度條）；右側「動態」時間軸、「撞檔」、「人在做」（`humans`，取自 data.js）
-- [ ] 更新時只改變動的卡（以 lane／need id 對應），新增的淡入、消失的淡出、數字變了跳一下；不整個重建 `#nv`
-- [ ] 動畫只用 CSS transition／animation，包在 `@media (prefers-reduced-motion: no-preference)` 裡；「暫停動畫」按鈕切 `.still`（`animation-play-state: paused`），狀態存 localStorage
-- [ ] 伺服器已閒置結束的提示（ADR-003「犧牲」第 3 點）：頁面是 `http:` 開的、且 data.js 或 live.js 的輪詢載入失敗時，`fetch('.serve-id')`（相對路徑，落在 `/<token>/.serve-id`）；連線失敗（promise reject）→ 頁首顯示一條「伺服器已結束（閒置 30 分鐘），重跑 /task-status」，停止輪詢計時器但保留畫面；回 200 或 404 → 不顯示（live.js 只是還沒產生）。分頁從背景回到可見時再試一次，伺服器回來了就收掉提示、恢復輪詢。`file:` 開的頁面不做這件事 — 驗證：截圖
-- [ ] 做完 `wc -c .claude/templates/overview/index.html`，數字記進「發現與決策」（上限已在階段 1 提到 128KB） — 驗證：`bash .claude/scripts/check-counts.sh`
+- [x] 全部寫在 `index.html`（決策 Q1：不拆檔）：`renderNow`、live.js 輪詢（頁面可見時每 2 秒，同 `check()` 的插 script 寫法，`window.OVERVIEW_LIVE` 先設 `null` 判斷半份檔）、每秒時鐘、暫停動畫按鈕；現況的 CSS 寫在既有 `<style>`，顏色只用 `var(--token)` — 驗證：截圖
+- [x] 分頁順序「現況／專案地圖／任務圖」，沒有 hash 預設 `#now`；`<div id="nv">` 容器；現況分頁隱藏圖例、篩選、落差、提示（`.v-now` 規則） — 驗證：截圖
+- [x] 版面：頂端 4 格（需要你＝`needs`＋卡住數、在跑的線＝`lanes` 數、今天完成＝一格兩個數字「N 個 agent · M 個任務」取自 `doneToday`、撞檔）；「需要你」清單（等批准／等回覆／卡住：lane 的 `lastAt` 超過 10 分鐘）；「現在在跑」依 `curGroups` 分組（組標題：任務名、在哪、目前階段「階段 9／12 結帳頁」、階段進度帶；`group` 為 null 的放「未歸屬」組），組內每 lane 一張卡（誰、在哪、正在做、經過時間每秒跳、進度條）；右側「動態」時間軸、「撞檔」、「人在做」（`humans`，取自 data.js）
+- [x] 更新時只改變動的卡（以 lane／need id 對應），新增的淡入、消失的淡出、數字變了跳一下；不整個重建 `#nv`
+- [x] 動畫只用 CSS transition／animation，包在 `@media (prefers-reduced-motion: no-preference)` 裡；「暫停動畫」按鈕切 `.still`（`animation-play-state: paused`），狀態存 localStorage
+- [x] 伺服器已閒置結束的提示（ADR-003「犧牲」第 3 點）：頁面是 `http:` 開的、且 data.js 或 live.js 的輪詢載入失敗時，`fetch('.serve-id')`（相對路徑，落在 `/<token>/.serve-id`）；連線失敗（promise reject）→ 頁首顯示一條「伺服器已結束（閒置 30 分鐘），重跑 /task-status」，停止輪詢計時器但保留畫面；回 200 或 404 → 不顯示（live.js 只是還沒產生）。分頁從背景回到可見時再試一次，伺服器回來了就收掉提示、恢復輪詢。`file:` 開的頁面不做這件事 — 驗證：截圖
+- [x] 做完 `wc -c .claude/templates/overview/index.html`，數字記進「發現與決策」（上限已在階段 1 提到 128KB） — 驗證：`bash .claude/scripts/check-counts.sh`
 - **預估**：4h
 - **驗收**：
   - 開頁沒有 hash → 顯示現況分頁，分頁列順序是現況、專案地圖、任務圖（截圖）
@@ -307,7 +307,7 @@ flowchart LR
   - 390／1440 × 淺／深四張截圖
 - **注意**：不拆檔，所以 `copy_page`、`session-start.sh`、`check-counts.sh` 本階段都不動。估計做完約 84–86KB，離 128KB 還有約 40KB；萬一超過 128KB 先回報，不自行瘦身或再調上限
 
-### 階段 8: 部件卡「誰在做／等你」與標籤連動 ⏳
+### 階段 8: 部件卡「誰在做／等你」與標籤連動 🔄
 - **依賴**：階段 2, 7
 - [ ] lane 寫過的檔落在某部件的檔案裡 → 該部件卡顯示「<誰> · <經過分鐘> 分」（`.who`）；該 lane 有未處理 need → 部件狀態改「等你」（`.pc.waiting`） — 驗證：截圖
 - [ ] live.js 更新時只 patch 部件卡（`data-part` 對應），不重建任務圖
@@ -363,3 +363,5 @@ flowchart LR
 - 2026-11-12 階段 5：`where` 用 `"main"`／`"worktree:<名>"`（頁面轉中文）；`humans.status` 沿用既有 state 代號；`humans.branch` 取 committerdate 最近一條，本地與 `origin/` 同名取本地、只在遠端才帶 `origin/`；WBS 沒有任何負責人時不跑 `git for-each-ref`；`doneOn` 只認 `✅ MM-DD`（帶年份回 null）。技術債：負責欄多人（`alice, bob`）整欄比對，不會認出「我」。頁面 74596 bytes
 - 2026-11-12 階段 6：`readonly` 照 `AGENT_INFLIGHT_READONLY`（code-quality-specialist 不在名單、為 false；原驗收寫錯）；clashes 加「兩線同組且只靠 plan glob 命中不算」與 `agents` 欄；data.js 的 `plans[]` 多帶 `files`；排序 `sort_by([.t,.ms,.i])` 穩定、相同 (t, ms) 依行序；沒做 aid 為空的退路（階段 3 實測不需要）。jq 1.6 由審查者用本機 `/usr/bin/jq` 1.6 實跑，輸出與 1.8.1 逐字相同
 - 2026-11-12 階段 6 審查後：**PostToolUse 改接全部工具**（matcher `"*"`，官方 hooks reference「`"*"`, `""`, or omitted | Match all」，含 MCP 工具），白名單外的工具只記工具名、`act` 為「用 <tool>」，不讀 tool_input——否則批准 WebFetch／MCP 後 need 永遠不關。代價：每次工具呼叫多一支 async hook；事件量變多，3000 行涵蓋的時間變短。`.live-at` 格式改為「觸發時間 視窗秒數」，`--live` 每輪後持鎖等到視窗結束再看 `.live-dirty`（最多 3 輪、單次等待 ≤10 秒）。殘留極小競態：視窗最後一刻或放鎖前幾毫秒寫的 dirty 要等下一次觸發
+- 2026-11-12 階段 7：頁面 91702 bytes（plan 估 84–86KB；低於 112KB 預警與 128KB 上限）。沒有 hash 時預設開現況分頁，原「重畫保留狀態」測試改開 `#map`。現況分頁藏 `#lede` 與正常狀態的 `#status`；頁首加「即時 · 最後變動 HH:MM」；動態最多 12 筆；目前任務組沒有線時顯示「沒有在跑的線」。重啟伺服器會換 token（ADR-003），所以「同 port 同 token 恢復」只能用替身伺服器驗；實際情況是舊網址回 404——裁決見帳本。Esc 在現況分頁對隱藏畫布 fitAll（任務圖分頁原本就有），未修
+- 2026-11-12 階段 7 修復後：連上過再拿到 .serve-id 404 →「網址已失效，重跑 /task-status」並停輪詢與 tick；伺服器結束時 tick 停。頁面 92187 bytes

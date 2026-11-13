@@ -102,3 +102,16 @@
 - 2026-11-12 17:02 查證（claude-code-guide）：官方 hooks reference 明文「"*", "", or omitted → Match all」，MCP 工具同樣匹配 → matcher "*" 正確
 - 2026-11-12 17:02 審查通過（規格 ✅ 品質 ✅，HIGH 與 MEDIUM 以 diff＋測試核對）｜範圍=30485ee..c848980
 - 2026-11-12 17:02 階段完成 → plan 標 ✅，current_phase=7｜摘要=--live 聚合 agent、需要你、撞檔、今天完成到 live.js｜測試=644/644
+
+## 階段 7: 現況分頁
+- 2026-11-12 17:03 派工 ui-builder（opus；前端頁面依路由表派 ui-builder，帶 ui-style-compliance 自檢）｜BASE=47f210f
+- 2026-11-12 18:27 回報 DONE_WITH_CONCERNS｜commit=7c3c15a, 9f6b55b｜產出 index.html、run-tests.sh 新節「overview 現況分頁」、fixtures/overview/now-check.js、README.md、WORKFLOW.md｜新節 44/0、check-counts 720 一致｜頁面 91702 bytes
+- 2026-11-12 18:27 Ruling: 頁面曾經連上伺服器（或已顯示過「伺服器已結束」）之後，`.serve-id` 回 404 → 顯示「網址已失效，重跑 /task-status」並停止輪詢，不再當成正常 — 重啟一律換 token（ADR-003），舊網址永遠不會恢復，靜默停更會讓使用者以為畫面是即時的 — 若判錯只是提示文字多出現一次，改回成本小｜併入審查後的修復輪
+- 2026-11-12 18:27 Ruling: 淡化格 opacity .55 的對比不足不改 — 數字為 0 本來就是不需要注意的狀態，驗收要求變淡 — 若使用者覺得看不清，改成只淡化數字不淡化標籤
+- 2026-11-12 18:30 派工審查 code-quality-specialist（opus）｜範圍=47f210f..9f6b55b
+- 2026-11-12 18:36 審查結果：無 CRITICAL／HIGH，3 MEDIUM（GONE 後 tick 仍算卡住；reduced-motion 測試沒有 lane；斷線恢復沒有自動測試）、2 LOW｜報告 context/quality/code-quality-specialist-2026-11-12-1830-p7.md
+- 2026-11-12 18:36 修復輪 R1 派回同一 ui-builder：404 失效提示（裁決）＋ 3 個 MEDIUM
+- 2026-11-13 09:16 重開機中斷修復輪 R1（改動已在工作區、未 commit）→ 續派同一 ui-builder 補完、跑測試、commit
+- 2026-11-13 09:19 修復 R1 完成｜commit=d26ea93｜新節 48/0、check-counts 720 一致｜92187 bytes
+- 2026-11-13 09:19 審查通過（規格 ✅ 品質 ✅；R1 只修 MEDIUM 與裁決，依 reviewer-prompt 不加審）｜範圍=47f210f..d26ea93
+- 2026-11-13 09:19 階段完成 → plan 標 ✅，current_phase=8｜摘要=現況分頁：需要你、在跑的線、動態、撞檔即時更新｜測試=48/48
