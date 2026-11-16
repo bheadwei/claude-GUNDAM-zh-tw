@@ -5976,6 +5976,85 @@ SV_X=(); out=$(sv_run); url=$(sv_last "$out")
 expect_eq "…下次呼叫重起、網址可用" 200 "$(sv_code "$(sv_url_port "$url")" GET "$(sv_url_path "$url")")"
 sv_stop
 
+# --- 網址固定（ADR-2026-11-16-001）：.serve-keep 沿用 token 與 port
+SV_KEEP="$SV_OV/.serve-keep"
+sv_perm() { case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) echo -rw------- ;; *) ls -l "$1" | cut -c1-10 ;; esac; }
+sv_keep_field() { sed -n "s/.*\"$1\": *\"\{0,1\}\([A-Za-z0-9_-]*\).*/\1/p" "$SV_KEEP"; }
+
+sv_reset
+out=$(sv_run); url1=$(sv_last "$out"); sv_stop
+out=$(sv_run); url2=$(sv_last "$out")
+expect_eq "起、--stop、再起 → 兩次網址完全相同（port 與 token）" "$url1" "$url2"
+port=$(sv_url_port "$url2"); upath=$(sv_url_path "$url2")
+expect_eq "…GET /.serve-keep → 404" 404 "$(sv_code "$port" GET /.serve-keep)"
+expect_eq "…GET /<token>/.serve-keep → 404" 404 "$(sv_code "$port" GET "${upath%index.html}.serve-keep")"
+expect_eq "….serve-keep 權限為 600" "-rw-------" "$(sv_perm "$SV_KEEP")"
+sv_stop
+
+sv_reset; SV_X=(OVERVIEW_SERVE_IDLE_MIN=0.03)
+out=$(sv_run); url1=$(sv_last "$out")
+for ((i = 0; i < 100; i++)); do [ -f "$SV_OV/.serve" ] || break; sleep 0.1; done
+expect_eq "閒置結束 → .serve 被刪" no "$([ -f "$SV_OV/.serve" ] && echo yes || echo no)"
+expect_eq "….serve-keep 還在" yes "$([ -f "$SV_KEEP" ] && echo yes || echo no)"
+SV_X=(); out=$(sv_run); url2=$(sv_last "$out")
+expect_eq "…再起 → 網址與閒置前相同" "$url1" "$url2"
+sv_stop
+
+sv_reset; sv_occupy "$SV_BASE" 1
+out=$(sv_run); url1=$(sv_last "$out"); sv_stop; sv_unoccupy
+out=$(sv_run); url2=$(sv_last "$out")
+expect_eq "第一次起在 base+1（base 被佔）→ 釋放 base 後再起，網址相同" "$url1" "$url2"
+expect_eq "…port 仍是 base+1" "$((SV_BASE + 1))" "$(sv_url_port "$url2")"
+sv_stop
+
+sv_reset
+out=$(sv_run); tok1=$(sv_keep_field token); sv_stop
+sv_occupy "$SV_BASE" 1
+out=$(sv_run); url2=$(sv_last "$out")
+expect_eq ".serve-keep 的 port 被佔 → 改用 base+1" "$((SV_BASE + 1))" "$(sv_url_port "$url2")"
+expect_eq "…token 不變" "$tok1" "$(sv_keep_field token)"
+expect_eq "….serve-keep 的 port 更新成新值" "$((SV_BASE + 1))" "$(sv_keep_field port)"
+sv_stop; sv_unoccupy
+
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+        ok ".serve-keep 權限 644 → 換新 token（Windows 無 POSIX 權限，略過）"
+        ok "…照常起、exit 0（Windows 無 POSIX 權限，略過）"
+        ok "….serve-keep 權限回到 600（Windows 無 POSIX 權限，略過）" ;;
+    *)  sv_reset
+        out=$(sv_run); tok1=$(sv_keep_field token); sv_stop
+        chmod 644 "$SV_KEEP"
+        out=$(sv_run); rc=$?
+        [ "$(sv_keep_field token)" != "$tok1" ] && ok ".serve-keep 權限 644 → 換新 token" || ng ".serve-keep 權限 644 → 換新 token" "token 不同" "$(sv_keep_field token)"
+        expect_eq "…照常起、exit 0" 0 "$rc"
+        expect_eq "….serve-keep 權限回到 600" "-rw-------" "$(sv_perm "$SV_KEEP")"
+        sv_stop ;;
+esac
+
+sv_reset
+out=$(sv_run); sv_stop
+echo '{壞掉的 json' > "$SV_KEEP"
+out=$(sv_run); rc=$?
+expect_eq ".serve-keep 是壞 JSON → exit 0" 0 "$rc"
+[[ $(sv_last "$out") =~ $SV_URL_RE ]] && ok "…照常起、印網址" || ng "…照常起、印網址" "$SV_URL_RE" "$out"
+sv_stop
+printf '{"token": "abcde", "port": %s}' "$SV_BASE" > "$SV_KEEP"; chmod 600 "$SV_KEEP"
+out=$(sv_run); rc=$?; url=$(sv_last "$out")
+expect_eq "token 只有 5 個字 → exit 0" 0 "$rc"
+[[ $url =~ $SV_URL_RE && $url != *"/abcde/"* ]] && ok "…產新 token、照常起" || ng "…產新 token、照常起" "新 token 的網址" "$out"
+sv_stop
+
+sv_reset; SV_X=(BROWSER="$SV_BIN/fake-browser")
+out=$(sv_run); url1=$(sv_last "$out"); tok1=$(sv_keep_field token); sleep 0.3; : > "$SV_CALLS"
+SV_X=(BROWSER="$SV_BIN/fake-browser"); out=$(sv_run --rotate); rc=$?; url2=$(sv_last "$out")
+expect_eq "--rotate → exit 0" 0 "$rc"
+[[ $url2 =~ $SV_URL_RE ]] && ok "--rotate → 印新網址" || ng "--rotate → 印新網址" "$SV_URL_RE" "$out"
+[ "$(sv_keep_field token)" != "$tok1" ] && ok "…token 與舊的不同" || ng "…token 與舊的不同" "不同" "$(sv_keep_field token)"
+expect_eq "…舊網址 → 404" 404 "$(sv_code "$(sv_url_port "$url2")" GET "$(sv_url_path "$url1")")"
+expect_eq "…新網址 → 200" 200 "$(sv_code "$(sv_url_port "$url2")" GET "$(sv_url_path "$url2")")"
+expect_eq "…\$BROWSER 呼叫 1 次" "fake-browser $url2" "$(sv_calls)"
+sv_stop
+
 # --- 沒有 project.json
 sv_reset; rm -f "$SV/.claude/taskmaster-data/project.json"
 out=$(sv_run); rc=$?

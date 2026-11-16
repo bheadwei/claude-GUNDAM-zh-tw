@@ -156,7 +156,7 @@ wbs-archive.md  已完成里程碑的完整任務列（含實際耗時，可回�
 
 **網址怎麼來**：`/task-status` 會起一個本機伺服器（`.claude/scripts/overview-serve.sh`，只綁 127.0.0.1、
 網址帶 token、閒置 30 分鐘自己結束），最後一行是 `http://127.0.0.1:<port>/<token>/index.html`，要整段複製。
-新起時會自動開瀏覽器；已在跑只印網址。需要 Python 3.7 以上，沒有時退回 `file://` 路徑。
+網址固定（同一個專案重起也一樣），可加書籤；外洩時跑 `bash .claude/scripts/overview-serve.sh --rotate` 換一個。新起時會自動開瀏覽器；已在跑只印網址。需要 Python 3.7 以上，沒有時退回 `file://` 路徑。
 VS Code 的 Simple Browser（Ctrl+Shift+P → `Simple Browser: Show`）貼網址也能看。
 **不要用 Live Server**：資料每幾秒更新一次，它會整頁重載、畫面一直閃。
 
