@@ -4,7 +4,7 @@ slug: "overview-stable-url"
 created: "2026-11-16"
 updated: "2026-11-16"
 status: "🔄 進行中"
-current_phase: 3
+current_phase: 4
 mode: "standard"
 files:
   # 階段 1：網址固定
@@ -152,7 +152,7 @@ flowchart LR
   - `check-counts.sh` 通過（≤128KB、token 區外沒有 hex 色碼、沒有 module script）
 - **注意**：Chrome 對背景分頁的計時器會節流（隱藏 5 分鐘後對齊到每分鐘），5 分鐘心跳不受影響；不要用 `requestAnimationFrame` 或 Web Worker 做心跳
 
-### 階段 3: 被中斷的 agent 判定（SessionStart 接線、靜默超時、閒置主 session） 🔄
+### 階段 3: 被中斷的 agent 判定（SessionStart 接線、靜默超時、閒置主 session） ✅
 - **依賴**：無
 - [ ] `settings.json` 的 `SessionStart` 陣列加 `agent-events.sh`（`async: true`，不設 matcher）；`hooks/README.md` 檔案樹那行與功能表補 SessionStart — 驗證：`jq . .claude/settings.json`
 - [ ] `agent-events.sh`：事件行加欄位 `ss`（SessionStart 的 `source`，`startup`／`resume`／`clear`／`compact`，上限 10 字；其他事件為 `""`）。**`v` 維持 1**：只加欄位、讀取端用 `.ss | str` 容忍沒有這欄的舊行；這條理由寫進 ADR-002 增補段。檔頭事件清單補 SessionStart — 驗證：`bash .claude/hooks/tests/run-tests.sh agent-events`
@@ -212,7 +212,7 @@ flowchart LR
   - ps1 兩支：本機有 `pwsh` 時跑同一組前 6 條；沒有 `pwsh` 的機器上不計入通過（印「略過」），並在「發現與決策」記實際有沒有跑到
 - **注意**：使用者的 VS Code 工作區根若不是專案根（multi-root、開上一層資料夾），glob 對不到，Live Server 仍會閃——寫進 task-status 那段一句。`.vscode/` 本身仍在 copy-template 排除清單（模板 repo 自己的編輯器設定不帶過去），新檔是由 helper 產的
 
-### 階段 5: 動態可刪除、中斷與卡住的顯示 ⏳
+### 階段 5: 動態可刪除、中斷與卡住的顯示 🔄
 - **依賴**：階段 3（`feed` 的 `agent_cut`／`why` 與上限 50）
 - [ ] 每則動態右側一個刪除鈕（`<button>`，`aria-label="刪除這則動態：<誰> <動作>"`，可點範圍 ≥ 44×44px）；「動態」標題旁「全部清除」鈕。「需要你」不加 — 驗證：截圖
 - [ ] 刪掉的 id（既有 `t|kind|id`）存 localStorage，key `overview-feed-hidden|<data.js 的 project.name>|<location.pathname>`（file:// 下各專案 pathname 不同；http 下 pathname 含 token；Live Server 下靠專案名區分）；讀寫都 try/catch；每次存時只留仍在目前 `LIVE.feed` 裡的 id、最多 200 個 — 驗證：同上

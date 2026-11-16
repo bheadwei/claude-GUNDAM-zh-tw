@@ -34,3 +34,14 @@
 
 ## 階段 3: 被中斷的 agent 判定
 - 2026-11-16 11:32 派工 implementer（sonnet，主 checkout）｜BASE=e2ab89a
+- 2026-11-16 11:41 回報 DONE｜commit=f8dc906｜RED 24 失敗 → GREEN agent-events 105/0、即時聚合 121/0、jq 1.6 綠
+- 2026-11-16 11:41 審查 PASS（MEDIUM 2、LOW 1）
+- 2026-11-16 11:41 Ruling: silent 不判「最後一筆帶 need（等批准、AskUserQuestion）」的 agent — 使用者離開越久越需要它留在「需要你」，plan 只排除 Bash 是規格缺口 — 若判錯，真正卡死在等批准的幽靈 agent 會一直掛著，restart 判定仍會收掉｜commit=dc973d3｜即時聚合 121/0
+- 2026-11-16 11:41 技術債（MEDIUM）：沒有 PreToolUse 的長工具（WebFetch、MCP）單次超過 30 分鐘會被 silent 誤判，之後有事件會回到 lanes；已寫進 overview.sh 檔頭
+- 2026-11-16 11:41 審查通過｜範圍=57588d5..dc973d3
+- 2026-11-16 11:41 階段完成 → plan 標 ✅｜摘要=被中斷的 agent 從現在在跑移除，動態記中斷｜測試=226/226
+- 2026-11-16 11:41 重算可平行：⏳ 階段 4、5 依賴都已完成，但都改 run-tests.sh → 不並行；先做 5（使用者看得到），再 4
+
+## 階段 5: 動態可刪除、中斷與卡住的顯示
+- 2026-11-16 11:41 派工 implementer（sonnet，主 checkout）｜BASE=dc973d3
+
