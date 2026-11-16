@@ -5765,7 +5765,8 @@ lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ev -500 Permission
 expect_eq "a1 有未處理的 approve、之後 SessionStart resume → needs 0 筆，feed 有該 need 的 need_done" "0 1" \
     "$(lvq '"\(.needs | length) \([.feed[] | select(.kind == "need_done")] | length)"')"
 lv_reset; lv_ev -3000 SubagentStart s1 a1 implementer main; lv_ev -2800 PermissionRequest s1 a1 implementer main "$LV_PR"; lv_run
-expect_eq "silent 判中斷的 agent 開著的 need 也關" "0 1" "$(lvq '"\(.needs | length) \([.feed[] | select(.kind == "need_done")] | length)"')"
+expect_eq "最後一筆是等批准、距今 47 分鐘 → 不判 silent，仍在 lanes、need 留在「需要你」" "1 1 0" \
+    "$(lvq '"\(.lanes | length) \(.needs | length) \([.feed[] | select(.kind == "agent_cut")] | length)"')"
 
 # 閒置主 session
 lv_reset; lv_ev -900 PostToolUse s1 "" "" main '{"tool":"Bash","act":"跑 ls"}'; lv_ev -800 Stop s1 "" "" main

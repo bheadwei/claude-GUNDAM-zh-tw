@@ -85,6 +85,8 @@
 #                     payload 沒有舊 sid 可對，這兩種只能靠 silent 收掉
 #            silent   最後一筆事件距現在超過 OVERVIEW_LIVE_CUT_MIN 分鐘（預設 30；不是整數時退回 30），且最後一筆
 #                     不是 PreToolUse Bash／PowerShell（還在跑的長指令不判）（t 取最後一筆 + 門檻）
+#                     最後一筆在等使用者（帶 need：批准、AskUserQuestion）也不判——人離開越久越需要留在「需要你」
+#                     限制：沒有 PreToolUse 事件的長工具（WebFetch、MCP）單次超過門檻會被誤判；之後有新事件就回到 lanes
 #            restart 優先。它還開著的 need 照 SubagentStop 的方式關（feed 記 need_done）。
 #            lane 的「結束」仍只認 SubagentStop（2026-09-11 的坑），中斷只是不再顯示
 #   needs    同 sid＋aid 的事件依序走一遍。開啟者＝事件行的 need 為 approve／reply（PermissionRequest、
@@ -383,7 +385,7 @@ def nwho: if .aid != "" then awho elif .src == "main" then "主 session" else "w
    | map(. as $s | $byAid[$s.aid] as $evs | ($evs | last) as $z
          | ([$restarts[] | select(.sid == $s.sid and .p > $z.p)] | first) as $rs
          | {s: $s, z: $z, why: (if $rs != null then "restart"
-                                elif ($now - $z.t) > $cutsec and ($z.ev == "PreToolUse" and ($z.tool == "Bash" or $z.tool == "PowerShell") | not) then "silent"
+                                elif ($now - $z.t) > $cutsec and $z.need == null and ($z.ev == "PreToolUse" and ($z.tool == "Bash" or $z.tool == "PowerShell") | not) then "silent"
                                 else null end),
             cutT: (if $rs != null then $rs.t else $z.t + $cutsec end), evs: $evs})) as $cand
 | ([$cand[] | select(.why == null) | . as $c | $c.s as $s | $c.z as $z | $c.evs as $evs | grpof($z.src; $s.sid) as $g
