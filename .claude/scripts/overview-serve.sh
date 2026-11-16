@@ -84,6 +84,10 @@ fi
 
 if [ "$ROTATE" -eq 1 ]; then
     stop_server
+    if running; then
+        echo "關不掉正在跑的伺服器（pid 見 $SERVE），沒有換 token；先結束那個程序再重跑 --rotate" >&2
+        exit 1
+    fi
     rm -f "$OV/.serve-keep"
 fi
 

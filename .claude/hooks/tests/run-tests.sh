@@ -6017,7 +6017,10 @@ expect_eq "….serve-keep 的 port 更新成新值" "$((SV_BASE + 1))" "$(sv_kee
 sv_stop; sv_unoccupy
 
 case "$(uname -s)" in
-    MINGW*|MSYS*|CYGWIN*) ;;
+    MINGW*|MSYS*|CYGWIN*)
+        ok ".serve-keep 權限 644 → 換新 token（Windows 無 POSIX 權限，略過）"
+        ok "…照常起、exit 0（Windows 無 POSIX 權限，略過）"
+        ok "….serve-keep 權限回到 600（Windows 無 POSIX 權限，略過）" ;;
     *)  sv_reset
         out=$(sv_run); tok1=$(sv_keep_field token); sv_stop
         chmod 644 "$SV_KEEP"

@@ -39,7 +39,7 @@ informed: [planner]
   - 理由一：多人共用的 Linux 主機（SSH 情境最常見）上，127.0.0.1 對同機所有使用者都開放；沒有 token，誰都能讀別人的圖解
   - 理由二：擋 DNS rebinding——惡意網頁把自己的網域解析到 127.0.0.1 後可以讀本機伺服器，猜不到 token 就只拿到 404
   - 不改用 Host 標頭白名單：VS Code 轉發後的 port 可能不同、Codespaces 等轉發網址的主機名也不同，Host 檢查會擋掉正常使用；token 對兩種威脅都有效
-  - token 用 Python `secrets.token_urlsafe(16)` 產生；每次新起都換新 token，舊網址隨之失效（重起後要用 `/task-status` 印的新網址）
+  - token 用 Python `secrets.token_urlsafe(16)` 產生；每次新起都換新 token，舊網址隨之失效（重起後要用 `/task-status` 印的新網址）（已被 ADR-2026-11-16-001 取代：token 固定沿用）
 - 所有回應帶 `Cache-Control: no-store`；不印存取 log（`log_message` 改成不輸出）
 - **閒置結束**：記錄最後一次請求的時間，超過 `OVERVIEW_SERVE_IDLE_MIN`（預設 30）分鐘沒有任何請求就自行結束並刪掉 `.serve`。頁面可見時每 2 秒輪詢 live.js，所以**分頁開著、看得到就不會被關**；切走分頁或關掉瀏覽器 30 分鐘後才結束
 - **身分確認端點**：`GET /<token>/.serve-id` 回 200。token 不對就是 404，所以這個端點本身不洩露 token
