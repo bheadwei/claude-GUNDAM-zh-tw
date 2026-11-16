@@ -212,7 +212,7 @@ flowchart LR
   - ps1 兩支：本機有 `pwsh` 時跑同一組前 6 條；沒有 `pwsh` 的機器上不計入通過（印「略過」），並在「發現與決策」記實際有沒有跑到
 - **注意**：使用者的 VS Code 工作區根若不是專案根（multi-root、開上一層資料夾），glob 對不到，Live Server 仍會閃——寫進 task-status 那段一句。`.vscode/` 本身仍在 copy-template 排除清單（模板 repo 自己的編輯器設定不帶過去），新檔是由 helper 產的
 
-### 階段 5: 動態可刪除、中斷與卡住的顯示 🔄
+### 階段 5: 動態可刪除、中斷與卡住的顯示 ✅
 - **依賴**：階段 3（`feed` 的 `agent_cut`／`why` 與上限 50）
 - [ ] 每則動態右側一個刪除鈕（`<button>`，`aria-label="刪除這則動態：<誰> <動作>"`，可點範圍 ≥ 44×44px）；「動態」標題旁「全部清除」鈕。「需要你」不加 — 驗證：截圖
 - [ ] 刪掉的 id（既有 `t|kind|id`）存 localStorage，key `overview-feed-hidden|<data.js 的 project.name>|<location.pathname>`（file:// 下各專案 pathname 不同；http 下 pathname 含 token；Live Server 下靠專案名區分）；讀寫都 try/catch；每次存時只留仍在目前 `LIVE.feed` 裡的 id、最多 200 個 — 驗證：同上
@@ -277,3 +277,4 @@ flowchart LR
 - 2026-11-16 主模型量測：`templates/overview/index.html` 現為 94144 bytes（上限 128KB）
 - 2026-11-16 階段 6：用文字規則不用 hook——觸發點「plan 階段標 ✅」是一次 Edit，可做成 PostToolUse 提醒，但重算要判斷依賴與檔案交集，hook 只能提醒、做不了判斷；實測被漏掉再升級成 hook 提醒
 - 2026-11-16 階段 2：index.html 動工前 94144 bytes、改後 94618 bytes
+- 2026-11-16 階段 5：index.html 動工前 94618 bytes、改後 97702 bytes，收尾修正後 97705 bytes；390／1440 × 淺／深截圖已看過（390 寬要用 `--headless=old`，新 headless 最小約 500 寬）；agent_cut 改帶 `idle`（閒置分鐘），頁面優先用它

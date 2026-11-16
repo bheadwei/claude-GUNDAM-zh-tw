@@ -45,3 +45,15 @@
 ## 階段 5: 動態可刪除、中斷與卡住的顯示
 - 2026-11-16 11:41 派工 implementer（sonnet，主 checkout）｜BASE=dc973d3
 
+- 2026-11-16 14:20 回報 DONE_WITH_CONCERNS｜commit=af47227｜產出 index.html（94618→97702 bytes）、fixtures/overview/feed-check.js（新）、run-tests.sh 現況分頁節｜現況分頁 75/0｜check-counts 725 一致
+- 2026-11-16 14:20 Ruling: silent 的「N 分鐘」不寫死 30，改由 overview.sh 在 agent_cut 帶閒置分鐘（idle）、頁面優先用它 — 使用者調過 OVERVIEW_LIVE_CUT_MIN 時畫面會說錯；改動小、在本 plan 已改過的檔內 — 若判斷錯只是多一個欄位
+- 2026-11-16 14:20 Ruling: 接受 implementer 順手修的 feed 節點 id 覆蓋 bug（f.id 蓋掉 t|kind|id）— 不修則刪除功能的 id 不成立 — 無
+- 2026-11-16 14:45 審查 R1 通過（規格 ✅ 品質 ✅，0 CRITICAL/HIGH）｜範圍=dc973d3..af47227｜MEDIUM：200 上限修剪沒測；LOW：最後一則刪除焦點應到「全部清除」
+- 2026-11-16 14:45 Ruling: MEDIUM 與焦點 LOW 併入 idle 欄位那次修正一起做（同一批檔，便宜）— 不加審查輪 — 若修壞由 /verify 抓到
+- 2026-11-16 14:45 派工 修正 implementer（sonnet，主 checkout）｜BASE=af47227
+- 2026-11-16 15:50 修正完成｜commit=94c8f4e｜agent_cut 帶 idle、刪最後一則焦點到「全部清除」、補 200 上限修剪測試｜即時聚合 124/0、現況分頁 78/0、check-counts 725 一致
+- 2026-11-16 15:50 階段完成 → plan 標 ✅，current_phase=4｜摘要=動態可刪、顯示中斷原因、等批准不算卡住｜測試=78/78
+- 2026-11-16 15:50 重算可平行：只剩 ⏳ 階段 4，不平行
+
+## 階段 4: Live Server 不再整頁閃（`.vscode/settings.json` 合併）
+- 2026-11-16 15:51 派工 implementer（sonnet，主 checkout）｜BASE=<本次 chore commit>
