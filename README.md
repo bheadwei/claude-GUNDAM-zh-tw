@@ -97,7 +97,7 @@ claude_v2026/
     ├── agents/       (14 個)         # 專業 Agent 定義
     ├── commands/     (29 個)         # Slash Commands
     ├── skills/       (30 個)         # 按需載入（不佔常駐 context）
-    ├── hooks/                        # Hook 腳本 + lib/ + 1268 案例回歸測試
+    ├── hooks/                        # Hook 腳本 + lib/ + 1706 案例回歸測試
     ├── scripts/                      # context-gc.sh（報告輪替）、check-counts.sh（文件計數一致性）、overview.sh（專案圖解）
     ├── ui/           (104 種風格)     # 設計系統 DESIGN.md（/ui-style 選用）
     │
@@ -163,7 +163,7 @@ claude_v2026/
 （或 `bash .claude/scripts/overview.sh --print-path`）。不用手動重產：寫 wbs／plan／架構文件或程式碼檔時
 hook 在背景更新，畫面每 3 秒自己重讀（現況分頁的即時資料每 2 秒）。地圖可拖曳平移、縮放（放大會顯示更多細節）、
 雙擊模組聚焦，左下角有小地圖可跳轉；點模組可展開看內部檔案與 import，右側欄列出它參與的資料流；
-產物在 `taskmaster-data/overview/`，不進 git。網址是 `/task-status` 起的本機伺服器（`overview-serve.sh`，只綁 127.0.0.1、網址帶 token、閒置 30 分鐘自動結束；需要 Python 3.7 以上，沒有就退回 `file://`）。SSH 遠端開發在自己電腦用 `ssh -L <port>:127.0.0.1:<port> <主機>` 轉發 port 後貼上網址（VS Code Remote 會自動轉發）。
+產物在 `taskmaster-data/overview/`，不進 git。網址是 `/task-status` 起的本機伺服器（`overview-serve.sh`，只綁 127.0.0.1、網址帶 token、閒置 30 分鐘自動結束；需要 Python 3.7 以上，沒有就退回 `file://`）。網址固定、可加書籤；外洩時跑 `bash .claude/scripts/overview-serve.sh --rotate` 換一個。SSH 遠端開發在自己電腦用 `ssh -L <port>:127.0.0.1:<port> <主機>` 轉發 port 後貼上網址（VS Code Remote 會自動轉發）。用 Live Server 開也不會閃（`copy-template`／`update-template` 會在目標的 `.vscode/settings.json` 讓它忽略地圖資料夾；工作區根不是專案根時 glob 對不到，仍會閃）。
 關閉用環境變數 `OVERVIEW=off`。使用方式見 `.claude/guides/WORKFLOW.md`「想看整體長什麼樣」，
 產生器與設定見 `.claude/scripts/overview.sh` 檔頭。
 

@@ -195,6 +195,12 @@ $minimalSettings = @'
 '@
 $minimalSettings | Set-Content -Path (Join-Path $Destination '.claude\settings.local.json') -Encoding UTF8
 
+# 專案地圖資料每幾秒更新，Live Server 會整頁重載：讓它忽略地圖資料夾（與 copy-template.sh 一致）。
+# .vscode\ 在排除清單，這份是 helper 產的；目標可能已有自己的 settings.json
+. (Join-Path $srcRoot 'scripts\lib\vscode-live-server.ps1')
+Write-Host "🖥  設定 Live Server 忽略專案地圖資料夾..." -ForegroundColor Cyan
+Ensure-LiveServerIgnore -Root $destPath
+
 # ============================================================================
 # 完成訊息
 # ============================================================================

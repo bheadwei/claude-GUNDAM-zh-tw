@@ -188,6 +188,13 @@ cat > "$DEST/.claude/settings.local.json" <<'EOF'
 }
 EOF
 
+# 專案地圖資料每幾秒更新，Live Server 會整頁重載：讓它忽略地圖資料夾。
+# .vscode/ 在排除清單（模板自己的編輯器設定不帶過去），這份是 helper 產的；目標可能已有自己的 settings.json
+# shellcheck source=lib/vscode-live-server.sh
+. "$SRC/scripts/lib/vscode-live-server.sh"
+echo "🖥  設定 Live Server 忽略專案地圖資料夾..."
+ensure_live_server_ignore "$DEST"
+
 # ============================================================================
 # 完成訊息
 # ============================================================================

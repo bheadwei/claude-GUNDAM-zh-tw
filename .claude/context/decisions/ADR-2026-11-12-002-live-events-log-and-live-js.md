@@ -246,3 +246,15 @@ sequenceDiagram
 - 狀態邊界：`.claude/skills/worktree-orchestration/SKILL.md`「短命旗標 vs 共享產物」表
 - 官方文件：Claude Code hooks reference（SubagentStart 輸入、common input fields 的 `agent_id`／`agent_type`、PermissionRequest 輸入、Notification matcher 值、Run hooks in the background）
 - 相關 ADR：ADR-2026-11-12-001（頁面大小）、ADR-2026-11-12-003（本機伺服器）
+
+## 2026-11-16 增補：記 SessionStart，判定被中斷的 agent
+
+背景：smartwork 實例——planner 跑到一半，使用者 `resume` 了 session，那個 planner 不會再有 SubagentStop，lane 掛到 12 小時才消失。
+
+- **第 1 節表多一列**：`SessionStart`（不設 matcher、`async: true`）｜記 `source`｜用途：`--live` 判斷同 sid 的 agent 是否被中斷。
+- **第 2 節欄位表多一列**：`ss`｜字串｜SessionStart 的 `source`（`startup`／`resume`／`clear`／`compact`）；其他事件為 `""`｜10 字。
+- **`v` 維持 1**：只加欄位、沒改既有欄位的意義；讀取端用 `.ss | str` 容忍沒有這欄的舊行。第 2 節「改形狀就加 1」的「形狀」指既有欄位的型別或意義，加欄位不算——否則已寫進檔的舊行會被整行略過，現況畫面清空。
+- **中斷規則的唯一來源是 `overview.sh` 檔頭「即時聚合」**：restart（同 sid 的 SessionStart `startup`／`resume`／`clear`，`compact` 不算）與 silent（最後一筆距今超過 `OVERVIEW_LIVE_CUT_MIN` 分鐘，預設 30；最後一筆是 PreToolUse Bash／PowerShell 不判）。本 ADR 不重述門檻與細節。
+- **`/clear` 與新視窗只能靠 silent**：這兩種會換新的 `session_id`（VS Code 重開若是 `startup` 也是新 sid），payload 裡沒有舊 sid 可以對，無法用 restart 認出，只有等 silent 超時收掉。這是已知的延遲，不是漏洞。
+- **閒置主 session 不進 lanes**：session lane 判斷「最後一筆」時略過 `Notification` 與 `SessionStart`；主 session 停下等回話時只在 `needs` 顯示等回覆。
+- 中斷只影響 `live.js` 的顯示：不寫回 `agent-activity.jsonl`、閘門不讀（第 6 節不變）。

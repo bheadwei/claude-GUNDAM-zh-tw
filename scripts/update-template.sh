@@ -198,6 +198,17 @@ elif [ -f "$SOURCE/.gitignore" ]; then
   fi
 fi
 
+# 專案地圖資料每幾秒更新，Live Server 會整頁重載：讓它忽略地圖資料夾（動的是根目錄的 .vscode/，--claude-only 不碰）。
+# update-template.ps1 要一致
+echo "▶ 補 .vscode/settings.json（Live Server 忽略專案地圖資料夾）..."
+if [ "$CLAUDE_ONLY" -eq 1 ]; then
+  echo "   ⏭  --claude-only：跳過"
+else
+  # shellcheck source=lib/vscode-live-server.sh
+  . "$SCRIPT_DIR/lib/vscode-live-server.sh"
+  if [ "$DRY_RUN" -eq 1 ]; then ensure_live_server_ignore "$DEST" --dry-run; else ensure_live_server_ignore "$DEST"; fi
+fi
+
 echo "▶ MERGE 骨架目錄（保留執行資料）..."
 # 只補「骨架檔」：README.md、_*_TEMPLATE.md、以及各 area 的目錄與 .gitkeep。
 #

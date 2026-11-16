@@ -61,6 +61,8 @@ _changed_rule() {
         .claude/coordination/handoffs/_HANDOFF_TEMPLATE.md)  echo "=_HANDOFF_TEMPLATE.md" ;;
         .claude/ui/_sources.json)                            echo "=_sources.json" ;;
         scripts/copy-template.sh)                            echo "=copy-template.sh" ;;
+        scripts/lib/vscode-live-server.*)                    echo "=vscode-live-server" ;;
+        scripts/update-template.sh)                          echo "=update-template" ;;
         .claude/templates/overview/*)                        echo "=overview.sh" ;;
         .claude/hooks/tests/fixtures/overview/*)             echo "=overview" ;;
         # hook 與被測的腳本：跑提到它的節
@@ -5075,8 +5077,8 @@ if [ -f "$UT_SRC" ] && [ -f "$UT_GI" ]; then
     for l in .full-suite-warned .last-verify .merge-round-open; do
         grep -qxF ".claude/taskmaster-data/$l" "$UT_GI" && ok "模板 .gitignore 列了 $l" || ng "模板 .gitignore 列了 $l" "有這一行" "沒有"
     done
-    UT="$SANDBOX/ut"; rm -rf "$UT"; mkdir -p "$UT/tpl/scripts" "$UT/tpl/.claude/agents" "$UT/dst/.claude" "$UT/dst2/.claude"
-    cp "$UT_SRC" "$UT/tpl/scripts/"; echo a > "$UT/tpl/.claude/agents/a.md"; echo x > "$UT/tpl/.worktreeinclude"
+    UT="$SANDBOX/ut"; rm -rf "$UT"; mkdir -p "$UT/tpl/scripts/lib" "$UT/tpl/.claude/agents" "$UT/dst/.claude" "$UT/dst2/.claude"
+    cp "$UT_SRC" "$UT/tpl/scripts/"; cp "$HOOK_DIR/../../scripts/lib/vscode-live-server.sh" "$UT/tpl/scripts/lib/"; echo a > "$UT/tpl/.claude/agents/a.md"; echo x > "$UT/tpl/.worktreeinclude"
     printf '# x\n.env\n.claude/taskmaster-data/.current-task\n.claude/taskmaster-data/.last-verify\n.claude/taskmaster-data/.merge-round-open\n.claude/taskmaster-data/.full-suite-warned\n.claude/worktrees/\n' > "$UT/tpl/.gitignore"
     ut() { bash "$UT/tpl/scripts/update-template.sh" "$@" --no-backup </dev/null 2>&1; }
     # 目標：CRLF、檔尾沒有換行、已經有 .current-task、還有一行自己的規則
@@ -5104,6 +5106,107 @@ if [ -f "$UT_SRC" ] && [ -f "$UT_GI" ]; then
     rm -rf "$UT"
 else
     ok "（不是模板 repo，沒有 scripts/update-template.sh，略過）"
+fi
+
+# =========================================================================
+section "vscode-live-server — Live Server 忽略專案地圖資料夾"
+# =========================================================================
+# 地圖資料每幾秒更新，Live Server 會整頁重載。helper 在 scripts/lib/，copy／update 兩支 sh 共用。
+# 用假模板跑：update-template.sh ＋ copy-template.sh ＋ lib。對應 plan 階段 4 的驗收條目。
+VL_LIB="$HOOK_DIR/../../scripts/lib/vscode-live-server.sh"
+VL_GLOB='.claude/taskmaster-data/overview/**'
+if [ -f "$VL_LIB" ] && command -v jq >/dev/null 2>&1; then
+    VL="$SANDBOX/vl"; rm -rf "$VL"; mkdir -p "$VL"
+    vl() { ( . "$VL_LIB"; ensure_live_server_ignore "$@" ) 2>&1; }
+    vlk() { jq -c "$2" "$1/.vscode/settings.json"; }
+    mkdir -p "$VL/a"
+    out=$(vl "$VL/a"); rc=$?
+    expect_eq "目標沒有 .vscode/ → 建出 settings.json，最後一項是地圖 glob" "$VL_GLOB" "$(jq -r '."liveServer.settings.ignoreFiles"[-1]' "$VL/a/.vscode/settings.json")"
+    expect_eq "新建的陣列帶 Live Server 預設值（設了這個鍵會蓋掉預設）" '[".vscode/**","**/*.scss","**/*.sass",".claude/taskmaster-data/overview/**"]' "$(vlk "$VL/a" '."liveServer.settings.ignoreFiles"')"
+    mkdir -p "$VL/b/.vscode"; printf '{"editor.tabSize": 4, "liveServer.settings.ignoreFiles": ["**/*.ts"]}\n' > "$VL/b/.vscode/settings.json"
+    vl "$VL/b" >/dev/null
+    expect_eq "既有陣列 → 附加到尾端，editor.tabSize 仍為 4" '["**/*.ts",".claude/taskmaster-data/overview/**"] 4' "$(jq -r '"\(."liveServer.settings.ignoreFiles" | tojson) \(."editor.tabSize")"' "$VL/b/.vscode/settings.json")"
+    mkdir -p "$VL/c/.vscode"; printf '{"z": 1, "a": {"x": 2}}\n' > "$VL/c/.vscode/settings.json"
+    vl "$VL/c" >/dev/null
+    expect_eq "既有物件沒有這個鍵 → 加上（含預設值），其他鍵與順序不變" '["z","a","liveServer.settings.ignoreFiles"] 4' "$(jq -r '"\(keys_unsorted | tojson) \(."liveServer.settings.ignoreFiles" | length)"' "$VL/c/.vscode/settings.json")"
+    cp "$VL/b/.vscode/settings.json" "$VL/b-before"
+    out=$(vl "$VL/b")
+    cmp -s "$VL/b-before" "$VL/b/.vscode/settings.json" && ok "已含地圖 glob → 檔案 cmp 相同；連跑兩次第二次不變" || ng "已含地圖 glob → 檔案不變" "cmp 相同" "$(diff "$VL/b-before" "$VL/b/.vscode/settings.json" | head -3)"
+    expect_contains "已含地圖 glob → 輸出含「已設定」" "已設定" "$out"
+    mkdir -p "$VL/d/.vscode"; printf '{\n  // 我的設定\n  "editor.tabSize": 2\n}\n' > "$VL/d/.vscode/settings.json"; cp "$VL/d/.vscode/settings.json" "$VL/d-before"
+    out=$(vl "$VL/d"); rc=$?
+    cmp -s "$VL/d-before" "$VL/d/.vscode/settings.json" && ok "含 // 註解 → 一個 byte 都沒動" || ng "含 // 註解 → 不動" "cmp 相同" "檔案被改了"
+    expect_contains "含註解 → 印手動那行" '"liveServer.settings.ignoreFiles": [".claude/taskmaster-data/overview/**"]' "$out"
+    expect_eq "含註解 → exit 0" 0 "$rc"
+    mkdir -p "$VL/e/.vscode"; printf '{"a": 1,}\n' > "$VL/e/.vscode/settings.json"; cp "$VL/e/.vscode/settings.json" "$VL/e-before"
+    out=$(vl "$VL/e")
+    cmp -s "$VL/e-before" "$VL/e/.vscode/settings.json" && expect_contains "尾逗號（jq 讀不懂）→ 不動、印手動那行" "手動加入" "$out" || ng "尾逗號 → 不動" "cmp 相同" "檔案被改了"
+    mkdir -p "$VL/f/.vscode"; printf '{"liveServer.settings.ignoreFiles": "**/*.ts"}\n' > "$VL/f/.vscode/settings.json"; cp "$VL/f/.vscode/settings.json" "$VL/f-before"
+    out=$(vl "$VL/f")
+    cmp -s "$VL/f-before" "$VL/f/.vscode/settings.json" && expect_contains "鍵的值是字串 → 不改、印手動那行" '[".claude/taskmaster-data/overview/**"]' "$out" || ng "鍵是字串 → 不改" "cmp 相同" "檔案被改了"
+    mkdir -p "$VL/g/.vscode"; printf '{\r\n    "editor.tabSize": 4,\r\n    "liveServer.settings.ignoreFiles": [\r\n        "**/*.ts"\r\n    ]\r\n}\r\n' > "$VL/g/.vscode/settings.json"
+    vl "$VL/g" >/dev/null
+    g_lines=$(grep -c '' "$VL/g/.vscode/settings.json"); g_cr=$(tr -cd '\r' < "$VL/g/.vscode/settings.json" | wc -c | tr -d ' ')
+    expect_eq "原檔 4 空白縮排、CRLF → 改寫後每行 CRLF、第一個縮排行仍是 4 空白" "$g_lines 4" "$g_cr $(sed -n 2p "$VL/g/.vscode/settings.json" | tr -d '\r' | sed 's/[^ ].*//' | awk '{print length($0)}')"
+    mkdir -p "$VL/h/.vscode"; printf '{\n\t"editor.tabSize": 4\n}\n' > "$VL/h/.vscode/settings.json"
+    vl "$VL/h" >/dev/null
+    expect_eq "原檔 tab 縮排 → 改寫後仍是 tab" 1 "$(sed -n 2p "$VL/h/.vscode/settings.json" | grep -c $'^\t"')"
+    mkdir -p "$VL/i/.vscode" "$VL/nojq"; printf '{"a": 1}\n' > "$VL/i/.vscode/settings.json"; cp "$VL/i/.vscode/settings.json" "$VL/i-before"
+    for c in bash dirname cat sed tr head mktemp cp mv rm mkdir awk; do ln -sf "$(command -v $c)" "$VL/nojq/$c"; done
+    out=$(PATH="$VL/nojq" "$(command -v bash)" -c ". '$VL_LIB'; ensure_live_server_ignore '$VL/i'; ensure_live_server_ignore '$VL/j'; echo rc=\$?" 2>&1)
+    cmp -s "$VL/i-before" "$VL/i/.vscode/settings.json" && [ ! -e "$VL/j/.vscode" ] && ok "PATH 裡沒有 jq → 不建也不改" || ng "沒有 jq → 不建也不改" "沒動" "有改動"
+    expect_contains "沒有 jq → 印手動那行、exit 0" '[".claude/taskmaster-data/overview/**"]' "$out"
+    expect_contains "沒有 jq → exit 0" "rc=0" "$out"
+    mkdir -p "$VL/k"; out=$(vl "$VL/k" --dry-run)
+    [ ! -e "$VL/k/.vscode" ] && expect_contains "--dry-run → 不寫、輸出列出會做的事" "[dry]" "$out" || ng "--dry-run → 不寫" "沒有 .vscode" "有"
+
+    mkdir -p "$VL/l/.vscode"; printf '{"liveServer.settings.ignoreFiles": ["**/*.ts"]}\n' > "$VL/l/.vscode/settings.json"; cp "$VL/l/.vscode/settings.json" "$VL/l-before"
+    out=$(vl "$VL/l" --dry-run)
+    cmp -s "$VL/l-before" "$VL/l/.vscode/settings.json" && expect_contains "--dry-run 且檔案已存在但缺 glob → 檔案不變、輸出「[dry] 會在」" "[dry] 會在" "$out" || ng "--dry-run 已存在缺 glob → 不改" "cmp 相同" "檔案被改了"
+
+    # 接線：update-template.sh（假模板）
+    VT="$VL/tpl"; mkdir -p "$VT/scripts/lib" "$VT/.claude/agents" "$VL/u1/.claude" "$VL/u2/.claude" "$VL/u3/.claude"
+    cp "$HOOK_DIR/../../scripts/update-template.sh" "$VT/scripts/"; cp "$VL_LIB" "$VT/scripts/lib/"; echo a > "$VT/.claude/agents/a.md"; echo x > "$VT/.worktreeinclude"
+    utv() { bash "$VT/scripts/update-template.sh" "$@" --no-backup </dev/null 2>&1; }
+    utv "$VL/u1" --claude-only >/dev/null
+    [ ! -e "$VL/u1/.vscode" ] && ok "update-template.sh --claude-only → 不建 .vscode/settings.json" || ng "--claude-only → 不碰 .vscode" "沒有" "有"
+    out=$(utv "$VL/u2" --dry-run)
+    [ ! -e "$VL/u2/.vscode" ] && expect_contains "update-template.sh --dry-run → 不寫、列出會做的事" "[dry] 會建立" "$out" || ng "--dry-run → 不寫" "沒有 .vscode" "有"
+    utv "$VL/u3" >/dev/null
+    expect_eq "update-template.sh → 建出 .vscode/settings.json 含地圖 glob" "$VL_GLOB" "$(jq -r '."liveServer.settings.ignoreFiles"[-1]' "$VL/u3/.vscode/settings.json" 2>/dev/null)"
+
+    # 接線：copy-template.sh（假模板）
+    CT="$VL/ctpl"; mkdir -p "$CT/scripts/lib" "$CT/.claude/agents"
+    cp "$HOOK_DIR/../../scripts/copy-template.sh" "$CT/scripts/"; cp "$VL_LIB" "$CT/scripts/lib/"; echo a > "$CT/.claude/agents/a.md"
+    bash "$CT/scripts/copy-template.sh" "$VL/newproj" </dev/null >/dev/null 2>&1
+    expect_eq "copy-template.sh 到新資料夾 → 有 .vscode/settings.json 且含地圖 glob" "$VL_GLOB" "$(jq -r '."liveServer.settings.ignoreFiles"[-1]' "$VL/newproj/.vscode/settings.json" 2>/dev/null)"
+    mkdir -p "$VL/mergeproj/.vscode"; printf '{"editor.tabSize": 4, "liveServer.settings.ignoreFiles": ["**/*.ts"]}\n' > "$VL/mergeproj/.vscode/settings.json"
+    echo y | bash "$CT/scripts/copy-template.sh" "$VL/mergeproj" >/dev/null 2>&1
+    expect_eq "copy-template.sh 到已有自己 .vscode/settings.json 的資料夾 → 合併不覆蓋（原鍵保留、glob 附加）" '["**/*.ts",".claude/taskmaster-data/overview/**"] 4' "$(jq -r '"\(."liveServer.settings.ignoreFiles" | tojson) \(."editor.tabSize")"' "$VL/mergeproj/.vscode/settings.json" 2>/dev/null)"
+    [ ! -e "$VL/newproj/scripts/lib" ] && ok "copy-template.sh → 新專案沒有 scripts/lib/" || ng "新專案沒有 scripts/lib/" "沒有" "有"
+
+    # ps1：本機沒有 pwsh 就略過，不計入通過
+    if command -v pwsh >/dev/null 2>&1; then
+        PL="$HOOK_DIR/../../scripts/lib/vscode-live-server.ps1"
+        mkdir -p "$VL/p1" "$VL/p2/.vscode" "$VL/p3/.vscode"
+        printf '{"editor.tabSize": 4, "liveServer.settings.ignoreFiles": ["**/*.ts"]}\n' > "$VL/p2/.vscode/settings.json"
+        printf '{\n // c\n "a": 1\n}\n' > "$VL/p3/.vscode/settings.json"; cp "$VL/p3/.vscode/settings.json" "$VL/p3-before"
+        pwsh -NoProfile -Command ". '$PL'; Ensure-LiveServerIgnore -Root '$VL/p1'; Ensure-LiveServerIgnore -Root '$VL/p2'; Ensure-LiveServerIgnore -Root '$VL/p3'; Ensure-LiveServerIgnore -Root '$VL/p2'" >/dev/null 2>&1
+        expect_eq "ps1：沒有 .vscode/ → 建出，最後一項是地圖 glob" "$VL_GLOB" "$(jq -r '."liveServer.settings.ignoreFiles"[-1]' "$VL/p1/.vscode/settings.json")"
+        mkdir -p "$VL/p4/.vscode"; printf '{"liveServer.settings.ignoreFiles": ["**/*.ts"]}\n' > "$VL/p4/.vscode/settings.json"
+        pwsh -NoProfile -Command ". '$PL'; Ensure-LiveServerIgnore -Root '$VL/p4'" >/dev/null 2>&1
+        expect_eq "ps1：含 \"**/*.ts\" 的檔第一次跑會附加（glob 的 /* 不算註解）" '["**/*.ts",".claude/taskmaster-data/overview/**"]' "$(jq -c '."liveServer.settings.ignoreFiles"' "$VL/p4/.vscode/settings.json")"
+        cp "$VL/p4/.vscode/settings.json" "$VL/p4-before"
+        pwsh -NoProfile -Command ". '$PL'; Ensure-LiveServerIgnore -Root '$VL/p4'" >/dev/null 2>&1
+        cmp -s "$VL/p4-before" "$VL/p4/.vscode/settings.json" && ok "ps1：第二次跑檔案 cmp 不變" || ng "ps1：第二次跑不變" "cmp 相同" "被改了"
+        expect_eq "ps1：既有陣列 → 附加，連跑兩次只有一個" '["**/*.ts",".claude/taskmaster-data/overview/**"] 4' "$(jq -r '"\(."liveServer.settings.ignoreFiles" | tojson) \(."editor.tabSize")"' "$VL/p2/.vscode/settings.json")"
+        cmp -s "$VL/p3-before" "$VL/p3/.vscode/settings.json" && ok "ps1：含註解 → 不動" || ng "ps1：含註解 → 不動" "cmp 相同" "被改了"
+    else
+        echo "  - （本機沒有 pwsh，ps1 案例略過，不計入通過）"
+    fi
+    rm -rf "$VL"
+else
+    ok "（沒有 scripts/lib/vscode-live-server.sh 或沒有 jq，略過）"
 fi
 
 # =========================================================================
@@ -5237,7 +5340,8 @@ expect_eq "SubagentStart：src 為 main" main "$(ae_f '.src')"
 expect_eq "SubagentStart：t 與 ms 都是整數、ms 在 0–999" true \
     "$(ae_last | jq '(.t|type=="number" and .==floor) and (.ms|type=="number" and .==floor and .>=0 and .<=999)')"
 expect_eq "SubagentStart：沒有 tool／file／act／need／nt／text 以外的欄位" \
-    "act,aid,at,ev,file,ms,need,nt,sid,src,t,text,tool,v" "$(ae_last | jq -r 'keys|join(",")')"
+    "act,aid,at,ev,file,ms,need,nt,sid,src,ss,t,text,tool,v" "$(ae_last | jq -r 'keys|join(",")')"
+expect_eq "SubagentStart：ss 為空字串（只有 SessionStart 填）" "" "$(ae_f '.ss')"
 
 # --- 主 session 的 PostToolUse Write（沒有 agent_id）
 ae_run "$(ae_with "$(ae_ev PostToolUse)" ". + {tool_name:\"Write\", tool_input:{file_path:\"$AE_BOX/src/a.ts\", content:\"FILECONTENT-XYZ\"}}")" >/dev/null
@@ -5413,6 +5517,16 @@ printf '' | env CLAUDE_PROJECT_DIR="$AE_BOX" bash "$HOOK_DIR/session-start.sh" >
 expect_eq "session 啟動時 live-events.jsonl 3500 行：截成最後 3000 行" "3000|501" \
     "$(ae_lines)|$(head -n 1 "$AE_LOG" | jq -r '.n')"
 
+# --- SessionStart（2026-11-16 增補：source 記進 ss，v 仍為 1）
+ae_reset
+ae_run '{"hook_event_name":"SessionStart","session_id":"s1","source":"resume","cwd":"'"$AE_BOX"'"}' >/dev/null
+expect_eq "SessionStart resume：ev／ss／aid／sid／v" "SessionStart|resume||s1|1" "$(ae_f '[.ev,.ss,.aid,.sid,.v]|join("|")')"
+expect_eq "SessionStart：整行 < 1024 bytes" true "$([ "$(ae_last | wc -c | tr -d ' ')" -lt 1024 ] && echo true || echo false)"
+ae_run '{"hook_event_name":"SessionStart","session_id":"s1","source":"abcdefghijklmnopqrstuvwxyz","cwd":"'"$AE_BOX"'"}' >/dev/null
+expect_eq "SessionStart：ss 上限 10 字" abcdefghij "$(ae_f '.ss')"
+ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Read", source:"startup"}')" >/dev/null
+expect_eq "PostToolUse：ss 為空字串（即使 payload 有 source）" "" "$(ae_f '.ss')"
+
 # =========================================================================
 section "overview.sh --live — 即時聚合（live.js）"
 # =========================================================================
@@ -5543,8 +5657,8 @@ expect_eq "最後一筆是 Stop → 不列" 0 "$(lvq '.lanes | length')"
 lv_reset; lv_ev -1200 UserPromptSubmit s9 "" "" main; lv_run
 expect_eq "最近一筆事件在 20 分鐘前 → 不列" 0 "$(lvq '.lanes | length')"
 lv_reset; lv_ev -300 PostToolUse s9 "" "" main '{"tool":"Bash","act":"跑 測試"}'; lv_ev -200 Stop s9 "" "" main
-lv_ev -60 Notification s9 "" "" main '{"need":"reply","nt":"idle_prompt","text":"等你"}'; lv_run
-expect_eq "session：跑 測試 → Stop → idle_prompt → lane 的 doing 只看 Stop 之後（不是「跑 測試」）、since 為 idle_prompt 的 t" "null $((LV_NOW - 60))" \
+lv_ev -60 UserPromptSubmit s9 "" "" main; lv_run
+expect_eq "session：跑 測試 → Stop → UserPromptSubmit → lane 的 doing 只看 Stop 之後（不是「跑 測試」）、since 為 UserPromptSubmit 的 t" "null $((LV_NOW - 60))" \
     "$(lvq '"\(.lanes[0].doing) \(.lanes[0].since)"')"
 lv_reset; lv_ev -60 UserPromptSubmit s8 "" "" worktree:wt-b; lv_run
 expect_eq "worktree 的 session → who 為 worktree session、group 照 src 歸組" "worktree session plans/3.1-y.md" "$(lvq '.lanes[0] | "\(.who) \(.group)"')"
@@ -5700,6 +5814,97 @@ expect_eq "data.js 的 plans 帶 files:（給撞檔比對）" '["src/api/a.ts","
 rm -f "$TGD/.current-task" "$TGD/plans/1.2-x.md"; tg_ov
 expect_eq "curGroups 變了（沒有目前任務）→ 重產後 lane 的 group 跟著變成 null" null \
     "$(sed -n 's/^window\.OVERVIEW_LIVE = //; s/;$//p' "$TGO/live.js" 2>/dev/null | jq -r '.lanes[0].group' 2>/dev/null)"
+
+# --- 被中斷的 agent（2026-11-16）：restart／silent、閒置主 session、feed 上限
+lv_ss() { lv_ev "$1" SessionStart "$2" "" "" main "{\"ss\":\"$3\"}"; }
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ev -590 PostToolUse s1 a1 implementer main '{"tool":"Bash"}'; lv_ss -500 s1 resume; lv_run
+expect_eq "a1 Start、PostToolUse、之後同 sid SessionStart resume、a1 沒再有事件 → lanes 不含 a1，feed 第一筆是 agent_cut（restart、t 為 SessionStart 的 t）" \
+    "0 agent_cut a1 restart $((LV_NOW - 500))" "$(lvq '"\(.lanes | length) \(.feed[0].kind) \(.feed[0].id) \(.feed[0].why) \(.feed[0].t)"')"
+expect_eq "agent_cut 的欄位：who、where、text 為 description" "implementer main 實作階段" \
+    "$(lv_act a1 "實作階段"; lv_run; lvq '.feed[0] | "\(.who) \(.where) \(.text)"')"
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ss -500 s1 clear; lv_run
+expect_eq "SessionStart clear 也算 restart" "0 restart" "$(lvq '"\(.lanes | length) \(.feed[0].why)"')"
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ss -500 s1 startup; lv_run
+expect_eq "SessionStart startup 也算 restart" "0 restart" "$(lvq '"\(.lanes | length) \(.feed[0].why)"')"
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ss -500 s1 compact; lv_run
+expect_eq "SessionStart compact 不算 → a1 仍在 lanes、feed 沒有 agent_cut" "1 0" "$(lvq '"\(.lanes | length) \([.feed[] | select(.kind == "agent_cut")] | length)"')"
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ss -500 s1 resume; lv_ev -400 PostToolUse s1 a1 implementer main '{"tool":"Bash"}'; lv_run
+expect_eq "SessionStart 之後 a1 還有事件 → 仍在 lanes" "1 0" "$(lvq '"\(.lanes | length) \([.feed[] | select(.kind == "agent_cut")] | length)"')"
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ss -500 s2 resume; lv_run
+expect_eq "SessionStart 的 sid 是 s2（不同 session）→ a1 仍在 lanes" "1 0" "$(lvq '"\(.lanes | length) \([.feed[] | select(.kind == "agent_cut")] | length)"')"
+lv_reset; lv_ss -700 s1 resume; lv_ev -600 SubagentStart s1 a1 implementer main; lv_run
+expect_eq "SessionStart 在 a1 開始之前 → 不影響 a1" 1 "$(lvq '.lanes | length')"
+
+# smartwork 實例：planner A 開始後最後事件、同 session resume、planner B 開始又完成
+lv_reset
+lv_ev -3000 SubagentStart s1 aA planner main; lv_ev -2900 PostToolUse s1 aA planner main '{"tool":"Write","file":"docs/x.md","act":"編輯 x.md"}'
+lv_ss -2000 s1 resume
+lv_ev -1900 SubagentStart s1 aB planner main; lv_ev -1500 SubagentStop s1 aB planner main; lv_run
+expect_eq "smartwork 重現：lanes 0 筆；feed 有 A 的 agent_cut 與 B 的 agent_done" "0 aA aB" \
+    "$(lvq '"\(.lanes | length) \([.feed[] | select(.kind == "agent_cut") | .id] | first) \([.feed[] | select(.kind == "agent_done") | .id] | first)"')"
+expect_eq "中斷的 aA 不算進 doneToday.agents（只有 aB）" 1 "$(lvq '.doneToday.agents')"
+
+# silent
+lv_reset; lv_ev -1900 SubagentStart s1 a1 implementer main; lv_ev -1860 PostToolUse s1 a1 implementer main '{"tool":"Read"}'; lv_run
+expect_eq "最後一筆 PostToolUse 距今 31 分鐘 → 不在 lanes，feed 有 why silent（t 為最後一筆 + 30 分鐘）" "0 agent_cut silent $((LV_NOW - 1860 + 1800))" \
+    "$(lvq '"\(.lanes | length) \(.feed[0].kind) \(.feed[0].why) \(.feed[0].t)"')"
+lv_reset; lv_ev -3000 SubagentStart s1 a1 implementer main; lv_ev -3000 PostToolUse s1 a1 implementer main '{"tool":"Read"}'; lv_run
+expect_eq "silent 的 agent_cut 帶 idle＝最後一筆距今的整數分鐘（50）" "silent 50" "$(lvq '"\(.feed[0].why) \(.feed[0].idle)"')"
+lv_reset; lv_ev -3030 SubagentStart s1 a1 implementer main; lv_ev -3030 PostToolUse s1 a1 implementer main '{"tool":"Read"}'; lv_run
+expect_eq "idle 向下取整（3030 秒 → 50 分鐘）" 50 "$(lvq '.feed[0].idle')"
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ss -500 s1 resume; lv_run
+expect_eq "restart 的 agent_cut 不帶 idle（null）" "restart null" "$(lvq '"\(.feed[0].why) \(.feed[0].idle)"')"
+lv_reset; lv_ev -1740 SubagentStart s1 a1 implementer main; lv_ev -1740 PostToolUse s1 a1 implementer main '{"tool":"Read"}'; lv_run
+expect_eq "距今 29 分鐘 → 仍在 lanes" 1 "$(lvq '.lanes | length')"
+lv_reset; lv_ev -3000 SubagentStart s1 a1 implementer main; lv_ev -3000 PreToolUse s1 a1 implementer main '{"tool":"Bash","act":"跑 整套測試"}'; lv_run
+expect_eq "最後一筆是 PreToolUse Bash、距今 50 分鐘 → 仍在 lanes" 1 "$(lvq '.lanes | length')"
+lv_reset; lv_ev -3000 SubagentStart s1 a1 implementer main; lv_ev -3000 PreToolUse s1 a1 implementer main '{"tool":"PowerShell","act":"跑 測試"}'; lv_run
+expect_eq "最後一筆是 PreToolUse PowerShell、距今 50 分鐘 → 仍在 lanes" 1 "$(lvq '.lanes | length')"
+lv_reset; lv_ev -3000 SubagentStart s1 a1 implementer main; lv_ev -3000 PostToolUse s1 a1 implementer main '{"tool":"Bash"}'; lv_run
+expect_eq "最後一筆是 PostToolUse Bash、距今 50 分鐘 → 判中斷（指令已跑完）" "0 silent" "$(lvq '"\(.lanes | length) \(.feed[0].why)"')"
+lv_reset; lv_ev -360 SubagentStart s1 a1 implementer main; lv_ev -360 PostToolUse s1 a1 implementer main '{"tool":"Read"}'
+env TZ=UTC OVERVIEW_NOW="$LV_NOW" OVERVIEW_LIVE_CUT_MIN=5 bash "$LV/.claude/scripts/overview.sh" --live "$LV" >/dev/null 2>&1
+expect_eq "OVERVIEW_LIVE_CUT_MIN=5、距今 6 分鐘 → 判中斷" "0 silent" "$(lvq '"\(.lanes | length) \(.feed[0].why)"')"
+lv_reset; lv_ev -360 SubagentStart s1 a1 implementer main; lv_ev -360 PostToolUse s1 a1 implementer main '{"tool":"Read"}'
+env TZ=UTC OVERVIEW_NOW="$LV_NOW" OVERVIEW_LIVE_CUT_MIN=abc bash "$LV/.claude/scripts/overview.sh" --live "$LV" >/dev/null 2>&1
+expect_eq "OVERVIEW_LIVE_CUT_MIN 不是整數 → 退回 30 分鐘（6 分鐘仍在 lanes）" 1 "$(lvq '.lanes | length')"
+
+# 中斷的 agent 還開著的 need
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ev -500 PermissionRequest s1 a1 implementer main "$LV_PR"; lv_ss -400 s1 resume; lv_run
+expect_eq "a1 有未處理的 approve、之後 SessionStart resume → needs 0 筆，feed 有該 need 的 need_done" "0 1" \
+    "$(lvq '"\(.needs | length) \([.feed[] | select(.kind == "need_done")] | length)"')"
+lv_reset; lv_ev -3000 SubagentStart s1 a1 implementer main; lv_ev -2800 PermissionRequest s1 a1 implementer main "$LV_PR"; lv_run
+expect_eq "最後一筆是等批准、距今 47 分鐘 → 不判 silent，仍在 lanes、need 留在「需要你」" "1 1 0" \
+    "$(lvq '"\(.lanes | length) \(.needs | length) \([.feed[] | select(.kind == "agent_cut")] | length)"')"
+
+# 閒置主 session
+lv_reset; lv_ev -900 PostToolUse s1 "" "" main '{"tool":"Bash","act":"跑 ls"}'; lv_ev -800 Stop s1 "" "" main
+lv_ev -660 Notification s1 "" "" main '{"need":"reply","nt":"idle_prompt","text":"Claude 在等你的輸入"}'; lv_run
+expect_eq "主 session：PostToolUse → Stop → idle_prompt（11 分鐘前）→ lanes 沒有 s1；needs 有 1 筆 reply" "0 1 reply" \
+    "$(lvq '"\(.lanes | length) \(.needs | length) \(.needs[0].kind)"')"
+lv_reset; lv_ss -60 s1 startup; lv_run
+expect_eq "主 session 只有一筆 SessionStart startup → lanes 沒有 s1" 0 "$(lvq '.lanes | length')"
+lv_reset; lv_ss -300 s1 startup; lv_ev -200 UserPromptSubmit s1 "" "" main; lv_ss -100 s1 compact; lv_run
+expect_eq "UserPromptSubmit 之後有 SessionStart compact → 仍在 lanes（略過 SessionStart 看最後一筆）、since 為 UserPromptSubmit 的 t" "1 $((LV_NOW - 200))" \
+    "$(lvq '"\(.lanes | length) \(.lanes[0].since)"')"
+
+# feed 上限 50
+lv_reset
+for k in $(seq 1 35); do lv_ev $((-4000 + k * 10)) SubagentStart s1 "f$k" implementer main; lv_ev $((-4000 + k * 10 + 5)) SubagentStop s1 "f$k" implementer main; done
+lv_run
+expect_eq "35 個 agent 開始＋完成共 70 筆事件 → feed 長度 50（上限）" 50 "$(lvq '.feed | length')"
+lv_reset
+for k in $(seq 1 17); do lv_ev $((-4000 + k * 10)) SubagentStart s1 "f$k" implementer main; lv_ev $((-4000 + k * 10 + 5)) SubagentStop s1 "f$k" implementer main; done
+lv_ev -300 SubagentStart s1 g1 implementer main; lv_run
+expect_eq "35 筆 feed 事件 → 長度 35（未達上限不截）" 35 "$(lvq '.feed | length')"
+
+# 舊事件行沒有 ss 欄：不影響
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ev -100 SessionStart s1 "" "" main; lv_run
+expect_eq "SessionStart 事件行沒有 ss 欄（舊行）→ 不判中斷、照常聚合" 1 "$(lvq '.lanes | length')"
+
+# 閘門仍不讀事件檔
+expect_eq "pre-agent-gate.sh、lib/agent-inflight.sh 沒有引用 live-events" "" \
+    "$(grep -l live-events "$HOOK_DIR/pre-agent-gate.sh" "$HOOK_DIR/lib/agent-inflight.sh" 2>/dev/null)"
 
 # --- 效能：3000 行事件（40 個 agent 輪流跑指令、寫檔、要批准）
 lv_reset
@@ -5976,6 +6181,85 @@ SV_X=(); out=$(sv_run); url=$(sv_last "$out")
 expect_eq "…下次呼叫重起、網址可用" 200 "$(sv_code "$(sv_url_port "$url")" GET "$(sv_url_path "$url")")"
 sv_stop
 
+# --- 網址固定（ADR-2026-11-16-001）：.serve-keep 沿用 token 與 port
+SV_KEEP="$SV_OV/.serve-keep"
+sv_perm() { case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) echo -rw------- ;; *) ls -l "$1" | cut -c1-10 ;; esac; }
+sv_keep_field() { sed -n "s/.*\"$1\": *\"\{0,1\}\([A-Za-z0-9_-]*\).*/\1/p" "$SV_KEEP"; }
+
+sv_reset
+out=$(sv_run); url1=$(sv_last "$out"); sv_stop
+out=$(sv_run); url2=$(sv_last "$out")
+expect_eq "起、--stop、再起 → 兩次網址完全相同（port 與 token）" "$url1" "$url2"
+port=$(sv_url_port "$url2"); upath=$(sv_url_path "$url2")
+expect_eq "…GET /.serve-keep → 404" 404 "$(sv_code "$port" GET /.serve-keep)"
+expect_eq "…GET /<token>/.serve-keep → 404" 404 "$(sv_code "$port" GET "${upath%index.html}.serve-keep")"
+expect_eq "….serve-keep 權限為 600" "-rw-------" "$(sv_perm "$SV_KEEP")"
+sv_stop
+
+sv_reset; SV_X=(OVERVIEW_SERVE_IDLE_MIN=0.03)
+out=$(sv_run); url1=$(sv_last "$out")
+for ((i = 0; i < 100; i++)); do [ -f "$SV_OV/.serve" ] || break; sleep 0.1; done
+expect_eq "閒置結束 → .serve 被刪" no "$([ -f "$SV_OV/.serve" ] && echo yes || echo no)"
+expect_eq "….serve-keep 還在" yes "$([ -f "$SV_KEEP" ] && echo yes || echo no)"
+SV_X=(); out=$(sv_run); url2=$(sv_last "$out")
+expect_eq "…再起 → 網址與閒置前相同" "$url1" "$url2"
+sv_stop
+
+sv_reset; sv_occupy "$SV_BASE" 1
+out=$(sv_run); url1=$(sv_last "$out"); sv_stop; sv_unoccupy
+out=$(sv_run); url2=$(sv_last "$out")
+expect_eq "第一次起在 base+1（base 被佔）→ 釋放 base 後再起，網址相同" "$url1" "$url2"
+expect_eq "…port 仍是 base+1" "$((SV_BASE + 1))" "$(sv_url_port "$url2")"
+sv_stop
+
+sv_reset
+out=$(sv_run); tok1=$(sv_keep_field token); sv_stop
+sv_occupy "$SV_BASE" 1
+out=$(sv_run); url2=$(sv_last "$out")
+expect_eq ".serve-keep 的 port 被佔 → 改用 base+1" "$((SV_BASE + 1))" "$(sv_url_port "$url2")"
+expect_eq "…token 不變" "$tok1" "$(sv_keep_field token)"
+expect_eq "….serve-keep 的 port 更新成新值" "$((SV_BASE + 1))" "$(sv_keep_field port)"
+sv_stop; sv_unoccupy
+
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+        ok ".serve-keep 權限 644 → 換新 token（Windows 無 POSIX 權限，略過）"
+        ok "…照常起、exit 0（Windows 無 POSIX 權限，略過）"
+        ok "….serve-keep 權限回到 600（Windows 無 POSIX 權限，略過）" ;;
+    *)  sv_reset
+        out=$(sv_run); tok1=$(sv_keep_field token); sv_stop
+        chmod 644 "$SV_KEEP"
+        out=$(sv_run); rc=$?
+        [ "$(sv_keep_field token)" != "$tok1" ] && ok ".serve-keep 權限 644 → 換新 token" || ng ".serve-keep 權限 644 → 換新 token" "token 不同" "$(sv_keep_field token)"
+        expect_eq "…照常起、exit 0" 0 "$rc"
+        expect_eq "….serve-keep 權限回到 600" "-rw-------" "$(sv_perm "$SV_KEEP")"
+        sv_stop ;;
+esac
+
+sv_reset
+out=$(sv_run); sv_stop
+echo '{壞掉的 json' > "$SV_KEEP"
+out=$(sv_run); rc=$?
+expect_eq ".serve-keep 是壞 JSON → exit 0" 0 "$rc"
+[[ $(sv_last "$out") =~ $SV_URL_RE ]] && ok "…照常起、印網址" || ng "…照常起、印網址" "$SV_URL_RE" "$out"
+sv_stop
+printf '{"token": "abcde", "port": %s}' "$SV_BASE" > "$SV_KEEP"; chmod 600 "$SV_KEEP"
+out=$(sv_run); rc=$?; url=$(sv_last "$out")
+expect_eq "token 只有 5 個字 → exit 0" 0 "$rc"
+[[ $url =~ $SV_URL_RE && $url != *"/abcde/"* ]] && ok "…產新 token、照常起" || ng "…產新 token、照常起" "新 token 的網址" "$out"
+sv_stop
+
+sv_reset; SV_X=(BROWSER="$SV_BIN/fake-browser")
+out=$(sv_run); url1=$(sv_last "$out"); tok1=$(sv_keep_field token); sleep 0.3; : > "$SV_CALLS"
+SV_X=(BROWSER="$SV_BIN/fake-browser"); out=$(sv_run --rotate); rc=$?; url2=$(sv_last "$out")
+expect_eq "--rotate → exit 0" 0 "$rc"
+[[ $url2 =~ $SV_URL_RE ]] && ok "--rotate → 印新網址" || ng "--rotate → 印新網址" "$SV_URL_RE" "$out"
+[ "$(sv_keep_field token)" != "$tok1" ] && ok "…token 與舊的不同" || ng "…token 與舊的不同" "不同" "$(sv_keep_field token)"
+expect_eq "…舊網址 → 404" 404 "$(sv_code "$(sv_url_port "$url2")" GET "$(sv_url_path "$url1")")"
+expect_eq "…新網址 → 200" 200 "$(sv_code "$(sv_url_port "$url2")" GET "$(sv_url_path "$url2")")"
+expect_eq "…\$BROWSER 呼叫 1 次" "fake-browser $url2" "$(sv_calls)"
+sv_stop
+
 # --- 沒有 project.json
 sv_reset; rm -f "$SV/.claude/taskmaster-data/project.json"
 out=$(sv_run); rc=$?
@@ -6058,6 +6342,39 @@ if [ -n "$NW_CHROME" ] && [ -x "$NW_CHROME" ]; then
     expect_eq "prefers-reduced-motion: reduce、畫面上有 4 條 lane、3 條滑動進度條 → 所有元素（含 ::after）的 animation-name 為 none" "4 3 0" \
         "$(nq '"\(.reduceSeen.lanes) \(.reduceSeen.ind) \(.reduceBad)"')"
     expect_eq "重開頁面仍是暫停（按鈕寫「繼續動畫」）" "繼續動畫" "$(nq '.hashless.still')"
+    # 階段 5：動態可刪除、中斷與卡住的顯示（feed-check.js）。刪除的 id 存在 profile 的 localStorage，案例的順序有意義
+    nw_page "$NW/feed.html" "$HOOK_DIR/tests/fixtures/overview/feed-check.js"
+    nw_feed() { NW_URL="file://$NW/feed.html?$1"; NW_RES=$(nw_run --force-prefers-reduced-motion); }
+    rm -rf "$NW/prof"; nw_feed throw
+    expect_eq "localStorage.setItem 會 throw → 按刪除當下仍從畫面消失、沒有未捕捉的錯誤" "12 false 0" "$(nq '"\(.T.n) \(.T.hasA0) \(.T.errs)"')"
+    rm -rf "$NW/prof"; nw_feed del
+    expect_eq "30 則動態 → 顯示 12 則，每則一個 button 刪除鈕；「需要你」有清單、沒有任何按鈕" "12 12 BUTTON 1 0" "$(nq '"\(.A.n) \(.A.btns) \(.A.tag) \(.A.needs) \(.A.needBtns)"')"
+    expect_eq "刪除鈕與「全部清除」可點範圍都 ≥ 44×44，按 Tab 能到（tabIndex 0）" "true true 0" \
+        "$(nq '"\(.A.minW >= 44 and .A.minH >= 44 and .A.clearW >= 44 and .A.clearH >= 44) \(.A.clear) \(.A.tab)"')"
+    expect_eq "刪除鈕的 aria-label 是「刪除這則動態：<誰> <動作>」" "刪除這則動態：implementer 完成" "$(nq '.A.label')"
+    expect_eq "刪第 1 則 → 焦點在下一則的刪除鈕（淡出前就移走）" "true BUTTON" "$(nq '"\(.D1.active == .D1.want) \(.D1.isBtn | if contains("fdel") then "BUTTON" else . end)"')"
+    expect_eq "刪第 1 則 → 仍 12 則、第 1 則是原本第 2 則、最後一則是原本第 13 則" "12 true true" "$(nq '"\(.D2.n) \(.D2.first == .ids0[1]) \(.D2.last == .want13)"')"
+    expect_eq "刪除的 id 存進 localStorage「overview-feed-hidden|<專案名>|<pathname>」" "1 true" "$(nq '"\(.D2.ls | length) \(.D2.ls[0] == .ids0[0])"')"
+    expect_eq "live.js 多一則新的 → 新的在最前、被刪的仍不出現、仍 12 則" "12 1780000060|agent_start|new false" "$(nq '"\(.E.n) \(.E.first) \(.E.hasA0)"')"
+    nw_feed reload
+    expect_eq "同一個 localStorage 重開 → 被刪的那則仍不出現、仍 12 則" "12 false" "$(nq '"\(.R.n) \(.R.hasA0)"')"
+    sed -i 's/"name":"現況"/"name":"別專案"/' "$NW/data.js"; nw_feed reload
+    expect_eq "另一份 data.js（project.name 不同、同一個目錄與 profile）→ 在原專案刪的不影響它" "12 true" "$(nq '"\(.R.n) \(.R.hasA0)"')"
+    nw_data "$NW"
+    rm -rf "$NW/prof"; nw_feed clear
+    expect_eq "按「全部清除」→ 動態區隱藏、焦點不掉在 body；之後 live.js 多一則 → 動態區出現且只有那 1 則" "true 0 true 1 1780000060|agent_start|new" \
+        "$(nq '"\(.C0.hidden) \(.C0.n) \(.C0.ae != "BODY") \(.C1.n) \(.C1.id)"')"
+    rm -rf "$NW/prof"; nw_feed last
+    expect_eq "刪到最後一則（沒有下一則）→ 焦點在「全部清除」；全部刪光後動態區隱藏、焦點在 aside" "fclear 1 dside true" "$(nq '"\(.L1.ae) \(.L1.rest) \(.L2.ae) \(.L2.hidden)"')"
+    rm -rf "$NW/prof"; nw_feed cap
+    expect_eq "localStorage 已有 250 個 id（含不在 feed 的）再刪一則 → 存回 ≤200、不含已不在 feed 的 id" "true true" "$(nq '"\(.P.len <= 200) \(.P.stale == 0)"')"
+    nw_feed cut
+    expect_eq "feed 有 agent_cut：restart →「中斷 · 視窗重開」，silent →「中斷 · 30 分鐘沒有動靜」" "中斷 · 視窗重開,中斷 · 30 分鐘沒有動靜" "$(nq '.K.fv | join(",")')"
+    expect_eq "lane l1 11 分鐘沒動靜但有同 id 的 approve need →「需要你」只 1 行（等批准）加沒有 need 的 l2 的卡住，l1 不標 stuck、l2 標 stuck" "2 true true" \
+        "$(nq '"\(.K.needs | length) \(.K.l1 | not) \(.K.l2 | not | not)"')"
+    expect_eq "卡住與中斷的差別寫在 title" "true true" "$(nq '"\(.K.stuckTitle | contains("10 分鐘")) \(.K.fvTitle | contains("已從名單移除"))"')"
+    nw_feed idle
+    expect_eq "agent_cut 帶 idle=47 → 顯示「中斷 · 47 分鐘沒有動靜」；沒帶 idle 才退回 30" "中斷 · 47 分鐘沒有動靜,中斷 · 30 分鐘沒有動靜" "$(nq '.I.fv | join(",")')"
     # 階段 8：任務圖部件卡「誰在做／等你」、標題列目前任務標籤（parts-check.js，以 #tasks 開頁）
     nw_pdata "$NW"; nw_page "$NW/parts.html" "$HOOK_DIR/tests/fixtures/overview/parts-check.js"
     # 開 reduce：smooth 捲動在 --virtual-time-budget 下不會前進（2026-11-13 實測 scrollTop 停在 0），reduce 時頁面改用立即捲動
@@ -6076,21 +6393,44 @@ if [ -n "$NW_CHROME" ] && [ -x "$NW_CHROME" ]; then
         SV_X=(BROWSER=true); NW_URL=$(sv_last "$(sv_run)"); SV_X=()
         nw_pid=$(sed -n 's/.*"pid": *\([0-9]*\).*/\1/p' "$SV_OV/.serve" 2>/dev/null)
         NW_MAIN=$NW_URL
-        NW_URL="${NW_MAIN%index.html}index.html?mock"; NW_RES=$(NW_BUDGET=36000 nw_run)
-        expect_eq "連不上伺服器 → 出現提示、tick 停住（之後過了卡住門檻，「需要你」仍 0、經過時間不再跳）" \
-            "0 伺服器已結束（閒置 30 分鐘），重跑 /task-status 0 true" "$(nq '"\(.m0.need) \(.m1.gone) \(.m2.need) \(.m1.clock == .m2.clock)"')"
-        expect_eq "伺服器已結束 → 部件卡的經過分鐘數也不再用舊資料更新（過了整分仍是 0 分）" "implementer · 0 分 implementer · 0 分" "$(nq '"\(.m1.part) \(.m2.part)"')"
-        expect_eq "提示中回到可見、.serve-id 回 200 → 收掉提示、live.js 恢復輪詢" "null true" "$(nq '"\(.m3.gone) \(.m3.nl > .m2.nl)"')"
-        expect_eq "連上過之後 .serve-id 回 404 →「網址已失效，重跑 /task-status」、停止輪詢，回到可見也不再重試" \
-            "網址已失效，重跑 /task-status true" "$(nq '"\(.m5.gone) \(.m5.nl == .m4.nl)"')"
+        NW_URL="${NW_MAIN%index.html}index.html?mock"; NW_RES=$(NW_BUDGET=60000 nw_run)
+        expect_contains "連不上伺服器 → 頁首提示含 overview-serve.sh，說會自己接回" "overview-serve.sh，這頁會自己接回" "$(nq '.m1.gone')"
+        expect_eq "連不上伺服器 → tick 停住（之後過了卡住門檻，「需要你」仍 0、經過時間不再跳）" "0 true" "$(nq '"\(.m2.need) \(.m1.clock == .m2.clock)"')"
+        expect_eq "伺服器已斷線 → 部件卡的經過分鐘數也不再用舊資料更新（過了整分仍是 0 分）" "implementer · 0 分 implementer · 0 分" "$(nq '"\(.m1.part) \(.m2.part)"')"
+        expect_eq "不切分頁、10 秒後 .serve-id 回 200 → 提示消失、live.js 恢復每 2 秒載入" "null true true" "$(nq '"\(.m3.gone) \(.m3.nl > .m2.nl) \(.m3b.nl - .m3.nl >= 2)"')"
+        expect_contains "連上過之後 .serve-id 回 404 → 提示含「這個網址已失效」" "這個網址已失效" "$(nq '.m4.gone')"
+        expect_eq "404 的提示出現後輪詢停住；.serve-id 改回 200 → 提示消失、輪詢恢復（不再永久停止）" "null true" "$(nq '"\(.m5.gone) \(.m6.nl - .m5.nl >= 2)"')"
         NW_URL="${NW_MAIN%index.html}index.html?never"; NW_RES=$(nw_run)
         expect_eq "從沒連上過、第一次就拿到 .serve-id 404 → 不顯示提示、照常輪詢" "null null true" "$(nq '"\(.n0.gone) \(.n1.gone) \(.n1.nl > .n0.nl)"')"
+        NW_URL="${NW_MAIN%index.html}index.html?hide"; NW_RES=$(NW_BUDGET=1240000 nw_run)
+        expect_eq "分頁隱藏 15 分鐘 → .serve-id 被請求 3 次，data.js 與 live.js 都 0 次" "3 0 0" "$(nq '"\(.h1.sid) \(.h1.data) \(.h1.live)"')"
+        expect_eq "回到可見 → 立刻各載入一次 data.js、live.js，之後心跳不再發" "0 1 1 0" "$(nq '"\(.h2.sid) \(.h2.data) \(.h2.live) \(.h3.sid)"')"
+        NW_URL="file://$NW/index.html?hide"; NW_RES=$(NW_BUDGET=1240000 nw_run)
+        expect_eq "file:// 開的頁面隱藏 15 分鐘 → .serve-id 0 次" "0 0 0" "$(nq '"\(.h1.sid) \(.h1.data) \(.h1.live)"')"
+        nw_slow="$SANDBOX/nw-slow"; rm -rf "$nw_slow"; mkdir -p "$nw_slow"
+        nw_sp=$("$SV_BIN/python3" -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
+        "$SV_BIN/python3" -c '
+import http.server, sys, time
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        open(sys.argv[1] + "/hit", "w").close(); time.sleep(6)
+        self.send_response(200); self.send_header("Content-Length", "0"); self.end_headers()
+    def log_message(self, *a): pass
+http.server.HTTPServer(("127.0.0.1", int(sys.argv[2])), H).serve_forever()' "$nw_slow" "$nw_sp" &
+        nw_slow_pid=$!
+        sv_wait_for "$nw_sp"
+        ( for _ in $(seq 1 100); do [ -e "$nw_slow/hit" ] && break; sleep 0.1; done; SV_X=(BROWSER=true); sv_run >/dev/null ) &
+        nw_rs=$!
+        NW_URL="${NW_MAIN%index.html}index.html?real=$nw_sp"; NW_RES=$(NW_BUDGET=40000 nw_run)
+        wait "$nw_rs"; kill "$nw_slow_pid" 2>/dev/null; wait "$nw_slow_pid" 2>/dev/null; rm -rf "$nw_slow"
+        expect_contains "真伺服器：關掉 → 頁首出現「伺服器沒在跑」" "伺服器沒在跑" "$(nq '.dead.gone')"
+        expect_eq "真伺服器：同網址重起 → 不切分頁，20 秒（虛擬時間）內提示消失" "null" "$(nq '.back.gone')"
         NW_URL=$NW_MAIN
         NW_RES=$(NW_BUDGET=9000 nw_run)
         expect_eq "伺服器活著、還沒有 live.js → 不顯示伺服器結束提示，顯示「還沒有即時資料」" "null 還沒有即時資料：agent 開始工作後這裡會出現" \
             "$(nq '"\(.alive.gone) \(.alive.nnone)"')"
-        expect_eq "伺服器結束後下一輪輪詢 → 頁首出現提示、現況畫面仍在" "伺服器已結束（閒置 30 分鐘），重跑 /task-status true 專案圖解 — 現況" \
-            "$(nq '"\(.dead.gone) \(.deadNv) \(.deadTitle)"')"
+        expect_eq "伺服器結束後下一輪輪詢 → 頁首出現提示、現況畫面仍在" "true true 專案圖解 — 現況" \
+            "$(nq '"\(.dead.gone | contains("伺服器沒在跑")) \(.deadNv) \(.deadTitle)"')"
         sv_stop
         for _ in $(seq 1 30); do kill -0 "$nw_pid" 2>/dev/null || break; sleep 0.1; done
         expect_eq "現況分頁的伺服器案例結束後沒有殘留行程" no "$([ -n "$nw_pid" ] && kill -0 "$nw_pid" 2>/dev/null && echo yes || echo no)"

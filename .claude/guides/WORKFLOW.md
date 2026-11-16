@@ -156,9 +156,9 @@ wbs-archive.md  已完成里程碑的完整任務列（含實際耗時，可回�
 
 **網址怎麼來**：`/task-status` 會起一個本機伺服器（`.claude/scripts/overview-serve.sh`，只綁 127.0.0.1、
 網址帶 token、閒置 30 分鐘自己結束），最後一行是 `http://127.0.0.1:<port>/<token>/index.html`，要整段複製。
-新起時會自動開瀏覽器；已在跑只印網址。需要 Python 3.7 以上，沒有時退回 `file://` 路徑。
+網址固定（同一個專案重起也一樣），可加書籤；外洩時跑 `bash .claude/scripts/overview-serve.sh --rotate` 換一個。新起時會自動開瀏覽器；已在跑只印網址。需要 Python 3.7 以上，沒有時退回 `file://` 路徑。
 VS Code 的 Simple Browser（Ctrl+Shift+P → `Simple Browser: Show`）貼網址也能看。
-**不要用 Live Server**：資料每幾秒更新一次，它會整頁重載、畫面一直閃。
+建議用 `/task-status` 給的網址；用 Live Server 開也不會閃了（模板已在 `.vscode/settings.json` 讓它忽略地圖資料夾）。VS Code 工作區根若不是專案根（multi-root、開上一層資料夾），glob 對不到，Live Server 仍會閃。
 
 **在 SSH 遠端機器上開發時**：伺服器跑在遠端，本機瀏覽器要經 port 轉發才連得到。
 用 VS Code Remote 開的終端機跑 `/task-status`，port 會自動轉發、瀏覽器在本機打開；
@@ -480,5 +480,5 @@ bash .claude/scripts/check-counts.sh --tests 1041         # 文件計數一致�
 CI（`.github/workflows/template-ci.yml`）會在 push 與 PR 時自動跑整套與計數檢查，
 加上 Windows/Git Bash 的回歸測試、shell 與 PowerShell 語法、copy/update-template 沙箱實跑。
 
-整套 1268 個案例，全綠才算沒破壞閘門；什麼時候跑整套、什麼時候依改動挑，唯一來源是
+整套 1706 個案例，全綠才算沒破壞閘門；什麼時候跑整套、什麼時候依改動挑，唯一來源是
 `commands/verify.md` 步驟 4。詳見 `.claude/hooks/tests/README.md`。

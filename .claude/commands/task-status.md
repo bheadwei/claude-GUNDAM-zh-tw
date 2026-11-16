@@ -41,7 +41,7 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
      網址一律以 `overview-serve.sh` 為準（同一個資料夾裡的 `overview.md` 是 Markdown 版，兩份都不進 git）
    - `overview-serve.sh`：確保本機伺服器在跑（閒置 30 分鐘自己結束，不用手動關），**把它印的最後一行放在輸出的最後一行**，
      格式 `http://127.0.0.1:<port>/<token>/index.html`。說明 token 是防同機其他使用者與惡意網頁讀取，網址要整段複製；
-     每次新起都換新 token，舊網址會失效。新起時會自動開瀏覽器，已在跑只印網址；SSH 遠端且沒有桌面時它會多印一行
+     網址固定（同一個專案重起也一樣），可加書籤；網址外洩時跑 `bash .claude/scripts/overview-serve.sh --rotate` 換一個。新起時會自動開瀏覽器，已在跑只印網址；SSH 遠端且沒有桌面時它會多印一行
      `ssh -L …` 的 port 轉發指令，照樣轉告。它印的最後一行是 `file://…`（找不到 Python 3.7 以上、或起不來）→
      照實轉告它印的原因，這個 `file://` 就是最後一行（退路，SSH 遠端打不開）
    - Python 依 `python3` → `python3.13`…`python3.7` → `python` → `py -3` 找第一個 3.7 以上的；預設 `python3` 太舊時可用環境變數
@@ -49,7 +49,7 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
    - 共用主機（多人登入同一台）上，開瀏覽器時網址會出現在 `ps`；可設 `BROWSER=true`（`true` 什麼都不做）讓它不自動開，
      自己貼網址
    - 補充給使用者：VS Code 的 Simple Browser（Ctrl+Shift+P → `Simple Browser: Show`）貼上網址也能看；
-     **不要用 Live Server**——資料每幾秒更新一次，它會整頁重載、畫面一直閃
+     建議用上面給的網址；用 Live Server 開也不會閃了（模板已在 `.vscode/settings.json` 讓它忽略地圖資料夾）。注意：VS Code 工作區根若不是專案根（multi-root、開上一層資料夾），那條 glob 對不到，Live Server 仍會閃
    **只印路徑，不要 Read `overview/data.js` 或 `overview/overview.md`**——那是給人看的衍生物，
    大專案可達數百 KB；要狀態就讀 `wbs.md`。沒有 `project.json` 時腳本什麼都不印，直接略過這行
 

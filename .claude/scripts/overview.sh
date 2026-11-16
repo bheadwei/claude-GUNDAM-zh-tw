@@ -62,7 +62,9 @@
 #   輸出 live.js 只有一句 `window.OVERVIEW_LIVE = {...};`（理由同 data.js），去掉 at 後沒變就不重寫：
 #   lanes    還在跑的線，依 since 排序。兩種：
 #            ① agent：12 小時內 SubagentStart、之後沒有該 aid 的 SubagentStop（lane 結束只認 SubagentStop）
-#            ② session：aid 為空的事件依 sid 分，最後一筆在 15 分鐘內、而且不是 Stop
+#            ② session：aid 為空的事件依 sid 分，最後一筆在 15 分鐘內、而且不是 Stop；判斷「最後一筆」時
+#               略過 Notification 與 SessionStart（Stop 之後只有 idle_prompt 通知、或只有 SessionStart 還沒送出第一句話
+#               的 session 不列；它的 reply need 仍在 needs）
 #            {id: aid／sid, who: agent 類型（沒有寫 "agent"）／"主 session"／"worktree session",
 #             desc: agent-activity 的 description（session 為 null）, where: 最後一筆事件的 src,
 #             readonly: agent 類型在 AGENT_INFLIGHT_READONLY 裡, group, since: agent 為 SubagentStart 的 t、
@@ -75,6 +77,19 @@
 #            以 glob 命中的部件檔數＝done。沒有組、或那些階段沒有部件檔 → null
 #            parts：所屬組 plan 的部件（planned 不為 false，不限階段）裡，有任一檔案 glob 命中該線寫過的檔的部件 id
 #            （寫過的檔同 files 的 done；session 一樣只看最後一個 Stop 之後）。沒有組 → []。給頁面的部件卡標「誰在做／等你」
+#   中斷的 agent（2026-11-16；不進 lanes，也不算 doneToday.agents；不寫回 agent-activity.jsonl、閘門不讀）：
+#            該 agent 有 SubagentStart、沒有 SubagentStop，且符合下列任一，feed 記一筆
+#            {t, kind: "agent_cut", id: aid, who, where, text: description, why: "restart"|"silent", idle: 整數分鐘|null}：
+#            restart  同 sid 在它最後一筆事件之後出現 SessionStart 且 ss 為 startup／resume／clear（t 取該 SessionStart 的 t）。
+#                     compact 不算（壓縮時背景 agent 是否存活查不到官方說明，保守不判）。/clear 與新視窗會換 sid，
+#                     payload 沒有舊 sid 可對，這兩種只能靠 silent 收掉
+#            silent   最後一筆事件距現在超過 OVERVIEW_LIVE_CUT_MIN 分鐘（預設 30；不是整數時退回 30），且最後一筆
+#                     不是 PreToolUse Bash／PowerShell（還在跑的長指令不判）（t 取最後一筆 + 門檻）
+#                     最後一筆在等使用者（帶 need：批准、AskUserQuestion）也不判——人離開越久越需要留在「需要你」
+#                     限制：沒有 PreToolUse 事件的長工具（WebFetch、MCP）單次超過門檻會被誤判；之後有新事件就回到 lanes
+#            idle     silent 時為最後一筆事件到 now 的整數分鐘（向下取整），restart 時 null
+#            restart 優先。它還開著的 need 照 SubagentStop 的方式關（feed 記 need_done）。
+#            lane 的「結束」仍只認 SubagentStop（2026-09-11 的坑），中斷只是不再顯示
 #   needs    同 sid＋aid 的事件依序走一遍。開啟者＝事件行的 need 為 approve／reply（PermissionRequest、
 #            Notification permission_prompt／idle_prompt／elicitation_dialog、PreToolUse AskUserQuestion）。
 #            開啟者之後出現任何非開啟者事件（含其他 nt 的 Notification、主 session 的 UserPromptSubmit、
@@ -91,8 +106,8 @@
 #            {file, lines: [src…]（排序）, agents: [寫過這個檔、還在跑的 agent id…]}
 #   doneToday {agents: 今天（本機時區）SubagentStop 的不重複 aid 數, tasks: data.js tasks 裡 doneOn 等於今天的數}
 #            （tasks 只來自 wbs.md，已歸檔的不算）
-#   feed     agent 開始／完成（agent_start／agent_done，text 為 description）、need 出現／處理（need_open／need_done，
-#            text 為 need 的 text），新的在前、最多 30 筆：{t, kind, id, who, where, text}
+#   feed     agent 開始／完成（agent_start／agent_done，text 為 description）、agent 被判中斷（agent_cut）、need 出現／處理（need_open／need_done，
+#            text 為 need 的 text），新的在前、最多 50 筆：{t, kind, id, who, where, text}（agent_cut 另帶 why、idle）
 #   at       產生時間（格式同 data.js 的 generatedAt），放最後
 #
 # 說明層：.claude/taskmaster-data/module-notes.md（格式與寫作標準的唯一來源是
@@ -336,7 +351,7 @@ def nwho: if .aid != "" then awho elif .src == "main" then "主 session" else "w
        ev: (.ev | str), sid: (.sid | str), aid: (.aid | str), at: (.at | str),
        src: ((.src | str) as $s | if ($s == "main" or $s == "") and $wtsrc[$fn] != null then $wtsrc[$fn]
                                   elif $s == "" then "main" else $s end),
-       tool: (.tool | str), file: (.file | str), act: (.act | str), text: (.text | str),
+       tool: (.tool | str), file: (.file | str), act: (.act | str), text: (.text | str), ss: (.ss | str),
        need: (if .need == "approve" or .need == "reply" then .need else null end)}]
    | [range(length) as $k | .[$k] + {i: $k}] | sort_by([.t, .ms, .i])
    | [range(length) as $k | .[$k] + {p: $k}]) as $E
@@ -366,12 +381,20 @@ def nwho: if .aid != "" then awho elif .src == "main" then "主 session" else "w
 
   ($E | map(select(.aid != "")) | group_by(.aid) | map({key: .[0].aid, value: .}) | tomap) as $byAid
 | ([$E[] | select(.ev == "SubagentStop" and .aid != "") | {key: .aid, value: .}] | tomap) as $stopP
+| ([$E[] | select(.ev == "SessionStart" and (.ss == "startup" or .ss == "resume" or .ss == "clear"))]) as $restarts
 | ([$E[] | select(.ev == "SubagentStart" and .aid != "" and .t >= ($now - 43200) and $stopP[.aid] == null)] | unique_by(.aid)
-   | map(. as $s | $byAid[$s.aid] as $evs | ($evs | last) as $z | grpof($z.src; $s.sid) as $g
+   | map(. as $s | $byAid[$s.aid] as $evs | ($evs | last) as $z
+         | ([$restarts[] | select(.sid == $s.sid and .p > $z.p)] | first) as $rs
+         | {s: $s, z: $z, why: (if $rs != null then "restart"
+                                elif ($now - $z.t) > $cutsec and $z.need == null and ($z.ev == "PreToolUse" and ($z.tool == "Bash" or $z.tool == "PowerShell") | not) then "silent"
+                                else null end),
+            cutT: (if $rs != null then $rs.t else $z.t + $cutsec end), evs: $evs})) as $cand
+| ([$cand[] | select(.why == null) | . as $c | $c.s as $s | $c.z as $z | $c.evs as $evs | grpof($z.src; $s.sid) as $g
          | {id: $s.aid, who: ($s | awho), desc: ($desc[$s.aid] // null), where: $z.src,
             readonly: ($s.at as $a | any($ros[]; . == $a)), group: $g, since: $s.t, lastAt: $z.t,
-            doing: doing($evs), files: lfiles($g; $evs), parts: lparts($g; $evs)})) as $agentLanes
-| ([$E[] | select(.aid == "")] | group_by(.sid)
+            doing: doing($evs), files: lfiles($g; $evs), parts: lparts($g; $evs)}]) as $agentLanes
+| ([$cand[] | select(.why != null) | {key: .s.aid, value: {t: .cutT, ms: 0, i: 1000000000, p: 1000000000}}] | tomap) as $cutP
+| ([$E[] | select(.aid == "" and .ev != "Notification" and .ev != "SessionStart")] | group_by(.sid)
    | map(select((last | .t >= ($now - 900) and .ev != "Stop")))
    | map(. as $evs | ($evs | last) as $z
          | ([range($evs | length) | select($evs[.].ev == "Stop")] | last) as $ls
@@ -396,7 +419,7 @@ def nwho: if .aid != "" then awho elif .src == "main" then "主 session" else "w
            end
          elif .open != null then ndone($e)
          else . end)
-       | if .open != null and .open.aid != "" and (($stopP[.open.aid].p // -1) > .open.p) then ndone($stopP[.open.aid]) else . end)) as $needRuns
+       | if .open != null and .open.aid != "" and ((($stopP[.open.aid] // $cutP[.open.aid]).p // -1) > .open.p) then ndone($stopP[.open.aid] // $cutP[.open.aid]) else . end)) as $needRuns
 
 | ([$E[] | select(.t >= ($now - 43200))]) as $E12
 | ([$E12[] | select(iswrite) | {src, file, aid}]) as $W
@@ -423,8 +446,11 @@ def nwho: if .aid != "" then awho elif .src == "main" then "主 session" else "w
    feed: (([$E[] | select((.ev == "SubagentStart" or .ev == "SubagentStop") and .aid != "")
             | {t, ms, i, kind: (if .ev == "SubagentStart" then "agent_start" else "agent_done" end),
                id: .aid, who: awho, where: .src, text: ($desc[.aid] // "")}]
-           + [$needRuns[].feed[]])
-          | sort_by([.t, .ms, .i]) | reverse | .[:30] | map(del(.ms, .i)))}
+           + [$needRuns[].feed[]]
+           + [$cand[] | select(.why != null) | {t: .cutT, ms: 0, i: 1000000000, kind: "agent_cut", id: .s.aid, who: (.s | awho),
+                                                where: .z.src, text: ($desc[.s.aid] // ""), why,
+                                                idle: (if .why == "silent" then (($now - .z.t) / 60 | floor) else null end)}])
+          | sort_by([.t, .ms, .i]) | reverse | .[:50] | map(del(.ms, .i)))}
 JQ
 
 LIVE_LOCK="$OUT/.live.lock"
@@ -444,7 +470,7 @@ take_live_lock() {
 
 # live_once <暫存目錄>：讀事件檔、agent-activity、data.js，算出 live.js；去掉 at 後沒變就不寫
 live_once() {
-    local d=$1 f n=0 now mm dd hh mi ss body old="" new AGENT_INFLIGHT_READONLY=""
+    local d=$1 f n=0 now mm dd hh mi ss body old="" new cutsec AGENT_INFLIGHT_READONLY=""
     local -a evs=(ev0.jsonl)
     rm -rf "$d"; mkdir -p "$d" || return 1
     : > "$d/ev0.jsonl"; : > "$d/wts.tsv"; : > "$d/act.jsonl"; : > "$d/data.json"
@@ -462,12 +488,15 @@ live_once() {
     source "$SCRIPT_DIR/../hooks/lib/agent-inflight.sh" 2>/dev/null
     now=${OVERVIEW_NOW:-}
     [[ $now =~ ^[0-9]+$ ]] || now=$(date +%s)
+    cutsec=${OVERVIEW_LIVE_CUT_MIN:-30}
+    [[ $cutsec =~ ^[0-9]+$ ]] || cutsec=30
+    cutsec=$((10#$cutsec * 60))
     read -r mm dd hh mi ss <<< "$(date -d "@$now" '+%m %d %H %M %S' 2>/dev/null || date -r "$now" '+%m %d %H %M %S' 2>/dev/null)"
     [[ "$mm$dd$hh$mi$ss" =~ ^[0-9]{10}$ ]] || { echo "算不出今天的日期（date 不支援 -d 也不支援 -r）" > "$d/err"; return 1; }
     printf '%s\n%s\n' "$JQ_GLOB" "$JQ_LIVE" > "$d/live.jq"
     ( cd "$d" && LC_ALL=C.UTF-8 jq -n -R -c \
         --rawfile dj data.json --rawfile act act.jsonl --rawfile wts wts.tsv --arg ro "$AGENT_INFLIGHT_READONLY" \
-        --argjson now "$now" --argjson day0 $((now - 10#$hh * 3600 - 10#$mi * 60 - 10#$ss)) \
+        --argjson now "$now" --argjson cutsec "$cutsec" --argjson day0 $((now - 10#$hh * 3600 - 10#$mi * 60 - 10#$ss)) \
         --argjson md "[$((10#$mm)),$((10#$dd))]" -f live.jq "${evs[@]}" > out.json 2> err ) || return 1
     IFS= read -r body < "$d/out.json"
     [[ $body == '{'*'}' ]] || { echo "live.jq 沒有輸出物件" >> "$d/err"; return 1; }
