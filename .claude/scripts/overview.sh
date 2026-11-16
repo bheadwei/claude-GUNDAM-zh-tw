@@ -79,7 +79,7 @@
 #            （寫過的檔同 files 的 done；session 一樣只看最後一個 Stop 之後）。沒有組 → []。給頁面的部件卡標「誰在做／等你」
 #   中斷的 agent（2026-11-16；不進 lanes，也不算 doneToday.agents；不寫回 agent-activity.jsonl、閘門不讀）：
 #            該 agent 有 SubagentStart、沒有 SubagentStop，且符合下列任一，feed 記一筆
-#            {t, kind: "agent_cut", id: aid, who, where, text: description, why: "restart"|"silent"}：
+#            {t, kind: "agent_cut", id: aid, who, where, text: description, why: "restart"|"silent", idle: 整數分鐘|null}：
 #            restart  同 sid 在它最後一筆事件之後出現 SessionStart 且 ss 為 startup／resume／clear（t 取該 SessionStart 的 t）。
 #                     compact 不算（壓縮時背景 agent 是否存活查不到官方說明，保守不判）。/clear 與新視窗會換 sid，
 #                     payload 沒有舊 sid 可對，這兩種只能靠 silent 收掉
@@ -87,6 +87,7 @@
 #                     不是 PreToolUse Bash／PowerShell（還在跑的長指令不判）（t 取最後一筆 + 門檻）
 #                     最後一筆在等使用者（帶 need：批准、AskUserQuestion）也不判——人離開越久越需要留在「需要你」
 #                     限制：沒有 PreToolUse 事件的長工具（WebFetch、MCP）單次超過門檻會被誤判；之後有新事件就回到 lanes
+#            idle     silent 時為最後一筆事件到 now 的整數分鐘（向下取整），restart 時 null
 #            restart 優先。它還開著的 need 照 SubagentStop 的方式關（feed 記 need_done）。
 #            lane 的「結束」仍只認 SubagentStop（2026-09-11 的坑），中斷只是不再顯示
 #   needs    同 sid＋aid 的事件依序走一遍。開啟者＝事件行的 need 為 approve／reply（PermissionRequest、
@@ -106,7 +107,7 @@
 #   doneToday {agents: 今天（本機時區）SubagentStop 的不重複 aid 數, tasks: data.js tasks 裡 doneOn 等於今天的數}
 #            （tasks 只來自 wbs.md，已歸檔的不算）
 #   feed     agent 開始／完成（agent_start／agent_done，text 為 description）、agent 被判中斷（agent_cut）、need 出現／處理（need_open／need_done，
-#            text 為 need 的 text），新的在前、最多 50 筆：{t, kind, id, who, where, text}（agent_cut 另帶 why）
+#            text 為 need 的 text），新的在前、最多 50 筆：{t, kind, id, who, where, text}（agent_cut 另帶 why、idle）
 #   at       產生時間（格式同 data.js 的 generatedAt），放最後
 #
 # 說明層：.claude/taskmaster-data/module-notes.md（格式與寫作標準的唯一來源是
@@ -447,7 +448,8 @@ def nwho: if .aid != "" then awho elif .src == "main" then "主 session" else "w
                id: .aid, who: awho, where: .src, text: ($desc[.aid] // "")}]
            + [$needRuns[].feed[]]
            + [$cand[] | select(.why != null) | {t: .cutT, ms: 0, i: 1000000000, kind: "agent_cut", id: .s.aid, who: (.s | awho),
-                                                where: .z.src, text: ($desc[.s.aid] // ""), why}])
+                                                where: .z.src, text: ($desc[.s.aid] // ""), why,
+                                                idle: (if .why == "silent" then (($now - .z.t) / 60 | floor) else null end)}])
           | sort_by([.t, .ms, .i]) | reverse | .[:50] | map(del(.ms, .i)))}
 JQ
 

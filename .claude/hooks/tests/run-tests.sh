@@ -5745,6 +5745,12 @@ expect_eq "中斷的 aA 不算進 doneToday.agents（只有 aB）" 1 "$(lvq '.do
 lv_reset; lv_ev -1900 SubagentStart s1 a1 implementer main; lv_ev -1860 PostToolUse s1 a1 implementer main '{"tool":"Read"}'; lv_run
 expect_eq "最後一筆 PostToolUse 距今 31 分鐘 → 不在 lanes，feed 有 why silent（t 為最後一筆 + 30 分鐘）" "0 agent_cut silent $((LV_NOW - 1860 + 1800))" \
     "$(lvq '"\(.lanes | length) \(.feed[0].kind) \(.feed[0].why) \(.feed[0].t)"')"
+lv_reset; lv_ev -3000 SubagentStart s1 a1 implementer main; lv_ev -3000 PostToolUse s1 a1 implementer main '{"tool":"Read"}'; lv_run
+expect_eq "silent 的 agent_cut 帶 idle＝最後一筆距今的整數分鐘（50）" "silent 50" "$(lvq '"\(.feed[0].why) \(.feed[0].idle)"')"
+lv_reset; lv_ev -3030 SubagentStart s1 a1 implementer main; lv_ev -3030 PostToolUse s1 a1 implementer main '{"tool":"Read"}'; lv_run
+expect_eq "idle 向下取整（3030 秒 → 50 分鐘）" 50 "$(lvq '.feed[0].idle')"
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ss -500 s1 resume; lv_run
+expect_eq "restart 的 agent_cut 不帶 idle（null）" "restart null" "$(lvq '"\(.feed[0].why) \(.feed[0].idle)"')"
 lv_reset; lv_ev -1740 SubagentStart s1 a1 implementer main; lv_ev -1740 PostToolUse s1 a1 implementer main '{"tool":"Read"}'; lv_run
 expect_eq "距今 29 分鐘 → 仍在 lanes" 1 "$(lvq '.lanes | length')"
 lv_reset; lv_ev -3000 SubagentStart s1 a1 implementer main; lv_ev -3000 PreToolUse s1 a1 implementer main '{"tool":"Bash","act":"跑 整套測試"}'; lv_run
@@ -6255,11 +6261,17 @@ if [ -n "$NW_CHROME" ] && [ -x "$NW_CHROME" ]; then
     rm -rf "$NW/prof"; nw_feed clear
     expect_eq "按「全部清除」→ 動態區隱藏、焦點不掉在 body；之後 live.js 多一則 → 動態區出現且只有那 1 則" "true 0 true 1 1780000060|agent_start|new" \
         "$(nq '"\(.C0.hidden) \(.C0.n) \(.C0.ae != "BODY") \(.C1.n) \(.C1.id)"')"
+    rm -rf "$NW/prof"; nw_feed last
+    expect_eq "刪到最後一則（沒有下一則）→ 焦點在「全部清除」；全部刪光後動態區隱藏、焦點在 aside" "fclear 1 dside true" "$(nq '"\(.L1.ae) \(.L1.rest) \(.L2.ae) \(.L2.hidden)"')"
+    rm -rf "$NW/prof"; nw_feed cap
+    expect_eq "localStorage 已有 250 個 id（含不在 feed 的）再刪一則 → 存回 ≤200、不含已不在 feed 的 id" "true true" "$(nq '"\(.P.len <= 200) \(.P.stale == 0)"')"
     nw_feed cut
     expect_eq "feed 有 agent_cut：restart →「中斷 · 視窗重開」，silent →「中斷 · 30 分鐘沒有動靜」" "中斷 · 視窗重開,中斷 · 30 分鐘沒有動靜" "$(nq '.K.fv | join(",")')"
     expect_eq "lane l1 11 分鐘沒動靜但有同 id 的 approve need →「需要你」只 1 行（等批准）加沒有 need 的 l2 的卡住，l1 不標 stuck、l2 標 stuck" "2 true true" \
         "$(nq '"\(.K.needs | length) \(.K.l1 | not) \(.K.l2 | not | not)"')"
     expect_eq "卡住與中斷的差別寫在 title" "true true" "$(nq '"\(.K.stuckTitle | contains("10 分鐘")) \(.K.fvTitle | contains("已從名單移除"))"')"
+    nw_feed idle
+    expect_eq "agent_cut 帶 idle=47 → 顯示「中斷 · 47 分鐘沒有動靜」；沒帶 idle 才退回 30" "中斷 · 47 分鐘沒有動靜,中斷 · 30 分鐘沒有動靜" "$(nq '.I.fv | join(",")')"
     # 階段 8：任務圖部件卡「誰在做／等你」、標題列目前任務標籤（parts-check.js，以 #tasks 開頁）
     nw_pdata "$NW"; nw_page "$NW/parts.html" "$HOOK_DIR/tests/fixtures/overview/parts-check.js"
     # 開 reduce：smooth 捲動在 --virtual-time-budget 下不會前進（2026-11-13 實測 scrollTop 停在 0），reduce 時頁面改用立即捲動

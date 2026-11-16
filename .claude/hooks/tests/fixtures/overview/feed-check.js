@@ -4,6 +4,9 @@
 //   reload 同一個 profile 重開 → 被刪的仍不出現（data.js 的 project.name 不同時改測不受影響）
 //   throw  localStorage.setItem 會 throw → 刪除當下仍從畫面消失、沒有未捕捉的錯誤
 //   clear  按「全部清除」→ 動態區隱藏；live.js 之後多一則 → 只出現那 1 則
+//   idle   agent_cut 帶 idle 的顯示
+//   last   刪最後一則 → 焦點到「全部清除」；全刪光 → aside
+//   cap    localStorage 已有超過 200 個 id → 刪一則後存回 ≤200、只留還在 feed 的
 //   cut    agent_cut 的文字，以及「有未處理 need 的 lane 不算卡住」
 // feed 的 t 用固定值（刪掉的 id 含 t，兩次開頁要對得上）。結果以 JSON 寫進 <pre id="result">。
 (function(){
@@ -61,6 +64,34 @@ if (MODE === 'del') {
     LV = function () { return live({feed: feed(30, [{t: E + 60, kind: 'agent_start', id: 'new', who: 'implementer', where: 'main', text: '新的'}]), at: 'B'}); };
   });
   at(6500, function () { R.C1 = {vis: vis($('feedbox')), n: rows().length, id: ids()[0]}; done(); });
+} else if (MODE === 'idle') {
+  LV = function () {
+    return live({feed: [{t: E, kind: 'agent_cut', id: 'c1', who: 'implementer', where: 'main', text: '甲', why: 'silent', idle: 47},
+                        {t: E - 60, kind: 'agent_cut', id: 'c2', who: 'implementer', where: 'main', text: '乙', why: 'silent'}]});
+  };
+  at(3000, function () { R.I = {fv: qa('#feed .fv.cut').map(function (e) { return e.textContent; })}; done(); });
+} else if (MODE === 'last') {
+  LV = function () { return live({feed: feed(2)}); };
+  at(3000, function () {
+    var b = qa('#feed li .fdel');
+    b[1].focus(); b[1].click();
+    R.L1 = {ae: document.activeElement.id, rest: rows().length};
+    var r = qa('#feed li:not(.leave) .fdel')[0]; r.focus(); r.click();
+    R.L2 = {ae: document.activeElement.className, hidden: !vis($('feedbox'))};
+    done();
+  });
+} else if (MODE === 'cap') {
+  var key = 'overview-feed-hidden|現況|' + location.pathname, pre = [], k;
+  for (k = 0; k < 220; k++) pre.push((E - k * 60) + '|agent_done|a' + k);
+  for (k = 0; k < 30; k++) pre.push('1|agent_done|gone' + k);
+  localStorage.setItem(key, JSON.stringify(pre));
+  LV = function () { return live({feed: feed(250)}); };
+  at(3000, function () {
+    qa('#feed li .fdel')[0].click();
+    var ls = JSON.parse(localStorage.getItem(key) || '[]');
+    R.P = {len: ls.length, stale: ls.filter(function (x) { return /gone/.test(x); }).length};
+    done();
+  });
 } else if (MODE === 'cut') {
   LV = function () {
     return live({lanes: [ln('l1', 660), ln('l2', 660)], needs: [{id: 's1|l1|' + (T - 120), kind: 'approve', who: 'implementer', where: 'main', text: 'npm install', since: T - 120}],

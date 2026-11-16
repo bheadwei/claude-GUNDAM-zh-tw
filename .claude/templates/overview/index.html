@@ -1294,7 +1294,7 @@ function groupSet(n, it) {
 function groupMake() { return mk('section', 'tgrp', '<div class="tgh"></div><div class="ldesc">沒有在跑的線</div><div class="glanes"></div>'); }
 function feedMake() { return mk('li', '', '<div class="fc"></div><button type="button" class="fdel">×</button>'); }
 function feedSet(n, f) {
-  var v = FEEDV[f.kind] || [f.kind, ''], vt = v[0] + (f.kind === 'agent_cut' ? ' · ' + (f.why === 'restart' ? '視窗重開' : CUT_MIN + ' 分鐘沒有動靜') : '');
+  var v = FEEDV[f.kind] || [f.kind, ''], vt = v[0] + (f.kind === 'agent_cut' ? ' · ' + (f.why === 'restart' ? '視窗重開' : (f.idle != null ? f.idle : CUT_MIN) + ' 分鐘沒有動靜') : '');
   html(n.firstChild, '<span class="ft">' + hm(f.t) + '</span><span><b>' + esc(f.who) + '</b> <span class="fv ' + v[1] + '"' + (f.kind === 'agent_cut' ? ' title="' + esc(TIP_CUT) + '"' : '') + '>' + esc(vt) + '</span></span>' +
     '<span class="fx">' + esc([f.text, f.where && f.where !== 'main' ? whereText(f.where) : ''].filter(Boolean).join(' · ')) + '</span>');
   n.lastChild.setAttribute('aria-label', '刪除這則動態：' + clean(f.who) + ' ' + vt);
@@ -1321,7 +1321,7 @@ function feedHide(ids, from) {
   var nx = from && nextLive(from.nextSibling);
   renderNow();
   var rest = [].filter.call($('feed').children, function (n) { return !n.classList.contains('leave'); });
-  var to = nx || rest[rest.length - 1];
+  var to = nx;
   (to ? to.querySelector('.fdel') : !$('feedbox').hidden ? $('fclear') : document.querySelector('.dside')).focus();
 }
 function renderNow() {
