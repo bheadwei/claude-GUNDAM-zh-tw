@@ -1,9 +1,12 @@
 #!/bin/bash
-# agent-events.sh — SubagentStart／SubagentStop／Notification／PermissionRequest／UserPromptSubmit／Stop／
+# agent-events.sh — SessionStart／SubagentStart／SubagentStop／Notification／PermissionRequest／UserPromptSubmit／Stop／
 #                   PreToolUse(AskUserQuestion|Bash|PowerShell)／PostToolUse(全部工具)
 #
 # 把事件壓成一行附加到 $MAIN_CLAUDE/logs/live-events.jsonl，給專案圖解的「現況」分頁用。
 # 契約（事件格式、白名單、need 規則、為什麼不能當閘門）：ADR-2026-11-12-002。
+#
+# SessionStart 只記 source（startup／resume／clear／compact）到 ss 欄，給 --live 判斷「被中斷的 agent」；
+# 其他事件 ss 為空字串。v 仍是 1（只加欄位，讀取端容忍舊行沒有 ss）。
 #
 # 只寫不讀、永遠無輸出、永遠 exit 0；全部接線都是 async（順序不保證，所以有 ms 欄）。
 # 閘門不得讀這份檔（pre-agent-gate.sh、lib/agent-inflight.sh 看的是 agent-activity.jsonl）。
@@ -107,7 +110,8 @@ AE_LINE=$(printf '%s' "$INPUT" | jq -c --argjson tt "${AE_T:-0}" --argjson msv "
   | {v: 1, t: $tt, ms: $msv, ev: ($ev | cap(40)),
      sid: ($p.session_id | str | cap(64)), aid: ($p.agent_id | str | cap(40)), at: ($p.agent_type | str | cap(40)),
      src: ($srcv | cap(60)), tool: ($tool | cap(40)), file: ($rel | tailcap(120)),
-     act: ($act | cap(80)), need: $need, nt: ($ntype | cap(30)), text: ($text | cap(120))}
+     act: ($act | cap(80)), need: $need, nt: ($ntype | cap(30)), text: ($text | cap(120)),
+     ss: (if $ev == "SessionStart" then ($p.source | str | cap(10)) else "" end)}
   | fit' 2>/dev/null)
 
 [ -n "$AE_LINE" ] || exit 0

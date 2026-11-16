@@ -5237,7 +5237,8 @@ expect_eq "SubagentStart：src 為 main" main "$(ae_f '.src')"
 expect_eq "SubagentStart：t 與 ms 都是整數、ms 在 0–999" true \
     "$(ae_last | jq '(.t|type=="number" and .==floor) and (.ms|type=="number" and .==floor and .>=0 and .<=999)')"
 expect_eq "SubagentStart：沒有 tool／file／act／need／nt／text 以外的欄位" \
-    "act,aid,at,ev,file,ms,need,nt,sid,src,t,text,tool,v" "$(ae_last | jq -r 'keys|join(",")')"
+    "act,aid,at,ev,file,ms,need,nt,sid,src,ss,t,text,tool,v" "$(ae_last | jq -r 'keys|join(",")')"
+expect_eq "SubagentStart：ss 為空字串（只有 SessionStart 填）" "" "$(ae_f '.ss')"
 
 # --- 主 session 的 PostToolUse Write（沒有 agent_id）
 ae_run "$(ae_with "$(ae_ev PostToolUse)" ". + {tool_name:\"Write\", tool_input:{file_path:\"$AE_BOX/src/a.ts\", content:\"FILECONTENT-XYZ\"}}")" >/dev/null
@@ -5413,6 +5414,16 @@ printf '' | env CLAUDE_PROJECT_DIR="$AE_BOX" bash "$HOOK_DIR/session-start.sh" >
 expect_eq "session 啟動時 live-events.jsonl 3500 行：截成最後 3000 行" "3000|501" \
     "$(ae_lines)|$(head -n 1 "$AE_LOG" | jq -r '.n')"
 
+# --- SessionStart（2026-11-16 增補：source 記進 ss，v 仍為 1）
+ae_reset
+ae_run '{"hook_event_name":"SessionStart","session_id":"s1","source":"resume","cwd":"'"$AE_BOX"'"}' >/dev/null
+expect_eq "SessionStart resume：ev／ss／aid／sid／v" "SessionStart|resume||s1|1" "$(ae_f '[.ev,.ss,.aid,.sid,.v]|join("|")')"
+expect_eq "SessionStart：整行 < 1024 bytes" true "$([ "$(ae_last | wc -c | tr -d ' ')" -lt 1024 ] && echo true || echo false)"
+ae_run '{"hook_event_name":"SessionStart","session_id":"s1","source":"abcdefghijklmnopqrstuvwxyz","cwd":"'"$AE_BOX"'"}' >/dev/null
+expect_eq "SessionStart：ss 上限 10 字" abcdefghij "$(ae_f '.ss')"
+ae_run "$(ae_with "$(ae_ev PostToolUse)" '. + {tool_name:"Read", source:"startup"}')" >/dev/null
+expect_eq "PostToolUse：ss 為空字串（即使 payload 有 source）" "" "$(ae_f '.ss')"
+
 # =========================================================================
 section "overview.sh --live — 即時聚合（live.js）"
 # =========================================================================
@@ -5543,8 +5554,8 @@ expect_eq "最後一筆是 Stop → 不列" 0 "$(lvq '.lanes | length')"
 lv_reset; lv_ev -1200 UserPromptSubmit s9 "" "" main; lv_run
 expect_eq "最近一筆事件在 20 分鐘前 → 不列" 0 "$(lvq '.lanes | length')"
 lv_reset; lv_ev -300 PostToolUse s9 "" "" main '{"tool":"Bash","act":"跑 測試"}'; lv_ev -200 Stop s9 "" "" main
-lv_ev -60 Notification s9 "" "" main '{"need":"reply","nt":"idle_prompt","text":"等你"}'; lv_run
-expect_eq "session：跑 測試 → Stop → idle_prompt → lane 的 doing 只看 Stop 之後（不是「跑 測試」）、since 為 idle_prompt 的 t" "null $((LV_NOW - 60))" \
+lv_ev -60 UserPromptSubmit s9 "" "" main; lv_run
+expect_eq "session：跑 測試 → Stop → UserPromptSubmit → lane 的 doing 只看 Stop 之後（不是「跑 測試」）、since 為 UserPromptSubmit 的 t" "null $((LV_NOW - 60))" \
     "$(lvq '"\(.lanes[0].doing) \(.lanes[0].since)"')"
 lv_reset; lv_ev -60 UserPromptSubmit s8 "" "" worktree:wt-b; lv_run
 expect_eq "worktree 的 session → who 為 worktree session、group 照 src 歸組" "worktree session plans/3.1-y.md" "$(lvq '.lanes[0] | "\(.who) \(.group)"')"
@@ -5700,6 +5711,90 @@ expect_eq "data.js 的 plans 帶 files:（給撞檔比對）" '["src/api/a.ts","
 rm -f "$TGD/.current-task" "$TGD/plans/1.2-x.md"; tg_ov
 expect_eq "curGroups 變了（沒有目前任務）→ 重產後 lane 的 group 跟著變成 null" null \
     "$(sed -n 's/^window\.OVERVIEW_LIVE = //; s/;$//p' "$TGO/live.js" 2>/dev/null | jq -r '.lanes[0].group' 2>/dev/null)"
+
+# --- 被中斷的 agent（2026-11-16）：restart／silent、閒置主 session、feed 上限
+lv_ss() { lv_ev "$1" SessionStart "$2" "" "" main "{\"ss\":\"$3\"}"; }
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ev -590 PostToolUse s1 a1 implementer main '{"tool":"Bash"}'; lv_ss -500 s1 resume; lv_run
+expect_eq "a1 Start、PostToolUse、之後同 sid SessionStart resume、a1 沒再有事件 → lanes 不含 a1，feed 第一筆是 agent_cut（restart、t 為 SessionStart 的 t）" \
+    "0 agent_cut a1 restart $((LV_NOW - 500))" "$(lvq '"\(.lanes | length) \(.feed[0].kind) \(.feed[0].id) \(.feed[0].why) \(.feed[0].t)"')"
+expect_eq "agent_cut 的欄位：who、where、text 為 description" "implementer main 實作階段" \
+    "$(lv_act a1 "實作階段"; lv_run; lvq '.feed[0] | "\(.who) \(.where) \(.text)"')"
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ss -500 s1 clear; lv_run
+expect_eq "SessionStart clear 也算 restart" "0 restart" "$(lvq '"\(.lanes | length) \(.feed[0].why)"')"
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ss -500 s1 startup; lv_run
+expect_eq "SessionStart startup 也算 restart" "0 restart" "$(lvq '"\(.lanes | length) \(.feed[0].why)"')"
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ss -500 s1 compact; lv_run
+expect_eq "SessionStart compact 不算 → a1 仍在 lanes、feed 沒有 agent_cut" "1 0" "$(lvq '"\(.lanes | length) \([.feed[] | select(.kind == "agent_cut")] | length)"')"
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ss -500 s1 resume; lv_ev -400 PostToolUse s1 a1 implementer main '{"tool":"Bash"}'; lv_run
+expect_eq "SessionStart 之後 a1 還有事件 → 仍在 lanes" "1 0" "$(lvq '"\(.lanes | length) \([.feed[] | select(.kind == "agent_cut")] | length)"')"
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ss -500 s2 resume; lv_run
+expect_eq "SessionStart 的 sid 是 s2（不同 session）→ a1 仍在 lanes" "1 0" "$(lvq '"\(.lanes | length) \([.feed[] | select(.kind == "agent_cut")] | length)"')"
+lv_reset; lv_ss -700 s1 resume; lv_ev -600 SubagentStart s1 a1 implementer main; lv_run
+expect_eq "SessionStart 在 a1 開始之前 → 不影響 a1" 1 "$(lvq '.lanes | length')"
+
+# smartwork 實例：planner A 開始後最後事件、同 session resume、planner B 開始又完成
+lv_reset
+lv_ev -3000 SubagentStart s1 aA planner main; lv_ev -2900 PostToolUse s1 aA planner main '{"tool":"Write","file":"docs/x.md","act":"編輯 x.md"}'
+lv_ss -2000 s1 resume
+lv_ev -1900 SubagentStart s1 aB planner main; lv_ev -1500 SubagentStop s1 aB planner main; lv_run
+expect_eq "smartwork 重現：lanes 0 筆；feed 有 A 的 agent_cut 與 B 的 agent_done" "0 aA aB" \
+    "$(lvq '"\(.lanes | length) \([.feed[] | select(.kind == "agent_cut") | .id] | first) \([.feed[] | select(.kind == "agent_done") | .id] | first)"')"
+expect_eq "中斷的 aA 不算進 doneToday.agents（只有 aB）" 1 "$(lvq '.doneToday.agents')"
+
+# silent
+lv_reset; lv_ev -1900 SubagentStart s1 a1 implementer main; lv_ev -1860 PostToolUse s1 a1 implementer main '{"tool":"Read"}'; lv_run
+expect_eq "最後一筆 PostToolUse 距今 31 分鐘 → 不在 lanes，feed 有 why silent（t 為最後一筆 + 30 分鐘）" "0 agent_cut silent $((LV_NOW - 1860 + 1800))" \
+    "$(lvq '"\(.lanes | length) \(.feed[0].kind) \(.feed[0].why) \(.feed[0].t)"')"
+lv_reset; lv_ev -1740 SubagentStart s1 a1 implementer main; lv_ev -1740 PostToolUse s1 a1 implementer main '{"tool":"Read"}'; lv_run
+expect_eq "距今 29 分鐘 → 仍在 lanes" 1 "$(lvq '.lanes | length')"
+lv_reset; lv_ev -3000 SubagentStart s1 a1 implementer main; lv_ev -3000 PreToolUse s1 a1 implementer main '{"tool":"Bash","act":"跑 整套測試"}'; lv_run
+expect_eq "最後一筆是 PreToolUse Bash、距今 50 分鐘 → 仍在 lanes" 1 "$(lvq '.lanes | length')"
+lv_reset; lv_ev -3000 SubagentStart s1 a1 implementer main; lv_ev -3000 PreToolUse s1 a1 implementer main '{"tool":"PowerShell","act":"跑 測試"}'; lv_run
+expect_eq "最後一筆是 PreToolUse PowerShell、距今 50 分鐘 → 仍在 lanes" 1 "$(lvq '.lanes | length')"
+lv_reset; lv_ev -3000 SubagentStart s1 a1 implementer main; lv_ev -3000 PostToolUse s1 a1 implementer main '{"tool":"Bash"}'; lv_run
+expect_eq "最後一筆是 PostToolUse Bash、距今 50 分鐘 → 判中斷（指令已跑完）" "0 silent" "$(lvq '"\(.lanes | length) \(.feed[0].why)"')"
+lv_reset; lv_ev -360 SubagentStart s1 a1 implementer main; lv_ev -360 PostToolUse s1 a1 implementer main '{"tool":"Read"}'
+env TZ=UTC OVERVIEW_NOW="$LV_NOW" OVERVIEW_LIVE_CUT_MIN=5 bash "$LV/.claude/scripts/overview.sh" --live "$LV" >/dev/null 2>&1
+expect_eq "OVERVIEW_LIVE_CUT_MIN=5、距今 6 分鐘 → 判中斷" "0 silent" "$(lvq '"\(.lanes | length) \(.feed[0].why)"')"
+lv_reset; lv_ev -360 SubagentStart s1 a1 implementer main; lv_ev -360 PostToolUse s1 a1 implementer main '{"tool":"Read"}'
+env TZ=UTC OVERVIEW_NOW="$LV_NOW" OVERVIEW_LIVE_CUT_MIN=abc bash "$LV/.claude/scripts/overview.sh" --live "$LV" >/dev/null 2>&1
+expect_eq "OVERVIEW_LIVE_CUT_MIN 不是整數 → 退回 30 分鐘（6 分鐘仍在 lanes）" 1 "$(lvq '.lanes | length')"
+
+# 中斷的 agent 還開著的 need
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ev -500 PermissionRequest s1 a1 implementer main "$LV_PR"; lv_ss -400 s1 resume; lv_run
+expect_eq "a1 有未處理的 approve、之後 SessionStart resume → needs 0 筆，feed 有該 need 的 need_done" "0 1" \
+    "$(lvq '"\(.needs | length) \([.feed[] | select(.kind == "need_done")] | length)"')"
+lv_reset; lv_ev -3000 SubagentStart s1 a1 implementer main; lv_ev -2800 PermissionRequest s1 a1 implementer main "$LV_PR"; lv_run
+expect_eq "silent 判中斷的 agent 開著的 need 也關" "0 1" "$(lvq '"\(.needs | length) \([.feed[] | select(.kind == "need_done")] | length)"')"
+
+# 閒置主 session
+lv_reset; lv_ev -900 PostToolUse s1 "" "" main '{"tool":"Bash","act":"跑 ls"}'; lv_ev -800 Stop s1 "" "" main
+lv_ev -660 Notification s1 "" "" main '{"need":"reply","nt":"idle_prompt","text":"Claude 在等你的輸入"}'; lv_run
+expect_eq "主 session：PostToolUse → Stop → idle_prompt（11 分鐘前）→ lanes 沒有 s1；needs 有 1 筆 reply" "0 1 reply" \
+    "$(lvq '"\(.lanes | length) \(.needs | length) \(.needs[0].kind)"')"
+lv_reset; lv_ss -60 s1 startup; lv_run
+expect_eq "主 session 只有一筆 SessionStart startup → lanes 沒有 s1" 0 "$(lvq '.lanes | length')"
+lv_reset; lv_ss -300 s1 startup; lv_ev -200 UserPromptSubmit s1 "" "" main; lv_ss -100 s1 compact; lv_run
+expect_eq "UserPromptSubmit 之後有 SessionStart compact → 仍在 lanes（略過 SessionStart 看最後一筆）、since 為 UserPromptSubmit 的 t" "1 $((LV_NOW - 200))" \
+    "$(lvq '"\(.lanes | length) \(.lanes[0].since)"')"
+
+# feed 上限 50
+lv_reset
+for k in $(seq 1 35); do lv_ev $((-4000 + k * 10)) SubagentStart s1 "f$k" implementer main; lv_ev $((-4000 + k * 10 + 5)) SubagentStop s1 "f$k" implementer main; done
+lv_run
+expect_eq "35 個 agent 開始＋完成共 70 筆事件 → feed 長度 50（上限）" 50 "$(lvq '.feed | length')"
+lv_reset
+for k in $(seq 1 17); do lv_ev $((-4000 + k * 10)) SubagentStart s1 "f$k" implementer main; lv_ev $((-4000 + k * 10 + 5)) SubagentStop s1 "f$k" implementer main; done
+lv_ev -300 SubagentStart s1 g1 implementer main; lv_run
+expect_eq "35 筆 feed 事件 → 長度 35（未達上限不截）" 35 "$(lvq '.feed | length')"
+
+# 舊事件行沒有 ss 欄：不影響
+lv_reset; lv_ev -600 SubagentStart s1 a1 implementer main; lv_ev -100 SessionStart s1 "" "" main; lv_run
+expect_eq "SessionStart 事件行沒有 ss 欄（舊行）→ 不判中斷、照常聚合" 1 "$(lvq '.lanes | length')"
+
+# 閘門仍不讀事件檔
+expect_eq "pre-agent-gate.sh、lib/agent-inflight.sh 沒有引用 live-events" "" \
+    "$(grep -l live-events "$HOOK_DIR/pre-agent-gate.sh" "$HOOK_DIR/lib/agent-inflight.sh" 2>/dev/null)"
 
 # --- 效能：3000 行事件（40 個 agent 輪流跑指令、寫檔、要批准）
 lv_reset
