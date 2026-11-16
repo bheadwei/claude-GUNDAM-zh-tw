@@ -3,7 +3,7 @@ wbs_task: "none"
 slug: "overview-stable-url"
 created: "2026-11-16"
 updated: "2026-11-16"
-status: "🔄 進行中"
+status: "✅ 完成"
 current_phase: 4
 mode: "standard"
 files:
@@ -184,7 +184,7 @@ flowchart LR
   - `grep -l live-events .claude/hooks/pre-agent-gate.sh .claude/hooks/lib/agent-inflight.sh` 仍為空
 - **注意**：`/clear` 會換新的 `session_id`、VS Code 重開若是 `startup` 也是新 sid——payload 裡沒有舊 sid 可以對，這兩種只能靠 silent 超時收掉，ADR 增補段要寫明。lane 的「結束」仍只認 SubagentStop（2026-09-11 的坑），中斷是另一種「不再顯示」，不寫回 `agent-activity.jsonl`、閘門不讀。`run-tests.sh agent-events "overview.sh --live"` 用關鍵字模式跑
 
-### 階段 4: Live Server 不再整頁閃（`.vscode/settings.json` 合併） ⏳
+### 階段 4: Live Server 不再整頁閃（`.vscode/settings.json` 合併） ✅
 - **依賴**：無
 - [ ] **先查證** Live Server 擴充（ritwickdey.LiveServer）的設定名 `liveServer.settings.ignoreFiles` 的格式（字串陣列、glob、相對工作區根）與預設值（記憶中是 `[".vscode/**", "**/*.scss", "**/*.sass", "**/*.ts"]`），來源網址寫進「發現與決策」。規劃時沒有網路工具，**未查證** — 驗證：官方 README／package.json 的 `contributes.configuration`
 - [ ] 新增 `scripts/lib/vscode-live-server.sh`（函式 `ensure_live_server_ignore <專案根> [--dry-run]`，給 copy／update 兩支 sh 共用）：
@@ -278,3 +278,4 @@ flowchart LR
 - 2026-11-16 階段 6：用文字規則不用 hook——觸發點「plan 階段標 ✅」是一次 Edit，可做成 PostToolUse 提醒，但重算要判斷依賴與檔案交集，hook 只能提醒、做不了判斷；實測被漏掉再升級成 hook 提醒
 - 2026-11-16 階段 2：index.html 動工前 94144 bytes、改後 94618 bytes
 - 2026-11-16 階段 5：index.html 動工前 94618 bytes、改後 97702 bytes，收尾修正後 97705 bytes；390／1440 × 淺／深截圖已看過（390 寬要用 `--headless=old`，新 headless 最小約 500 寬）；agent_cut 改帶 `idle`（閒置分鐘），頁面優先用它
+- 2026-11-16 階段 4：Live Server 預設值以官方文件為準（沒有 `**/*.ts`，本 plan 階段 4 第一條的記憶值是錯的）。**ps1 沒跑到**：本機沒有 pwsh，`scripts/lib/vscode-live-server.ps1` 與兩支 ps1 的接線只做過靜態審查，ps1 測試案例在本機印「略過」；要在有 pwsh 的機器補跑。ps1 用 `ConvertTo-Json` 改寫，不保留原縮排（PS 5.1 為 4 空白、PS 7 為 2 空白），接受

@@ -56,4 +56,12 @@
 - 2026-11-16 15:50 重算可平行：只剩 ⏳ 階段 4，不平行
 
 ## 階段 4: Live Server 不再整頁閃（`.vscode/settings.json` 合併）
-- 2026-11-16 15:51 派工 implementer（sonnet，主 checkout）｜BASE=<本次 chore commit>
+- 2026-11-16 15:51 派工 implementer（sonnet，主 checkout）｜BASE=fcb6ade
+- 2026-11-16 16:40 回報 DONE_WITH_CONCERNS｜commit=c497c48,b37eded｜vscode-live-server＋update-template 51/0｜check-counts 725 一致｜本機無 pwsh，ps1 helper 與接線未執行過、只靜態對照｜先寫實作後補測試（沒看 RED）
+- 2026-11-16 16:40 Ruling: ps1 未執行不擋本階段，審查特別看 ps1、plan 記「ps1 沒跑到」— 本機裝不了 pwsh — 若 ps1 有錯，Windows 使用者跑 copy/update 會在最後一步報錯，但前面的複製已完成
+- 2026-11-16 16:55 審查 R1：HIGH ps1 註解偵測 `/*` 誤中 `**/*.ts` 這類 glob（連模板自己寫的預設值 `**/*.scss` 都會中，第二次跑就變成印手動）；MEDIUM ps1 Join-Path 反斜線、ps1 不保留縮排；LOW 3 條＋2 個測試缺口
+- 2026-11-16 16:55 Ruling: ps1 不保留縮排接受、記進 plan — ConvertTo-Json 無法照原縮排，手寫序列化不值得 — Windows 使用者的 settings.json 縮排會被改成 PS 預設
+- 2026-11-16 16:55 修復 R1 交回同一個 implementer：HIGH＋Join-Path＋3 LOW＋2 測試缺口
+- 2026-11-16 17:20 修復 R1 完成｜commit=6565698｜vscode-live-server＋update-template 53/0｜check-counts 725 一致
+- 2026-11-16 17:20 複審（主模型，只驗 HIGH）：新 regex `(?m)(^|[\s,{\[])/\*` 對 `**/*.ts`、`**/*.scss` 不中，對行首與逗號後的 `/*` 會中 ✅｜範圍=fcb6ade..6565698
+- 2026-11-16 17:20 階段完成 → plan 標 ✅，status=✅ 完成｜摘要=copy／update 自動讓 Live Server 忽略地圖資料夾｜測試=53/53
