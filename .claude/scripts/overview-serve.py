@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""overview-serve.py — 專案圖解的本機靜態伺服器（ADR-2026-11-12-003 第 1 節）。
+"""overview-serve.py — 專案圖解的本機靜態伺服器（ADR-2026-11-12-003 第 1 節；token 固定見 ADR-2026-11-16-001）。
 
 用法：overview-serve.py <overview 資料夾>
 環境變數：
@@ -7,12 +7,14 @@
   OVERVIEW_SERVE_PORT_BASE  起始 port，預設 8765（最多往後試 20 個；測試用來避開真的伺服器）
 
 只綁 127.0.0.1、只服務 /<token>/ 底下的路徑，其他一律 404。起停由 overview-serve.sh 負責。
+token 與 port 記在 overview/.serve-keep，重起時沿用；閒置結束不刪它。
 最低 Python 3.7。
 """
 import functools
 import hmac
 import json
 import os
+import re
 import secrets
 import sys
 import threading
@@ -22,6 +24,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote
 
 PORT_TRIES = 20
+TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{20,64}$")
 
 
 def env_float(name, default):
@@ -96,9 +99,12 @@ class Handler(SimpleHTTPRequestHandler):
         threading.Thread(target=self.server.shutdown, daemon=True).start()
 
 
-def bind(handler, base):
+def bind(handler, base, preferred=None):
     last = None
-    for port in range(base, base + PORT_TRIES):
+    ports = list(range(base, base + PORT_TRIES))
+    if preferred is not None and 1024 <= preferred <= 65535:
+        ports.insert(0, preferred)
+    for port in ports:
         try:
             return ThreadingHTTPServer(("127.0.0.1", port), handler)
         except OSError as e:
@@ -115,23 +121,42 @@ def write_serve(serve_file, info):
     os.replace(tmp, serve_file)
 
 
+def load_keep(keep_file):
+    """回傳 (token, port)；檔案不存在、壞掉、token 不合格、或權限有 group／other 位元就回 (None, None)。"""
+    try:
+        if os.name != "nt" and os.stat(keep_file).st_mode & 0o077:
+            return None, None
+        with open(keep_file, encoding="utf-8") as f:
+            data = json.load(f)
+        token, port = data["token"], data["port"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None, None
+    if not isinstance(token, str) or not TOKEN_RE.match(token):
+        return None, None
+    return token, port if isinstance(port, int) and not isinstance(port, bool) else None
+
+
 def main():
     if len(sys.argv) != 2 or not os.path.isdir(sys.argv[1]):
         sys.stderr.write("用法：overview-serve.py <overview 資料夾>\n")
         return 2
     directory = os.path.abspath(sys.argv[1])
     serve_file = os.path.join(directory, ".serve")
+    keep_file = os.path.join(directory, ".serve-keep")
     os.umask(0o077)
 
-    token = secrets.token_urlsafe(16)
+    token, keep_port = load_keep(keep_file)
+    token = token or secrets.token_urlsafe(16)
     Handler.token = token
     Handler.activity = [time.monotonic()]
     server = bind(functools.partial(Handler, directory=directory),
-                  int(env_float("OVERVIEW_SERVE_PORT_BASE", 8765)))
+                  int(env_float("OVERVIEW_SERVE_PORT_BASE", 8765)), keep_port)
     if server is None:
         return 3
 
-    info = {"port": server.server_address[1], "token": token, "pid": os.getpid(),
+    port = server.server_address[1]
+    write_serve(keep_file, {"token": token, "port": port})
+    info = {"port": port, "token": token, "pid": os.getpid(),
             "started": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
     write_serve(serve_file, info)
 

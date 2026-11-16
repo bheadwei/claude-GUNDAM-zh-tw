@@ -3,6 +3,9 @@
 #
 #   bash .claude/scripts/overview-serve.sh [<工作目錄>]          確保伺服器在跑，印網址（stdout 最後一行一定是網址）
 #   bash .claude/scripts/overview-serve.sh --stop [<工作目錄>]   經 POST /<token>/.shutdown 關掉；沒在跑也 exit 0
+#   bash .claude/scripts/overview-serve.sh --rotate [<工作目錄>] 關掉、刪 .serve-keep、重起（換新 token，網址外洩時用；會開瀏覽器）
+#
+# 網址固定：token 與 port 記在 overview/.serve-keep，重起沿用（ADR-2026-11-16-001）。
 #
 # 只在「新起」時開瀏覽器；伺服器已在跑只印網址。開瀏覽器失敗不影響 exit code。
 # 沒有 Python 3.7 以上、或起不來時印 file:// 路徑與原因，exit 0。沒有 project.json 什麼都不印。
@@ -11,10 +14,11 @@
 # Windows Git Bash：用 nohup … & 起原生 python.exe，shell 結束後會不會被收掉未實測（ADR 第 5 節待實測）。
 # 若實測不通過，依 ADR 改試 `cmd //c start "" /b <python> …`、再試 PowerShell Start-Process。
 
-STOP=0 WORK=""
+STOP=0 ROTATE=0 WORK=""
 for a in "$@"; do
     case "$a" in
         --stop) STOP=1 ;;
+        --rotate) ROTATE=1 ;;
         *) WORK="$a" ;;
     esac
 done
@@ -62,7 +66,7 @@ fallback() {
     exit 0
 }
 
-if [ "$STOP" -eq 1 ]; then
+stop_server() {
     if running; then
         http_status "$PORT" POST "/$TOKEN/.shutdown" >/dev/null
         for ((k = 0; k < 20; k++)); do
@@ -71,7 +75,16 @@ if [ "$STOP" -eq 1 ]; then
         done
     fi
     [ -f "$SERVE" ] && ! running && rm -f "$SERVE"
+}
+
+if [ "$STOP" -eq 1 ]; then
+    stop_server
     exit 0
+fi
+
+if [ "$ROTATE" -eq 1 ]; then
+    stop_server
+    rm -f "$OV/.serve-keep"
 fi
 
 if running; then
