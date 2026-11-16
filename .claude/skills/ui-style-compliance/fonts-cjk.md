@@ -13,7 +13,8 @@
 ## 1. Google Fonts 上的繁中字型
 
 每一列都在 Google Fonts 的字型目錄（`https://fonts.google.com/metadata/fonts`）查過名稱、子集和字重。
-**字重少的字型撐不起「字重對比要拉開」那條規則**，選標題字時要先看這一欄。
+字重規則見 `anti-ai.md`「該主動做的事」①：**只用 400／500，最多 600**，層級靠字級和顏色。所以只有 400 的字型也能當標題；
+要用 500／600 時先看這一欄有沒有。
 
 | 字型（CSS 名稱） | 分類 | 字重 | 子集 | 氣質 | 適合 | 查證日期 |
 |---|---|---|---|---|---|---|
@@ -23,7 +24,7 @@
 | LXGW WenKai Mono TC | 等寬（楷書） | 300、400、700 | chinese-traditional | 同上，等寬 | 需要中文對齊的表格、程式碼註解 | 2026-10-16 |
 | Iansui（芫荽） | 手寫 | **只有 400** | chinese-traditional | 手寫感、比文楷更隨性 | 短標題、標語。字重只有一個，靠字級做對比 | 2026-10-16 |
 | Huninn（粉圓） | 圓體 | **只有 400** | chinese-traditional | 圓潤、親切、可愛 | 親子、甜點、寵物。字重只有一個 | 2026-10-16 |
-| Chiron GoRound TC | 圓體 | 200～900 | chinese-traditional | 圓潤但字重齊全 | 要圓體又要字重對比時，代替 Huninn | 2026-10-16 |
+| Chiron GoRound TC | 圓體 | 200～900 | chinese-traditional | 圓潤但字重齊全 | 要圓體又需要 500／600 時，代替 Huninn | 2026-10-16 |
 | Chiron Hei HK（昭源黑體） | 黑體 | 200～900（含斜體） | chinese-traditional | 比思源黑體多一點書寫味 | 有個性的標題黑體 | 2026-10-16 |
 | Chiron Sung HK（昭源宋體） | 宋體 | 200～900（含斜體） | **chinese-hongkong** | 比思源宋體更有印刷味 | 標題宋體。**子集是香港字形**，部分字的寫法和台灣教育部標準不同；教育、公部門網站改用 Noto Serif TC | 2026-10-16 |
 | Cactus Classical Serif | 宋體（仿古典活字） | **只有 400** | chinese-traditional | 老派鉛字、古書 | 老店、歷史、文學。字重只有一個 | 2026-10-16 |
@@ -50,13 +51,13 @@
 
 | # | 標題 | 內文 | 西文 | 氣質 | 注意 |
 |---|---|---|---|---|---|
-| 1 | Noto Serif TC 700／900 | Noto Sans TC 400 | Source Serif 4、Newsreader | 端正的出版品，像書店的選書誌 | 最穩的一組，也因此容易平淡：記憶點要靠字級 |
-| 2 | Cactus Classical Serif | Noto Sans TC 400 | EB Garamond、Cormorant Garamond | 老派鉛字、老店、歷史感 | 標題只有一個字重，對比靠字級。⚠ 配暖米白底＋陶土色就是 `anti-ai.md` 第 1 種樣式 |
-| 3 | LXGW WenKai TC 700 | Noto Sans TC 400 | Lora、Literata | 溫和的手寫，像茶舖的手寫菜單 | 楷書很容易被拿來做「溫暖手作」的通用配方，要有題材上的理由（店裡真的用手寫招牌） |
-| 4 | Huninn 或 Chiron GoRound TC | Noto Sans TC 400 | DM Sans、Outfit | 圓潤親切 | Huninn 只有 400；要字重對比用 Chiron GoRound TC |
-| 5 | Noto Sans TC 900 | Noto Sans TC 300 | Manrope、IBM Plex Sans | 現代、乾淨，靠極端字重對比撐場 | 只用一個家族也可以有個性，前提是字重拉開（300 對 900） |
-| 6 | Chiron Hei HK 800 | Noto Sans TC 400 | ⚠ Space Grotesk | 新創、科技 | Space Grotesk 是被點名最多次的預設字，換掉它通常更好 |
-| 7 | Noto Serif TC 700 | Noto Sans TC 400 | ⚠ Instrument Serif、⚠ Fraunces、Playfair Display、DM Serif Display | 時髦的編輯感 | 這幾個是高對比西文展示襯線，就是第 1 種樣式的「襯線」元素。底色、強調色一定要避開米白和陶土 |
+| 1 | Noto Serif TC 500／600 | Noto Sans TC 400 | Source Serif 4、Newsreader | 端正的出版品，像書店的選書誌 | 最穩的一組，也因此容易平淡：記憶點要靠字級 |
+| 2 | Cactus Classical Serif | Noto Sans TC 400 | EB Garamond、Cormorant Garamond | 老派鉛字、老店、歷史感 | 標題只有一個字重，層級靠字級。⚠ 配暖米白底＋陶土色就是 `anti-ai.md` 第 1 種樣式 |
+| 3 | LXGW WenKai TC 400 | Noto Sans TC 400 | Lora、Literata | 溫和的手寫，像茶舖的手寫菜單 | 楷書很容易被拿來做「溫暖手作」的通用配方，要有題材上的理由（店裡真的用手寫招牌） |
+| 4 | Huninn 或 Chiron GoRound TC | Noto Sans TC 400 | DM Sans、Outfit | 圓潤親切 | Huninn 只有 400；要 500／600 用 Chiron GoRound TC |
+| 5 | Noto Sans TC 500 | Noto Sans TC 400 | Manrope、IBM Plex Sans | 現代、乾淨，靠字級和留白撐場 | 中文只用一個家族也可以有個性，前提是標題字級敢放大、顏色分出層級；西文字型要是選過的，不是系統字 |
+| 6 | Chiron Hei HK 500／600 | Noto Sans TC 400 | ⚠ Space Grotesk | 新創、科技 | Space Grotesk 是被點名最多次的預設字，換掉它通常更好 |
+| 7 | Noto Serif TC 500／600 | Noto Sans TC 400 | ⚠ Instrument Serif、⚠ Fraunces、Playfair Display、DM Serif Display | 時髦的編輯感 | 這幾個是高對比西文展示襯線，就是第 1 種樣式的「襯線」元素。底色、強調色一定要避開米白和陶土 |
 | 8 | 任一 | Noto Sans TC 400 | ⚠ Inter、⚠ Geist | 中性 | 全站只有 Inter 或沒改過的 Geist 是第一層預設。只拿來當內文、標題換別的，才算有選過 |
 
 ---
@@ -76,7 +77,7 @@
 ```html
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Cactus+Classical+Serif&text=%E4%B8%80%E4%BF%9D%E5%A0%82&display=swap" rel="stylesheet">
 ```
 

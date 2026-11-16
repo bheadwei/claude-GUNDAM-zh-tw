@@ -81,6 +81,8 @@ Pick by the character in the direction. All of these are free, and a partner can
 
 A display serif belongs to large headlines only, never to labels or buttons.
 
+[模板調整 1] Inter and Geist may only be the body face here: a screen set only in Inter, Geist or a system stack counts as slop, so pair them with a headline family of a clearly different role. Instrument Serif, Fraunces and Space Grotesk are on the overused list in `.claude/skills/ui-style-compliance/anti-ai.md` (table 2), so use them only when you can say why this product needs them. Display faces keep the weights of the type scale below, 400 to 500.
+
 ## Type scale
 
 | Use | Size | Line height | Weight |
@@ -133,3 +135,5 @@ One easing curve for everything, `cubic-bezier(0.22, 1, 0.36, 1)`.
 ---
 
 Part of unslop by Damir Sokolovsky ([@heydamir](https://x.com/heydamir)), CC BY 4.0. Keep this credit in copies and adaptations.
+
+標 `[模板調整 N]` 的句子是 TaskMaster 模板的修改，不是原作內容；說明見 `../SKILL.md`「在本模板中的調整」。

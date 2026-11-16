@@ -12,6 +12,24 @@ metadata:
 
 unslop was created by Damir Sokolovsky ([@heydamir](https://x.com/heydamir)), who started the Unslopping series on X. It is licensed under CC BY 4.0, so keep this credit in any copy or adaptation.
 
+## 在本模板中的調整
+
+**本節與內文標 `[模板調整 N]` 的地方是 TaskMaster 模板的修改，不是原作內容。** 原作見本檔授權段（frontmatter 的 `license`、`metadata` 與上一段署名，CC BY 4.0）；
+`references/` 底下改過的檔案在檔尾另有標註。修改原因：和本模板反 AI 感規則的唯一來源
+`.claude/skills/ui-style-compliance/anti-ai.md` 有五處相反，2026-11-16 由使用者逐項裁決。
+
+| # | 項目 | 原作 | 本模板 | 對應 `anti-ai.md` |
+|---|---|---|---|---|
+| 1 | 字型 | 一種介面字型＋最多一個搭配；沒人選過的 Inter「可以」換 | 全站只有 Inter／系統字型、沒有第二個字型是 **P0**。依題目選一到兩個字型，兩個時角色要明顯不同；`references/tokens.md` 的 Inter、Geist 只能當內文，標題要換別的 | 表 2、表 3 第 2 列、產出後 P0 第 3 列 |
+| 2 | 字重 | 400／500，最多 600；標題不用 700–900 | **不變**（`anti-ai.md` 改成和本檔一致） | 「該主動做的事」① |
+| 3 | 等寬字 | 數量、說明可以用淡色等寬字 | **不變**（`anti-ai.md` 改成和本檔一致；全大寫加寬字距的標籤仍算 slop） | 表 1 第 5 種 |
+| 4 | 查不到的資料 | 預覽用「看起來合理的資料」；無意義的佔位內容可以換成有意義的內容 | **不准編事實。** 價格、方案內容、營業時間、地址、電話、Email；得獎、認證、成立年份、統計數字；評論、推薦語、客戶名與 logo 牆——沒有來源（使用者給的資料、IA 文件、既有內容）一律寫 `【待提供：<項目>】` 並列進回報的開放問題。產品預覽裡的示範資料（範例列、圖表數值）可以看起來真實，但不能是上列關於這個產品或店家的事實 | 「文案與事實」 |
+| 5 | 方向確認 | Run it 第 4 步：方向五行；有問答工具就用，沒有就純文字問 | 用 `AskUserQuestion` 問，一次一題，使用者說過「直接做」才跳過。方向的格式以 `anti-ai.md` 為準：本檔的五行＋配色、字型、版面概念＋「換一個類似題目會不會也得出這個」自我對照，合成一份 | 「動手前：寫方向、自我對照、等使用者確認」 |
+
+- **與 `anti-ai.md` 衝突時：第 1、4 點以 `anti-ai.md` 為準。** 第 2、3、5 點已經讓 `anti-ai.md` 對齊本檔
+- 選定的 DESIGN.md 或使用者的明確要求，優先於本檔與 `anti-ai.md`（`anti-ai.md` 原則 2）
+- 本檔任何地方要問使用者（方向、無 slop 時的小修、無法查證的宣稱、生圖前），一律用 `AskUserQuestion`、一次一題（`.claude/rules/interactive-qa.md`）
+
 Vibecoded UI fails in the same predictable ways. Every surface glows, every label has an emoji, spacing is whatever the model typed that day, and the copy shouts. Unslopping fixes the craft and keeps the product. The features, content and order of sections stay. What changes is that every size, color, word and image becomes deliberate.
 
 Removing slop is only half the job. A screen that is clean but could belong to any product is the next template. Every run ends with a screen that only this product could have.
@@ -26,7 +44,7 @@ Work like a designer doing a redline pass, one layer at a time, across the whole
 - **Quiet chrome.** Navigation, buttons and text use the tinted neutrals and one accent. Nothing glows, nothing competes with the bright element.
 - **A clear idea.** You can say in one sentence what the visual shows and why it belongs to this product.
 - **Text on calm space.** The headline sits on a part of the image or layout that was left empty for it, short and specific, with one primary and one secondary action and nothing stacked under them.
-- **Real product, real material.** Previews look like the real app with plausible data, and objects look like real things with weight, light and shadow.
+- **Real product, real material.** Previews look like the real app with plausible demo data, never invented facts about the product [模板調整 4], and objects look like real things with weight, light and shadow.
 
 Which visual styles tend to work, and which fail, is in [references/visuals.md](references/visuals.md). Finished examples to learn from are in [references/refs.md](references/refs.md), and code treatments like drawing an image in glyphs are in [references/effects.md](references/effects.md).
 
@@ -41,7 +59,7 @@ Which visual styles tend to work, and which fail, is in [references/visuals.md](
    - **Heavy slop**, many signs across color, type, icons and copy. Run the full process below.
    - **Light slop**, a screen that is mostly designed with a few signs left. Polish mode. Fix only what the audit found, take the direction from the existing brand instead of inventing a new one, and keep the palette, type, layout and visual. Bigger ideas, like a moment that is missing or a scene for the hero, go into the report as suggestions, not changes.
    - **No slop.** Say so plainly and suggest two or three small refinements at most, with exact values. Apply them only if the user agrees, and stop there. Never change a good screen just to make it different.
-4. **Set the direction and stop.** Write the five lines described below. Show the audit and the direction to the user and wait for their answer before editing, since changing the direction later means redoing everything. If you have a tool for asking the user questions, ask through it, otherwise ask in plain text and stop. Skip the wait only when the user already said to just do it.
+4. **Set the direction and stop.** Write the five lines described below, together with the palette, type, layout and self-check from [模板調整 5]. Show the audit and the direction to the user and wait for their answer before editing, since changing the direction later means redoing everything. Ask through `AskUserQuestion`, one question at a time, and stop [模板調整 5]. Skip the wait only when the user already said to just do it.
 5. **Fix in nine passes, in order.** Finish a pass across the whole screen before starting the next. When nearly every line changes, plan the passes in order and then write the new screen in one go, as long as every pass is applied. Spacing comes first because everything else reads differently once the rhythm is right. Copy comes before type and layout because the length of the headline decides its size and where it sits. Visuals and motion come last because they should fit a screen that already works without them.
 6. **Check.** Run the checklist at the end of this file, render again and compare with the audit list. Anything still on the list gets fixed.
 7. **Report** the direction, a few lines per pass about what changed, and any image prompt you wrote.
@@ -62,6 +80,8 @@ Before touching anything, write five short lines. Derive them from what the page
 - **Signature.** One small detail only this product would have, used consistently. A live status dot for a monitoring tool, keycaps for a developer tool, hand drawn underlines for a teaching app, a route line for a delivery app. One detail, not five.
 
 The examples here only show the shape of an answer. Derive yours from the product in front of you, even when an example happens to fit.
+
+[模板調整 5] 在本模板中，方向的完整格式（五行之外的配色、字型、版面概念與自我對照）以 `.claude/skills/ui-style-compliance/anti-ai.md`「動手前」一節為準，寫一份就好。
 
 If the product already has a real brand, like a logo file, a color or a typeface that is not slop, keep it and build the direction around it. A violet to blue gradient, sparkles and glow are slop even when they sit in the logo, so they do not count as brand unless the user says they do.
 
@@ -109,12 +129,12 @@ If the product already has a real brand, like a logo file, a color or a typeface
 - Headlines, subheads, labels, buttons and captions end without a period. Only paragraphs of several sentences keep their periods.
 - No hype words like supercharge, seamless, unlock, magic, revolutionize or game-changing, and no `AI-powered` on everything.
 - Claims that cannot be checked, like `Loved by 10,000+ teams` or `10x faster`, become quiet and specific if the user confirms they are real, and are removed otherwise. Ask, and list them in the report.
-- Mock data looks real, with plausible numbers and names, never `[X]` or `123,456`.
+- Mock data looks real, with plausible numbers and names, never `[X]` or `123,456`. This is for demo data inside a product preview only. Facts about the product or business, like prices, hours, contact details, awards, founding year, statistics, reviews or customer names, are never invented: without a source they become `【待提供：<項目>】` [模板調整 4].
 - Badges like `PRO`, `New ✨` or `Beta 🚀` go away unless the product really needs them, and then they are quiet text.
 
 ## 5. Type
 
-- Choose type for the character in the direction, from the families in the tokens. Keep the project's font when it is part of a real brand. A default like Inter that nobody chose may be swapped when another family fits the character better. One family for the interface, plus at most one partner from any row of the tokens, a mono for figures and meta or a display face for large headlines.
+- Choose type for the character in the direction, from the families in the tokens. Keep the project's font when it is part of a real brand. A default like Inter or a system stack that nobody chose is not a choice: a screen set only in it counts as slop, so pick a family for the character, and if Inter stays it is the body face with a headline family of a clearly different role [模板調整 1]. One family for the interface, plus at most one partner from any row of the tokens, a mono for figures and meta or a display face for large headlines.
 - A few sizes from a scale and two weights, 400 and 500, with 600 at most for rare emphasis. No 700 to 900 headings, no gradient text.
 - Hierarchy comes from size and color, not from weight.
 - Sentence case everywhere. Labels like `NAVIGATION` or `PAID THIS MONTH` with wide tracking become `Navigation` and `Paid this month`.
@@ -159,7 +179,7 @@ If the product already has a real brand, like a logo file, a color or a typeface
 - Dashboards and app screens almost never need generated images. Their moments come from the product itself: a chart drawn with care, figures set beautifully, real content like product photos or avatars, a status that feels alive. A physical thing the product deals with, like a payment card in a finance app, is usually better built in code with real materials, a soft gradient, a chip, a number.
 - Generate images for an app only for empty states, onboarding and marketing moments, or when the user asks for it.
 - With an image generation tool, the first choice for a landing hero is a scene from the world in the direction, generated wide enough to sit behind the whole hero, with calm empty space where the text goes. It carries the color and the mood, and the chrome stays quiet over it.
-- Under the scene, or as the visual when there is no tool, show the product. Build a preview in code of what the page already promises, with the project's components or careful HTML and plausible data, like the main screen, one key card or the result the product produces. Showing what the copy already claims is not inventing a feature. In a scene hero it rises from the bottom edge and runs past it.
+- Under the scene, or as the visual when there is no tool, show the product. Build a preview in code of what the page already promises, with the project's components or careful HTML and plausible demo data [模板調整 4], like the main screen, one key card or the result the product produces. Showing what the copy already claims is not inventing a feature. In a scene hero it rises from the bottom edge and runs past it.
 - The product view carries a moment, not just a plain card. A rendered object inside it, like a payment card on a figure, a rich chart or a small object from the world. These are kinds of objects, so using one that fits is fine.
 - Before this pass, look at the references in [references/refs.md](references/refs.md). Take qualities from them, like composition, light, restraint and how the moment is placed, never their subject or layout.
 - Rendered objects and scenes come from an image generation tool when you have one. If you do not, build what you can in code, write the prompts for the rest and leave empty slots of the right size.
@@ -209,22 +229,22 @@ It adds a few minutes, so make it only when the user wants it.
 ## Do not
 
 - Do not rename the product, even when the name has AI in it. Keep a real logo as it is. When the logo itself is slop, like an emoji or a sparkle in a gradient tile, redraw it flat: the wordmark alone in the new type, or a simple glyph from the product's idea in one solid color. Never a glossy or gradient ball, a glow or a gradient tile, those read as AI at first sight.
-- Do not change what the product is. Keep its features, content and the order of sections unless the user asks for more. Placeholder content that means nothing may be replaced with content that does.
+- Do not change what the product is. Keep its features, content and the order of sections unless the user asks for more. Placeholder content that means nothing may be replaced with content that does, taken from what the page, the user or the project already says. Facts without a source become `【待提供：<項目>】` instead [模板調整 4].
 - Do not replace removed decoration with new decoration, and do not swap one trend for another like glass, grain, noise, neon or bento grids.
 - Do not invent features, claims or data.
 - Do not fall back to the same look for every product. The direction decides the palette tint, type and visual, not habit.
 
 ## Checklist
 
-- [ ] The direction is written and every pass follows it
+- [ ] The direction is written, confirmed by the user or skipped because they said to just do it [模板調整 5], and every pass follows it
 - [ ] Every spacing value is on the 4px scale and equal things have equal sizes
 - [ ] Icons, labels and numbers each sit in one aligned column
 - [ ] One tinted neutral ramp, three text roles, one accent with enough contrast
 - [ ] No hue gradients, gradient text, glows, colored shadows or color blobs
 - [ ] No emoji left in the interface
 - [ ] One icon set at one size and stroke
-- [ ] Type chosen for the character, weights 400 to 600, no uppercase tracked labels, no italic, no negative tracking on small text
-- [ ] No exclamation marks, no trailing periods on short strings, no greeting headline, no unverified claims
+- [ ] Type chosen for the character, never Inter or a system stack alone [模板調整 1], weights 400 to 600, no uppercase tracked labels, no italic, no negative tracking on small text
+- [ ] No exclamation marks, no trailing periods on short strings, no greeting headline, no unverified claims, no invented facts and every missing one marked `【待提供：<項目>】` [模板調整 4]
 - [ ] Numbers in one format with tabular figures
 - [ ] Nested radii add up
 - [ ] Table row states read apart: header, value in use, selection and keyboard focus are each recognizable

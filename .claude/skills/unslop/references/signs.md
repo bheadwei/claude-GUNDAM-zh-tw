@@ -16,6 +16,7 @@ Go through every group and note each sign you find with where it lives. Each lin
 ## Type
 
 - Headings at weight 800 or 900 → 400 to 500 and size for hierarchy
+- The whole screen in Inter or a system stack only, with no second family → a family chosen for the character, or Inter for body with a headline family of a clearly different role [模板調整 1]
 - Uppercase labels with wide tracking, like `NAVIGATION` or `PAID THIS MONTH` → sentence case at normal or slightly open tracking
 - Too many sizes and weights on one screen → a few sizes from the scale, weights 400 and 500
 - Numbers in mixed formats, like `$48,210` next to `$124,860.40`, or `07` → one format, tabular figures
@@ -46,7 +47,7 @@ Go through every group and note each sign you find with where it lives. Each lin
 - Wordy placeholders, like `Search anything...` → `Search`
 - Hype words, like supercharge, seamless, unlock, magic, revolutionize → what the thing actually does
 - Trailing periods on labels and buttons → none
-- Fake looking data, like `$123,456` or `[X]` → plausible numbers
+- Fake looking data, like `$123,456` or `[X]` → plausible numbers for demo data in a product preview; facts about the product or business without a source → `【待提供：<項目>】` [模板調整 4]
 
 ## Components
 
@@ -101,3 +102,5 @@ These are not slop, but they are what a cleaned up screen falls back to when nob
 ---
 
 Part of unslop by Damir Sokolovsky ([@heydamir](https://x.com/heydamir)), CC BY 4.0. Keep this credit in copies and adaptations.
+
+標 `[模板調整 N]` 的句子是 TaskMaster 模板的修改，不是原作內容；說明見 `../SKILL.md`「在本模板中的調整」。

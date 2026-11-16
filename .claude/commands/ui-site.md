@@ -158,6 +158,12 @@ i18n：zh-TW + en
 確認產生？(y/N)
 ```
 
+**方向一起確認**：`ui-style.json` 的 `source` 不是 `preview`（使用者沒在 `/ui-style` 看預覽選過方向）、
+也沒說過「直接做」時，在摘要下面附上方向——照 `.claude/skills/ui-style-compliance/anti-ai.md`
+「動手前：寫方向、自我對照、等使用者確認」寫（唯一來源），這一題同時確認設定與方向。
+`source` 是 `preview` 就沿用 `notes` 的方向，不另外問。確認過的方向寫進 IA 文檔，派 `ui-builder` 時一併附上
+（它是 subagent，問不了使用者）。
+
 ### Q&A 記錄
 
 遵守 `.claude/rules/interactive-qa.md`：
