@@ -61,6 +61,8 @@ _changed_rule() {
         .claude/coordination/handoffs/_HANDOFF_TEMPLATE.md)  echo "=_HANDOFF_TEMPLATE.md" ;;
         .claude/ui/_sources.json)                            echo "=_sources.json" ;;
         scripts/copy-template.sh)                            echo "=copy-template.sh" ;;
+        scripts/lib/vscode-live-server.*)                    echo "=vscode-live-server" ;;
+        scripts/update-template.sh)                          echo "=update-template" ;;
         .claude/templates/overview/*)                        echo "=overview.sh" ;;
         .claude/hooks/tests/fixtures/overview/*)             echo "=overview" ;;
         # hook 與被測的腳本：跑提到它的節
@@ -5075,8 +5077,8 @@ if [ -f "$UT_SRC" ] && [ -f "$UT_GI" ]; then
     for l in .full-suite-warned .last-verify .merge-round-open; do
         grep -qxF ".claude/taskmaster-data/$l" "$UT_GI" && ok "模板 .gitignore 列了 $l" || ng "模板 .gitignore 列了 $l" "有這一行" "沒有"
     done
-    UT="$SANDBOX/ut"; rm -rf "$UT"; mkdir -p "$UT/tpl/scripts" "$UT/tpl/.claude/agents" "$UT/dst/.claude" "$UT/dst2/.claude"
-    cp "$UT_SRC" "$UT/tpl/scripts/"; echo a > "$UT/tpl/.claude/agents/a.md"; echo x > "$UT/tpl/.worktreeinclude"
+    UT="$SANDBOX/ut"; rm -rf "$UT"; mkdir -p "$UT/tpl/scripts/lib" "$UT/tpl/.claude/agents" "$UT/dst/.claude" "$UT/dst2/.claude"
+    cp "$UT_SRC" "$UT/tpl/scripts/"; cp "$HOOK_DIR/../../scripts/lib/vscode-live-server.sh" "$UT/tpl/scripts/lib/"; echo a > "$UT/tpl/.claude/agents/a.md"; echo x > "$UT/tpl/.worktreeinclude"
     printf '# x\n.env\n.claude/taskmaster-data/.current-task\n.claude/taskmaster-data/.last-verify\n.claude/taskmaster-data/.merge-round-open\n.claude/taskmaster-data/.full-suite-warned\n.claude/worktrees/\n' > "$UT/tpl/.gitignore"
     ut() { bash "$UT/tpl/scripts/update-template.sh" "$@" --no-backup </dev/null 2>&1; }
     # 目標：CRLF、檔尾沒有換行、已經有 .current-task、還有一行自己的規則
@@ -5104,6 +5106,94 @@ if [ -f "$UT_SRC" ] && [ -f "$UT_GI" ]; then
     rm -rf "$UT"
 else
     ok "（不是模板 repo，沒有 scripts/update-template.sh，略過）"
+fi
+
+# =========================================================================
+section "vscode-live-server — Live Server 忽略專案地圖資料夾"
+# =========================================================================
+# 地圖資料每幾秒更新，Live Server 會整頁重載。helper 在 scripts/lib/，copy／update 兩支 sh 共用。
+# 用假模板跑：update-template.sh ＋ copy-template.sh ＋ lib。對應 plan 階段 4 的驗收條目。
+VL_LIB="$HOOK_DIR/../../scripts/lib/vscode-live-server.sh"
+VL_GLOB='.claude/taskmaster-data/overview/**'
+if [ -f "$VL_LIB" ] && command -v jq >/dev/null 2>&1; then
+    VL="$SANDBOX/vl"; rm -rf "$VL"; mkdir -p "$VL"
+    vl() { ( . "$VL_LIB"; ensure_live_server_ignore "$@" ) 2>&1; }
+    vlk() { jq -c "$2" "$1/.vscode/settings.json"; }
+    mkdir -p "$VL/a"
+    out=$(vl "$VL/a"); rc=$?
+    expect_eq "目標沒有 .vscode/ → 建出 settings.json，最後一項是地圖 glob" "$VL_GLOB" "$(jq -r '."liveServer.settings.ignoreFiles"[-1]' "$VL/a/.vscode/settings.json")"
+    expect_eq "新建的陣列帶 Live Server 預設值（設了這個鍵會蓋掉預設）" '[".vscode/**","**/*.scss","**/*.sass",".claude/taskmaster-data/overview/**"]' "$(vlk "$VL/a" '."liveServer.settings.ignoreFiles"')"
+    mkdir -p "$VL/b/.vscode"; printf '{"editor.tabSize": 4, "liveServer.settings.ignoreFiles": ["**/*.ts"]}\n' > "$VL/b/.vscode/settings.json"
+    vl "$VL/b" >/dev/null
+    expect_eq "既有陣列 → 附加到尾端，editor.tabSize 仍為 4" '["**/*.ts",".claude/taskmaster-data/overview/**"] 4' "$(jq -r '"\(."liveServer.settings.ignoreFiles" | tojson) \(."editor.tabSize")"' "$VL/b/.vscode/settings.json")"
+    mkdir -p "$VL/c/.vscode"; printf '{"z": 1, "a": {"x": 2}}\n' > "$VL/c/.vscode/settings.json"
+    vl "$VL/c" >/dev/null
+    expect_eq "既有物件沒有這個鍵 → 加上（含預設值），其他鍵與順序不變" '["z","a","liveServer.settings.ignoreFiles"] 4' "$(jq -r '"\(keys_unsorted | tojson) \(."liveServer.settings.ignoreFiles" | length)"' "$VL/c/.vscode/settings.json")"
+    cp "$VL/b/.vscode/settings.json" "$VL/b-before"
+    out=$(vl "$VL/b")
+    cmp -s "$VL/b-before" "$VL/b/.vscode/settings.json" && ok "已含地圖 glob → 檔案 cmp 相同；連跑兩次第二次不變" || ng "已含地圖 glob → 檔案不變" "cmp 相同" "$(diff "$VL/b-before" "$VL/b/.vscode/settings.json" | head -3)"
+    expect_contains "已含地圖 glob → 輸出含「已設定」" "已設定" "$out"
+    mkdir -p "$VL/d/.vscode"; printf '{\n  // 我的設定\n  "editor.tabSize": 2\n}\n' > "$VL/d/.vscode/settings.json"; cp "$VL/d/.vscode/settings.json" "$VL/d-before"
+    out=$(vl "$VL/d"); rc=$?
+    cmp -s "$VL/d-before" "$VL/d/.vscode/settings.json" && ok "含 // 註解 → 一個 byte 都沒動" || ng "含 // 註解 → 不動" "cmp 相同" "檔案被改了"
+    expect_contains "含註解 → 印手動那行" '"liveServer.settings.ignoreFiles": [".claude/taskmaster-data/overview/**"]' "$out"
+    expect_eq "含註解 → exit 0" 0 "$rc"
+    mkdir -p "$VL/e/.vscode"; printf '{"a": 1,}\n' > "$VL/e/.vscode/settings.json"; cp "$VL/e/.vscode/settings.json" "$VL/e-before"
+    out=$(vl "$VL/e")
+    cmp -s "$VL/e-before" "$VL/e/.vscode/settings.json" && expect_contains "尾逗號（jq 讀不懂）→ 不動、印手動那行" "手動加入" "$out" || ng "尾逗號 → 不動" "cmp 相同" "檔案被改了"
+    mkdir -p "$VL/f/.vscode"; printf '{"liveServer.settings.ignoreFiles": "**/*.ts"}\n' > "$VL/f/.vscode/settings.json"; cp "$VL/f/.vscode/settings.json" "$VL/f-before"
+    out=$(vl "$VL/f")
+    cmp -s "$VL/f-before" "$VL/f/.vscode/settings.json" && expect_contains "鍵的值是字串 → 不改、印手動那行" '[".claude/taskmaster-data/overview/**"]' "$out" || ng "鍵是字串 → 不改" "cmp 相同" "檔案被改了"
+    mkdir -p "$VL/g/.vscode"; printf '{\r\n    "editor.tabSize": 4,\r\n    "liveServer.settings.ignoreFiles": [\r\n        "**/*.ts"\r\n    ]\r\n}\r\n' > "$VL/g/.vscode/settings.json"
+    vl "$VL/g" >/dev/null
+    g_lines=$(grep -c '' "$VL/g/.vscode/settings.json"); g_cr=$(tr -cd '\r' < "$VL/g/.vscode/settings.json" | wc -c | tr -d ' ')
+    expect_eq "原檔 4 空白縮排、CRLF → 改寫後每行 CRLF、第一個縮排行仍是 4 空白" "$g_lines 4" "$g_cr $(sed -n 2p "$VL/g/.vscode/settings.json" | tr -d '\r' | sed 's/[^ ].*//' | awk '{print length($0)}')"
+    mkdir -p "$VL/h/.vscode"; printf '{\n\t"editor.tabSize": 4\n}\n' > "$VL/h/.vscode/settings.json"
+    vl "$VL/h" >/dev/null
+    expect_eq "原檔 tab 縮排 → 改寫後仍是 tab" 1 "$(sed -n 2p "$VL/h/.vscode/settings.json" | grep -c $'^\t"')"
+    mkdir -p "$VL/i/.vscode" "$VL/nojq"; printf '{"a": 1}\n' > "$VL/i/.vscode/settings.json"; cp "$VL/i/.vscode/settings.json" "$VL/i-before"
+    for c in bash dirname cat sed tr head mktemp cp mv rm mkdir awk; do ln -sf "$(command -v $c)" "$VL/nojq/$c"; done
+    out=$(PATH="$VL/nojq" "$(command -v bash)" -c ". '$VL_LIB'; ensure_live_server_ignore '$VL/i'; ensure_live_server_ignore '$VL/j'; echo rc=\$?" 2>&1)
+    cmp -s "$VL/i-before" "$VL/i/.vscode/settings.json" && [ ! -e "$VL/j/.vscode" ] && ok "PATH 裡沒有 jq → 不建也不改" || ng "沒有 jq → 不建也不改" "沒動" "有改動"
+    expect_contains "沒有 jq → 印手動那行、exit 0" '[".claude/taskmaster-data/overview/**"]' "$out"
+    expect_contains "沒有 jq → exit 0" "rc=0" "$out"
+    mkdir -p "$VL/k"; out=$(vl "$VL/k" --dry-run)
+    [ ! -e "$VL/k/.vscode" ] && expect_contains "--dry-run → 不寫、輸出列出會做的事" "[dry]" "$out" || ng "--dry-run → 不寫" "沒有 .vscode" "有"
+
+    # 接線：update-template.sh（假模板）
+    VT="$VL/tpl"; mkdir -p "$VT/scripts/lib" "$VT/.claude/agents" "$VL/u1/.claude" "$VL/u2/.claude" "$VL/u3/.claude"
+    cp "$HOOK_DIR/../../scripts/update-template.sh" "$VT/scripts/"; cp "$VL_LIB" "$VT/scripts/lib/"; echo a > "$VT/.claude/agents/a.md"; echo x > "$VT/.worktreeinclude"
+    utv() { bash "$VT/scripts/update-template.sh" "$@" --no-backup </dev/null 2>&1; }
+    utv "$VL/u1" --claude-only >/dev/null
+    [ ! -e "$VL/u1/.vscode" ] && ok "update-template.sh --claude-only → 不建 .vscode/settings.json" || ng "--claude-only → 不碰 .vscode" "沒有" "有"
+    out=$(utv "$VL/u2" --dry-run)
+    [ ! -e "$VL/u2/.vscode" ] && expect_contains "update-template.sh --dry-run → 不寫、列出會做的事" "[dry] 會建立" "$out" || ng "--dry-run → 不寫" "沒有 .vscode" "有"
+    utv "$VL/u3" >/dev/null
+    expect_eq "update-template.sh → 建出 .vscode/settings.json 含地圖 glob" "$VL_GLOB" "$(jq -r '."liveServer.settings.ignoreFiles"[-1]' "$VL/u3/.vscode/settings.json" 2>/dev/null)"
+
+    # 接線：copy-template.sh（假模板）
+    CT="$VL/ctpl"; mkdir -p "$CT/scripts/lib" "$CT/.claude/agents"
+    cp "$HOOK_DIR/../../scripts/copy-template.sh" "$CT/scripts/"; cp "$VL_LIB" "$CT/scripts/lib/"; echo a > "$CT/.claude/agents/a.md"
+    bash "$CT/scripts/copy-template.sh" "$VL/newproj" </dev/null >/dev/null 2>&1
+    expect_eq "copy-template.sh 到新資料夾 → 有 .vscode/settings.json 且含地圖 glob" "$VL_GLOB" "$(jq -r '."liveServer.settings.ignoreFiles"[-1]' "$VL/newproj/.vscode/settings.json" 2>/dev/null)"
+    [ ! -e "$VL/newproj/scripts/lib" ] && ok "copy-template.sh → 新專案沒有 scripts/lib/" || ng "新專案沒有 scripts/lib/" "沒有" "有"
+
+    # ps1：本機沒有 pwsh 就略過，不計入通過
+    if command -v pwsh >/dev/null 2>&1; then
+        PL="$HOOK_DIR/../../scripts/lib/vscode-live-server.ps1"
+        mkdir -p "$VL/p1" "$VL/p2/.vscode" "$VL/p3/.vscode"
+        printf '{"editor.tabSize": 4, "liveServer.settings.ignoreFiles": ["**/*.ts"]}\n' > "$VL/p2/.vscode/settings.json"
+        printf '{\n // c\n "a": 1\n}\n' > "$VL/p3/.vscode/settings.json"; cp "$VL/p3/.vscode/settings.json" "$VL/p3-before"
+        pwsh -NoProfile -Command ". '$PL'; Ensure-LiveServerIgnore -Root '$VL/p1'; Ensure-LiveServerIgnore -Root '$VL/p2'; Ensure-LiveServerIgnore -Root '$VL/p3'; Ensure-LiveServerIgnore -Root '$VL/p2'" >/dev/null 2>&1
+        expect_eq "ps1：沒有 .vscode/ → 建出，最後一項是地圖 glob" "$VL_GLOB" "$(jq -r '."liveServer.settings.ignoreFiles"[-1]' "$VL/p1/.vscode/settings.json")"
+        expect_eq "ps1：既有陣列 → 附加，連跑兩次只有一個" '["**/*.ts",".claude/taskmaster-data/overview/**"] 4' "$(jq -r '"\(."liveServer.settings.ignoreFiles" | tojson) \(."editor.tabSize")"' "$VL/p2/.vscode/settings.json")"
+        cmp -s "$VL/p3-before" "$VL/p3/.vscode/settings.json" && ok "ps1：含註解 → 不動" || ng "ps1：含註解 → 不動" "cmp 相同" "被改了"
+    else
+        echo "  - （本機沒有 pwsh，ps1 案例略過，不計入通過）"
+    fi
+    rm -rf "$VL"
+else
+    ok "（沒有 scripts/lib/vscode-live-server.sh 或沒有 jq，略過）"
 fi
 
 # =========================================================================

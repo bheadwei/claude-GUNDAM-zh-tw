@@ -212,6 +212,15 @@ if ($ClaudeOnly) {
     }
 }
 
+# 專案地圖資料每幾秒更新，Live Server 會整頁重載：讓它忽略地圖資料夾（與 update-template.sh 一致；-ClaudeOnly 不碰）
+Write-Host "▶ 補 .vscode/settings.json（Live Server 忽略專案地圖資料夾）..." -ForegroundColor Green
+if ($ClaudeOnly) {
+    Write-Host "   ⏭  -ClaudeOnly：跳過" -ForegroundColor DarkGray
+} else {
+    . (Join-Path $scriptRoot 'lib\vscode-live-server.ps1')
+    Ensure-LiveServerIgnore -Root $destPath -DryRun:$DryRun
+}
+
 Write-Host "▶ MERGE 骨架目錄（保留執行資料）..." -ForegroundColor Green
 # 只補骨架檔（README.md / _*.md / .gitkeep）與目錄結構。
 #
