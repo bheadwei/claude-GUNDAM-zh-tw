@@ -4,7 +4,7 @@ slug: "overview-stable-url"
 created: "2026-11-16"
 updated: "2026-11-16"
 status: "🔄 進行中"
-current_phase: 1
+current_phase: 2
 mode: "standard"
 files:
   # 階段 1：網址固定
@@ -111,7 +111,7 @@ flowchart LR
 | p10 | 中斷與卡住的顯示 | 5 | `.claude/templates/overview/index.html` | `feed` 有 `kind: agent_cut, why: restart` → 該行寫「中斷 · 視窗重開」 |
 | p11 | 階段完成後重算 | 6 | `.claude/commands/tdd.md`, `.claude/skills/subagent-execution/SKILL.md` | tdd.md 第 2 節「續跑沿用」那句後面明寫「只沿用派法，平行與否每階段 ✅ 後重算」 |
 
-### 階段 1: 網址固定（token、port 沿用）與 ADR 🔄
+### 階段 1: 網址固定（token、port 沿用）與 ADR ✅
 - **依賴**：無
 - [ ] **先寫 ADR**（Q1 已確認：永久固定、外洩手動 `--rotate`）：新增 `.claude/context/decisions/ADR-2026-11-16-001-overview-fixed-token.md`，取代 ADR-003 第 1 節「每次新起都換新 token」那一條與「犧牲」第 3 點；ADR-003 檔頭加一行「第 1 節 token 一條已被 ADR-2026-11-16-001 取代」。威脅模型重看：① 同機其他使用者——`.serve-keep` 0600、`.serve` 0600，仍讀不到，**成立**；② DNS rebinding／本機惡意網頁——token 128 bit（`token_urlsafe(16)`），固定不會讓它變得可猜，**成立**；③ **新增的風險**：網址外洩（瀏覽器歷史、螢幕分享、終端機捲動紀錄、對話 transcript）後一直有效，舊做法重起即失效。對策：`overview-serve.sh --rotate` 換 token；`.serve-keep` 權限不是 600 時視為外洩、自動換。替代方案表至少列「每次換（現狀）」「固定」「固定但 N 天自動換」 — 驗證：人讀
 - [ ] `overview-serve.py`：在 overview 資料夾讀 `.serve-keep`（單行 JSON `{"token","port"}`）。token 符合 `^[A-Za-z0-9_-]{20,64}$`、且（POSIX）檔案權限沒有 group／other 位元 → 沿用；否則產新 token。bind 時**先試 `.serve-keep` 的 port**（1024–65535 才試），失敗再照原本從 `OVERVIEW_SERVE_PORT_BASE` 起試 20 個。bind 成功後以暫存檔＋`os.replace` 寫回 `.serve-keep`（0600），再寫 `.serve`。閒置結束時**不刪** `.serve-keep` — 驗證：`bash .claude/hooks/tests/run-tests.sh overview-serve`
@@ -131,7 +131,7 @@ flowchart LR
   - `grep -c '每次新起都換新 token' .claude/commands/task-status.md` 為 0；ADR-2026-11-16-001 存在且「替代方案」表至少 3 列
 - **注意**：`.serve-keep` 是點開頭，`_serve_file` 本來就拒絕點開頭的段，不用另外擋，但驗收要測。`MAIN_CLAUDE` 側（同 `.serve`），worktree 不另存
 
-### 階段 2: 頁面斷線自動接回 ⏳
+### 階段 2: 頁面斷線自動接回 🔄
 - **依賴**：階段 1（固定 token 才讓「伺服器重起後舊分頁拿到 200」成立；測試用真伺服器重起驗接回）
 - [ ] 動手前 `wc -c .claude/templates/overview/index.html` 記進「發現與決策」。超過 112KB → 停下回報（ADR-2026-11-12-001：規劃時要評估拆檔或瘦身），不自行處理 — 驗證：`wc -c`
 - [ ] 分頁隱藏時不再全停：停掉 data.js／live.js 輪詢，改每 `HEARTBEAT_MS`（5 分鐘，小於伺服器閒置 30 分鐘）`fetch('.serve-id')`；只在 `http:` 開的頁面做。回到可見時停心跳、恢復輪詢 — 驗證：headless chrome（`now-check.js` 的 `?mock`）
