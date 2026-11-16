@@ -3,7 +3,7 @@ wbs_task: "none"
 slug: "overview-stable-url"
 created: "2026-11-16"
 updated: "2026-11-16"
-status: "⏳ 未開始"
+status: "🔄 進行中"
 current_phase: 1
 mode: "standard"
 files:
@@ -111,7 +111,7 @@ flowchart LR
 | p10 | 中斷與卡住的顯示 | 5 | `.claude/templates/overview/index.html` | `feed` 有 `kind: agent_cut, why: restart` → 該行寫「中斷 · 視窗重開」 |
 | p11 | 階段完成後重算 | 6 | `.claude/commands/tdd.md`, `.claude/skills/subagent-execution/SKILL.md` | tdd.md 第 2 節「續跑沿用」那句後面明寫「只沿用派法，平行與否每階段 ✅ 後重算」 |
 
-### 階段 1: 網址固定（token、port 沿用）與 ADR ⏳
+### 階段 1: 網址固定（token、port 沿用）與 ADR 🔄
 - **依賴**：無
 - [ ] **先寫 ADR**（Q1 已確認：永久固定、外洩手動 `--rotate`）：新增 `.claude/context/decisions/ADR-2026-11-16-001-overview-fixed-token.md`，取代 ADR-003 第 1 節「每次新起都換新 token」那一條與「犧牲」第 3 點；ADR-003 檔頭加一行「第 1 節 token 一條已被 ADR-2026-11-16-001 取代」。威脅模型重看：① 同機其他使用者——`.serve-keep` 0600、`.serve` 0600，仍讀不到，**成立**；② DNS rebinding／本機惡意網頁——token 128 bit（`token_urlsafe(16)`），固定不會讓它變得可猜，**成立**；③ **新增的風險**：網址外洩（瀏覽器歷史、螢幕分享、終端機捲動紀錄、對話 transcript）後一直有效，舊做法重起即失效。對策：`overview-serve.sh --rotate` 換 token；`.serve-keep` 權限不是 600 時視為外洩、自動換。替代方案表至少列「每次換（現狀）」「固定」「固定但 N 天自動換」 — 驗證：人讀
 - [ ] `overview-serve.py`：在 overview 資料夾讀 `.serve-keep`（單行 JSON `{"token","port"}`）。token 符合 `^[A-Za-z0-9_-]{20,64}$`、且（POSIX）檔案權限沒有 group／other 位元 → 沿用；否則產新 token。bind 時**先試 `.serve-keep` 的 port**（1024–65535 才試），失敗再照原本從 `OVERVIEW_SERVE_PORT_BASE` 起試 20 個。bind 成功後以暫存檔＋`os.replace` 寫回 `.serve-keep`（0600），再寫 `.serve`。閒置結束時**不刪** `.serve-keep` — 驗證：`bash .claude/hooks/tests/run-tests.sh overview-serve`
@@ -237,7 +237,7 @@ flowchart LR
   - `check-counts.sh` 通過
 - **注意**：`sync()` 移除節點有 0.3 秒淡出，焦點要在淡出前移走。已有 class 先 grep 一次再取名（上一輪踩過 `.bar`／`.dash`／`.mini` 撞名）
 
-### 階段 6: `/tdd` 每個階段完成後重算能否平行 ⏳
+### 階段 6: `/tdd` 每個階段完成後重算能否平行 🔄
 - **依賴**：無
 - [ ] 動手前讀 `writing-extensions` skill，在「發現與決策」記一句為什麼這次用文字規則（觸發點「plan 階段標 ✅」是一次 Edit，可以改成 PostToolUse hook 注入提醒；先用文字、若實測被漏掉再升級成 hook）— 驗證：人讀
 - [ ] `commands/tdd.md` 第 2 節：「續跑 → 直接沿用上次選的方式，不要再問」改成「續跑 → 沿用上次選的**派法**（implementer／主模型直接做），不再問；**能否平行不沿用**，照下面『每個階段 ✅ 之後』重算」。新增一小段「每個階段 ✅ 之後」：照 `plan-format`「階段『依賴』與可平行」判準重算未完成的階段；依賴都已 ✅、部件表檔案無交集的 ≥ 2 個 → **直接改用 worktree 平行**（照 `worktree-orchestration`），宣告一句「階段 X、Y 現在可以同時做，改開 worktree 平行」，在帳本記一筆 `Ruling: 改用 worktree 平行跑階段 X、Y — 依賴已完成且檔案不重疊 — 若判錯，合併時會有衝突`，**不另問使用者**；帳本或先前回答明確寫過「不要平行」才不改 — 驗證：人讀＋下方 grep
