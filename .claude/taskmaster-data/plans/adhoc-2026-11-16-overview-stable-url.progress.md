@@ -25,3 +25,12 @@
 
 ## 階段 2: 頁面斷線自動接回
 - 2026-11-16 11:18 派工 implementer（sonnet，主 checkout）｜BASE=29ce0ef
+- 2026-11-16 11:32 回報 DONE｜commit=a25b578｜index.html 94144→94618 bytes｜chrome 由 npx playwright@1.49.1 install chromium 裝到 ~/.cache/ms-playwright
+- 2026-11-16 11:32 審查 PASS（MEDIUM：真伺服器案例慢伺服器只撐 3 秒；LOW：背景分頁開啟收不到 visibilitychange、慢伺服器無 trap）→ 主模型把延遲拉到 6 秒｜commit=e2ab89a｜現況分頁 61/0
+- 2026-11-16 11:32 審查通過｜範圍=6fa86b1..e2ab89a
+- 2026-11-16 11:32 階段完成 → plan 標 ✅｜摘要=頁面斷線自動接回：背景心跳、兩種提示持續重試｜測試=61/61
+- 2026-11-16 11:32 技術債（LOW）：背景分頁開啟時不啟動心跳；慢伺服器行程中止會殘留；真伺服器案例沒截圖
+- 2026-11-16 11:32 重算可平行：⏳ 階段 3、4 依賴已完成但都改 run-tests.sh → 不並行；階段 5 依賴 3。下一個階段 3
+
+## 階段 3: 被中斷的 agent 判定
+- 2026-11-16 11:32 派工 implementer（sonnet，主 checkout）｜BASE=e2ab89a

@@ -4,7 +4,7 @@ slug: "overview-stable-url"
 created: "2026-11-16"
 updated: "2026-11-16"
 status: "🔄 進行中"
-current_phase: 2
+current_phase: 3
 mode: "standard"
 files:
   # 階段 1：網址固定
@@ -131,7 +131,7 @@ flowchart LR
   - `grep -c '每次新起都換新 token' .claude/commands/task-status.md` 為 0；ADR-2026-11-16-001 存在且「替代方案」表至少 3 列
 - **注意**：`.serve-keep` 是點開頭，`_serve_file` 本來就拒絕點開頭的段，不用另外擋，但驗收要測。`MAIN_CLAUDE` 側（同 `.serve`），worktree 不另存
 
-### 階段 2: 頁面斷線自動接回 🔄
+### 階段 2: 頁面斷線自動接回 ✅
 - **依賴**：階段 1（固定 token 才讓「伺服器重起後舊分頁拿到 200」成立；測試用真伺服器重起驗接回）
 - [ ] 動手前 `wc -c .claude/templates/overview/index.html` 記進「發現與決策」。超過 112KB → 停下回報（ADR-2026-11-12-001：規劃時要評估拆檔或瘦身），不自行處理 — 驗證：`wc -c`
 - [ ] 分頁隱藏時不再全停：停掉 data.js／live.js 輪詢，改每 `HEARTBEAT_MS`（5 分鐘，小於伺服器閒置 30 分鐘）`fetch('.serve-id')`；只在 `http:` 開的頁面做。回到可見時停心跳、恢復輪詢 — 驗證：headless chrome（`now-check.js` 的 `?mock`）
@@ -152,7 +152,7 @@ flowchart LR
   - `check-counts.sh` 通過（≤128KB、token 區外沒有 hex 色碼、沒有 module script）
 - **注意**：Chrome 對背景分頁的計時器會節流（隱藏 5 分鐘後對齊到每分鐘），5 分鐘心跳不受影響；不要用 `requestAnimationFrame` 或 Web Worker 做心跳
 
-### 階段 3: 被中斷的 agent 判定（SessionStart 接線、靜默超時、閒置主 session） ⏳
+### 階段 3: 被中斷的 agent 判定（SessionStart 接線、靜默超時、閒置主 session） 🔄
 - **依賴**：無
 - [ ] `settings.json` 的 `SessionStart` 陣列加 `agent-events.sh`（`async: true`，不設 matcher）；`hooks/README.md` 檔案樹那行與功能表補 SessionStart — 驗證：`jq . .claude/settings.json`
 - [ ] `agent-events.sh`：事件行加欄位 `ss`（SessionStart 的 `source`，`startup`／`resume`／`clear`／`compact`，上限 10 字；其他事件為 `""`）。**`v` 維持 1**：只加欄位、讀取端用 `.ss | str` 容忍沒有這欄的舊行；這條理由寫進 ADR-002 增補段。檔頭事件清單補 SessionStart — 驗證：`bash .claude/hooks/tests/run-tests.sh agent-events`
@@ -276,3 +276,4 @@ flowchart LR
 - 2026-11-16 使用者裁決開放問題（全部照 plan 預設）：Q1 token 永久固定、外洩時手動 `--rotate`、`.serve-keep` 權限不對自動換；Q2 主 session 停下等回話時只在「需要你」顯示等回覆（最多 4 小時），不加額外說明；Q3 中斷判定 30 分鐘（`OVERVIEW_LIVE_CUT_MIN`），最後一筆是還在跑的 Bash 不判；Q4 專案沒有 `.vscode/settings.json` 時主動建立（含 Live Server 官方預設忽略清單 `.vscode/**`、`**/*.scss`、`**/*.sass`——2026-11-16 查官方文件 https://ritwickdey.github.io/vscode-live-server/docs/settings.html，沒有 `**/*.ts`）；Q5 `/clear`、新視窗換 sid 的情況只靠 30 分鐘超時收掉，可接受
 - 2026-11-16 主模型量測：`templates/overview/index.html` 現為 94144 bytes（上限 128KB）
 - 2026-11-16 階段 6：用文字規則不用 hook——觸發點「plan 階段標 ✅」是一次 Edit，可做成 PostToolUse 提醒，但重算要判斷依賴與檔案交集，hook 只能提醒、做不了判斷；實測被漏掉再升級成 hook 提醒
+- 2026-11-16 階段 2：index.html 動工前 94144 bytes、改後 94618 bytes
