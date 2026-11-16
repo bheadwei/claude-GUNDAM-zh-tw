@@ -199,7 +199,7 @@ $minimalSettings | Set-Content -Path (Join-Path $Destination '.claude\settings.l
 # .vscode\ 在排除清單，這份是 helper 產的；目標可能已有自己的 settings.json
 . (Join-Path $srcRoot 'scripts\lib\vscode-live-server.ps1')
 Write-Host "🖥  設定 Live Server 忽略專案地圖資料夾..." -ForegroundColor Cyan
-Ensure-LiveServerIgnore -Root $Destination
+Ensure-LiveServerIgnore -Root $destPath
 
 # ============================================================================
 # 完成訊息

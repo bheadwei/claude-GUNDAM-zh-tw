@@ -51,12 +51,13 @@ ensure_live_server_ignore() {  # $1=專案根 $2=--dry-run（選填）
     esac
     [ -n "$(tr -cd '\r' < "$f" | head -c 1)" ] && crlf=1
 
-    tmp=$(mktemp "$f.XXXXXX") || return 0
+    tmp=$(mktemp "$f.XXXXXX") || { echo "$manual"; return 0; }
     cp -p "$f" "$tmp"
     jq "${flag[@]}" --arg k "$key" --arg g "$LIVE_SERVER_GLOB" --argjson d "$want" '
         .[$k] = (if .[$k] == null then $d else .[$k] + [$g] end)' "$f" > "$tmp" || { rm -f "$tmp"; echo "$manual"; return 0; }
     if [ "$crlf" -eq 1 ]; then
-        sed 's/$/\r/' "$tmp" > "$tmp.crlf" && mv -f "$tmp.crlf" "$tmp"
+        sed 's/$/\r/' "$tmp" > "$tmp.crlf" && cat "$tmp.crlf" > "$tmp"
+        rm -f "$tmp.crlf"
     fi
     mv -f "$tmp" "$f"
     echo "   ✚ 已更新 .vscode/settings.json（Live Server 忽略專案地圖資料夾）"

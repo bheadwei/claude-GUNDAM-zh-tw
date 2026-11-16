@@ -11,7 +11,7 @@ $script:LiveServerDefaults = @('.vscode/**', '**/*.scss', '**/*.sass')
 function Ensure-LiveServerIgnore {
     param([string]$Root, [switch]$DryRun)
     $glob = $script:LiveServerGlob; $key = $script:LiveServerKey
-    $f = Join-Path $Root '.vscode\settings.json'
+    $f = Join-Path (Join-Path $Root '.vscode') 'settings.json'
     $manual = "   ⚠ .vscode/settings.json 有註解或不是標準 JSON，沒有自動修改。請手動加入：`"$key`": [`"$glob`"]（已有這個鍵就把字串加進陣列）"
     $utf8 = New-Object System.Text.UTF8Encoding $false
 
@@ -26,7 +26,7 @@ function Ensure-LiveServerIgnore {
     }
 
     $text = [System.IO.File]::ReadAllText($f, $utf8)
-    if ($text -match '(?m)(^|[\s,{\[])//' -or $text.Contains('/*')) { Write-Host $manual -ForegroundColor Yellow; return }
+    if ($text -match '(?m)(^|[\s,{\[])//' -or $text -match '(?m)(^|[\s,{\[])/\*') { Write-Host $manual -ForegroundColor Yellow; return }
     try { $json = $text | ConvertFrom-Json -ErrorAction Stop } catch { Write-Host $manual -ForegroundColor Yellow; return }
     if ($null -eq $json -or $json -isnot [System.Management.Automation.PSCustomObject]) { Write-Host $manual -ForegroundColor Yellow; return }
 
