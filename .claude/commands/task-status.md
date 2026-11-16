@@ -41,7 +41,7 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
      網址一律以 `overview-serve.sh` 為準（同一個資料夾裡的 `overview.md` 是 Markdown 版，兩份都不進 git）
    - `overview-serve.sh`：確保本機伺服器在跑（閒置 30 分鐘自己結束，不用手動關），**把它印的最後一行放在輸出的最後一行**，
      格式 `http://127.0.0.1:<port>/<token>/index.html`。說明 token 是防同機其他使用者與惡意網頁讀取，網址要整段複製；
-     每次新起都換新 token，舊網址會失效。新起時會自動開瀏覽器，已在跑只印網址；SSH 遠端且沒有桌面時它會多印一行
+     網址固定（同一個專案重起也一樣），可加書籤；網址外洩時跑 `bash .claude/scripts/overview-serve.sh --rotate` 換一個。新起時會自動開瀏覽器，已在跑只印網址；SSH 遠端且沒有桌面時它會多印一行
      `ssh -L …` 的 port 轉發指令，照樣轉告。它印的最後一行是 `file://…`（找不到 Python 3.7 以上、或起不來）→
      照實轉告它印的原因，這個 `file://` 就是最後一行（退路，SSH 遠端打不開）
    - Python 依 `python3` → `python3.13`…`python3.7` → `python` → `py -3` 找第一個 3.7 以上的；預設 `python3` 太舊時可用環境變數

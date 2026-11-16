@@ -6,6 +6,8 @@ consulted: [architect]
 informed: [planner]
 ---
 
+> 第 1 節 token 一條已被 ADR-2026-11-16-001 取代（token 永久固定，不再每次新起都換）。
+
 # ADR-2026-11-12-003: 專案圖解改用自寫的本機 Python 靜態伺服器，只綁 127.0.0.1、閒置 30 分鐘自行結束
 
 ## 背景
