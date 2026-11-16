@@ -3,6 +3,7 @@ wbs_task: "none"
 slug: "overview-stable-url"
 created: "2026-11-16"
 updated: "2026-11-16"
+archived: "2026-11-16"
 status: "✅ 完成"
 current_phase: 4
 mode: "standard"
