@@ -237,7 +237,7 @@ flowchart LR
   - `check-counts.sh` 通過
 - **注意**：`sync()` 移除節點有 0.3 秒淡出，焦點要在淡出前移走。已有 class 先 grep 一次再取名（上一輪踩過 `.bar`／`.dash`／`.mini` 撞名）
 
-### 階段 6: `/tdd` 每個階段完成後重算能否平行 🔄
+### 階段 6: `/tdd` 每個階段完成後重算能否平行 ✅
 - **依賴**：無
 - [ ] 動手前讀 `writing-extensions` skill，在「發現與決策」記一句為什麼這次用文字規則（觸發點「plan 階段標 ✅」是一次 Edit，可以改成 PostToolUse hook 注入提醒；先用文字、若實測被漏掉再升級成 hook）— 驗證：人讀
 - [ ] `commands/tdd.md` 第 2 節：「續跑 → 直接沿用上次選的方式，不要再問」改成「續跑 → 沿用上次選的**派法**（implementer／主模型直接做），不再問；**能否平行不沿用**，照下面『每個階段 ✅ 之後』重算」。新增一小段「每個階段 ✅ 之後」：照 `plan-format`「階段『依賴』與可平行」判準重算未完成的階段；依賴都已 ✅、部件表檔案無交集的 ≥ 2 個 → **直接改用 worktree 平行**（照 `worktree-orchestration`），宣告一句「階段 X、Y 現在可以同時做，改開 worktree 平行」，在帳本記一筆 `Ruling: 改用 worktree 平行跑階段 X、Y — 依賴已完成且檔案不重疊 — 若判錯，合併時會有衝突`，**不另問使用者**；帳本或先前回答明確寫過「不要平行」才不改 — 驗證：人讀＋下方 grep
@@ -275,3 +275,4 @@ flowchart LR
 - 2026-11-16 規劃：階段 6（`/tdd` 重算平行）為使用者追加、已同意；只動 `.md`，與階段 1–5 檔案無交集
 - 2026-11-16 使用者裁決開放問題（全部照 plan 預設）：Q1 token 永久固定、外洩時手動 `--rotate`、`.serve-keep` 權限不對自動換；Q2 主 session 停下等回話時只在「需要你」顯示等回覆（最多 4 小時），不加額外說明；Q3 中斷判定 30 分鐘（`OVERVIEW_LIVE_CUT_MIN`），最後一筆是還在跑的 Bash 不判；Q4 專案沒有 `.vscode/settings.json` 時主動建立（含 Live Server 官方預設忽略清單 `.vscode/**`、`**/*.scss`、`**/*.sass`——2026-11-16 查官方文件 https://ritwickdey.github.io/vscode-live-server/docs/settings.html，沒有 `**/*.ts`）；Q5 `/clear`、新視窗換 sid 的情況只靠 30 分鐘超時收掉，可接受
 - 2026-11-16 主模型量測：`templates/overview/index.html` 現為 94144 bytes（上限 128KB）
+- 2026-11-16 階段 6：用文字規則不用 hook——觸發點「plan 階段標 ✅」是一次 Edit，可做成 PostToolUse 提醒，但重算要判斷依賴與檔案交集，hook 只能提醒、做不了判斷；實測被漏掉再升級成 hook 提醒
