@@ -28,7 +28,7 @@ description: Use when executing a multi-phase plan under standard/critical task 
 
 **這是選項不是強制。** 由主模型用 `AskUserQuestion` 問一題讓使用者決定（implementer 沒有這個工具，不要叫它問）：
 逐階段派 implementer（context 乾淨、可平行審查、較慢較貴）vs 主模型直接照 plan 實作
-（快、省，但長任務容易偏離 plan）。使用者沒表示過就問，問過就記在帳本裡別再問。
+（快、省，但長任務容易偏離 plan）。使用者沒表示過就問，問過就記在帳本裡別再問（平行與否見 `commands/tdd.md`，每階段 ✅ 後重算）。
 
 ---
 
@@ -44,6 +44,7 @@ description: Use when executing a multi-phase plan under standard/critical task 
 │  4. 審查這個階段（規格合規 + 程式品質）              │
 │  5. 有問題 → 修復迴圈（最多 5 輪，R≥4 升級模型）     │
 │  6. 通過 → 帳本記完成、plan 階段標 ✅、current_phase++│
+│     → 重算可平行（`commands/tdd.md`「每個階段 ✅ 之後」）│
 └──────────────────────────────────────────────────────┘
    ▼
 全部階段完成 → /verify（不另做全域審查：每階段已審過，見 `rules/task-mode.md`「審查節奏」）
