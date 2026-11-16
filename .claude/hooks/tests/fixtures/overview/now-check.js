@@ -3,11 +3,16 @@
 // LV 為 null 時改載一個不存在的檔，模擬還沒有 live.js。結果以 JSON 寫進 <pre id="result">。
 // 用 http 開時改測伺服器結束提示，依網址的 ?<模式>：
 //   （沒有）真的 POST .shutdown 關掉伺服器，等下一輪輪詢；
-//   ?mock   .serve-id 的回應由 FX 假造：連不上 → 提示、tick 停住（部件卡的經過分鐘數也停）→ 回到可見時 200 → 恢復輪詢 → 再 404 → 網址已失效、不再重試；
-//   ?never  從沒連上過、第一次就拿到 404 → 不顯示提示、照常輪詢。
+//   ?mock   .serve-id 的回應由 FX 假造：連不上 → 提示、tick 停住（部件卡的經過分鐘數也停）→ 不切分頁、改回 200 → 提示消失、恢復輪詢
+//           → 404 → 網址已失效 → 改回 200 → 提示消失、恢復輪詢；
+//   ?never  從沒連上過、第一次就拿到 404 → 不顯示提示、照常輪詢；
+//   ?hide   分頁隱藏 15 分鐘（虛擬時間）→ 只剩 .serve-id 心跳；回到可見 → 立刻各載入一次 data.js、live.js，心跳停；
+//   ?real=<port>  真伺服器：關掉後出現提示，再對 127.0.0.1:<port>（測試開的慢速伺服器）發請求，請求懸著時虛擬時間不前進，外部趁這段把伺服器重起；之後提示自己消失。
 (function(){
-var R = {}, LV = null, ap = document.head.appendChild.bind(document.head), T = 0, MODE = location.search.slice(1), NL = 0, FX = null;
+var R = {}, LV = null, ap = document.head.appendChild.bind(document.head), T = 0, MODE = location.search.slice(1), NL = 0, ND = 0, NF = 0, FX = null, VS = 'visible';
+Object.defineProperty(document, 'visibilityState', {get: function () { return VS; }});
 document.head.appendChild = function (n) {
+  if (n.tagName === 'SCRIPT' && /^data\.js/.test(n.getAttribute('src') || '')) ND++;
   if (n.tagName === 'SCRIPT' && /^live\.js/.test(n.getAttribute('src') || '')) {
     NL++;
     if (location.protocol !== 'http:' || MODE)
@@ -16,7 +21,7 @@ document.head.appendChild = function (n) {
   return ap(n);
 };
 var of = window.fetch;
-window.fetch = function (u) { return FX && /\.serve-id/.test(u) ? FX() : of.apply(this, arguments); };
+window.fetch = function (u) { if (/\.serve-id/.test(u)) NF++; return FX && /\.serve-id/.test(u) ? FX() : of.apply(this, arguments); };
 function res(code) { return function () { return Promise.resolve(new Response('', {status: code})); }; }
 function $(i) { return document.getElementById(i); }
 function q(s) { return document.querySelector(s); }
@@ -52,18 +57,37 @@ if (MODE === 'never') {
   at(9000, function () { R.n1 = {gone: snap().gone, nl: NL}; done(); });
   return;
 }
+if (MODE === 'hide') {
+  LV = function () { return {lanes: [], needs: [], clashes: [], doneToday: {agents: 0, tasks: 0}, feed: [], at: 'H' + T}; };
+  FX = res(200);
+  function cnt() { return {sid: NF, data: ND, live: NL}; }
+  var c0;
+  at(3000, function () { VS = 'hidden'; seeVis(); c0 = cnt(); });
+  at(913000, function () { var c = cnt(); R.h1 = {sid: c.sid - c0.sid, data: c.data - c0.data, live: c.live - c0.live}; c0 = c; VS = 'visible'; seeVis(); });
+  at(913400, function () { var c = cnt(); R.h2 = {sid: c.sid - c0.sid, data: c.data - c0.data, live: c.live - c0.live}; c0 = c; });
+  at(1230000, function () { R.h3 = {sid: NF - c0.sid}; done(); });
+  return;
+}
 if (MODE === 'mock') {
   LV = function () { return {lanes: [Object.assign(ln('m1', 'g1', 50, 590, null), {parts: ['p2a']})], needs: [], clashes: [], doneToday: {agents: 0, tasks: 0}, feed: [], at: 'M' + T}; };
   at(3000, function () { R.m0 = {need: kpis()['k-need'].t, lanes: qa('.lane').length}; LV = null; FX = function () { return Promise.reject(new TypeError('down')); }; });
-  at(6000, function () { R.m1 = {gone: snap().gone, clock: lane('m1').querySelector('.lclock').textContent, part: q('.pc[data-part] .who').textContent}; });
+  at(8000, function () { R.m1 = {gone: snap().gone, clock: lane('m1').querySelector('.lclock').textContent, part: q('.pc[data-part] .who').textContent}; });
   at(21000, function () {
     R.m2 = {need: kpis()['k-need'].t, clock: lane('m1').querySelector('.lclock').textContent, nl: NL, part: q('.pc[data-part] .who').textContent};
     FX = res(200); LV = function () { return {lanes: [ln('m1', 'g1', 30, 5, null)], needs: [], clashes: [], doneToday: {agents: 0, tasks: 0}, feed: [], at: 'R' + T}; };
-    seeVis();
   });
-  at(24500, function () { R.m3 = {gone: snap().gone, nl: NL}; LV = null; FX = res(404); });
-  at(28000, function () { R.m4 = {gone: snap().gone, nl: NL}; seeVis(); });
-  at(33000, function () { R.m5 = {gone: snap().gone, nl: NL}; done(); });
+  at(32000, function () { R.m3 = {gone: snap().gone, nl: NL}; });
+  at(36000, function () { R.m3b = {nl: NL}; LV = null; FX = res(404); });
+  at(40000, function () { R.m4 = {gone: snap().gone, nl: NL}; });
+  at(41000, function () { FX = res(200); LV = function () { return {lanes: [], needs: [], clashes: [], doneToday: {agents: 0, tasks: 0}, feed: [], at: 'S' + T}; }; });
+  at(54000, function () { R.m5 = {gone: snap().gone, nl: NL}; });
+  at(58000, function () { R.m6 = {nl: NL}; done(); });
+  return;
+}
+if (/^real=/.test(MODE)) {
+  at(1500, function () { R.alive = snap(); fetch('.shutdown', {method: 'POST'}); });
+  at(8000, function () { R.dead = snap(); of('http://127.0.0.1:' + MODE.slice(5) + '/', {mode: 'no-cors'}).then(function () { R.held = true; }, function () { R.held = false; }); });
+  at(30000, function () { R.back = snap(); done(); });
   return;
 }
 if (location.protocol === 'http:') {

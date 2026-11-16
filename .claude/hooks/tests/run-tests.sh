@@ -6155,21 +6155,44 @@ if [ -n "$NW_CHROME" ] && [ -x "$NW_CHROME" ]; then
         SV_X=(BROWSER=true); NW_URL=$(sv_last "$(sv_run)"); SV_X=()
         nw_pid=$(sed -n 's/.*"pid": *\([0-9]*\).*/\1/p' "$SV_OV/.serve" 2>/dev/null)
         NW_MAIN=$NW_URL
-        NW_URL="${NW_MAIN%index.html}index.html?mock"; NW_RES=$(NW_BUDGET=36000 nw_run)
-        expect_eq "連不上伺服器 → 出現提示、tick 停住（之後過了卡住門檻，「需要你」仍 0、經過時間不再跳）" \
-            "0 伺服器已結束（閒置 30 分鐘），重跑 /task-status 0 true" "$(nq '"\(.m0.need) \(.m1.gone) \(.m2.need) \(.m1.clock == .m2.clock)"')"
-        expect_eq "伺服器已結束 → 部件卡的經過分鐘數也不再用舊資料更新（過了整分仍是 0 分）" "implementer · 0 分 implementer · 0 分" "$(nq '"\(.m1.part) \(.m2.part)"')"
-        expect_eq "提示中回到可見、.serve-id 回 200 → 收掉提示、live.js 恢復輪詢" "null true" "$(nq '"\(.m3.gone) \(.m3.nl > .m2.nl)"')"
-        expect_eq "連上過之後 .serve-id 回 404 →「網址已失效，重跑 /task-status」、停止輪詢，回到可見也不再重試" \
-            "網址已失效，重跑 /task-status true" "$(nq '"\(.m5.gone) \(.m5.nl == .m4.nl)"')"
+        NW_URL="${NW_MAIN%index.html}index.html?mock"; NW_RES=$(NW_BUDGET=60000 nw_run)
+        expect_contains "連不上伺服器 → 頁首提示含 overview-serve.sh，說會自己接回" "overview-serve.sh，這頁會自己接回" "$(nq '.m1.gone')"
+        expect_eq "連不上伺服器 → tick 停住（之後過了卡住門檻，「需要你」仍 0、經過時間不再跳）" "0 true" "$(nq '"\(.m2.need) \(.m1.clock == .m2.clock)"')"
+        expect_eq "伺服器已斷線 → 部件卡的經過分鐘數也不再用舊資料更新（過了整分仍是 0 分）" "implementer · 0 分 implementer · 0 分" "$(nq '"\(.m1.part) \(.m2.part)"')"
+        expect_eq "不切分頁、10 秒後 .serve-id 回 200 → 提示消失、live.js 恢復每 2 秒載入" "null true true" "$(nq '"\(.m3.gone) \(.m3.nl > .m2.nl) \(.m3b.nl - .m3.nl >= 2)"')"
+        expect_contains "連上過之後 .serve-id 回 404 → 提示含「這個網址已失效」" "這個網址已失效" "$(nq '.m4.gone')"
+        expect_eq "404 的提示出現後輪詢停住；.serve-id 改回 200 → 提示消失、輪詢恢復（不再永久停止）" "null true" "$(nq '"\(.m5.gone) \(.m6.nl - .m5.nl >= 2)"')"
         NW_URL="${NW_MAIN%index.html}index.html?never"; NW_RES=$(nw_run)
         expect_eq "從沒連上過、第一次就拿到 .serve-id 404 → 不顯示提示、照常輪詢" "null null true" "$(nq '"\(.n0.gone) \(.n1.gone) \(.n1.nl > .n0.nl)"')"
+        NW_URL="${NW_MAIN%index.html}index.html?hide"; NW_RES=$(NW_BUDGET=1240000 nw_run)
+        expect_eq "分頁隱藏 15 分鐘 → .serve-id 被請求 3 次，data.js 與 live.js 都 0 次" "3 0 0" "$(nq '"\(.h1.sid) \(.h1.data) \(.h1.live)"')"
+        expect_eq "回到可見 → 立刻各載入一次 data.js、live.js，之後心跳不再發" "0 1 1 0" "$(nq '"\(.h2.sid) \(.h2.data) \(.h2.live) \(.h3.sid)"')"
+        NW_URL="file://$NW/index.html?hide"; NW_RES=$(NW_BUDGET=1240000 nw_run)
+        expect_eq "file:// 開的頁面隱藏 15 分鐘 → .serve-id 0 次" "0 0 0" "$(nq '"\(.h1.sid) \(.h1.data) \(.h1.live)"')"
+        nw_slow="$SANDBOX/nw-slow"; rm -rf "$nw_slow"; mkdir -p "$nw_slow"
+        nw_sp=$("$SV_BIN/python3" -c 'import socket;s=socket.socket();s.bind(("127.0.0.1",0));print(s.getsockname()[1])')
+        "$SV_BIN/python3" -c '
+import http.server, sys, time
+class H(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        open(sys.argv[1] + "/hit", "w").close(); time.sleep(3)
+        self.send_response(200); self.send_header("Content-Length", "0"); self.end_headers()
+    def log_message(self, *a): pass
+http.server.HTTPServer(("127.0.0.1", int(sys.argv[2])), H).serve_forever()' "$nw_slow" "$nw_sp" &
+        nw_slow_pid=$!
+        sv_wait_for "$nw_sp"
+        ( for _ in $(seq 1 100); do [ -e "$nw_slow/hit" ] && break; sleep 0.1; done; SV_X=(BROWSER=true); sv_run >/dev/null ) &
+        nw_rs=$!
+        NW_URL="${NW_MAIN%index.html}index.html?real=$nw_sp"; NW_RES=$(NW_BUDGET=40000 nw_run)
+        wait "$nw_rs"; kill "$nw_slow_pid" 2>/dev/null; wait "$nw_slow_pid" 2>/dev/null; rm -rf "$nw_slow"
+        expect_contains "真伺服器：關掉 → 頁首出現「伺服器沒在跑」" "伺服器沒在跑" "$(nq '.dead.gone')"
+        expect_eq "真伺服器：同網址重起 → 不切分頁，20 秒（虛擬時間）內提示消失" "null" "$(nq '.back.gone')"
         NW_URL=$NW_MAIN
         NW_RES=$(NW_BUDGET=9000 nw_run)
         expect_eq "伺服器活著、還沒有 live.js → 不顯示伺服器結束提示，顯示「還沒有即時資料」" "null 還沒有即時資料：agent 開始工作後這裡會出現" \
             "$(nq '"\(.alive.gone) \(.alive.nnone)"')"
-        expect_eq "伺服器結束後下一輪輪詢 → 頁首出現提示、現況畫面仍在" "伺服器已結束（閒置 30 分鐘），重跑 /task-status true 專案圖解 — 現況" \
-            "$(nq '"\(.dead.gone) \(.deadNv) \(.deadTitle)"')"
+        expect_eq "伺服器結束後下一輪輪詢 → 頁首出現提示、現況畫面仍在" "true true 專案圖解 — 現況" \
+            "$(nq '"\(.dead.gone | contains("伺服器沒在跑")) \(.deadNv) \(.deadTitle)"')"
         sv_stop
         for _ in $(seq 1 30); do kill -0 "$nw_pid" 2>/dev/null || break; sleep 0.1; done
         expect_eq "現況分頁的伺服器案例結束後沒有殘留行程" no "$([ -n "$nw_pid" ] && kill -0 "$nw_pid" 2>/dev/null && echo yes || echo no)"

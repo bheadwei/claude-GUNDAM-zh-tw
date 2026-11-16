@@ -275,7 +275,7 @@ button.chip{cursor:pointer;min-height:28px}
   <button class="pill" id="still" aria-pressed="false">暫停動畫</button>
   <button class="pill" id="theme" aria-pressed="false">深色</button>
 </header>
-<div id="gone" class="gone" role="status" hidden>伺服器已結束（閒置 30 分鐘），重跑 /task-status</div>
+<div id="gone" class="gone" role="status" hidden></div>
 <div id="ntc" class="drawer" hidden></div>
 <div id="drift" class="drawer" hidden></div>
 <div id="psel" class="drawer" hidden></div>
@@ -304,7 +304,7 @@ button.chip{cursor:pointer;min-height:28px}
 <script>
 (function () {
 'use strict';
-var POLL_MS = 3000, SCHEMA = 2, UNG = '_ungrouped';
+var POLL_MS = 3000, HEARTBEAT_MS = 300000, SCHEMA = 2, UNG = '_ungrouped';
 var STATUS = {done: '完成', wip: '開發中', issue: '有問題', todo: '未開始'};
 // 版面常數。位置由 overview.sh 依群組決定（pos.col／pos.row），這裡只換算像素；節點不可拖
 var W = 290, GAPX = 90, GAPG = 50, GAPY = 36, ROW = 40, HEAD = 70, FOOT = 34, LINE = 22, MAXF = 6, MAXT = 6, MARGIN = 24;
@@ -1303,7 +1303,7 @@ function renderNow() {
   kpi('run', L ? L.lanes.length : 0, String(L ? L.lanes.length : 0));
   kpi('fin', dt.agents + dt.tasks, '<span>' + dt.agents + '<span class="ku"> 個 agent · </span></span><span>' + dt.tasks + '<span class="ku"> 個任務</span></span>');
   kpi('clash', cs.length, String(cs.length));
-  $('live').hidden = !L || GONE || DEAD;
+  $('live').hidden = !L || GONE;
   if (L) $('livetx').textContent = '即時 · 最後變動 ' + String(L.at || '').slice(11, 16);
   tick();
 }
@@ -1324,7 +1324,7 @@ function partsTick(t) {
   });
 }
 function tick() {
-  if (!$('needs') || GONE || DEAD) return;
+  if (!$('needs') || GONE) return;
   var ns = needItems();
   $('needbox').hidden = !ns.length;
   sync($('needs'), ns, function () { return mk('li', '', '<span class="nk"></span><span class="ntx"></span><span class="ago"></span>'); }, needSet);
@@ -1407,7 +1407,7 @@ function okText(d) { return '資料時間 ' + when(d) + (d.scan && d.scan.files 
 // 輪詢：每次插一個新的 classic script（帶 ?t= 避開快取）。載入前把 window.OVERVIEW 設成 null，
 // 載入後仍是 null ＝ 檔案寫到一半（語法錯誤）或暫時不存在 → 保留上一份、顯示「更新中」。
 // 這招成立的前提是 data.js 只有一句賦值（overview.sh 保證）。live.js 同理（每 2 秒）。
-var timer = null, ltimer = null, inflight = false, linflight = false, last = null, GONE = false, DEAD = false, SEEN = false;
+var timer = null, ltimer = null, inflight = false, linflight = false, last = null, GONE = null, SEEN = false, rtimer = null, htimer = null;
 function check() {
   if (inflight) return;
   inflight = true;
@@ -1448,37 +1448,42 @@ function checkLive() {
   s.onload = done; s.onerror = function () { done(); serverCheck(); };
   document.head.appendChild(s);
 }
-// 伺服器閒置結束（ADR-2026-11-12-003）：載入失敗時問 .serve-id，連不上才算結束；200／404 是伺服器還在（只是檔案還沒產生）。
-// 例外：連上過之後才拿到 404 ＝ 伺服器重起換了 token，這個網址永遠拿不到新資料
+// 伺服器斷線（ADR-2026-11-12-003）：載入失敗時問 .serve-id。連不上＝伺服器沒在跑，連上過之後拿到 404＝網址失效；
+// 兩種都持續重試（可見時每 10 秒、隱藏時跟著心跳），拿到 200 就收掉提示、恢復輪詢。
+// 從沒連上過就 404（例如 Live Server 開的）不算斷線。
+var GONE_MSG = {
+  down: '伺服器沒在跑。在專案裡跑 /task-status 或 bash .claude/scripts/overview-serve.sh，這頁會自己接回',
+  stale: '這個網址已失效（token 換了或伺服器換了 port）。跑 /task-status 取得新網址'
+};
 function serverCheck() {
-  if (DEAD || !/^http/.test(location.protocol)) return;
+  if (!/^http/.test(location.protocol)) return;
   fetch('.serve-id', {cache: 'no-store'}).then(function (r) {
-    if (r.status === 404 && SEEN) return expire();
+    if (r.status === 404 && SEEN) return setGone('stale');
     if (r.ok) SEEN = true;
-    setGone(false);
-  }, function () { setGone(true); });
+    setGone(null);
+  }, function () { SEEN = true; setGone('down'); });
 }
-function expire() {
-  DEAD = true;
+function setGone(mode) {
+  if (GONE === mode) return;
+  GONE = mode;
+  $('gone').textContent = mode ? GONE_MSG[mode] : '';
+  $('gone').hidden = !mode;
+  $('live').hidden = !!mode || !LIVE;
   stop();
-  $('gone').textContent = '網址已失效，重跑 /task-status';
-  $('gone').hidden = false;
-  $('live').hidden = true;
-}
-function setGone(on) {
-  if (DEAD || GONE === on) return;
-  GONE = on;
-  if (on) SEEN = true;
-  $('gone').hidden = !on;
-  $('live').hidden = on || !LIVE;
-  if (on) stop(); else if (document.visibilityState === 'visible') { check(); checkLive(); start(); }
+  if (mode) retry();
+  else if (document.visibilityState === 'visible') { check(); checkLive(); start(); }
 }
 function start() { if (!timer) { timer = setInterval(check, POLL_MS); ltimer = setInterval(checkLive, 2000); } }
-function stop() { clearInterval(timer); clearInterval(ltimer); timer = ltimer = null; }
+function stop() { clearInterval(timer); clearInterval(ltimer); clearInterval(rtimer); timer = ltimer = rtimer = null; }
+function retry() { if (!rtimer && document.visibilityState === 'visible') rtimer = setInterval(serverCheck, 10000); }
 document.addEventListener('visibilitychange', function () {
-  if (document.visibilityState !== 'visible') stop();
-  else if (DEAD) return;
-  else if (GONE) serverCheck();
+  if (document.visibilityState !== 'visible') {
+    stop();
+    if (!htimer && /^http/.test(location.protocol)) htimer = setInterval(serverCheck, HEARTBEAT_MS);
+    return;
+  }
+  clearInterval(htimer); htimer = null;
+  if (GONE) { serverCheck(); retry(); }
   else { check(); checkLive(); start(); }
 });
 new ResizeObserver(function () { drawVp(); }).observe(stage);
