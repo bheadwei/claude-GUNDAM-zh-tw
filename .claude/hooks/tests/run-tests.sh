@@ -6175,7 +6175,7 @@ if [ -n "$NW_CHROME" ] && [ -x "$NW_CHROME" ]; then
 import http.server, sys, time
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        open(sys.argv[1] + "/hit", "w").close(); time.sleep(3)
+        open(sys.argv[1] + "/hit", "w").close(); time.sleep(6)
         self.send_response(200); self.send_header("Content-Length", "0"); self.end_headers()
     def log_message(self, *a): pass
 http.server.HTTPServer(("127.0.0.1", int(sys.argv[2])), H).serve_forever()' "$nw_slow" "$nw_sp" &
