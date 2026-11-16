@@ -226,9 +226,14 @@ button.chip{cursor:pointer;min-height:28px}
 .pbar i{position:absolute;left:0;top:0;bottom:0;border-radius:3px;background:var(--accent)}.pbar.ind i{width:30%}
 .pdot{width:8px;height:8px;border-radius:50%;background:var(--accent);position:relative;flex:none}
 .lane.stuck .pdot{background:var(--wip)}#live .pdot{background:var(--done)}
-.feed{gap:0}.feed li{display:grid;grid-template-columns:auto 1fr;gap:0 12px;padding:8px 0;border-top:1px solid var(--line)}
-.feed li:first-child{border-top:0}.ft{color:var(--muted);font-size:var(--fs-s);font-variant-numeric:tabular-nums;grid-row:span 2}
-.fx{color:var(--muted);font-size:var(--fs-s);grid-column:2;overflow-wrap:anywhere}.fv.ok{color:var(--done-fg)}.fv.wait{color:var(--wip-fg)}
+.feed{gap:0}.feed li{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line)}
+.feed li:first-child{border-top:0}.fc{flex:1;min-width:0;display:grid;grid-template-columns:auto 1fr;gap:0 12px;padding:8px 0}
+.fhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}.fhead .dh{margin:0}
+.fdel,.fclr{border:0;background:none;color:var(--muted);cursor:pointer;min-width:44px;min-height:44px;border-radius:8px}
+.fdel{flex:none;font-size:var(--fs-xl);line-height:1}.fclr{font-size:var(--fs-s);padding:0 12px}
+.fdel:hover,.fclr:hover{background:var(--group);color:var(--fg)}.feed .leave{pointer-events:none}
+.ft{color:var(--muted);font-size:var(--fs-s);font-variant-numeric:tabular-nums;grid-row:span 2}
+.fx{color:var(--muted);font-size:var(--fs-s);grid-column:2;overflow-wrap:anywhere}.fv.ok{color:var(--done-fg)}.fv.wait{color:var(--wip-fg)}.fv.cut{color:var(--issue-fg)}
 .dcard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
 .dcard.clash{border-color:var(--issue)}.dcard.clash .dh{color:var(--issue-fg)}
 .clist{gap:4px}.clist code{font:var(--fs-s) var(--f-mono);word-break:break-all}.clist .fx{display:block}
@@ -1164,7 +1169,10 @@ document.querySelector('.tabs').addEventListener('click', function (e) {
 var LIVE = null, ANIM = false, STUCK_S = 600, NONE = '_none';
 var NEED = {approve: '等批准', reply: '等回覆'};
 var HST = {blocked: '阻塞', wip: '進行中', todo: '待處理'};
-var FEEDV = {agent_start: ['開始', ''], agent_done: ['完成', 'ok'], need_open: ['等你', 'wait'], need_done: ['已處理', '']};
+var FEEDV = {agent_start: ['開始', ''], agent_done: ['完成', 'ok'], need_open: ['等你', 'wait'], need_done: ['已處理', ''], agent_cut: ['中斷', 'cut']};
+var CUT_MIN = 30;
+var TIP_STUCK = '卡住：還在名單上、' + STUCK_S / 60 + ' 分鐘沒動靜。可能在跑長指令，也可能卡住，請看一眼';
+var TIP_CUT = '中斷：判定已經不在跑（視窗重開，或 ' + CUT_MIN + ' 分鐘沒動靜且沒有指令在跑），已從名單移除';
 function secs() { return Date.now() / 1000; }
 function pad(n) { return ('0' + n).slice(-2); }
 function clock(s) {
@@ -1213,9 +1221,16 @@ function nowShell() {
     '<section id="needbox" hidden><h2 class="dh">需要你</h2><ul class="needs" id="needs"></ul></section>' +
     '<div class="dgrid"><section class="dmain"><h2 class="dh">現在在跑</h2><div class="tnone" id="nnone">還沒有即時資料：agent 開始工作後這裡會出現</div>' +
     '<div class="tnone" id="gnone" hidden>現在沒有在跑的線</div><div class="groups" id="groups"></div></section>' +
-    '<aside class="dside"><section class="dcard" id="feedbox" hidden><h2 class="dh">動態</h2><ul class="feed" id="feed"></ul></section>' +
+    '<aside class="dside" tabindex="-1" aria-label="動態與撞檔"><section class="dcard" id="feedbox" hidden><div class="fhead"><h2 class="dh">動態</h2><button type="button" class="fclr" id="fclear">全部清除</button></div><ul class="feed" id="feed"></ul></section>' +
     '<section class="dcard clash" id="clashbox" hidden><h2 class="dh">撞檔</h2><ul class="clist" id="clashes"></ul></section>' +
     '<section class="dcard" id="humbox" hidden><h2 class="dh">人在做</h2><ul class="clist" id="humans"></ul></section></aside></div></div>';
+  $('feedbox').onclick = feedClick;
+}
+function feedClick(e) {
+  var b = e.target.closest && e.target.closest('.fdel, .fclr');
+  if (!b) return;
+  var li = b.closest('li');
+  feedHide(li ? [li.dataset.id] : (LIVE ? LIVE.feed : []).map(feedId), li);
 }
 function kpi(id, n, h) {
   var k = $('k-' + id), e = k.querySelector('.kn'), had = e.innerHTML;
@@ -1225,7 +1240,12 @@ function kpi(id, n, h) {
   if (ANIM) flash(e, 'bump');
 }
 function who(x) { return clean(x.who) + '（' + whereText(x.where) + '）'; }
-function stuckFor(l) { return secs() - l.lastAt > STUCK_S; }
+function waitSet() {
+  var w = {};
+  (LIVE ? LIVE.needs : []).forEach(function (x) { var a = String(x.id).split('|'); w[a[1] || a[0]] = 1; });
+  return w;
+}
+function stuckFor(l) { return secs() - l.lastAt > STUCK_S && !waitSet()[l.id]; }
 function needItems() {
   if (!LIVE) return [];
   return LIVE.needs.map(function (x) {
@@ -1234,7 +1254,7 @@ function needItems() {
     return {id: 's|' + l.id, k: '卡住', tx: who(l) + (l.doing ? '：' + clean(l.doing) : ''), ago: Math.floor((secs() - l.lastAt) / 60) + ' 分鐘沒有動靜'};
   }));
 }
-function needSet(n, it) { txt(n, '.nk', it.k); txt(n, '.ntx', it.tx); txt(n, '.ago', it.ago); }
+function needSet(n, it) { txt(n, '.nk', it.k); n.querySelector('.nk').title = it.k === '卡住' ? TIP_STUCK : ''; txt(n, '.ntx', it.tx); txt(n, '.ago', it.ago); }
 function laneSet(n, l) {
   var f = l.files, bar = n.querySelector('.pbar');
   txt(n, '.lwho', l.who);
@@ -1272,10 +1292,37 @@ function groupSet(n, it) {
   sync(n.querySelector('.glanes'), it.lanes, laneMake, laneSet);
 }
 function groupMake() { return mk('section', 'tgrp', '<div class="tgh"></div><div class="ldesc">沒有在跑的線</div><div class="glanes"></div>'); }
+function feedMake() { return mk('li', '', '<div class="fc"></div><button type="button" class="fdel">×</button>'); }
 function feedSet(n, f) {
-  var v = FEEDV[f.kind] || [f.kind, ''];
-  html(n, '<span class="ft">' + hm(f.t) + '</span><span><b>' + esc(f.who) + '</b> <span class="fv ' + v[1] + '">' + esc(v[0]) + '</span></span>' +
+  var v = FEEDV[f.kind] || [f.kind, ''], vt = v[0] + (f.kind === 'agent_cut' ? ' · ' + (f.why === 'restart' ? '視窗重開' : CUT_MIN + ' 分鐘沒有動靜') : '');
+  html(n.firstChild, '<span class="ft">' + hm(f.t) + '</span><span><b>' + esc(f.who) + '</b> <span class="fv ' + v[1] + '"' + (f.kind === 'agent_cut' ? ' title="' + esc(TIP_CUT) + '"' : '') + '>' + esc(vt) + '</span></span>' +
     '<span class="fx">' + esc([f.text, f.where && f.where !== 'main' ? whereText(f.where) : ''].filter(Boolean).join(' · ')) + '</span>');
+  n.lastChild.setAttribute('aria-label', '刪除這則動態：' + clean(f.who) + ' ' + vt);
+}
+// 刪掉的動態 id 存 localStorage（key 含專案名與 pathname，同一個 file:// 目錄的不同專案不互相影響）；寫不進去時只在這一頁生效
+var HID = {}, HIDK = null;
+function hidKey() { return 'overview-feed-hidden|' + (D && D.project && D.project.name || '') + '|' + location.pathname; }
+function hidLoad() {
+  var k = hidKey();
+  if (k === HIDK) return;
+  HIDK = k; HID = {};
+  try { JSON.parse(localStorage.getItem(k) || '[]').forEach(function (id) { HID[id] = 1; }); } catch (e) {}
+}
+function feedId(f) { return f.t + '|' + f.kind + '|' + f.id; }
+function hidSave() {
+  var keep = (LIVE ? LIVE.feed : []).map(feedId).filter(function (id) { return HID[id]; }).slice(0, 200);
+  HID = {}; keep.forEach(function (id) { HID[id] = 1; });
+  try { localStorage.setItem(HIDK, JSON.stringify(keep)); } catch (e) {}
+}
+function feedHide(ids, from) {
+  hidLoad();
+  ids.forEach(function (id) { HID[id] = 1; });
+  hidSave();
+  var nx = from && nextLive(from.nextSibling);
+  renderNow();
+  var rest = [].filter.call($('feed').children, function (n) { return !n.classList.contains('leave'); });
+  var to = nx || rest[rest.length - 1];
+  (to ? to.querySelector('.fdel') : !$('feedbox').hidden ? $('fclear') : document.querySelector('.dside')).focus();
 }
 function renderNow() {
   if (!$('nv').firstChild) nowShell();
@@ -1288,9 +1335,10 @@ function renderNow() {
   $('gnone').hidden = !L || items.length > 0;
   $('groups').hidden = !L;
   sync($('groups'), L ? items : [], groupMake, groupSet);
-  var fd = L ? L.feed.slice(0, 12) : [];
+  hidLoad();
+  var fd = L ? L.feed.filter(function (f) { return !HID[feedId(f)]; }).slice(0, 12) : [];
   $('feedbox').hidden = !fd.length;
-  sync($('feed'), fd.map(function (f) { return Object.assign({id: f.t + '|' + f.kind + '|' + f.id}, f); }), function () { return mk('li', '', ''); }, feedSet);
+  sync($('feed'), fd.map(function (f) { return Object.assign({}, f, {id: feedId(f)}); }), feedMake, feedSet);
   var cs = L ? L.clashes : [];
   $('clashbox').hidden = !cs.length;
   html($('clashes'), cs.map(function (c) { return '<li><code>' + esc(c.file) + '</code><span class="fx">' + esc(c.lines.map(whereText).join(' ／ ')) + '</span></li>'; }).join(''));
@@ -1309,9 +1357,8 @@ function renderNow() {
 }
 // 部件卡的「誰在做／等你」：lane.parts 對 data-part（<plan>|<部件 id>），need 的 id 是 <sid>|<aid>|<since>，aid 空時對 session lane 的 sid
 function partsTick(t) {
-  var gp = {}, on = {}, wait = {};
+  var gp = {}, on = {}, wait = waitSet();
   (D && D.curGroups || []).forEach(function (g) { gp[g.key] = g.plan; });
-  (LIVE ? LIVE.needs : []).forEach(function (x) { var a = String(x.id).split('|'); wait[a[1] || a[0]] = 1; });
   (LIVE ? LIVE.lanes : []).forEach(function (l) {
     (l.parts || []).forEach(function (id) { var k = gp[l.group] + '|' + id; (on[k] = on[k] || []).push(l); });
   });

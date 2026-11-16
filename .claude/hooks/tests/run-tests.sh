@@ -6233,6 +6233,33 @@ if [ -n "$NW_CHROME" ] && [ -x "$NW_CHROME" ]; then
     expect_eq "prefers-reduced-motion: reduce、畫面上有 4 條 lane、3 條滑動進度條 → 所有元素（含 ::after）的 animation-name 為 none" "4 3 0" \
         "$(nq '"\(.reduceSeen.lanes) \(.reduceSeen.ind) \(.reduceBad)"')"
     expect_eq "重開頁面仍是暫停（按鈕寫「繼續動畫」）" "繼續動畫" "$(nq '.hashless.still')"
+    # 階段 5：動態可刪除、中斷與卡住的顯示（feed-check.js）。刪除的 id 存在 profile 的 localStorage，案例的順序有意義
+    nw_page "$NW/feed.html" "$HOOK_DIR/tests/fixtures/overview/feed-check.js"
+    nw_feed() { NW_URL="file://$NW/feed.html?$1"; NW_RES=$(nw_run --force-prefers-reduced-motion); }
+    rm -rf "$NW/prof"; nw_feed throw
+    expect_eq "localStorage.setItem 會 throw → 按刪除當下仍從畫面消失、沒有未捕捉的錯誤" "12 false 0" "$(nq '"\(.T.n) \(.T.hasA0) \(.T.errs)"')"
+    rm -rf "$NW/prof"; nw_feed del
+    expect_eq "30 則動態 → 顯示 12 則，每則一個 button 刪除鈕；「需要你」有清單、沒有任何按鈕" "12 12 BUTTON 1 0" "$(nq '"\(.A.n) \(.A.btns) \(.A.tag) \(.A.needs) \(.A.needBtns)"')"
+    expect_eq "刪除鈕與「全部清除」可點範圍都 ≥ 44×44，按 Tab 能到（tabIndex 0）" "true true 0" \
+        "$(nq '"\(.A.minW >= 44 and .A.minH >= 44 and .A.clearW >= 44 and .A.clearH >= 44) \(.A.clear) \(.A.tab)"')"
+    expect_eq "刪除鈕的 aria-label 是「刪除這則動態：<誰> <動作>」" "刪除這則動態：implementer 完成" "$(nq '.A.label')"
+    expect_eq "刪第 1 則 → 焦點在下一則的刪除鈕（淡出前就移走）" "true BUTTON" "$(nq '"\(.D1.active == .D1.want) \(.D1.isBtn | if contains("fdel") then "BUTTON" else . end)"')"
+    expect_eq "刪第 1 則 → 仍 12 則、第 1 則是原本第 2 則、最後一則是原本第 13 則" "12 true true" "$(nq '"\(.D2.n) \(.D2.first == .ids0[1]) \(.D2.last == .want13)"')"
+    expect_eq "刪除的 id 存進 localStorage「overview-feed-hidden|<專案名>|<pathname>」" "1 true" "$(nq '"\(.D2.ls | length) \(.D2.ls[0] == .ids0[0])"')"
+    expect_eq "live.js 多一則新的 → 新的在最前、被刪的仍不出現、仍 12 則" "12 1780000060|agent_start|new false" "$(nq '"\(.E.n) \(.E.first) \(.E.hasA0)"')"
+    nw_feed reload
+    expect_eq "同一個 localStorage 重開 → 被刪的那則仍不出現、仍 12 則" "12 false" "$(nq '"\(.R.n) \(.R.hasA0)"')"
+    sed -i 's/"name":"現況"/"name":"別專案"/' "$NW/data.js"; nw_feed reload
+    expect_eq "另一份 data.js（project.name 不同、同一個目錄與 profile）→ 在原專案刪的不影響它" "12 true" "$(nq '"\(.R.n) \(.R.hasA0)"')"
+    nw_data "$NW"
+    rm -rf "$NW/prof"; nw_feed clear
+    expect_eq "按「全部清除」→ 動態區隱藏、焦點不掉在 body；之後 live.js 多一則 → 動態區出現且只有那 1 則" "true 0 true 1 1780000060|agent_start|new" \
+        "$(nq '"\(.C0.hidden) \(.C0.n) \(.C0.ae != "BODY") \(.C1.n) \(.C1.id)"')"
+    nw_feed cut
+    expect_eq "feed 有 agent_cut：restart →「中斷 · 視窗重開」，silent →「中斷 · 30 分鐘沒有動靜」" "中斷 · 視窗重開,中斷 · 30 分鐘沒有動靜" "$(nq '.K.fv | join(",")')"
+    expect_eq "lane l1 11 分鐘沒動靜但有同 id 的 approve need →「需要你」只 1 行（等批准）加沒有 need 的 l2 的卡住，l1 不標 stuck、l2 標 stuck" "2 true true" \
+        "$(nq '"\(.K.needs | length) \(.K.l1 | not) \(.K.l2 | not | not)"')"
+    expect_eq "卡住與中斷的差別寫在 title" "true true" "$(nq '"\(.K.stuckTitle | contains("10 分鐘")) \(.K.fvTitle | contains("已從名單移除"))"')"
     # 階段 8：任務圖部件卡「誰在做／等你」、標題列目前任務標籤（parts-check.js，以 #tasks 開頁）
     nw_pdata "$NW"; nw_page "$NW/parts.html" "$HOOK_DIR/tests/fixtures/overview/parts-check.js"
     # 開 reduce：smooth 捲動在 --virtual-time-budget 下不會前進（2026-11-13 實測 scrollTop 停在 0），reduce 時頁面改用立即捲動
