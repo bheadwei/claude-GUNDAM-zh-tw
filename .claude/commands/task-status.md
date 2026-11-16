@@ -49,7 +49,7 @@ description: 查看專案 WBS 任務狀態總覽，追蹤進度和阻塞項。
    - 共用主機（多人登入同一台）上，開瀏覽器時網址會出現在 `ps`；可設 `BROWSER=true`（`true` 什麼都不做）讓它不自動開，
      自己貼網址
    - 補充給使用者：VS Code 的 Simple Browser（Ctrl+Shift+P → `Simple Browser: Show`）貼上網址也能看；
-     **不要用 Live Server**——資料每幾秒更新一次，它會整頁重載、畫面一直閃
+     建議用上面給的網址；用 Live Server 開也不會閃了（模板已在 `.vscode/settings.json` 讓它忽略地圖資料夾）。注意：VS Code 工作區根若不是專案根（multi-root、開上一層資料夾），那條 glob 對不到，Live Server 仍會閃
    **只印路徑，不要 Read `overview/data.js` 或 `overview/overview.md`**——那是給人看的衍生物，
    大專案可達數百 KB；要狀態就讀 `wbs.md`。沒有 `project.json` 時腳本什麼都不印，直接略過這行
 
