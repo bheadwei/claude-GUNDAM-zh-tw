@@ -70,8 +70,8 @@ N_RULES=$(find .claude/rules -maxdepth 1 -name '*.md' 2>/dev/null | wc -l | tr -
 # hook 腳本：watch-agents.sh 是 /agent-log 的輔助工具，不是 hook，不計入
 N_HOOKS=$(find .claude/hooks -maxdepth 1 -name '*.sh' ! -name 'watch-agents.sh' 2>/dev/null | wc -l | tr -d ' ')
 # project-docs 的文件範本：INDEX.md 本身不算範本（曾經有兩處寫 21，就是把 INDEX 算進去了）；
-# 12、17 是 /ui-site 的 UI 鏈，不算文件體系（ADR-2026-11-05-004）
-N_DOCTPL=$(find .claude/skills/project-docs/templates -maxdepth 1 -name '*.md' ! -name 'INDEX.md' ! -name '12_*' ! -name '17_*' 2>/dev/null | wc -l | tr -d ' ')
+# frontend-* 是 /ui-site 的 UI 鏈，不算文件體系（ADR-2026-11-05-004）
+N_DOCTPL=$(find .claude/skills/project-docs/templates -maxdepth 1 -name '*.md' ! -name 'INDEX.md' ! -name 'frontend-*' 2>/dev/null | wc -l | tr -d ' ')
 
 echo ""
 echo "檔案系統實況"
@@ -115,7 +115,7 @@ verify "範本數 templates/INDEX"    "$N_DOCTPL" .claude/skills/project-docs/te
 # 淘汰範本的檔名不得殘留
 #
 # 為什麼：13 份範本已刪（ADR-2026-11-05-004）。指令或 agent 還寫著舊檔名，模型會去讀不存在的檔、
-# 或照舊流程產出已淘汰的文件，都不報錯。12、17 是 /ui-site 的 UI 鏈，不在名單裡。
+# 或照舊流程產出已淘汰的文件，都不報錯。frontend-* 是 /ui-site 的 UI 鏈，不在名單裡。
 RETIRED_TPL='01_workflow_manual|03_behavior_driven_development_guide|06_api_design_specification|07_module_specification_and_tests|08_project_structure_guide|09_design_and_dependencies|11_code_review_and_refactoring_guide|13_security_and_readiness_checklists|15_documentation_and_maintenance_guide|16_wbs_development_plan_template|18_data_model_and_migration_spec|19_observability_and_slo_spec|21_ai_llm_integration_spec'
 CHECKED=$((CHECKED + 1))
 RESIDUE=$(grep -rnoE --exclude=check-counts.sh "$RETIRED_TPL" \
@@ -196,7 +196,7 @@ done
 # documentation-specialist 引用的 skill 附屬檔（SKILL.md 以外的檔）必須存在
 #
 # 為什麼：上面只驗 SKILL.md。這支 agent 寫模組說明前要 Read `project-docs/module-notes.md`、
-# 補架構文件要讀 05 範本——路徑寫錯一個字，它就憑記憶寫，地圖的說明層照樣驗不過也不會有人知道原因。
+# 補架構文件要讀架構文件範本——路徑寫錯一個字，它就憑記憶寫，地圖的說明層照樣驗不過也不會有人知道原因。
 DSAGENT=.claude/agents/documentation-specialist.md
 if [ -f "$DSAGENT" ]; then
     refs=$(grep -ohE '\.claude/skills/[a-z0-9-]+/[A-Za-z0-9_./-]+\.md' "$DSAGENT" 2>/dev/null | grep -v '/SKILL\.md$' | sort -u)
@@ -382,17 +382,17 @@ if [ -f "$OVSH" ]; then
     done
 fi
 
-# 02 範本的 PRD 骨架：用語表、功能兩節，範例情境編號 `<代碼>-<序號>`
+# brief／PRD 範本的 PRD 骨架：用語表、功能兩節，範例情境編號 `<代碼>-<序號>`
 #
 # 為什麼：PRD 情境編號是 plan 的「PRD 情境變更」與 /verify 套回的對照鍵，
 # 範本範例寫成小寫或沒有序號，照抄的專案之後就沒有鍵可對。
-TPL02=.claude/skills/project-docs/templates/02_project_brief_and_prd.md
+TPL02=.claude/skills/project-docs/templates/project-brief-and-prd.md
 if [ -f "$TPL02" ]; then
     for sec in 用語表 功能; do
         CHECKED=$((CHECKED + 1))
         if ! grep -qE "^## $sec( |$)" "$TPL02"; then
             FAIL=$((FAIL + 1))
-            printf '  %s 02 範本的 PRD 骨架缺「## %s」一節：%s\n' "$(red '✗')" "$sec" "$TPL02"
+            printf '  %s brief／PRD 範本的 PRD 骨架缺「## %s」一節：%s\n' "$(red '✗')" "$sec" "$TPL02"
         fi
     done
     CHECKED=$((CHECKED + 1))
@@ -400,7 +400,7 @@ if [ -f "$TPL02" ]; then
     BAD_SCN=$(printf '%s\n' "$SCN" | grep -v '^$' | grep -vE '^#### [A-Z]+-[0-9]+( |$)' || true)
     if [ -z "$SCN" ] || [ -n "$BAD_SCN" ]; then
         FAIL=$((FAIL + 1))
-        printf '  %s 02 範本的範例情境標題要是「#### <大寫代碼>-<序號> 標題」：%s\n' "$(red '✗')" "${BAD_SCN:-（找不到任何情境）}"
+        printf '  %s brief／PRD 範本的範例情境標題要是「#### <大寫代碼>-<序號> 標題」：%s\n' "$(red '✗')" "${BAD_SCN:-（找不到任何情境）}"
     fi
 fi
 
@@ -452,10 +452,10 @@ if [ -n "$BAD_PS" ]; then
     printf '  %s 教人寫的 plan status 只准 ⏳ 未開始／🔄 進行中／🚫 阻塞／✅ 完成（不加附註）：%s\n' "$(red '✗')" "$(printf '%s' "$BAD_PS" | tr '\n' ';')"
 fi
 
-# 05 範本的資料流節：位在自動段之後、至少一張 sequenceDiagram、每個小標題以全形括號結尾
+# 架構文件範本的資料流節：位在自動段之後、至少一張 sequenceDiagram、每個小標題以全形括號結尾
 #
 # 為什麼：圖要連到 PRD 情境（括號裡的編號）；順序由大到小（模組與依賴在前、資料流在後）。
-TPL05=.claude/skills/project-docs/templates/05_architecture_and_design_document.md
+TPL05=.claude/skills/project-docs/templates/architecture-and-design.md
 if [ -f "$TPL05" ]; then
     CHECKED=$((CHECKED + 1))
     DF_TPL=$(awk '/^<!-- overview:generated:end -->/{after=1; next}
@@ -466,11 +466,11 @@ if [ -f "$TPL05" ]; then
                   END{if(!has) print "沒有資料流節"; else if(seq==0) print "節內沒有首行為 sequenceDiagram 的 mermaid 區塊"}' "$TPL05")
     if [ -n "$DF_TPL" ]; then
         FAIL=$((FAIL + 1))
-        printf '  %s 05 範本要在自動段之後有「## N. 資料流」節（含 sequenceDiagram、小標題以全形括號結尾）：%s\n' "$(red '✗')" "$(printf '%s' "$DF_TPL" | tr '\n' ';')"
+        printf '  %s 架構文件範本要在自動段之後有「## N. 資料流」節（含 sequenceDiagram、小標題以全形括號結尾）：%s\n' "$(red '✗')" "$(printf '%s' "$DF_TPL" | tr '\n' ';')"
     fi
 fi
 
-# overview.sh 的自動段標記與資料流節名 vs 05 範本（ADR-2026-11-05-007 的 A7、ADR-2026-11-06-002 決策 3）
+# overview.sh 的自動段標記與資料流節名 vs 架構文件範本（ADR-2026-11-05-007 的 A7、ADR-2026-11-06-002 決策 3）
 #
 # 為什麼：--sync-arch 找「行首是標記常數」的兩行，資料流解析找「## <數字>. <節名常數>」。
 # 範本改了字而常數沒跟上，照範本寫的架構文件自動段永遠不更新、資料流永遠是空的，都不報錯。
@@ -481,7 +481,7 @@ if [ -f "$OVSH" ] && [ -f "$TPL05" ]; then
         val=$(ov_const "$name")
         if [ -z "$val" ] || ! awk -v S="$val" '{ sub(/\r$/, "") } index($0, S) == 1 { f = 1 } END { exit !f }' "$TPL05"; then
             FAIL=$((FAIL + 1))
-            printf '  %s overview.sh 的 %s（%s）在 05 範本找不到以它開頭的一行：%s\n' "$(red '✗')" "$name" "${val:-找不到這個常數}" "$TPL05"
+            printf '  %s overview.sh 的 %s（%s）在架構文件範本找不到以它開頭的一行：%s\n' "$(red '✗')" "$name" "${val:-找不到這個常數}" "$TPL05"
             printf '      改了範本的自動段標記就同步 %s 的常數，否則 --sync-arch 會說沒有標記、自動段永遠不更新\n' "$OVSH"
         fi
     done
@@ -489,7 +489,7 @@ if [ -f "$OVSH" ] && [ -f "$TPL05" ]; then
     val=$(ov_const OVERVIEW_FLOW_SECTION)
     if [ -z "$val" ] || ! grep -qE "^##[[:space:]]+[0-9]+\.[[:space:]]*$val" "$TPL05"; then
         FAIL=$((FAIL + 1))
-        printf '  %s overview.sh 的 OVERVIEW_FLOW_SECTION（%s）在 05 範本找不到「## N. %s」節：%s\n' "$(red '✗')" "${val:-找不到這個常數}" "${val:-…}" "$TPL05"
+        printf '  %s overview.sh 的 OVERVIEW_FLOW_SECTION（%s）在架構文件範本找不到「## N. %s」節：%s\n' "$(red '✗')" "${val:-找不到這個常數}" "${val:-…}" "$TPL05"
         printf '      改了範本的資料流節名就同步 %s 的常數，否則地圖的資料流清單永遠是空的\n' "$OVSH"
     fi
 fi
@@ -535,7 +535,7 @@ if [ -f "$OVSH" ]; then
     fi
 fi
 
-# docs-init 的架構文件步驟：指向 05 範本、不內嵌模組表
+# docs-init 的架構文件步驟：指向架構文件範本、不內嵌模組表
 #
 # 為什麼：模組表只該出現在架構文件第 4 節的自動段。指令裡再抄一份表頭，
 # 照抄的專案就會手寫模組表，跟自動段兩份漂開。
@@ -543,9 +543,9 @@ DOCSINIT=.claude/commands/docs-init.md
 if [ -f "$DOCSINIT" ]; then
     ARCHSTEP=$(awk '/^### 步驟 [0-9]+：架構文件/{s=1; next} s && /^### /{exit} s{print}' "$DOCSINIT")
     CHECKED=$((CHECKED + 1))
-    if ! printf '%s' "$ARCHSTEP" | grep -q '05_architecture_and_design_document\.md'; then
+    if ! printf '%s' "$ARCHSTEP" | grep -q 'architecture-and-design\.md'; then
         FAIL=$((FAIL + 1))
-        printf '  %s docs-init.md 的「架構文件」步驟沒有指向 05 範本（格式的唯一來源）\n' "$(red '✗')"
+        printf '  %s docs-init.md 的「架構文件」步驟沒有指向架構文件範本（格式的唯一來源）\n' "$(red '✗')"
     fi
     CHECKED=$((CHECKED + 1))
     if printf '%s\n' "$ARCHSTEP" | grep -qE '^\|[[:space:]]*id[[:space:]]*\|'; then

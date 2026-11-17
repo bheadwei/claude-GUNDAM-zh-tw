@@ -46,7 +46,7 @@ model: sonnet
 專案地圖的骨架由程式碼掃出，沒有架構文件也畫得出來，所以**不會**有任何提示要你補架構文件。
 只有使用者或主模型明確要求「替舊專案補一份架構文件」時才做（例如要交給客戶）：
 
-1. 照 05 範本（`.claude/skills/project-docs/templates/05_architecture_and_design_document.md`）寫 `docs/architecture.md`：
+1. 照架構文件範本（`.claude/skills/project-docs/templates/architecture-and-design.md`）寫 `docs/architecture.md`：
    第 1–3 節只寫程式碼與設定檔看得出來的事實（外部系統、技術棧、部署設定）；第 4 節只放範本的兩行標記，
    內容由 `overview.sh --sync-arch` 產生；第 5 節資料流只放標題與「尚無」一行，跨服務流程由 architect 畫
 2. 檔案第一行加 `<!-- overview: draft -->`。專案地圖會把它當成草稿提示使用者確認

@@ -12,14 +12,14 @@ description: 驗證專案文件是否符合 project-docs 範本（brief、PRD、
 
 | 參數 | 範本 | 檢查的文件 |
 |---|---|---|
-| **brief** | `02_project_brief_and_prd.md`（上半） | `docs/00_brief.md` |
-| **prd** | `02_project_brief_and_prd.md`（下半） | `docs/prd.md` |
-| **adr** | `04_architecture_decision_record_template.md` | `docs/decisions/ADR-*.md` |
-| **architecture** | `05_architecture_and_design_document.md` | `docs/architecture.md` |
-| **runbook** | `14_deployment_and_operations_guide.md` | `docs/runbook.md` |
-| **threat-model** | `20_threat_model_template.md` | `docs/threat-model.md` |
-| **frontend-arch** | `12_frontend_architecture_specification.md`（UI 鏈） | `docs/12_*.md` |
-| **frontend-ia** | `17_frontend_information_architecture_template.md`（UI 鏈） | `docs/17_*.md` |
+| **brief** | `project-brief-and-prd.md`（上半） | `docs/00_brief.md` |
+| **prd** | `project-brief-and-prd.md`（下半） | `docs/prd.md` |
+| **adr** | `architecture-decision-record.md` | `docs/decisions/ADR-*.md` |
+| **architecture** | `architecture-and-design.md` | `docs/architecture.md` |
+| **runbook** | `deployment-and-operations.md` | `docs/runbook.md` |
+| **threat-model** | `threat-model.md` | `docs/threat-model.md` |
+| **frontend-arch** | `frontend-architecture.md`（UI 鏈） | `docs/frontend-architecture.md` |
+| **frontend-ia** | `frontend-information-architecture.md`（UI 鏈） | `docs/frontend-information-architecture.md` |
 
 比對三件事：範本的節有沒有缺、範本「不寫什麼」表列的內容有沒有被寫進來、
 架構文件第 4 節的 `overview:generated` 標記是否成對（標記之間由專案地圖產生，不檢查內容）。

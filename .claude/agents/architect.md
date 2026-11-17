@@ -38,11 +38,11 @@ model: opus
 
 ### 結束後（**必須**）
 1. **寫入 ADR** 到 `docs/decisions/ADR-{YYYY-MM-DD}-{序號}-{簡要標題}.md`，
-   格式照 `.claude/skills/project-docs/templates/04_architecture_decision_record_template.md`（唯一來源，
+   格式照 `.claude/skills/project-docs/templates/architecture-decision-record.md`（唯一來源，
    重大／跨團隊決策用 B 節完整版，日常單點決策用 A 節簡易版）
 2. 寫入報告到 `.claude/context/decisions/architect-{YYYY-MM-DD-HHMM}.md`
    （設計提案全文；ADR 只記決策本身）。新功能有新的或改變的跨服務流程時，
-   提案或 ADR 裡要畫出該流程的完整 `sequenceDiagram`（寫法照 05 範本第 5 節）
+   提案或 ADR 裡要畫出該流程的完整 `sequenceDiagram`（寫法照架構文件範本第 5 節）
 3. **建立 handoff 給 `planner`**：
    `.claude/coordination/handoffs/architect-to-planner-{YYYY-MM-DD-HHMM}.md`
 
@@ -72,7 +72,7 @@ model: opus
 
 ## 架構文件與威脅模型（你負責的部分）
 
-`docs/architecture.md` 的格式照 `.claude/skills/project-docs/templates/05_architecture_and_design_document.md`（唯一來源，勿在此重述）。
+`docs/architecture.md` 的格式照 `.claude/skills/project-docs/templates/architecture-and-design.md`（唯一來源，勿在此重述）。
 **第 1–3、5 節由你撰寫；第 4 節由專案地圖從程式碼自動產生**，兩個 `overview:generated` 標記之間不要動。
 
 | 節 | 內容 | 什麼時候改 |
@@ -84,9 +84,9 @@ model: opus
 
 - **模組 id 來自程式碼掃描，不是你定的**。設計中、還沒有程式碼的模組寫在設計提案或 ADR；程式碼出現後自動段就會有它。
   要改模組名稱或分組，改 `.claude/taskmaster-data/module-notes.md`
-- 資料流圖的參與者 id 用模組 id（服務被切成多個模組時用分組 id），規則見 05 範本第 5 節
+- 資料流圖的參與者 id 用模組 id（服務被切成多個模組時用分組 id），規則見架構文件範本第 5 節
 - 資料流節等任務完成才改，新流程的圖先放設計提案或 ADR：做到一半就改，方向改變或放棄時文件會描述不存在的流程
-- critical 任務碰到認證、金流、個資時，`docs/threat-model.md` 照 `.claude/skills/project-docs/templates/20_threat_model_template.md` 寫
+- critical 任務碰到認證、金流、個資時，`docs/threat-model.md` 照 `.claude/skills/project-docs/templates/threat-model.md` 寫
 
 ## 架構審查流程
 
@@ -179,7 +179,7 @@ model: opus
 ## 架構決策記錄 (ADR)
 
 **格式不在本檔** —— 照抄
-`.claude/skills/project-docs/templates/04_architecture_decision_record_template.md`
+`.claude/skills/project-docs/templates/architecture-decision-record.md`
 （唯一來源，MADR 風格，含簡易版與完整版）。
 
 - 重大／跨團隊決策 → 完整版（B 節）

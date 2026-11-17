@@ -54,7 +54,7 @@ git -c core.quotepath=false ls-files 'docs/*.md' \
   | grep -Ev '^docs/(00_brief|prd|architecture|threat-model|runbook)\.md$|^docs/(decisions|archive)/|^docs/1[27]_'
 ```
 
-（`docs/archive/` 是盤點後封存的去處，`docs/12_*`、`docs/17_*` 由 `/ui-site` 產生，都不算。
+（`docs/archive/` 是盤點後封存的去處，`docs/frontend-architecture.md`、`docs/frontend-information-architecture.md` 由 `/ui-site` 產生，都不算。
 `core.quotepath=false` 不能省：預設會把中文檔名輸出成 `"docs/\344…"`，`^docs/` 就對不上。）
 
 不是 git repo 或清單為空 → 不問，直接進 1c。
@@ -115,7 +115,7 @@ git -c core.quotepath=false ls-files 'docs/*.md' \
 
 `docs/00_brief.md` 已存在 → 直接用，進步驟 4。
 
-不存在 → 照 `.claude/skills/project-docs/templates/02_project_brief_and_prd.md` 的**上半**產（唯一來源，勿在此重述骨架）。
+不存在 → 照 `.claude/skills/project-docs/templates/project-brief-and-prd.md` 的**上半**產（唯一來源，勿在此重述骨架）。
 骨架裡缺的段用 `AskUserQuestion` 一題一題補問（由 `/task-init` 觸發時直接用它的問答），寫完逐段回述給使用者確認。
 
 **demo 到這裡結束**，跳到步驟 7。demo 沒有架構文件，WBS 的模組欄一律 `—`。
@@ -123,7 +123,7 @@ git -c core.quotepath=false ls-files 'docs/*.md' \
 
 ### 步驟 4：PRD 初稿（mvp／full）
 
-照 02 範本的**下半**產 `docs/prd.md`（格式的唯一來源）：
+照 brief／PRD 範本的**下半**產 `docs/prd.md`（格式的唯一來源）：
 
 1. 從 brief 的「核心功能」切出**領域**（一組相關的功能）。節標題括號寫模組分組名；還沒有程式碼時分組名先由這裡定，之後架構文件與專案地圖照用同一個名字
 2. 先寫**用語表**：brief 與問答裡出現的業務名詞，各寫一句意思與「不要說成」
@@ -135,7 +135,7 @@ PRD 寫好之後只由 `/verify` 依 plan 的「PRD 情境變更」套回，不�
 
 ### 步驟 5：架構文件（mvp／full）
 
-照 `.claude/skills/project-docs/templates/05_architecture_and_design_document.md` 產 `docs/architecture.md`
+照 `.claude/skills/project-docs/templates/architecture-and-design.md` 產 `docs/architecture.md`
 （節的寫法、標記字串、「不寫什麼」都以範本為唯一來源，不在這裡重述或內嵌表格）。
 第 1–3、5 節由 architect 撰寫；第 4 節由專案地圖從程式碼自動產生。
 
@@ -149,10 +149,10 @@ PRD 寫好之後只由 `/verify` 依 plan 的「PRD 情境變更」套回，不�
 
 ### 步驟 6：條件式文件（full）
 
-- **威脅模型**：brief 或 PRD 碰到認證、金流、個資 → **必產** `docs/threat-model.md`（`20_threat_model_template.md`），不另外問
+- **威脅模型**：brief 或 PRD 碰到認證、金流、個資 → **必產** `docs/threat-model.md`（`threat-model.md`），不另外問
 - **runbook**：用 `AskUserQuestion` 問「這個專案會上線並持續維運嗎？」
   - 上線前再補（Recommended）— 現在還沒有部署可寫
-  - 現在就產 — 照 `14_deployment_and_operations_guide.md` 產 `docs/runbook.md`，沒有的節直接刪
+  - 現在就產 — 照 `deployment-and-operations.md` 產 `docs/runbook.md`，沒有的節直接刪
 
 ### 步驟 7：更新 project.json
 

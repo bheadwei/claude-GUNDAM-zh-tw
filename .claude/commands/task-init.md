@@ -141,7 +141,7 @@ description: 專案初始化，建立 WBS 任務清單、分析複雜度、選�
 #### 2.7b 寫出 `docs/00_brief.md`
 
 把步驟 1、2、2.7a 的答案整理成一份簡短的 brief（**不是 PRD**，是 PRD 的輸入）。
-骨架的唯一來源是 `.claude/skills/project-docs/templates/02_project_brief_and_prd.md` 的**上半**——先讀它再寫，勿在此重述。
+骨架的唯一來源是 `.claude/skills/project-docs/templates/project-brief-and-prd.md` 的**上半**——先讀它再寫，勿在此重述。
 
 - 步驟 2 沒問到的段寫「未釐清」，不要編
 - demo 模式的「成功標準」放進「成功長什麼樣」

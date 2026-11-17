@@ -52,7 +52,7 @@ description: 記錄技術決策（ADR）。把「為什麼選 A 不選 B」寫�
 ### 步驟 3：寫入
 
 **格式的唯一來源是**
-`.claude/skills/project-docs/templates/04_architecture_decision_record_template.md`
+`.claude/skills/project-docs/templates/architecture-decision-record.md`
 —— 用它的 **A 節（簡易版）**，落點 `docs/decisions/`（ADR 唯一的家，不存在就建立）。
 編號與檔名規則也在那份範本裡（`ADR-{YYYY-MM-DD}-{當日序號}-{kebab-標題}.md`，
 掃目錄現有檔案決定序號）。
@@ -96,4 +96,4 @@ description: 記錄技術決策（ADR）。把「為什麼選 A 不選 B」寫�
 
 - `docs/decisions/` — 存放位置
 - `architect` agent — 也會寫 ADR（架構層級的決策）
-- `.claude/skills/project-docs/templates/04_architecture_decision_record_template.md` — 完整版 ADR 範本（正式文件用）
+- `.claude/skills/project-docs/templates/architecture-decision-record.md` — 完整版 ADR 範本（正式文件用）

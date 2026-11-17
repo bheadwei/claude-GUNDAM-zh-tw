@@ -209,6 +209,43 @@ else
   if [ "$DRY_RUN" -eq 1 ]; then ensure_live_server_ignore "$DEST" --dry-run; else ensure_live_server_ignore "$DEST"; fi
 fi
 
+# 模板 v6.1 把 /ui-site 產出的檔名去掉數字前綴，同步過去的指令只認新檔名：舊專案的檔在這裡一起改名，
+# 並把 docs/ 裡寫到舊檔名的連結換掉。新檔名已存在就不動（不覆寫、不合併）。update-template.ps1 要一致
+DOC_RENAMES=("12_frontend_architecture.md:frontend-architecture.md" "17_frontend_information_architecture.md:frontend-information-architecture.md")
+echo "▶ docs/ 舊檔名改名（/ui-site 產的前端文件去掉數字前綴）..."
+if [ "$CLAUDE_ONLY" -eq 1 ]; then
+  echo "   ⏭  --claude-only：跳過"
+elif [ -d "$DEST/docs" ]; then
+  DOC_SED=""
+  for pair in "${DOC_RENAMES[@]}"; do
+    old="${pair%%:*}"; new="${pair#*:}"
+    [ -f "$DEST/docs/$old" ] || continue
+    if [ -e "$DEST/docs/$new" ]; then
+      echo "   ⚠  docs/$old 與 docs/$new 都在，沒有改名；請自己合併後刪掉舊檔"
+      continue
+    fi
+    if [ "$DRY_RUN" -eq 1 ]; then echo "   [dry] docs/$old → docs/$new"; continue; fi
+    # 有進 git 就用 git mv，改名後的檔案保留歷史；失敗（例如 index.lock）只跳過這一份，不中止整個更新
+    if [ -n "$(git -C "$DEST" ls-files -- "docs/$old" 2>/dev/null)" ]; then
+      git -C "$DEST" mv "docs/$old" "docs/$new" || { echo "   ⚠  git mv docs/$old 失敗，沒有改名"; continue; }
+    else
+      mv "$DEST/docs/$old" "$DEST/docs/$new" || { echo "   ⚠  mv docs/$old 失敗，沒有改名"; continue; }
+    fi
+    echo "   ✎ docs/$old → docs/$new"
+    DOC_SED="$DOC_SED;s/${old//./\\.}/$new/g"
+  done
+  if [ -n "$DOC_SED" ]; then
+    while IFS= read -r -d '' f; do
+      # 不用 sed -i：GNU 與 BSD（macOS）的參數不同
+      tmp="$f.tpl-rename"
+      sed "${DOC_SED#;}" "$f" > "$tmp" || { rm -f "$tmp"; echo "   ⚠  沒能更新連結：${f#"$DEST"/}"; continue; }
+      if cmp -s "$tmp" "$f"; then rm -f "$tmp"; continue; fi
+      cat "$tmp" > "$f"; rm -f "$tmp"
+      echo "   ✎ 更新連結：${f#"$DEST"/}"
+    done < <(find "$DEST/docs" -type f -name '*.md' -print0)
+  fi
+fi
+
 echo "▶ MERGE 骨架目錄（保留執行資料）..."
 # 只補「骨架檔」：README.md、_*_TEMPLATE.md、以及各 area 的目錄與 .gitkeep。
 #

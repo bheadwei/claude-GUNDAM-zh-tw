@@ -879,7 +879,7 @@ expect_empty "整檔豁免不帶 ID → 全部豁免" \
 
 # 動畫等級以單頁 IA snippet 為準（motion.md 開頭）。對應得到才用單頁等級；
 # 對應不到（元件檔、沒有 snippet 的頁）就取「專案與所有單頁中最寬鬆的那級」——寧可漏提醒也不誤報。
-IA_DOC="$SANDBOX/docs/17_frontend_information_architecture.md"
+IA_DOC="$SANDBOX/docs/frontend-information-architecture.md"
 ia_page() { # <頁面路徑> <動畫等級那一行的值> —— append 一份最小 IA snippet
     mkdir -p "$(dirname "$IA_DOC")"
     printf '## 某頁（%s）\n\n### 實作筆記\n- 狀態管理：無\n- 動畫等級：%s\n\n' "$1" "$2" >> "$IA_DOC"
@@ -4241,13 +4241,13 @@ printf '%s' "$(jq -c 'del(.overview)' < "$SC/messy/.claude/taskmaster-data/proje
 sc_ov messy
 expect_eq "架構文件在 docs/architecture/x_architecture.md、project.json 沒有覆寫 → 自動指向它" \
     "docs/architecture/01_system_architecture.md" "$(sc_q messy '.project.architectureDoc')"
-sc_new arch; sc_put arch docs/12_frontend_architecture.md '# 前端\n'; sc_put arch docs/architecture.md '# 系統\n'; sc_git arch; sc_ov arch
-expect_eq "docs/12_frontend_architecture.md 與 docs/architecture.md 並存 → 用 docs/architecture.md" docs/architecture.md "$(sc_q arch '.project.architectureDoc')"
+sc_new arch; sc_put arch docs/frontend-architecture.md '# 前端\n'; sc_put arch docs/architecture.md '# 系統\n'; sc_git arch; sc_ov arch
+expect_eq "docs/frontend-architecture.md 與 docs/architecture.md 並存 → 用 docs/architecture.md" docs/architecture.md "$(sc_q arch '.project.architectureDoc')"
 echo '{"name":"掃描","mode":"mvp","overview":{"architectureDoc":"docs/my.md"}}' > "$SC/arch/.claude/taskmaster-data/project.json"
 sc_put arch docs/my.md '# 自訂\n'; sc_ov arch
 expect_eq "project.json 設 overview.architectureDoc → 優先用它（docs/architecture.md 也在）" docs/my.md "$(sc_q arch '.project.architectureDoc')"
-sc_new arch; sc_put arch docs/12_frontend_architecture.md '# 前端\n'; sc_git arch; sc_ov arch
-expect_eq "只有 docs/12_frontend_architecture.md → architectureDoc 為 null" null "$(sc_q arch '.project.architectureDoc')"
+sc_new arch; sc_put arch docs/frontend-architecture.md '# 前端\n'; sc_git arch; sc_ov arch
+expect_eq "只有 docs/frontend-architecture.md → architectureDoc 為 null" null "$(sc_q arch '.project.architectureDoc')"
 expect_eq "沒有任何架構文件 → notices 沒有「找不到架構文件」" 0 "$(sc_q arch '[.notices[] | select(.text | test("找不到架構文件"))] | length')"
 
 # ---- 標籤正規化（X8）
@@ -5109,6 +5109,46 @@ else
 fi
 
 # =========================================================================
+section "update-template — /ui-site 舊檔名自動改名"
+# =========================================================================
+# 模板 v6.1 去掉 docs/12_*、docs/17_* 的數字前綴；舊專案跑 update-template 時要自動改名、連結跟著換
+if [ -f "$UT_SRC" ]; then
+    UR="$SANDBOX/ur"; rm -rf "$UR"; mkdir -p "$UR/tpl/scripts/lib" "$UR/tpl/.claude/agents"
+    cp "$UT_SRC" "$UR/tpl/scripts/"; cp "$HOOK_DIR/../../scripts/lib/vscode-live-server.sh" "$UR/tpl/scripts/lib/"; echo a > "$UR/tpl/.claude/agents/a.md"
+    ur() { bash "$UR/tpl/scripts/update-template.sh" "$@" --no-backup </dev/null 2>&1; }
+    ur_dst() {  # $1=名稱；建一個有舊檔名的 git 專案，IA 文件連到前端架構文件
+        local d="$UR/$1"; mkdir -p "$d/.claude" "$d/docs/sub"
+        printf '# 前端架構\n' > "$d/docs/12_frontend_architecture.md"
+        printf '見 [前端架構](./12_frontend_architecture.md)\n' > "$d/docs/17_frontend_information_architecture.md"
+        printf '[IA](../17_frontend_information_architecture.md)\n' > "$d/docs/sub/note.md"
+        git -C "$d" -c init.defaultBranch=main init -q && git -C "$d" add -A && git -C "$d" -c user.name=t -c user.email=t@t commit -qm init
+    }
+    ur_dst a; out=$(ur "$UR/a")
+    [ -f "$UR/a/docs/frontend-architecture.md" ] && [ -f "$UR/a/docs/frontend-information-architecture.md" ] \
+        && [ ! -e "$UR/a/docs/12_frontend_architecture.md" ] && [ ! -e "$UR/a/docs/17_frontend_information_architecture.md" ] \
+        && ok "舊檔名 → 改成新檔名、舊檔不留" || ng "舊檔名 → 改成新檔名" "只有新檔" "$(ls "$UR/a/docs")"
+    expect_eq "有進 git → 用 git mv（暫存區是改名）" 2 "$(git -C "$UR/a" status --porcelain | grep -c '^R')"
+    expect_eq "docs/ 內連到舊檔名的連結換成新檔名" "見 [前端架構](./frontend-architecture.md) [IA](../frontend-information-architecture.md)" \
+        "$(cat "$UR/a/docs/frontend-information-architecture.md" "$UR/a/docs/sub/note.md" | paste -sd' ' -)"
+    out=$(ur "$UR/a")
+    expect_not_contains "再跑一次 → 沒有東西可改" "→ docs/" "$out"
+    ur_dst b; printf '新的\n' > "$UR/b/docs/frontend-architecture.md"; out=$(ur "$UR/b")
+    [ -f "$UR/b/docs/12_frontend_architecture.md" ] && [ "$(cat "$UR/b/docs/frontend-architecture.md")" = "新的" ] \
+        && expect_contains "新舊都在 → 不改名、不覆寫，提示自己合併" "都在，沒有改名" "$out" \
+        || ng "新舊都在 → 不覆寫" "兩個檔都原樣" "$(ls "$UR/b/docs")"
+    expect_not_contains "只有 17 改名 → 只提到 12 的檔內容沒變，不印「更新連結」" "更新連結：docs/frontend-information-architecture.md" "$out"
+    ur_dst c; ur "$UR/c" --dry-run >/dev/null
+    [ -f "$UR/c/docs/12_frontend_architecture.md" ] && ok "--dry-run → 不改名" || ng "--dry-run → 不改名" "舊檔還在" "不在"
+    ur "$UR/c" --claude-only >/dev/null
+    [ -f "$UR/c/docs/12_frontend_architecture.md" ] && ok "--claude-only → 不碰 docs/" || ng "--claude-only → 不碰 docs/" "舊檔還在" "不在"
+    mkdir -p "$UR/d/.claude" "$UR/d/docs"; printf 'x\n' > "$UR/d/docs/12_frontend_architecture.md"; ur "$UR/d" >/dev/null
+    [ -f "$UR/d/docs/frontend-architecture.md" ] && ok "不是 git repo → 一般 mv 改名" || ng "不是 git repo → 改名" "新檔名" "$(ls "$UR/d/docs")"
+    rm -rf "$UR"
+else
+    ok "（不是模板 repo，沒有 scripts/update-template.sh，略過）"
+fi
+
+# =========================================================================
 section "vscode-live-server — Live Server 忽略專案地圖資料夾"
 # =========================================================================
 # 地圖資料每幾秒更新，Live Server 會整頁重載。helper 在 scripts/lib/，copy／update 兩支 sh 共用。
@@ -5230,7 +5270,7 @@ if [ -f "$CC_SRC" ] && [ -f "$CC_DS" ] && [ -d "$HOOK_DIR/../skills/project-docs
     cp "$HOOK_DIR/../templates/overview/index.html" "$CC/.claude/templates/overview/"
     cp "$HOOK_DIR/../templates/wbs.template.md" "$CC/.claude/templates/"
     CC_NOTES=.claude/skills/project-docs/module-notes.md
-    CC_T05=.claude/skills/project-docs/templates/05_architecture_and_design_document.md
+    CC_T05=.claude/skills/project-docs/templates/architecture-and-design.md
     cc_run() {
         CC_OUT=$(bash "$CC/.claude/scripts/check-counts.sh" 2>&1 </dev/null); CC_RC=$?
         CC_OUT=$(printf '%s' "$CC_OUT" | sed $'s/\033\\[[0-9;]*m//g')
@@ -5256,11 +5296,11 @@ if [ -f "$CC_SRC" ] && [ -f "$CC_DS" ] && [ -d "$HOOK_DIR/../skills/project-docs
     cc_case "module-notes.md 說明表表頭「依據」改成「來源」" "$CC_NOTES" '/^| id | 名稱 /s/| 依據 |/| 來源 |/' OVERVIEW_COLS_NOTES
     cc_case "documentation-specialist.md 的附屬檔路徑 module-notes.md 少一個字" .claude/agents/documentation-specialist.md \
         's#skills/project-docs/module-notes\.md#skills/project-docs/module-note.md#' "module-note.md"
-    cc_case "05 範本的 <!-- overview:generated:start --> 改成 <!-- overview:gen:start -->" "$CC_T05" \
+    cc_case "架構文件範本的 <!-- overview:generated:start --> 改成 <!-- overview:gen:start -->" "$CC_T05" \
         's/<!-- overview:generated:start -->/<!-- overview:gen:start -->/' OVERVIEW_GEN_START
-    cc_case "05 範本的 <!-- overview:generated:end --> 改成 <!-- overview:gen:end -->" "$CC_T05" \
+    cc_case "架構文件範本的 <!-- overview:generated:end --> 改成 <!-- overview:gen:end -->" "$CC_T05" \
         's/<!-- overview:generated:end -->/<!-- overview:gen:end -->/' OVERVIEW_GEN_END
-    cc_case "05 範本的「## 5. 資料流」改成「## 5. 跨服務流程」" "$CC_T05" 's/^## 5\. 資料流/## 5. 跨服務流程/' OVERVIEW_FLOW_SECTION
+    cc_case "架構文件範本的「## 5. 資料流」改成「## 5. 跨服務流程」" "$CC_T05" 's/^## 5\. 資料流/## 5. 跨服務流程/' OVERVIEW_FLOW_SECTION
     cc_case "overview.sh 的 OVERVIEW_FLOW_SECTION 改成 \"流程\"" .claude/scripts/overview.sh \
         's/^OVERVIEW_FLOW_SECTION="資料流"/OVERVIEW_FLOW_SECTION="流程"/' OVERVIEW_FLOW_SECTION
     # 畫面大小上限 128KB（ADR-2026-11-12-001）：補空白到指定 bytes（在假模板的複本上，不碰真範本）

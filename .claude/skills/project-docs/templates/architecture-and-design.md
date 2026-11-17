@@ -1,7 +1,7 @@
 # 架構與設計文件範本（`docs/architecture.md`）
 
 > 第 1–3、5 節由 `architect` 撰寫，只寫程式碼看不出來的事；第 4 節由專案地圖從程式碼自動產生，手改會被蓋掉。
-> 圖表抽象層級採 [C4 Model](https://c4model.com)。設計理由不放這裡，寫成 ADR（`04_architecture_decision_record_template.md`），本檔只連結。
+> 圖表抽象層級採 [C4 Model](https://c4model.com)。設計理由不放這裡，寫成 ADR（`architecture-decision-record.md`），本檔只連結。
 
 ---
 

@@ -12,7 +12,7 @@ model: opus
 - `.claude/skills/ui-style-compliance/SKILL.md`（強制三階段檢查）
 - `.claude/skills/node-package-manager/SKILL.md`（跑任何 npm/pnpm/bun/npx 指令或動 lock 檔前）
 - 當前專案的 `.claude/ui/<codename>/DESIGN.md`
-- 當前專案的 `docs/17_frontend_information_architecture.md`（若存在）
+- 當前專案的 `docs/frontend-information-architecture.md`（若存在）
 
 你有 `context7` MCP（`resolve-library-id` + `query-docs`）：框架與 UI 函式庫改版頻繁
 （React／Vue／Tailwind 的 API 每年都在動），**寫元件前查當前版本的官方文檔**，不要憑記憶用舊 API。
@@ -74,7 +74,7 @@ Read .claude/taskmaster-data/ui-style.json
 ### 2. 讀取 IA 契約（若有提供頁面路徑）
 
 ```
-Read docs/17_frontend_information_architecture.md
+Read docs/frontend-information-architecture.md
 ```
 
 從 IA 取得該頁資訊：

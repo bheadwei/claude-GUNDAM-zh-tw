@@ -43,7 +43,7 @@ Read .claude/ui/<codename>/DESIGN.md
 
 #### 1.3 IA 檢查（三種模式分流）
 
-檢查 `docs/17_frontend_information_architecture.md` 是否存在：
+檢查 `docs/frontend-information-architecture.md` 是否存在：
 
 **模式 A：IA 已存在**
 
@@ -201,7 +201,7 @@ hero 通過後再多問一次：「剩下的段落要一段一段看，還是一
 #### 5.1 回寫 IA（模式 A 補充 / 模式 B.1 建立 snippet）
 
 - **模式 A**：若此次 Q&A 補充了 IA 未涵蓋的資訊（例如確定了使用哪套表單庫），append 到 IA doc 該頁區段
-- **模式 B.1**：建立或更新 `docs/17_frontend_information_architecture.md`，append 這一頁的 IA snippet
+- **模式 B.1**：建立或更新 `docs/frontend-information-architecture.md`，append 這一頁的 IA snippet
 - **模式 B.2**（Adhoc）：不寫任何 doc
 
 IA snippet 格式（最小模式）：

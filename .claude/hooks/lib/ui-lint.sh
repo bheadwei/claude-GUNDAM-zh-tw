@@ -146,7 +146,7 @@ if [ -n "$UI_JSON" ] && command -v jq >/dev/null 2>&1; then
         printf '%s\n' "${r:-/}"
     }
     IA_DOC=""
-    for f in "$IA_ROOT/docs/17_frontend_information_architecture.md" "$IA_ROOT"/docs/*frontend_information_architecture*.md; do
+    for f in "$IA_ROOT/docs/frontend-information-architecture.md" "$IA_ROOT"/docs/*frontend[-_]information[-_]architecture*.md; do
         [ -f "$f" ] && { IA_DOC="$f"; break; }
     done
     # 每一份 snippet 輸出「路由<TAB>等級」，等級是 L1～L3，寫「沿用專案」或認不出來的是 -

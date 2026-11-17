@@ -51,7 +51,7 @@ Dockerfile 指令、Terraform provider 參數這類版本相依的細節一律�
 - 告警規則配置與優化
 
 ### 維護 runbook（`docs/runbook.md`）
-- 格式照範本 14：`.claude/skills/project-docs/templates/14_deployment_and_operations_guide.md`（部署、回滾、SLO 與告警、排障、事後檢討、備份與復原）
+- 格式照runbook 範本：`.claude/skills/project-docs/templates/deployment-and-operations.md`（部署、回滾、SLO 與告警、排障、事後檢討、備份與復原）
 - 部署方式、回滾步驟、SLO、告警或排障步驟有變時，**同一次工作就更新 runbook**——不要留給下一棒
 - 專案還沒有 runbook、這次又是會上線並持續維運的部署 → 在回報「摘要」建議建立（選配，由使用者決定）
 - 程式碼改動造成的指令、路徑、設定名對不上，由 `documentation-specialist` 在 `/verify` 文件同步時修；SLO 與事故處理的內容歸你

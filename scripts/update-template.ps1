@@ -221,6 +221,59 @@ if ($ClaudeOnly) {
     Ensure-LiveServerIgnore -Root $destPath -DryRun:$DryRun
 }
 
+# 模板 v6.1 把 /ui-site 產出的檔名去掉數字前綴，同步過去的指令只認新檔名：舊專案的檔在這裡一起改名，
+# 並把 docs\ 裡寫到舊檔名的連結換掉。新檔名已存在就不動（不覆寫、不合併）。與 update-template.sh 一致
+Write-Host "▶ docs\ 舊檔名改名（/ui-site 產的前端文件去掉數字前綴）..." -ForegroundColor Green
+$docRenames = [ordered]@{
+    '12_frontend_architecture.md'             = 'frontend-architecture.md'
+    '17_frontend_information_architecture.md' = 'frontend-information-architecture.md'
+}
+$docsDir = Join-Path $destPath 'docs'
+if ($ClaudeOnly) {
+    Write-Host "   ⏭  -ClaudeOnly：跳過" -ForegroundColor DarkGray
+} elseif (Test-Path $docsDir -PathType Container) {
+    $renamed = [ordered]@{}
+    $haveGit = [bool](Get-Command git -ErrorAction SilentlyContinue)
+    foreach ($old in $docRenames.Keys) {
+        $new = $docRenames[$old]
+        $oldPath = Join-Path $docsDir $old
+        $newPath = Join-Path $docsDir $new
+        if (-not (Test-Path $oldPath -PathType Leaf)) { continue }
+        if (Test-Path $newPath) {
+            Write-Host "   ⚠  docs\$old 與 docs\$new 都在，沒有改名；請自己合併後刪掉舊檔" -ForegroundColor Yellow
+            continue
+        }
+        if ($DryRun) { Write-Host "   [dry] docs\$old → docs\$new" -ForegroundColor DarkGray; continue }
+        # 有進 git 就用 git mv，改名後的檔案保留歷史。
+        # 判斷是否追蹤看 ls-files 的輸出而不是 --error-unmatch：5.1 在 ErrorActionPreference=Stop 下
+        # 原生指令寫 stderr 會變成終止例外，整支腳本中止
+        $tracked = $haveGit -and [bool](& git -C $destPath ls-files -- "docs/$old")
+        if ($tracked) {
+            & git -C $destPath mv "docs/$old" "docs/$new"
+            if ($LASTEXITCODE -ne 0) { Write-Host "   ⚠  git mv docs\$old 失敗，沒有改名" -ForegroundColor Yellow; continue }
+        } else {
+            try { Move-Item -Path $oldPath -Destination $newPath -ErrorAction Stop }
+            catch { Write-Host "   ⚠  搬移 docs\$old 失敗，沒有改名：$($_.Exception.Message)" -ForegroundColor Yellow; continue }
+        }
+        Write-Host "   ✎ docs\$old → docs\$new" -ForegroundColor Cyan
+        $renamed[$old] = $new
+    }
+    if ($renamed.Count -gt 0) {
+        Get-ChildItem -Path $docsDir -Recurse -File -Filter '*.md' | ForEach-Object {
+            $bytes = [System.IO.File]::ReadAllBytes($_.FullName)
+            # 原檔有 BOM 就照樣寫回（與 sh 版一樣不動編碼）
+            $hasBom = $bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF
+            $text = [System.IO.File]::ReadAllText($_.FullName)
+            $updated = $text
+            foreach ($old in $renamed.Keys) { $updated = $updated.Replace($old, $renamed[$old]) }
+            if ($updated -cne $text) {
+                [System.IO.File]::WriteAllText($_.FullName, $updated, (New-Object System.Text.UTF8Encoding $hasBom))
+                Write-Host "   ✎ 更新連結：$($_.FullName.Substring($destPath.Length).TrimStart('\'))" -ForegroundColor Cyan
+            }
+        }
+    }
+}
+
 Write-Host "▶ MERGE 骨架目錄（保留執行資料）..." -ForegroundColor Green
 # 只補骨架檔（README.md / _*.md / .gitkeep）與目錄結構。
 #

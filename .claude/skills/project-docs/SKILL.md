@@ -12,26 +12,26 @@ description: Use when writing or updating a project document — 「寫 PRD」�
 
 | 文件 | 路徑 | 回答什麼 | 誰寫、何時更新 | 格式來源 |
 |---|---|---|---|---|
-| brief | `docs/00_brief.md` | 為什麼做、範圍上限、不做什麼、怎樣算成功 | `/task-init` 2.7b 產、使用者逐段確認；方向改變時改 | 02 範本上半 |
-| PRD | `docs/prd.md` | 系統該有什麼行為（編號情境）、用語 | `/docs-init` 產初稿；之後只由 `/verify` 依 plan 的「PRD 情境變更」套回 | 02 範本下半 |
-| 架構文件 | `docs/architecture.md` | 跟誰連、用什麼、怎麼部署；模組與依賴；跨服務的資料流 | 第 1–3、5 節由 `architect` 撰寫；第 4 節由專案地圖從程式碼自動產生 | 05 範本 |
+| brief | `docs/00_brief.md` | 為什麼做、範圍上限、不做什麼、怎樣算成功 | `/task-init` 2.7b 產、使用者逐段確認；方向改變時改 | brief／PRD 範本上半 |
+| PRD | `docs/prd.md` | 系統該有什麼行為（編號情境）、用語 | `/docs-init` 產初稿；之後只由 `/verify` 依 plan 的「PRD 情境變更」套回 | brief／PRD 範本下半 |
+| 架構文件 | `docs/architecture.md` | 跟誰連、用什麼、怎麼部署；模組與依賴；跨服務的資料流 | 第 1–3、5 節由 `architect` 撰寫；第 4 節由專案地圖從程式碼自動產生 | 架構文件範本 |
 | WBS | `.claude/taskmaster-data/wbs.md` | 做到哪、誰負責、下一個 | `/task-init`、`/task-add`、`/verify` | `.claude/templates/wbs.template.md` |
 | plan | `.claude/taskmaster-data/plans/*.md` | 這次為什麼做、怎麼做、改善了什麼 | `planner`、`/tdd`、`/verify`；完成即歸檔 | `plan-format` skill |
-| ADR | `docs/decisions/ADR-*.md` | 為什麼這樣設計 | `architect`、`/adr`；接受後只改 status | 04 範本 |
+| ADR | `docs/decisions/ADR-*.md` | 為什麼這樣設計 | `architect`、`/adr`；接受後只改 status | ADR 範本 |
 
 **按條件才有**（不算常駐）：
 
 | 文件 | 路徑 | 何時要 | 格式來源 |
 |---|---|---|---|
-| 威脅模型 | `docs/threat-model.md` | critical 任務碰到認證、金流、個資時**必產** | 20 範本 |
-| runbook | `docs/runbook.md` | 會上線並持續維運時（選配），由 `deployment-expert` 維護 | 14 範本 |
+| 威脅模型 | `docs/threat-model.md` | critical 任務碰到認證、金流、個資時**必產** | 威脅模型範本 |
+| runbook | `docs/runbook.md` | 會上線並持續維運時（選配），由 `deployment-expert` 維護 | runbook 範本 |
 
 **不算文件體系**：
 
 - 專案地圖與一頁現況（`/task-status`）是產生物，不進 git
 - `README.md`、`CLAUDE.md` 是入口。6 份文件的位置寫在 CLAUDE.md 的「文件在哪」，**不另寫手寫索引**（`docs/README.md` 這種索引最先腐爛）
 - 交付物、對外手冊、評測紀錄、匯出檔是使用者自己的，模板不管、不檢查
-- `docs/12_*`、`docs/17_*` 由 `/ui-site` 產生（12、17 範本），路徑不動
+- `docs/frontend-architecture.md`、`docs/frontend-information-architecture.md` 由 `/ui-site` 產生（UI 鏈範本），路徑不動
 
 ## 每份不寫什麼
 
@@ -72,15 +72,15 @@ description: Use when writing or updating a project document — 「寫 PRD」�
 
 ## 範本
 
-| # | 範本 | 用在 |
-|---|---|---|
-| 02 | `project_brief_and_prd.md` | brief（上半）、PRD（下半） |
-| 04 | `architecture_decision_record_template.md` | ADR（簡易版給 `/adr`、完整版給 `architect`） |
-| 05 | `architecture_and_design_document.md` | 架構文件 |
-| 14 | `deployment_and_operations_guide.md` | runbook |
-| 20 | `threat_model_template.md` | 威脅模型 |
+| 範本 | 用在 |
+|---|---|
+| `project-brief-and-prd.md` | brief（上半）、PRD（下半） |
+| `architecture-decision-record.md` | ADR（簡易版給 `/adr`、完整版給 `architect`） |
+| `architecture-and-design.md` | 架構文件 |
+| `deployment-and-operations.md` | runbook |
+| `threat-model.md` | 威脅模型 |
 
-另有 UI 鏈的 12、17，由 `/ui-site` 使用。清單與產出路徑見 `templates/INDEX.md`。
+另有 UI 鏈的 `frontend-architecture.md`、`frontend-information-architecture.md`，由 `/ui-site` 使用。清單與產出路徑見 `templates/INDEX.md`。
 
 ## 淘汰的範本
 

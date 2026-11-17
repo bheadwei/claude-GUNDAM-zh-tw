@@ -121,7 +121,7 @@ Read .claude/ui/{primary}/DESIGN.md
 `tailwind.config.ts` 或 `styles/tokens.css`，**但後續元件必須引用 token，不再抄 hex**。
 
 > Token 分層與交換格式對齊 W3C DTCG（global → semantic/alias → component），
-> 詳見範本 `12_frontend_architecture_specification.md`。
+> 詳見範本 `frontend-architecture.md`。
 >
 > 動畫的時長、easing、位移距離也是 token，不要散在元件裡（L2／L3 的寫法見 `motion.md` 第 4 節）。
 

@@ -174,10 +174,10 @@ i18n：zh-TW + en
 
 ### 1. 建立 IA 文檔
 
-根據 VibeCoding 範本 17（`.claude/skills/project-docs/templates/17_frontend_information_architecture_template.md`），填入 Q&A 答案，產出：
+根據前端資訊架構範本（`.claude/skills/project-docs/templates/frontend-information-architecture.md`），填入 Q&A 答案，產出：
 
 ```
-docs/17_frontend_information_architecture.md
+docs/frontend-information-architecture.md
 ```
 
 內容包含：
@@ -190,10 +190,10 @@ docs/17_frontend_information_architecture.md
 
 ### 2. 建立前端架構文檔
 
-根據 VibeCoding 範本 12（`.claude/skills/project-docs/templates/12_frontend_architecture_specification.md`），填入技術決策：
+根據前端架構範本（`.claude/skills/project-docs/templates/frontend-architecture.md`），填入技術決策：
 
 ```
-docs/12_frontend_architecture.md
+docs/frontend-architecture.md
 ```
 
 內容包含：
@@ -275,8 +275,8 @@ export default function PricingPage() {
 ```
 my-site/
 ├── docs/
-│   ├── 17_frontend_information_architecture.md   ✅ 已產
-│   └── 12_frontend_architecture.md                ✅ 已產
+│   ├── frontend-information-architecture.md   ✅ 已產
+│   └── frontend-architecture.md                ✅ 已產
 ├── src/
 │   ├── app/                                       ✅ 9 頁 stub
 │   ├── components/
@@ -311,7 +311,7 @@ my-site/
 
 | 情境 | 處理 |
 |---|---|
-| 既有專案執行 `/ui-site` | 偵測 `docs/17_*.md` 已存在 → 警告「會覆寫既有 IA，確認？」 |
+| 既有專案執行 `/ui-site` | 偵測 `docs/frontend-information-architecture.md` 已存在 → 警告「會覆寫既有 IA，確認？」 |
 | 既有 `src/app/` 有檔案 | 警告 + 詢問是否備份現有 → `src/app.bak/` |
 | Q3 頁面選了 0 個 | 至少要 `/`，強制加入 |
 | ui-style.json 不存在 | 用 fallback，但每頁 stub 加註解「建議 /ui-style 後重新產出」 |

@@ -121,24 +121,24 @@
 # 沒有 jq：只寫一份帶「需要 jq」提示的 data.js（用 printf），畫面照樣打得開。
 # 逃生門：OVERVIEW=off。大小上限：OVERVIEW_MAX_BYTES（data.js 的位元組數，預設 512KB）
 
-# 欄名常數。check-counts.sh 會比對它們與 05 範本 5.5、wbs.template.md、plan-format 的表頭；
+# 欄名常數。check-counts.sh 會比對它們與架構文件範本 5.5、wbs.template.md、plan-format 的表頭；
 # 改那幾份範本的欄名時同步這裡，否則這支會靜默抽不到東西。
-OVERVIEW_COLS_MODULE="id 路徑"          # 05 範本 5.5 模組表的必要欄
-OVERVIEW_COLS_MODULE_OPT="模組 職責"    # 05 範本 5.5 模組表的選用欄（顯示名稱、職責）
+OVERVIEW_COLS_MODULE="id 路徑"          # 架構文件範本 5.5 模組表的必要欄
+OVERVIEW_COLS_MODULE_OPT="模組 職責"    # 架構文件範本 5.5 模組表的選用欄（顯示名稱、職責）
 OVERVIEW_COLS_WBS="# 任務 狀態"         # wbs.template.md 任務表的必要欄
 OVERVIEW_COL_WBS="模組"                 # wbs.template.md 任務表的模組欄
 OVERVIEW_COLS_PART="id 部件 階段 檔案"  # plan-format「一眼看懂」部件表的必要欄（驗收欄選用）
 OVERVIEW_COLS_NOTES="id 名稱 分組 說明 依據"  # project-docs/module-notes.md 說明表的必要欄
 
 DRAFT_MARK='<!-- overview: draft -->'
-# 架構文件自動段的標記：與 05 範本（project-docs/templates/05_architecture_and_design_document.md）第 4 節同一字串
+# 架構文件自動段的標記：與架構文件範本（project-docs/templates/architecture-and-design.md）第 4 節同一字串
 OVERVIEW_GEN_START='<!-- overview:generated:start -->'
 OVERVIEW_GEN_END='<!-- overview:generated:end -->'
 LOCK_STALE_SEC=120                 # 要比 --actual 的等待（60 秒）長，否則等鎖的那支會搶走還活著的鎖
 MAX_CHANGES=200                    # 每份 plan、地圖各列幾個改動檔，其餘依第一層目錄彙總進 changesRollup
 MAX_BYTES=${OVERVIEW_MAX_BYTES:-524288}
 [[ $MAX_BYTES =~ ^[0-9]+$ ]] || MAX_BYTES=524288
-# 架構文件資料流節的節名（`## <數字>. 資料流`，不綁節號）：與 05 範本同一字串
+# 架構文件資料流節的節名（`## <數字>. 資料流`，不綁節號）：與架構文件範本同一字串
 OVERVIEW_FLOW_SECTION="資料流"
 # 模組展開（modules[].inner，ADR-2026-11-06-002 決策 1）：每模組節點、模組內邊、框外項目的上限
 OVERVIEW_INNER_MAX_NODES=${OVERVIEW_INNER_MAX_NODES:-60}
@@ -232,7 +232,8 @@ NOTES_OFF=0
 
 # 架構文件：project.json 的 overview.architectureDoc（選填覆寫）→ docs/architecture.md → docs/*architecture*.md
 # → docs/**/*architecture*.md → docs/tech-spec.md。檔名含 frontend 的跳過：/ui-site 產的
-# docs/12_frontend_architecture.md 依字母序排在 architecture.md 前面，會被當成系統架構文件。
+# docs/frontend-architecture.md（舊專案是 docs/12_frontend_architecture.md）在沒有 docs/architecture.md 時
+# 會被 *architecture*.md 命中，當成系統架構文件。
 # docs/** 用 find 不用 globstar（bash 3.2 沒有）。
 find_arch() {
     local f b best="" re='"architectureDoc"[[:space:]]*:[[:space:]]*"([^"]*)"'
@@ -2074,7 +2075,7 @@ sync_arch() {
             else
                 mv -f "$TMP/arch.new" "$MAIN_ROOT/$a" && echo "已更新架構文件自動段：$a"
             fi ;;
-        3)  echo "$a 沒有自動段標記（$OVERVIEW_GEN_START／$OVERVIEW_GEN_END），沒有寫入；標記放在哪見 05 範本第 4 節" ;;
+        3)  echo "$a 沒有自動段標記（$OVERVIEW_GEN_START／$OVERVIEW_GEN_END），沒有寫入；標記放在哪見架構文件範本第 4 節" ;;
         *)  why=$(cat "$TMP/err" 2>/dev/null)
             echo "overview.sh --sync-arch：$a 的自動段標記不成對（${why:-awk 失敗}），整份沒有寫入。修法：只留一組 $OVERVIEW_GEN_START 與 $OVERVIEW_GEN_END（start 在前、各占一行），或兩行都刪掉" >&2
             return 1 ;;

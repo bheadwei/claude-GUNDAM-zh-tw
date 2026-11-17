@@ -145,7 +145,7 @@ files:                       # 本任務會「新增/修改」的檔案範圍
 critical 任務多兩段，放在「改善了什麼」之前：`## 回滾`（出事時怎麼退回去，migration 要寫可逆或前向修復）、
 `## 威脅`（連到 `docs/threat-model.md` 的對應項）。quick 不寫 plan。
 
-- **為什麼做**：底下的「PRD 情境變更」只列這次動到的情境（格式與套回規則見 PRD 範本 `02_project_brief_and_prd.md`）。
+- **為什麼做**：底下的「PRD 情境變更」只列這次動到的情境（格式與套回規則見 PRD 範本 `project-brief-and-prd.md`）。
   沒有動到使用者看得到的行為就寫「無」。同一個情境編號在其他進行中的 plan 也出現時，planner 提一句（不擋）
 - **資料流變更**：每行 `ADDED／MODIFIED／REMOVED` ＋ 流程識別（＝架構文件資料流節的小標題去掉括號那段）＋ 一句說明，不貼整張圖。
   沒動到跨服務流動就寫「無」；舊 plan 沒有這一小節視同「無」。新流程的完整圖放 architect 的設計提案或 ADR，plan 只寫一句並連結

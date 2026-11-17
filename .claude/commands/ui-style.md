@@ -93,7 +93,7 @@ description: 選擇或切換專案的 UI 設計風格——看三個方向的預
 先推斷，**推斷不出來才問**。依序讀：
 
 1. 既有 `ui-style.json` 的 `site_type`
-2. `docs/17_*.md`（IA 文件）
+2. `docs/frontend-information-architecture.md`（IA 文件）
 3. `docs/00_brief.md`、`README.md`、`CLAUDE.md` 的專案描述
 
 推斷出來 → 一句話告知「判斷這是 <類型>，要改請說」，繼續。推斷不出來 → 問。
@@ -111,7 +111,7 @@ description: 選擇或切換專案的 UI 設計風格——看三個方向的預
 
 1. `.claude/skills/ui-style-compliance/anti-ai.md` 的「產出前」整節，以及「例外」節裡的「看預覽選提方向時」（**提方向的規則以那裡為唯一來源**）
 2. `.claude/ui/CATALOG.md`（候選 codename 從這裡找）
-3. 專案描述：`docs/00_brief.md`、`docs/17_*.md`、`README.md`、`CLAUDE.md`。
+3. 專案描述：`docs/00_brief.md`、`docs/frontend-information-architecture.md`、`README.md`、`CLAUDE.md`。
    全都沒有 → 先問一題：「這個網站在介紹什麼、給誰看？一句話就好」（直接輸入）
 
 **F-2：想 3 個方向**
